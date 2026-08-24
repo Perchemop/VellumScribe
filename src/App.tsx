@@ -36,6 +36,7 @@ import {
   FirstTimeUserGuideModal,
   hasCompletedOnboarding,
 } from './components/FirstTimeUserGuideModal';
+import { AppLogo } from './components/AppLogo';
 
 export default function App() {
   // State from Local Storage
@@ -46,7 +47,7 @@ export default function App() {
 
   // UI Navigation
   const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
-  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>('cloud');
+  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates'>('cloud');
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
@@ -181,17 +182,7 @@ export default function App() {
                 }}
                 className="group flex items-center gap-2.5 text-left focus:outline-hidden"
               >
-                <div className="w-8 h-8 rounded-xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 flex items-center justify-center font-serif text-sm font-semibold tracking-tight shadow-2xs transition-transform group-hover:scale-105">
-                  V
-                </div>
-                <div>
-                  <span className="font-semibold text-sm tracking-tight text-zinc-900 dark:text-zinc-100 font-sans block leading-none">
-                    VellumScribe
-                  </span>
-                  <span className="text-[10px] text-zinc-500 font-normal leading-none">
-                    Private Note Studio
-                  </span>
-                </div>
+                <AppLogo size="sm" showText={true} />
               </button>
             </div>
 
@@ -455,6 +446,8 @@ export default function App() {
                 initialSubtab={settingsSubtab}
                 onOpenConflictModal={() => setShowConflictModal(true)}
                 onRefreshNotes={refreshLocalState}
+                onBackToNotes={selectedNote ? () => setActiveView('notes') : undefined}
+                activeEditingNoteTitle={selectedNote?.title || (selectedNote ? 'Untitled Note' : undefined)}
               />
             </div>
           )}
