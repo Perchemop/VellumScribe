@@ -23,11 +23,13 @@ import {
   Circle,
   MoreHorizontal,
   FolderPlus,
+  Share2,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
 import { MergeNotesModal } from './MergeNotesModal';
 import { BatchActionBar } from './BatchActionBar';
+import { NoteShareModal } from './NoteShareModal';
 
 interface EventNotesListProps {
   events: EventRecord[];
@@ -71,6 +73,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   // Batch Selection State
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
+  const [shareNoteTarget, setShareNoteTarget] = useState<NoteRecord | null>(null);
 
   // Extract all unique tags across notes
   const allAvailableTags = useMemo(() => {
@@ -693,17 +696,30 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                       )}
 
                       {activeTab !== 'trash' && activeTab !== 'archived' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            SQLiteDatabase.archiveNote(note.id);
-                            onRefresh();
-                          }}
-                          title="Archive Note (Hide from active notes)"
-                          className="text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <Archive className="w-3 h-3" />
-                        </button>
+                        <>
+                          <button
+                            id={`quick-share-btn-${note.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShareNoteTarget(note);
+                            }}
+                            title="Share & Export Note"
+                            className="text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Share2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              SQLiteDatabase.archiveNote(note.id);
+                              onRefresh();
+                            }}
+                            title="Archive Note (Hide from active notes)"
+                            className="text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Archive className="w-3 h-3" />
+                          </button>
+                        </>
                       )}
 
                       <span>
@@ -893,6 +909,15 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Quick Note Share Modal */}
+      {shareNoteTarget && (
+        <NoteShareModal
+          note={shareNoteTarget}
+          event={events.find((e) => e.id === shareNoteTarget.event_id)}
+          onClose={() => setShareNoteTarget(null)}
+        />
       )}
     </div>
   );

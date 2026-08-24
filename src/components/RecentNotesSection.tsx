@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
+import { AppLogo } from './AppLogo';
 
 interface RecentNotesSectionProps {
   notes: NoteRecord[];
@@ -81,8 +82,8 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
     >
       {/* Central Quiet Creation Hub */}
       <div className="max-w-md mx-auto w-full text-center space-y-4 pt-4">
-        <div className="w-10 h-10 mx-auto rounded-xl bg-zinc-100 dark:bg-zinc-850 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-serif text-sm font-semibold">
-          V
+        <div className="flex justify-center">
+          <AppLogo size="lg" showText={false} />
         </div>
         <div className="space-y-1.5">
           <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 font-serif-editorial">

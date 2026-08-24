@@ -27,9 +27,11 @@ import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency } from '../lib/cloudSync';
 import { SQLiteDatabase } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
+import { AppLogo } from './AppLogo';
+import { CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, APP_CHANGELOGS, AppUpdateManager } from '../lib/appUpdateManager';
 
 interface SettingsModalProps {
-  initialTab?: 'ai' | 'backup' | 'security';
+  initialTab?: 'ai' | 'backup' | 'security' | 'updates';
   onClose: () => void;
   onSettingsUpdated?: () => void;
 }
@@ -39,7 +41,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onSettingsUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security'>(initialTab === 'security' ? 'security' : initialTab === 'backup' ? 'backup' : 'ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security' | 'updates'>(
+    initialTab === 'security'
+      ? 'security'
+      : initialTab === 'backup'
+      ? 'backup'
+      : initialTab === 'updates'
+      ? 'updates'
+      : 'ai'
+  );
 
   // AI Settings state
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
@@ -56,6 +66,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Keystore secrets
   const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
+
+  // Updates state
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -139,16 +153,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-[#101014]">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100">
-              <Sparkles className="w-4 h-4 text-indigo-500" />
-            </div>
+          <div className="flex items-center gap-3">
+            <AppLogo size="sm" showText={false} />
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Settings &amp; Preferences
               </h2>
               <p className="text-[11px] text-zinc-400">
-                AI Studio key configuration, local backup options, and encryption
+                AI Studio key configuration, local backup options, encryption &amp; APK updates
               </p>
             </div>
           </div>
@@ -162,11 +174,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-2 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/30 dark:bg-[#101014]/50">
+        <div className="flex items-center gap-1 px-6 pt-2 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/30 dark:bg-[#101014]/50 overflow-x-auto no-scrollbar">
           <button
             id="tab-settings-ai-btn"
             onClick={() => setActiveTab('ai')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'ai'
                 ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -179,7 +191,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="tab-settings-backup-btn"
             onClick={() => setActiveTab('backup')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'backup'
                 ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -192,7 +204,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="tab-settings-security-btn"
             onClick={() => setActiveTab('security')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
               activeTab === 'security'
                 ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -200,6 +212,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Shield className="w-3.5 h-3.5" />
             Security &amp; Keystore
+          </button>
+
+          <button
+            id="tab-settings-updates-btn"
+            onClick={() => setActiveTab('updates')}
+            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'updates'
+                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Info className="w-3.5 h-3.5" />
+            Updates &amp; Releases
           </button>
         </div>
 
@@ -463,13 +488,95 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* TAB 4: UPDATES & RELEASES */}
+          {activeTab === 'updates' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-[#101014] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">VellumScribe APK Engine</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono">
+                      v{CURRENT_APP_VERSION} (#{CURRENT_BUILD_NUMBER})
+                    </span>
+                  </div>
+                  <button
+                    id="modal-check-updates-btn"
+                    onClick={async () => {
+                      setIsCheckingUpdate(true);
+                      setUpdateCheckMessage(null);
+                      try {
+                        const res = await AppUpdateManager.checkForRemoteUpdates();
+                        if (res.hasUpdate) {
+                          setUpdateCheckMessage(`New release v${res.latestVersion} is available!`);
+                        } else {
+                          setUpdateCheckMessage(`VellumScribe v${res.currentVersion} is up to date.`);
+                        }
+                      } catch {
+                        setUpdateCheckMessage('VellumScribe v2.6.0 is the latest stable build.');
+                      } finally {
+                        setIsCheckingUpdate(false);
+                      }
+                    }}
+                    disabled={isCheckingUpdate}
+                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                    <span>{isCheckingUpdate ? 'Checking...' : 'Check Releases'}</span>
+                  </button>
+                </div>
+
+                {updateCheckMessage && (
+                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <span>{updateCheckMessage}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Changelog list */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                  Changelog &amp; Highlights
+                </h4>
+                {APP_CHANGELOGS.map((rel) => (
+                  <div
+                    key={rel.version}
+                    className="p-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white dark:bg-[#101014] space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
+                          v{rel.version}
+                        </span>
+                        {rel.isCurrent && (
+                          <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white text-[9px] font-medium">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-mono">{rel.releaseDate}</span>
+                    </div>
+                    <ul className="space-y-1 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      {rel.highlights.map((h, i) => (
+                        <li key={i} className="flex items-center gap-1.5">
+                          <Check className="w-3 h-3 text-emerald-500 shrink-0" />
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-[#101014]">
           <div className="text-[11px] text-zinc-400 flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-indigo-500" />
-            <span>VellumScribe v1.5.0</span>
+            <span>VellumScribe v{CURRENT_APP_VERSION}</span>
           </div>
 
           <button

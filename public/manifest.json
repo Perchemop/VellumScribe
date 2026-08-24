@@ -1,0 +1,18 @@
+{
+  "short_name": "VellumScribe",
+  "name": "VellumScribe — Minimalist Multimodal Notes Studio",
+  "description": "Offline-first multimodal note-taking studio with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#121215",
+  "theme_color": "#121215",
+  "display": "standalone",
+  "orientation": "any"
+}

@@ -25,6 +25,7 @@ import {
   Clock,
   X,
   Share2,
+  Settings,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
@@ -38,6 +39,8 @@ import { OcrScannerModal } from './OcrScannerModal';
 import { ChecklistEditor } from './ChecklistEditor';
 import { SketchCanvasModal } from './SketchCanvasModal';
 import { NoteSecurityModal } from './NoteSecurityModal';
+import { NoteShareModal } from './NoteShareModal';
+import { SettingsModal } from './SettingsModal';
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -92,6 +95,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showOcrScanner, setShowOcrScanner] = useState(false);
   const [showSketchModal, setShowSketchModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -253,12 +258,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (updated) onNoteUpdated(updated);
   };
 
-  const handleShareNote = async () => {
-    let exportText = body;
-    if (noteType === 'checklist' && checklistItems.length > 0) {
-      exportText = checklistItems.map((c) => `- [${c.completed ? 'x' : ' '}] ${c.text}`).join('\n') + (body ? `\n\n${body}` : '');
-    }
-    await NativeBridge.shareNoteText(title || 'Note', exportText);
+  const handleShareNote = () => {
+    setShowShareModal(true);
   };
 
   // Generate Meeting Minutes using Gemini
@@ -553,13 +554,24 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {note.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Share note via native Android intent or clipboard */}
+          {/* Share note via native Android intent, QR code, or markdown */}
           <button
+            id="note-editor-share-btn"
             onClick={handleShareNote}
-            title="Share Note"
+            title="Share & Export Note"
             className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg transition-colors"
           >
             <Share2 className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Quick in-editor Settings Modal */}
+          <button
+            id="note-editor-settings-btn"
+            onClick={() => setShowSettingsModal(true)}
+            title="AI & App Settings"
+            className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg transition-colors"
+          >
+            <Settings className="w-3.5 h-3.5" />
           </button>
 
           {/* Duplicate note */}
@@ -1018,6 +1030,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           noteId={note.id}
           onOcrExtracted={handleOcrExtracted}
           onClose={() => setShowOcrScanner(false)}
+        />
+      )}
+
+      {/* Note Share & Export Modal */}
+      {showShareModal && (
+        <NoteShareModal
+          note={note}
+          event={events.find((e) => e.id === eventId)}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {/* In-Editor Settings Modal */}
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
+          onSettingsUpdated={() => {
+            // Refreshes storage & cloud status
+          }}
         />
       )}
     </div>

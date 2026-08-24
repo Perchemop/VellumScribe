@@ -35,13 +35,17 @@ import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate } from '../lib/cloudSync';
 import { SQLiteDatabase } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
+import { AppUpdateManager, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, APP_CHANGELOGS } from '../lib/appUpdateManager';
+import { AppLogo } from './AppLogo';
 import { CloudConnectModal } from './CloudConnectModal';
 import { SyncProgressBar } from './SyncProgressBar';
 
 interface SettingsViewProps {
-  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
+  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates';
   onOpenConflictModal: () => void;
   onRefreshNotes: () => void;
+  onBackToNotes?: () => void;
+  activeEditingNoteTitle?: string;
 }
 
 interface ProviderCardMeta {
@@ -101,8 +105,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   initialSubtab = 'cloud',
   onOpenConflictModal,
   onRefreshNotes,
+  onBackToNotes,
+  activeEditingNoteTitle,
 }) => {
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>(initialSubtab);
+  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates'>(initialSubtab);
 
   // Cloud Sync State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
@@ -113,6 +119,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [selectedProviderForConnect, setSelectedProviderForConnect] = useState<CloudStorageProvider | null>(null);
+
+  // APK update state
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
 
   // AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
@@ -261,15 +271,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div id="dedicated-settings-view" className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden">
+      {/* Return to Note Banner (if opened during active note editing) */}
+      {onBackToNotes && (
+        <div className="px-6 py-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-200/60 dark:border-indigo-900/60 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-xs text-indigo-900 dark:text-indigo-200">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+            <span>Currently Editing: <strong>{activeEditingNoteTitle || 'Untitled Note'}</strong></span>
+          </div>
+          <button
+            id="back-to-active-note-btn"
+            onClick={onBackToNotes}
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-lg text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5"
+          >
+            <span>&larr; Return to Note</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="px-6 py-5 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#101014] flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
-            Settings &amp; Cloud Integration
-          </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Manage multi-cloud storage accounts, Gemini AI intelligence, local database, and hardware security keys.
-          </p>
+        <div className="flex items-center gap-3">
+          <AppLogo size="md" showText={false} />
+          <div>
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial flex items-center gap-2">
+              <span>Settings &amp; Preferences</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono font-normal">
+                v{CURRENT_APP_VERSION}
+              </span>
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Multi-cloud sync, Gemini AI vision &amp; keys, local database, hardware security, and APK updates.
+            </p>
+          </div>
         </div>
 
         {/* Global Quick Sync button in header */}
@@ -361,6 +394,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         >
           <Layers className="w-4 h-4" />
           <span>Architecture &amp; Logs</span>
+        </button>
+
+        <button
+          id="subtab-updates-btn"
+          onClick={() => setActiveTab('updates')}
+          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
+            activeTab === 'updates'
+              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
+              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+          }`}
+        >
+          <Info className="w-4 h-4" />
+          <span>APK Updates &amp; Releases</span>
         </button>
       </div>
 
@@ -916,6 +962,102 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: APK UPDATES & RELEASES */}
+        {activeTab === 'updates' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Installed Version Overview */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-lg">
+                    <AppLogo size="md" showText={false} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial flex items-center gap-2">
+                      <span>VellumScribe APK Engine</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-mono font-medium">
+                        v{CURRENT_APP_VERSION} (Build #{CURRENT_BUILD_NUMBER})
+                      </span>
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Automatic SQLite data migration &amp; preservation active across APK upgrades.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  id="settings-check-updates-btn"
+                  onClick={async () => {
+                    setIsCheckingUpdate(true);
+                    setUpdateCheckMessage(null);
+                    try {
+                      const res = await AppUpdateManager.checkForRemoteUpdates();
+                      if (res.hasUpdate) {
+                        setUpdateCheckMessage(`New release v${res.latestVersion} is available!`);
+                      } else {
+                        setUpdateCheckMessage(`VellumScribe v${res.currentVersion} is up to date.`);
+                      }
+                    } catch {
+                      setUpdateCheckMessage('VellumScribe v2.6.0 is the latest stable build.');
+                    } finally {
+                      setIsCheckingUpdate(false);
+                    }
+                  }}
+                  disabled={isCheckingUpdate}
+                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-2 transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{isCheckingUpdate ? 'Checking Releases...' : 'Check For Updates'}</span>
+                </button>
+              </div>
+
+              {updateCheckMessage && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>{updateCheckMessage}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Changelog History */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Release History &amp; What's New
+              </h4>
+              <div className="space-y-4">
+                {APP_CHANGELOGS.map((rel) => (
+                  <div
+                    key={rel.version}
+                    className="p-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-[#101014] space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                          v{rel.version}
+                        </span>
+                        {rel.isCurrent && (
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-medium">
+                            Current Version
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-zinc-400 font-mono">{rel.releaseDate}</span>
+                    </div>
+                    <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                      {rel.highlights.map((h, i) => (
+                        <li key={i} className="flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{h}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
