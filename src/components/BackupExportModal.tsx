@@ -9,8 +9,10 @@ import {
   AlertCircle,
   Database,
   Copy,
+  Share2,
 } from 'lucide-react';
 import { SQLiteDatabase } from '../lib/storage';
+import { NativeBridge } from '../lib/nativeBridge';
 
 interface BackupExportModalProps {
   onClose: () => void;
@@ -25,19 +27,22 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleExportJson = () => {
+  const handleExportJson = async () => {
     const backupJson = SQLiteDatabase.exportFullBackup();
-    const blob = new Blob([backupJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `VellumScribe_Backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setFeedback({ type: 'success', message: 'Backup JSON downloaded successfully.' });
+    const fileName = `VellumScribe_Backup_${new Date().toISOString().split('T')[0]}.json`;
+    const res = await NativeBridge.shareOrDownloadFile(
+      fileName,
+      backupJson,
+      'application/json',
+      'Share VellumScribe Backup'
+    );
+    setFeedback({
+      type: res.success ? 'success' : 'error',
+      message: res.message,
+    });
   };
 
-  const handleExportMarkdownZip = () => {
+  const handleExportMarkdownZip = async () => {
     const notes = SQLiteDatabase.getNotes();
     const markdownContent = notes
       .map(
@@ -48,21 +53,26 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
       )
       .join('\n\n\n' + '='.repeat(40) + '\n\n\n');
 
-    const blob = new Blob([markdownContent], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `VellumScribe_Notes_${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-    setFeedback({ type: 'success', message: 'Markdown bundle exported successfully.' });
+    const fileName = `VellumScribe_Notes_${new Date().toISOString().split('T')[0]}.md`;
+    const res = await NativeBridge.shareOrDownloadFile(
+      fileName,
+      markdownContent,
+      'text/markdown',
+      'Share Markdown Notes'
+    );
+    setFeedback({
+      type: res.success ? 'success' : 'error',
+      message: res.message,
+    });
   };
 
-  const handleCopyJson = () => {
+  const handleCopyJson = async () => {
     const backupJson = SQLiteDatabase.exportFullBackup();
-    navigator.clipboard.writeText(backupJson);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const success = await NativeBridge.copyText(backupJson);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

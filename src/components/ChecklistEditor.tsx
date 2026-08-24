@@ -8,6 +8,7 @@ import {
   Check,
 } from 'lucide-react';
 import { ChecklistItem } from '../types';
+import { NativeBridge } from '../lib/nativeBridge';
 
 interface ChecklistEditorProps {
   items: ChecklistItem[];
@@ -31,6 +32,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
     };
     onChange([...items, newItem]);
     setNewItemText('');
+    NativeBridge.hapticImpact('light');
   };
 
   const handleToggle = (id: string) => {
@@ -38,6 +40,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
       item.id === id ? { ...item, completed: !item.completed } : item
     );
     onChange(updated);
+    NativeBridge.hapticImpact('light');
   };
 
   const handleTextChange = (id: string, newText: string) => {
