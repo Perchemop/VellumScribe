@@ -1,0 +1,899 @@
+import React, { useState, useMemo } from 'react';
+import {
+  Plus,
+  Search,
+  FileText,
+  Mic,
+  Camera,
+  Pin,
+  X,
+  Cloud,
+  CheckSquare,
+  PenTool,
+  Bell,
+  Archive,
+  Trash2,
+  Lock,
+  MapPin,
+  GitMerge,
+  RotateCcw,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  Circle,
+  MoreHorizontal,
+  FolderPlus,
+} from 'lucide-react';
+import { EventRecord, NoteRecord } from '../types';
+import { SQLiteDatabase } from '../lib/storage';
+import { MergeNotesModal } from './MergeNotesModal';
+import { BatchActionBar } from './BatchActionBar';
+
+interface EventNotesListProps {
+  events: EventRecord[];
+  notes: NoteRecord[];
+  selectedEventId: number | null;
+  selectedNoteId: number | null;
+  onSelectEvent: (eventId: number) => void;
+  onSelectNote: (noteId: number) => void;
+  onCreateEvent: (event: Omit<EventRecord, 'id'>) => void;
+  onCreateNote: (eventId: number, type?: 'text' | 'checklist' | 'sketch') => void;
+  onDeleteEvent: (eventId: number) => void;
+  onDeleteNote: (noteId: number) => void;
+  onRefresh: () => void;
+}
+
+type NoteTabFilter = 'all' | 'checklist' | 'sketch' | 'reminders' | 'archived' | 'trash';
+type SortOption = 'updated' | 'created' | 'title' | 'reminder';
+
+export const EventNotesList: React.FC<EventNotesListProps> = ({
+  events,
+  notes,
+  selectedEventId,
+  selectedNoteId,
+  onSelectEvent,
+  onSelectNote,
+  onCreateEvent,
+  onCreateNote,
+  onRefresh,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<NoteTabFilter>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('updated');
+  const [viewLayout, setViewLayout] = useState<'list' | 'grid'>('list');
+  const [showNewEventModal, setShowNewEventModal] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventCategory, setNewEventCategory] = useState<EventRecord['category']>('meeting');
+  const [newEventColor, setNewEventColor] = useState('#3b82f6');
+
+  // Batch Selection State
+  const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
+  const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
+
+  // Extract all unique tags across notes
+  const allAvailableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    notes.forEach((n) => {
+      (n.tags || []).forEach((t) => {
+        if (t && t.trim()) tagSet.add(t.trim());
+      });
+    });
+    return Array.from(tagSet).sort();
+  }, [notes]);
+
+  // Filter notes according to tab, category, tag, and search
+  const filteredNotes = useMemo(() => {
+    return notes
+      .filter((n) => {
+        // Tab filtering
+        if (activeTab === 'archived') {
+          if (n.status !== 'archived') return false;
+        } else if (activeTab === 'trash') {
+          if (n.status !== 'trash') return false;
+        } else {
+          // All active views exclude archived and trashed items
+          if (n.status === 'archived' || n.status === 'trash') return false;
+
+          if (activeTab === 'checklist' && n.note_type !== 'checklist') return false;
+          if (activeTab === 'sketch' && n.note_type !== 'sketch') return false;
+          if (activeTab === 'reminders' && !n.reminder_at) return false;
+        }
+
+        // Category filter
+        if (selectedEventId && selectedEventId !== 0 && n.event_id !== selectedEventId) {
+          return false;
+        }
+
+        // Tag filter
+        if (selectedTag && !(n.tags || []).includes(selectedTag)) {
+          return false;
+        }
+
+        // Search query filter
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim();
+          const bodyMatch = n.body.toLowerCase().includes(query);
+          const titleMatch = (n.title || '').toLowerCase().includes(query);
+          const locMatch = (n.location_name || '').toLowerCase().includes(query);
+          const tagMatch = (n.tags || []).some((t) => t.toLowerCase().includes(query));
+          const checklistMatch = (n.checklist_items || []).some((item) =>
+            item.text.toLowerCase().includes(query)
+          );
+          const eventMatch = events
+            .find((e) => e.id === n.event_id)
+            ?.title.toLowerCase()
+            .includes(query);
+          return bodyMatch || titleMatch || locMatch || tagMatch || checklistMatch || !!eventMatch;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        // Pinned notes stick to top unless in trash
+        if (activeTab !== 'trash') {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+        }
+
+        if (sortBy === 'title') {
+          return (a.title || '').localeCompare(b.title || '');
+        }
+        if (sortBy === 'created') {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        if (sortBy === 'reminder') {
+          if (!a.reminder_at) return 1;
+          if (!b.reminder_at) return -1;
+          return new Date(a.reminder_at).getTime() - new Date(b.reminder_at).getTime();
+        }
+        // Default: updated
+        const timeA = new Date(a.updated_at || a.created_at).getTime();
+        const timeB = new Date(b.updated_at || b.created_at).getTime();
+        return timeB - timeA;
+      });
+  }, [notes, activeTab, selectedEventId, selectedTag, searchQuery, sortBy, events]);
+
+  // Batch Selection Handlers
+  const handleToggleNoteSelect = (noteId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedNoteIds((prev) => {
+      const exists = prev.includes(noteId);
+      const next = exists ? prev.filter((id) => id !== noteId) : [...prev, noteId];
+      if (next.length === 0 && !isSelectionMode) {
+        setIsSelectionMode(false);
+      } else if (next.length > 0) {
+        setIsSelectionMode(true);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedNoteIds(filteredNotes.map((n) => n.id));
+    setIsSelectionMode(true);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedNoteIds([]);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedNoteIds([]);
+    setIsSelectionMode(false);
+  };
+
+  const handleCreateCategorySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEventTitle.trim()) return;
+    onCreateEvent({
+      title: newEventTitle.trim(),
+      event_date: new Date().toISOString().slice(0, 10),
+      category: newEventCategory,
+      color: newEventColor,
+    });
+    setNewEventTitle('');
+    setShowNewEventModal(false);
+  };
+
+  // In-app confirm state (avoids iframe window.confirm blocks)
+  const [confirmEmptyTrashModal, setConfirmEmptyTrashModal] = useState(false);
+  const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<number | null>(null);
+
+  const handleEmptyTrash = () => {
+    setConfirmEmptyTrashModal(true);
+  };
+
+  const executeEmptyTrash = () => {
+    SQLiteDatabase.emptyTrash();
+    setConfirmEmptyTrashModal(false);
+    onRefresh();
+  };
+
+  const handleRestoreNote = (e: React.MouseEvent, noteId: number) => {
+    e.stopPropagation();
+    SQLiteDatabase.restoreNote(noteId);
+    onRefresh();
+  };
+
+  const handlePermanentDelete = (e: React.MouseEvent, noteId: number) => {
+    e.stopPropagation();
+    setConfirmDeleteNoteId(noteId);
+  };
+
+  const executePermanentDeleteNote = () => {
+    if (confirmDeleteNoteId !== null) {
+      SQLiteDatabase.deleteNote(confirmDeleteNoteId);
+      setConfirmDeleteNoteId(null);
+      onRefresh();
+    }
+  };
+
+  const handleUnarchiveNote = (e: React.MouseEvent, noteId: number) => {
+    e.stopPropagation();
+    SQLiteDatabase.unarchiveNote(noteId);
+    onRefresh();
+  };
+
+  return (
+    <div
+      id="event-notes-explorer"
+      className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0e0e11] select-none relative overflow-hidden"
+    >
+      {/* Android Material Contextual Action Bar (CAB) when selecting notes */}
+      {selectedNoteIds.length > 0 && (
+        <BatchActionBar
+          selectedNoteIds={selectedNoteIds}
+          allNotes={filteredNotes}
+          events={events}
+          activeTab={activeTab}
+          onClearSelection={handleClearSelection}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={handleDeselectAll}
+          onOpenMergeModal={() => setShowMergeModal(true)}
+          onRefresh={() => {
+            onRefresh();
+            setSelectedNoteIds([]);
+            setIsSelectionMode(false);
+          }}
+        />
+      )}
+
+      {/* Search & Top Action Bar (hidden when CAB is active to prevent clutter) */}
+      {selectedNoteIds.length === 0 && (
+        <div className="p-3 pb-1.5 shrink-0">
+          <div className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+              <input
+                id="note-search-input"
+                type="text"
+                placeholder="Search notes, checklists, locations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-hidden focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Select Mode Button for Mobile */}
+            <button
+              id="batch-select-mode-toggle-btn"
+              onClick={() => {
+                setIsSelectionMode((p) => !p);
+                if (isSelectionMode) setSelectedNoteIds([]);
+              }}
+              title={isSelectionMode ? 'Cancel Selection' : 'Select Notes'}
+              className={`p-2 rounded-xl text-xs font-semibold border transition-all ${
+                isSelectionMode
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent shadow-xs'
+                  : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {isSelectionMode ? (
+                <X className="w-4 h-4" />
+              ) : (
+                <CheckSquare className="w-4 h-4" />
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Omni-Notes Core Mode Tabs (Pills) */}
+      <div className="px-3 py-1 shrink-0">
+        <div className="grid grid-cols-6 gap-1 text-[11px] font-medium bg-zinc-100 dark:bg-[#141418] rounded-xl p-1 border border-zinc-200/60 dark:border-zinc-800/60">
+          <button
+            onClick={() => setActiveTab('all')}
+            title="All Notes"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'all'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('checklist')}
+            title="Checklists & To-Dos"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'checklist'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sketch')}
+            title="Sketches & Drawings"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'sketch'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <PenTool className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reminders')}
+            title="Reminders & Alarms"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'reminders'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('archived')}
+            title="Archive"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'archived'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('trash')}
+            title="Trash / Recycle Bin"
+            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+              activeTab === 'trash'
+                ? 'bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 font-semibold shadow-2xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Category Pills Strip */}
+      <div className="px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+        <button
+          id="category-all-notes-btn"
+          onClick={() => onSelectEvent(0)}
+          className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
+            selectedEventId === 0 || selectedEventId === null
+              ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold shadow-2xs'
+              : 'bg-white/80 dark:bg-[#16161a] border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+          }`}
+        >
+          All Categories
+        </button>
+
+        {events.map((ev) => (
+          <button
+            key={ev.id}
+            id={`category-btn-${ev.id}`}
+            onClick={() => onSelectEvent(ev.id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap flex items-center gap-1.5 transition-all ${
+              selectedEventId === ev.id
+                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold shadow-2xs'
+                : 'bg-white/80 dark:bg-[#16161a] border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+            }`}
+          >
+            {ev.color && (
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: ev.color }}
+              />
+            )}
+            <span className="truncate max-w-[120px]">{ev.title}</span>
+          </button>
+        ))}
+
+        <button
+          onClick={() => setShowNewEventModal(true)}
+          title="New Category"
+          className="p-1.5 bg-white/80 dark:bg-[#16161a] border border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* Tag Filter Strip */}
+      {allAvailableTags.length > 0 && (
+        <div className="px-3 py-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
+          <button
+            id="tag-filter-all"
+            onClick={() => setSelectedTag(null)}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
+              selectedTag === null
+                ? 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+            }`}
+          >
+            All tags
+          </button>
+
+          {allAvailableTags.map((tag) => {
+            const isTagActive = selectedTag === tag;
+            return (
+              <button
+                key={tag}
+                id={`tag-filter-${tag.toLowerCase()}`}
+                onClick={() => setSelectedTag(isTagActive ? null : tag)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium shrink-0 transition-all ${
+                  isTagActive
+                    ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold'
+                    : 'bg-white/60 dark:bg-[#16161a] border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+                }`}
+              >
+                #{tag}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* List Header & Sorting / Quick Actions */}
+      <div className="px-3.5 py-2 flex items-center justify-between text-zinc-400 text-[11px] font-medium border-t border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
+        <div className="flex items-center gap-2">
+          <span>
+            {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
+          </span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            className="bg-transparent text-zinc-600 dark:text-zinc-300 text-[11px] font-medium focus:outline-hidden cursor-pointer"
+          >
+            <option value="updated">Recent</option>
+            <option value="created">Created</option>
+            <option value="title">Title A-Z</option>
+            <option value="reminder">Reminder</option>
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* List vs Grid Layout Toggle */}
+          <button
+            onClick={() => setViewLayout((p) => (p === 'list' ? 'grid' : 'list'))}
+            title={viewLayout === 'list' ? 'Switch to Grid View' : 'Switch to List View'}
+            className="p-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md"
+          >
+            {viewLayout === 'list' ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+          </button>
+
+          {activeTab === 'trash' ? (
+            filteredNotes.length > 0 && (
+              <button
+                onClick={handleEmptyTrash}
+                className="text-rose-600 dark:text-rose-400 hover:underline font-semibold"
+              >
+                Empty Trash
+              </button>
+            )
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setSelectedNoteIds(filteredNotes.slice(0, 2).map((n) => n.id));
+                  setShowMergeModal(true);
+                }}
+                title="Merge notes"
+                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-0.5"
+              >
+                <GitMerge className="w-3 h-3" />
+                <span>Merge</span>
+              </button>
+              <button
+                id="create-new-note-btn"
+                onClick={() => onCreateNote(selectedEventId || (events[0]?.id ?? 1), 'text')}
+                className="flex items-center gap-1 text-zinc-900 dark:text-zinc-100 font-semibold hover:opacity-75 transition-opacity"
+              >
+                <Plus className="w-3 h-3" />
+                <span>New</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Notes List / Grid */}
+      <div className="flex-1 overflow-y-auto px-3 pb-6 custom-minimal-scrollbar">
+        {filteredNotes.length > 0 ? (
+          <div
+            className={
+              viewLayout === 'grid'
+                ? 'grid grid-cols-2 gap-2.5'
+                : 'space-y-2'
+            }
+          >
+            {filteredNotes.map((note) => {
+              const isSelectedInBatch = selectedNoteIds.includes(note.id);
+              const isActiveEditor = selectedNoteId === note.id;
+              const recordings = SQLiteDatabase.getRecordingsForNote(note.id);
+              const ocrScans = SQLiteDatabase.getOcrScansForNote(note.id);
+              const isChecklist = note.note_type === 'checklist';
+              const isSketch = note.note_type === 'sketch';
+              const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
+              const totalItems = (note.checklist_items || []).length;
+
+              return (
+                <div
+                  key={note.id}
+                  id={`note-item-${note.id}`}
+                  onClick={(e) => {
+                    if (isSelectionMode || selectedNoteIds.length > 0) {
+                      handleToggleNoteSelect(note.id, e);
+                    } else {
+                      onSelectNote(note.id);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    handleToggleNoteSelect(note.id, e);
+                  }}
+                  className={`p-3.5 rounded-2xl cursor-pointer transition-all relative overflow-hidden group ${
+                    isSelectedInBatch
+                      ? 'bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-900 dark:border-zinc-100 shadow-md ring-1 ring-zinc-400'
+                      : isActiveEditor
+                      ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
+                      : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
+                  }`}
+                  style={{
+                    borderLeft: note.color ? `4px solid ${note.color}` : undefined,
+                  }}
+                >
+                  {/* Selection Checkbox (always visible when in selection mode, or on card hover) */}
+                  {(isSelectionMode || selectedNoteIds.length > 0) && (
+                    <div
+                      onClick={(e) => handleToggleNoteSelect(note.id, e)}
+                      className="absolute top-3 right-3 z-10 p-0.5 rounded-full"
+                    >
+                      {isSelectedInBatch ? (
+                        <CheckCircle2 className="w-4 h-4 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-zinc-400 hover:text-zinc-700" />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Title & Status Icons */}
+                  <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {isChecklist && <CheckSquare className="w-3.5 h-3.5 text-zinc-500 shrink-0" />}
+                      {isSketch && <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                      {note.is_locked && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                      <h4
+                        className={`text-xs truncate ${
+                          isActiveEditor || isSelectedInBatch
+                            ? 'font-semibold text-zinc-950 dark:text-zinc-50'
+                            : 'font-medium text-zinc-800 dark:text-zinc-200'
+                        }`}
+                      >
+                        {note.title || 'Untitled Note'}
+                      </h4>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {note.is_pinned && (
+                        <Pin className="w-3 h-3 text-zinc-700 dark:text-zinc-300 fill-current" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Body or Checklist summary */}
+                  {isChecklist && totalItems > 0 ? (
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-2.5">
+                      <span>{completedItems} of {totalItems} items checked</span>
+                      <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
+                        <div
+                          className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all"
+                          style={{ width: `${(completedItems / totalItems) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={`text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
+                      {note.is_locked ? '•••••••• Protected Note Content' : note.body.replace(/[#*`_]/g, '').slice(0, 120)}
+                    </p>
+                  )}
+
+                  {/* Subdued Metadata & Badges */}
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-zinc-100/80 dark:border-zinc-850">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {note.reminder_at && (
+                        <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                          <Bell className="w-2.5 h-2.5" />
+                          <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                        </span>
+                      )}
+
+                      {note.location_name && (
+                        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                          <MapPin className="w-2.5 h-2.5" />
+                          <span className="truncate max-w-[65px]">{note.location_name}</span>
+                        </span>
+                      )}
+
+                      {recordings.length > 0 && (
+                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
+                          <Mic className="w-2.5 h-2.5" />
+                          {recordings.length}
+                        </span>
+                      )}
+
+                      {ocrScans.length > 0 && (
+                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
+                          <Camera className="w-2.5 h-2.5" />
+                          {ocrScans.length}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right side actions for Trash / Archive / Date */}
+                    <div className="flex items-center gap-1.5">
+                      {activeTab === 'trash' && (
+                        <>
+                          <button
+                            onClick={(e) => handleRestoreNote(e, note.id)}
+                            title="Restore Note"
+                            className="text-zinc-600 dark:text-zinc-300 hover:text-emerald-600 p-0.5"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={(e) => handlePermanentDelete(e, note.id)}
+                            title="Delete Permanently"
+                            className="text-zinc-600 dark:text-zinc-300 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+
+                      {activeTab === 'archived' && (
+                        <button
+                          onClick={(e) => handleUnarchiveNote(e, note.id)}
+                          title="Restore Note (Unarchive)"
+                          className="text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 p-0.5"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {activeTab !== 'trash' && activeTab !== 'archived' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            SQLiteDatabase.archiveNote(note.id);
+                            onRefresh();
+                          }}
+                          title="Archive Note (Hide from active notes)"
+                          className="text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                        >
+                          <Archive className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      <span>
+                        {new Date(note.updated_at || note.created_at).toLocaleDateString([], {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-10 text-center text-zinc-400 space-y-2">
+            <FileText className="w-7 h-7 mx-auto mb-1 opacity-40 stroke-[1.2]" />
+            <p className="text-xs font-normal">
+              {activeTab === 'trash'
+                ? 'Trash is empty.'
+                : activeTab === 'archived'
+                ? 'No archived notes.'
+                : activeTab === 'checklist'
+                ? 'No checklist notes.'
+                : activeTab === 'sketch'
+                ? 'No sketch notes.'
+                : activeTab === 'reminders'
+                ? 'No active reminders.'
+                : 'No notes found.'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* New Category Modal */}
+      {showNewEventModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/40 backdrop-blur-xs">
+          <div className="w-full sm:max-w-sm bg-white dark:bg-[#16161a] border border-zinc-200 dark:border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
+                New Category
+              </h3>
+              <button
+                onClick={() => setShowNewEventModal(false)}
+                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCategorySubmit} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block mb-1">
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Work, Ideas, Tasks"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  className="w-full p-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 block mb-1">
+                  Tag Color
+                </label>
+                <div className="flex items-center gap-2">
+                  {['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'].map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewEventColor(color)}
+                      className={`w-6 h-6 rounded-full transition-transform ${
+                        newEventColor === color ? 'scale-125 ring-2 ring-zinc-400' : ''
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewEventModal(false)}
+                  className="px-3.5 py-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-xs font-semibold"
+                >
+                  Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Notes Modal */}
+      {showMergeModal && (
+        <MergeNotesModal
+          notes={notes.filter((n) => n.status !== 'trash')}
+          initialSelectedIds={selectedNoteIds}
+          onMerged={(merged) => {
+            onRefresh();
+            setSelectedNoteIds([]);
+            setIsSelectionMode(false);
+            onSelectNote(merged.id);
+          }}
+          onClose={() => setShowMergeModal(false)}
+        />
+      )}
+
+      {/* Confirm Empty Trash Modal */}
+      {confirmEmptyTrashModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+          <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Empty Trash?</h3>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Permanently delete all notes in Trash? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setConfirmEmptyTrashModal(false)}
+                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeEmptyTrash}
+                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs"
+              >
+                Empty Trash
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Note Modal */}
+      {confirmDeleteNoteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+          <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Permanently Delete Note?</h3>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  This note and its recordings, transcripts, and OCR scans will be removed permanently.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteNoteId(null)}
+                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executePermanentDeleteNote}
+                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs"
+              >
+                Delete Note
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
