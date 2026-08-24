@@ -24,12 +24,14 @@ import {
   Palette,
   Clock,
   X,
+  Share2,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { GeminiApiService } from '../lib/geminiService';
+import { NativeBridge } from '../lib/nativeBridge';
 import { AudioRecorderPlayer } from './AudioRecorderPlayer';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
 import { OcrScannerModal } from './OcrScannerModal';
@@ -249,6 +251,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       cloud_save_enabled: newStatus,
     });
     if (updated) onNoteUpdated(updated);
+  };
+
+  const handleShareNote = async () => {
+    let exportText = body;
+    if (noteType === 'checklist' && checklistItems.length > 0) {
+      exportText = checklistItems.map((c) => `- [${c.completed ? 'x' : ' '}] ${c.text}`).join('\n') + (body ? `\n\n${body}` : '');
+    }
+    await NativeBridge.shareNoteText(title || 'Note', exportText);
   };
 
   // Generate Meeting Minutes using Gemini
@@ -541,6 +551,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             }`}
           >
             {note.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Share note via native Android intent or clipboard */}
+          <button
+            onClick={handleShareNote}
+            title="Share Note"
+            className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 rounded-lg transition-colors"
+          >
+            <Share2 className="w-3.5 h-3.5" />
           </button>
 
           {/* Duplicate note */}

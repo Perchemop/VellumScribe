@@ -17,9 +17,11 @@ import {
   RotateCcw,
   MoreVertical,
   ChevronDown,
+  Share2,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
+import { NativeBridge } from '../lib/nativeBridge';
 
 interface BatchActionBarProps {
   selectedNoteIds: number[];
@@ -177,28 +179,18 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     onRefresh();
   };
 
-  const handleExportMarkdown = () => {
+  const handleExportMarkdown = async () => {
     const md = SQLiteDatabase.exportNotesAsMarkdown(selectedNoteIds);
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `VellumScribe_Notes_${new Date().toISOString().slice(0, 10)}.md`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const fileName = `VellumScribe_Notes_${new Date().toISOString().slice(0, 10)}.md`;
+    await NativeBridge.shareOrDownloadFile(fileName, md, 'text/markdown', 'Share Selected Markdown Notes');
     setShowExportMenu(false);
     setShowMoreMenu(false);
   };
 
-  const handleExportJson = () => {
+  const handleExportJson = async () => {
     const jsonStr = SQLiteDatabase.exportNotesAsJson(selectedNoteIds);
-    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `VellumScribe_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const fileName = `VellumScribe_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    await NativeBridge.shareOrDownloadFile(fileName, jsonStr, 'application/json', 'Share Selected Notes JSON');
     setShowExportMenu(false);
     setShowMoreMenu(false);
   };

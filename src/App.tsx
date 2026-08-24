@@ -24,6 +24,7 @@ import {
 import { EventRecord, NoteRecord, ConflictLog } from './types';
 import { SQLiteDatabase } from './lib/storage';
 import { CloudSyncEngine, SyncProgressUpdate } from './lib/cloudSync';
+import { NativeBridge } from './lib/nativeBridge';
 import { EventNotesList } from './components/EventNotesList';
 import { NoteEditor } from './components/NoteEditor';
 import { RecentNotesSection } from './components/RecentNotesSection';
@@ -170,7 +171,7 @@ export default function App() {
       >
         {/* Desktop & Mobile Clean Top Bar */}
         {!focusMode && (
-          <header className="h-14 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-3.5 sm:px-6 flex items-center justify-between shrink-0 z-20">
+          <header className="min-h-14 safe-area-pt border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-3.5 sm:px-6 flex items-center justify-between shrink-0 z-20">
             {/* Brand Identity */}
             <div className="flex items-center gap-2.5">
               <button
@@ -508,9 +509,10 @@ export default function App() {
 
         {/* Mobile Bottom Navigation Bar */}
         {!focusMode && !selectedNote && (
-          <nav className="md:hidden h-14 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-3 flex items-center justify-around shrink-0 z-20">
+          <nav className="md:hidden min-h-14 safe-area-pb border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-3 py-1 flex items-center justify-around shrink-0 z-20">
             <button
               onClick={() => {
+                NativeBridge.hapticImpact('light');
                 setActiveView('notes');
                 setSelectedNoteId(null);
               }}
@@ -532,6 +534,7 @@ export default function App() {
 
             <button
               onClick={() => {
+                NativeBridge.hapticImpact('light');
                 setActiveView('recents');
                 setSelectedNoteId(null);
               }}
@@ -553,6 +556,7 @@ export default function App() {
 
             <button
               onClick={() => {
+                NativeBridge.hapticImpact('light');
                 setActiveView('archive');
                 setSelectedNoteId(null);
               }}
@@ -574,6 +578,7 @@ export default function App() {
 
             <button
               onClick={() => {
+                NativeBridge.hapticImpact('light');
                 setActiveView('settings');
                 setSelectedNoteId(null);
               }}
