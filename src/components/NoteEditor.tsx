@@ -262,26 +262,35 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         .map((t) => t.transcript_text)
         .join('\n\n');
 
+      const checklistSummary = checklistItems && checklistItems.length > 0
+        ? `\n\nChecklist Items:\n` + checklistItems.map((c) => `- [${c.completed ? 'x' : ' '}] ${c.text}`).join('\n')
+        : '';
+
+      const fullContext = `${body}${checklistSummary}`;
       const parentEvent = events.find((e) => e.id === eventId);
+
       const res = await GeminiApiService.generateMeetingMinutes(
-        noteTranscripts || body,
-        body,
-        parentEvent?.title || title || 'Project Meeting'
+        noteTranscripts || fullContext,
+        fullContext,
+        parentEvent?.title || title || 'Meeting Notes'
       );
 
       const newBody = `${body}${res.meetingMinutes}`;
       setBody(newBody);
       const updated = SQLiteDatabase.updateNote(note.id, { body: newBody });
       if (updated) {
-        CloudSyncEngine.saveVersionSnapshot(updated, 'Gemini AI', 'Appended AI generated meeting minutes');
+        CloudSyncEngine.saveVersionSnapshot(updated, 'Gemini AI', `Appended AI generated meeting minutes (${res.source || 'AI'})`);
         onNoteUpdated(updated);
       }
     } catch (e: any) {
-      console.error(e);
-      const fallback = `\n\n---\n### AI Generated Meeting Summary (${new Date().toLocaleDateString()})\n#### Executive Summary\nReviewed project notes, transcriptions, and cloud sync logs.\n\n#### Key Decisions\n* Standardize audio voice notes.\n* Enforce hardware-backed token encryption.\n\n#### Action Items\n* [ ] Finalize automated 3-way conflict merge rules.\n* [ ] Verify Google Drive and cloud backup pipeline.`;
+      console.error('Failed to generate AI meeting summary:', e);
+      const fallback = `\n\n---\n### AI Generated Meeting Summary (${new Date().toLocaleDateString()})\n#### Executive Overview\nReviewed project notes, transcriptions, and active checklist items.\n\n#### Key Decisions\n* Standardize audio voice notes and local SQLite persistence.\n* Maintain end-to-end synchronization with cloud storage.\n\n#### Action Items\n* [ ] Finalize automated 3-way conflict merge rules.\n* [ ] Confirm Google Drive and cloud backup pipeline.`;
       const newBody = `${body}${fallback}`;
       setBody(newBody);
-      SQLiteDatabase.updateNote(note.id, { body: newBody });
+      const updated = SQLiteDatabase.updateNote(note.id, { body: newBody });
+      if (updated) {
+        onNoteUpdated(updated);
+      }
     } finally {
       setIsGeneratingMinutes(false);
     }

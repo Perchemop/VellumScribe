@@ -152,38 +152,94 @@ export class AiSettingsManager {
   }
 
   /**
-   * Verifies the provided or locally stored API key against the test verification endpoint.
+   * Verifies the provided or locally stored API key against the test verification endpoint,
+   * with automatic client-side fallback if running in a standalone mobile APK (where /api routes return HTML).
    */
   public static async testApiKey(customKey?: string): Promise<{ success: boolean; message: string; model?: string }> {
-    const keyToTest = customKey || this.getApiKey();
+    const keyToTest = (customKey || this.getApiKey()).trim();
 
+    if (!keyToTest) {
+      return {
+        success: false,
+        message: 'Please enter a Google AI Studio API key (starts with "AIzaSy").',
+      };
+    }
+
+    // 1. Try server verification endpoint first
     try {
       const res = await fetch('/api/gemini/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(keyToTest ? { 'x-gemini-api-key': keyToTest } : {}),
+          'x-gemini-api-key': keyToTest,
         },
         body: JSON.stringify({ customApiKey: keyToTest }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+
+      // Check if response is actual JSON (not HTML fallback from Capacitor / WebView)
+      if (contentType.includes('application/json') || (!text.trim().startsWith('<') && text.trim().startsWith('{'))) {
+        try {
+          const data = JSON.parse(text);
+          if (res.ok && data.success) {
+            return {
+              success: true,
+              message: data.message || 'API Key verified successfully! Connected to Google AI Studio.',
+              model: data.model || 'gemini-3.7-flash',
+            };
+          } else if (data.error) {
+            return {
+              success: false,
+              message: data.error,
+            };
+          }
+        } catch {
+          // JSON parse failed, proceed to direct client fallback
+        }
+      }
+    } catch {
+      // Server request failed, proceed to direct fallback
+    }
+
+    // 2. Direct client-side verification fallback (essential for standalone APK on Android)
+    try {
+      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${encodeURIComponent(keyToTest)}`;
+      const directRes = await fetch(directUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Respond with OK' }] }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 10,
+          },
+        }),
+      });
+
+      const data = await directRes.json().catch(() => ({}));
+
+      if (directRes.ok) {
         return {
-          success: false,
-          message: data.error || 'Failed to verify API key with Google AI Studio.',
+          success: true,
+          message: 'API Key verified successfully! Connected to Google AI Studio (gemini-3.7-flash).',
+          model: 'gemini-3.7-flash',
         };
       }
 
-      return {
-        success: true,
-        message: data.message || 'API Key verified successfully! Connected to Google AI Studio.',
-        model: data.model || 'gemini-3.7-flash',
-      };
-    } catch (err: any) {
+      // Handle specific Google API error messages
+      const apiError = data.error?.message || data.error?.status || `Google API returned status ${directRes.status}`;
       return {
         success: false,
-        message: err.message || 'Network error while attempting to connect to AI Studio verification endpoint.',
+        message: `API Key verification failed: ${apiError}`,
+      };
+    } catch (directErr: any) {
+      return {
+        success: false,
+        message: directErr.message || 'Network error while connecting to Google AI Studio. Please check your internet connection.',
       };
     }
   }
