@@ -255,12 +255,7 @@ app.post("/api/gemini/ocr", async (req, res) => {
     const key = resolveApiKey(req);
     const ai = getGeminiClient(key);
     if (!ai) {
-      // Return clean OCR fallback if no key is configured
-      return res.json({
-        ocrText: "Project Launch Checklist:\n- Finalize mobile interface design\n- Enable automatic light and dark mode preferences\n- Record and attach voice memos to notes\n- Ensure automatic cloud backup to Google Drive",
-        confidence: 0.94,
-        source: "offline_fallback",
-      });
+      return res.status(503).json({ error: "AI OCR is not configured. No fabricated OCR result is returned." });
     }
 
     // Clean raw base64 string and normalized mime type
@@ -293,11 +288,7 @@ app.post("/api/gemini/ocr", async (req, res) => {
       });
     } catch (genError: any) {
       console.warn("Gemini OCR encountered transient high demand/error, providing seamless fallback:", genError?.message || genError);
-      return res.json({
-        ocrText: "Project Action Items:\n- Review and organize project notes\n- Confirm cloud synchronization preferences\n- Transcribe recorded audio memos\n- Validate version history snapshots",
-        confidence: 0.92,
-        source: "offline_fallback (model high demand)",
-      });
+      return res.status(503).json({ error: "Gemini OCR failed. No fabricated OCR result is returned." });
     }
   } catch (error: any) {
     console.error("Gemini OCR Error:", error);
@@ -318,11 +309,7 @@ app.post("/api/gemini/transcribe", async (req, res) => {
     const key = resolveApiKey(req);
     const ai = getGeminiClient(key);
     if (!ai) {
-      return res.json({
-        transcript:
-          "Welcome everyone. Today we are reviewing the mobile roadmap. Our goal is to ensure the interface is clean, uncluttered, and easy to use on mobile devices. Let us make sure audio recording and cloud backup work seamlessly. Next check-in is scheduled for Friday morning.",
-        source: "offline_fallback",
-      });
+      return res.status(503).json({ error: "AI transcription is not configured. No fabricated transcript is returned." });
     }
 
     // Robust base64 extraction and mime normalization
@@ -348,18 +335,13 @@ app.post("/api/gemini/transcribe", async (req, res) => {
           ],
         },
       });
-
       return res.json({
         transcript: text || "",
         source: modelUsed,
       });
     } catch (genError: any) {
-      console.warn("Gemini Transcription encountered transient high demand/error, providing seamless fallback:", genError?.message || genError);
-      return res.json({
-        transcript:
-          "Recording memo: Key discussion points were captured successfully. The roadmap includes automated note versioning, compressed AAC audio capture, and multi-device cloud synchronization.",
-        source: "offline_fallback (model high demand)",
-      });
+      console.warn("Gemini transcription failed:", genError?.message || genError);
+      return res.status(503).json({ error: "Gemini transcription failed. No fabricated transcript is returned." });
     }
   } catch (error: any) {
     console.error("Gemini Transcription Error:", error);
@@ -380,12 +362,9 @@ app.post("/api/gemini/meeting-minutes", async (req, res) => {
     const key = resolveApiKey(req);
     const ai = getGeminiClient(key);
     if (!ai) {
-      const fallbackMinutes = `\n\n---\n### Meeting Summary (${new Date().toLocaleDateString()})\n**Context**: ${eventTitle}\n\n#### Executive Overview\nThe team reviewed key milestones for the project. Deliverables focus on clean mobile formatting, quick audio capture, and automatic cloud backup.\n\n#### Key Decisions\n* Prioritize distraction-free writing and clean typography across all screens.\n* Provide automatic light and dark theme adaptation according to phone preferences.\n* Enable one-tap voice notes and handwritten document scanning.\n\n#### Action Items\n* [ ] Finalize responsive layout and typography hierarchy.\n* [ ] Verify audio transcription accuracy and playback speeds.\n* [ ] Test automatic cloud sync and version recovery.`;
-      return res.json({
-        meetingMinutes: fallbackMinutes,
-        source: "offline_fallback",
-      });
+      return res.status(503).json({ error: "AI meeting minutes are not configured. No fabricated summary is returned." });
     }
+
 
     const prompt = `Analyse the following transcript and notes. Generate concise bullet points for key decisions, action items, and summaries. Format with clean markdown headers (### Executive Summary, ### Key Decisions, ### Action Items with checkboxes [ ] and assignees if mentioned). Do not include emojis in the output.
 
@@ -412,13 +391,10 @@ ${currentBody}
         source: modelUsed,
       });
     } catch (genError: any) {
-      console.warn("Gemini Meeting Minutes encountered transient high demand/error, generating heuristic minutes:", genError?.message || genError);
-      const fallbackMinutes = `\n\n---\n### Meeting Summary (${new Date().toLocaleDateString()})\n**Context**: ${eventTitle}\n\n#### Executive Overview\nKey discussions summarized from audio notes and current project context.\n\n#### Key Decisions\n* Preserve note integrity with automatic local snapshots.\n* Ensure voice memos and scans are linked directly to active calendar events.\n\n#### Action Items\n* [ ] Review transcribed recording details.\n* [ ] Confirm synchronization with remote storage.`;
-      return res.json({
-        meetingMinutes: fallbackMinutes,
-        source: "heuristic_fallback (model high demand)",
-      });
+      console.warn("Gemini Meeting Minutes failed:", genError?.message || genError);
+      return res.status(503).json({ error: "Gemini meeting summary failed. No fabricated summary is returned." });
     }
+
   } catch (error: any) {
     console.error("Gemini Meeting Minutes Error:", error);
     res.status(500).json({
@@ -435,13 +411,9 @@ app.post("/api/gemini/intelligent-merge", async (req, res) => {
     const key = resolveApiKey(req);
     const ai = getGeminiClient(key);
     if (!ai) {
-      // Standard 3-way merge fallback: combine sections cleanly
-      const merged = `### ${documentTitle} (Merged)\n\n#### Local Edits\n${localContent}\n\n#### Remote Additions\n${remoteContent}`;
-      return res.json({
-        mergedContent: merged,
-        resolutionStrategy: "intelligent_heuristic",
-      });
+      return res.status(503).json({ error: "AI conflict merge is not configured. No heuristic merge is returned." });
     }
+
 
     const prompt = `You are a distributed database conflict resolution engine. Perform an intelligent 3-way merge on the following document.
 Original Base:
@@ -471,13 +443,10 @@ Merge both versions cleanly preserving all unique notes, action items, and struc
         resolutionStrategy: `${modelUsed}_semantic_merge`,
       });
     } catch (genError: any) {
-      console.warn("Gemini Merge encountered transient high demand/error, using heuristic merge:", genError?.message || genError);
-      const merged = `### ${documentTitle} (Merged)\n\n#### Local Changes\n${localContent}\n\n#### Remote Changes\n${remoteContent}`;
-      return res.json({
-        mergedContent: merged,
-        resolutionStrategy: "intelligent_heuristic (model high demand)",
-      });
+      console.warn("Gemini Merge failed:", genError?.message || genError);
+      return res.status(503).json({ error: "Gemini conflict merge failed. No heuristic merge is returned." });
     }
+
   } catch (error: any) {
     console.error("Gemini Merge Error:", error);
     res.status(500).json({
