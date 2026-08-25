@@ -13,7 +13,7 @@ import {
   Layers,
   Search,
 } from 'lucide-react';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 
 interface SqliteInspectorModalProps {
   onClose: () => void;
@@ -53,32 +53,32 @@ export const SqliteInspectorModal: React.FC<SqliteInspectorModalProps> = ({
     columns: string[];
     rows: any[][];
     message?: string;
-  }>(() => SQLiteDatabase.executeSql('SELECT * FROM notes'));
+  }>(() => StorageManager.executeSql('SELECT * FROM notes'));
 
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const tables = [
-    { name: 'events', count: SQLiteDatabase.getEvents().length },
-    { name: 'notes', count: SQLiteDatabase.getNotes().length },
-    { name: 'recordings', count: SQLiteDatabase.getRecordings().length },
-    { name: 'transcripts', count: SQLiteDatabase.getTranscripts().length },
-    { name: 'ocr_scans', count: SQLiteDatabase.getOcrScans().length },
+    { name: 'events', count: StorageManager.getEvents().length },
+    { name: 'notes', count: StorageManager.getNotes().length },
+    { name: 'recordings', count: StorageManager.getRecordings().length },
+    { name: 'transcripts', count: StorageManager.getTranscripts().length },
+    { name: 'ocr_scans', count: StorageManager.getOcrScans().length },
   ];
 
   const handleSelectTable = (tbl: any) => {
     setSelectedTable(tbl);
     const sql = `SELECT * FROM ${tbl}`;
     setSqlInput(sql);
-    setQueryResult(SQLiteDatabase.executeSql(sql));
+    setQueryResult(StorageManager.executeSql(sql));
   };
 
   const handleRunSql = () => {
-    const res = SQLiteDatabase.executeSql(sqlInput);
+    const res = StorageManager.executeSql(sqlInput);
     setQueryResult(res);
   };
 
   const handleExportDump = () => {
-    const dump = SQLiteDatabase.exportFullDump();
+    const dump = StorageManager.exportFullDump();
     const blob = new Blob([dump], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -93,7 +93,7 @@ export const SqliteInspectorModal: React.FC<SqliteInspectorModalProps> = ({
       const reader = new FileReader();
       reader.onload = () => {
         const text = reader.result as string;
-        const ok = SQLiteDatabase.importFullDump(text);
+        const ok = StorageManager.importFullDump(text);
         if (ok) {
           setImportStatus('SQLite database restored successfully!');
           onDatabaseChanged();
@@ -109,7 +109,7 @@ export const SqliteInspectorModal: React.FC<SqliteInspectorModalProps> = ({
 
   const handleResetFactory = () => {
     if (window.confirm('Reset SQLite database to factory sample data?')) {
-      SQLiteDatabase.resetToFactoryDefaults();
+      StorageManager.resetToFactoryDefaults();
       onDatabaseChanged();
       handleSelectTable(selectedTable);
     }

@@ -16,7 +16,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { AppLogo } from './AppLogo';
 
 interface RecentNotesSectionProps {
@@ -90,35 +90,19 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
             VellumScribe Studio
           </h2>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
-            Distraction-free multimodal workspace with markdown writing, interactive checklists, canvas sketching, and Gemini intelligence.
+            Distraction-free multimodal notes with markdown writing, interactive checklists, canvas sketching, and Gemini intelligence.
           </p>
         </div>
 
-        {/* 3 Quick Creation Buttons */}
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+        {/* Primary Creation Button */}
+        <div className="pt-2 flex items-center justify-center">
           <button
             id="create-note-empty-state-btn"
             onClick={() => onCreateNote(undefined, 'text')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-xl shadow-2xs transition-opacity"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-2xl shadow-sm transition-all hover:scale-102 active:scale-98"
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Text Note</span>
-          </button>
-
-          <button
-            onClick={() => onCreateNote(undefined, 'checklist')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-semibold rounded-xl border border-zinc-200/80 dark:border-zinc-700 transition-colors"
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-            <span>To-Do List</span>
-          </button>
-
-          <button
-            onClick={() => onCreateNote(undefined, 'sketch')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-semibold rounded-xl border border-zinc-200/80 dark:border-zinc-700 transition-colors"
-          >
-            <PenTool className="w-3.5 h-3.5" />
-            <span>Sketch Canvas</span>
+            <Plus className="w-4 h-4" />
+            <span>Create New Note</span>
           </button>
         </div>
       </div>
@@ -154,84 +138,74 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
             )}
           </div>
 
-          {/* Cards */}
           <div
             ref={scrollContainerRef}
-            id="recent-notes-scroll-container"
-            className="flex gap-3 overflow-x-auto pb-2 scroll-smooth snap-x snap-mandatory no-scrollbar"
+            className="flex gap-3 overflow-x-auto pb-4 pt-1 snap-x no-scrollbar"
           >
             {recentNotes.map((note) => {
-              const parentEvent = events.find((e) => e.id === note.event_id);
-              const recordings = SQLiteDatabase.getRecordingsForNote(note.id);
-              const ocrScans = SQLiteDatabase.getOcrScansForNote(note.id);
-              const isChecklist = note.note_type === 'checklist';
-              const isSketch = note.note_type === 'sketch';
-              const cleanPreview = note.body
-                .replace(/^#+\s+/gm, '')
-                .replace(/[*_`~[\]]/g, '')
-                .replace(/\n+/g, ' ')
-                .trim();
+              const event = events.find((e) => e.id === note.event_id);
+              const recordings = StorageManager.getRecordingsForNote(note.id);
+              const ocrScans = StorageManager.getOcrScansForNote(note.id);
+              const isLocked = note.is_locked;
 
               return (
                 <div
                   key={note.id}
-                  id={`recent-note-card-${note.id}`}
                   onClick={() => onSelectNote(note.id)}
-                  className="w-64 min-w-[240px] max-w-[260px] h-44 snap-start p-4 bg-zinc-50/70 dark:bg-[#121215] border border-zinc-200/70 dark:border-zinc-800/70 hover:border-zinc-400 dark:hover:border-zinc-600 rounded-xl cursor-pointer transition-all flex flex-col justify-between group"
-                  style={{
-                    borderTop: note.color ? `3px solid ${note.color}` : undefined,
-                  }}
+                  className="w-64 shrink-0 p-4 rounded-2xl bg-zinc-50/70 dark:bg-[#121216]/70 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/60 dark:hover:bg-[#16161c] transition-all cursor-pointer space-y-3 snap-start group relative"
                 >
-                  <div>
-                    <div className="flex items-center justify-between gap-1 mb-1.5 text-[10px] text-zinc-400">
-                      <span className="truncate max-w-[120px] font-medium">
-                        {parentEvent?.title || 'General'}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {note.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
-                        {note.is_pinned && (
-                          <Pin className="w-3 h-3 text-zinc-700 dark:text-zinc-300 fill-current shrink-0" />
-                        )}
-                      </div>
+                  {note.is_pinned && (
+                    <div className="absolute top-3 right-3 text-zinc-400">
+                      <Pin className="w-3 h-3 fill-current" />
                     </div>
+                  )}
 
-                    <div className="flex items-center gap-1 mb-1">
-                      {isChecklist && <CheckSquare className="w-3 h-3 text-zinc-400 shrink-0" />}
-                      {isSketch && <PenTool className="w-3 h-3 text-amber-500 shrink-0" />}
-                      <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 group-hover:text-zinc-950 dark:group-hover:text-white transition-colors truncate">
-                        {note.title || 'Untitled'}
-                      </h4>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: event?.color || '#a1a1aa' }}
+                    />
+                    <span className="text-[11px] font-medium text-zinc-400 truncate">
+                      {event?.title || 'General'}
+                    </span>
+                  </div>
 
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mt-1 font-normal">
-                      {note.is_locked
-                        ? '•••••••• Protected Note'
-                        : isChecklist
-                        ? `${(note.checklist_items || []).filter((i) => i.completed).length} of ${(note.checklist_items || []).length} items done`
-                        : cleanPreview || 'Empty note...'}
+                  <div className="space-y-1">
+                    <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
+                      {note.title || 'Untitled Note'}
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                      {isLocked ? 'Protected note with PIN security' : note.body || 'No text added...'}
                     </p>
                   </div>
 
-                  <div className="pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 flex items-center justify-between text-[10px] text-zinc-400">
-                    <div className="flex items-center gap-2">
-                      <span>{formatRelativeTime(note.updated_at || note.created_at)}</span>
-                      {note.reminder_at && <Bell className="w-2.5 h-2.5 text-amber-500" />}
-                      {note.location_name && <MapPin className="w-2.5 h-2.5 text-emerald-500" />}
+                  <div className="flex items-center justify-between pt-1 text-[10px] text-zinc-400 font-mono">
+                    <div className="flex items-center gap-1.5">
+                      {isLocked && <Lock className="w-3 h-3 text-amber-500" />}
+                      {note.reminder_at && <Bell className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
+                      {note.location_name && <MapPin className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
                       {recordings.length > 0 && (
-                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
-                          <Mic className="w-2.5 h-2.5" />
-                          {recordings.length}
+                        <span className="flex items-center gap-0.5">
+                          <Mic className="w-3 h-3" />
+                          <span>{recordings.length}</span>
                         </span>
                       )}
                       {ocrScans.length > 0 && (
-                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
-                          <Camera className="w-2.5 h-2.5" />
-                          {ocrScans.length}
+                        <span className="flex items-center gap-0.5">
+                          <Camera className="w-3 h-3" />
+                          <span>{ocrScans.length}</span>
                         </span>
                       )}
+                      {note.checklist_items && note.checklist_items.length > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <CheckSquare className="w-3 h-3" />
+                          <span>{note.checklist_items.filter((c) => c.completed).length}/{note.checklist_items.length}</span>
+                        </span>
+                      )}
+                      {note.sketch_data && <PenTool className="w-3 h-3 text-indigo-500" />}
                     </div>
 
-                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                    <span>{formatRelativeTime(note.updated_at || note.created_at)}</span>
                   </div>
                 </div>
               );
@@ -240,9 +214,15 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
         </div>
       )}
 
-      {/* Subtle Bottom Footer */}
-      <div className="text-center text-[10px] text-zinc-400 font-mono">
-        <span>VellumScribe Offline-First Storage Active</span>
+      {/* Footer System Status */}
+      <div className="max-w-md mx-auto w-full text-center space-y-1">
+        <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span>Local SQLite Database Active</span>
+        </div>
+        <p className="text-[10px] text-zinc-400">
+          Offline-first architecture with cloud backup support.
+        </p>
       </div>
     </div>
   );

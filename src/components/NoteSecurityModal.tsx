@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Lock, Unlock, X, KeyRound, AlertCircle, Check } from 'lucide-react';
+import { Lock, Unlock, X, AlertCircle } from 'lucide-react';
 import { NoteRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 
 interface NoteSecurityModalProps {
   note: NoteRecord;
@@ -17,10 +17,11 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const isCurrentlyLocked = note.is_locked;
 
-  const handleSetLock = (e: React.FormEvent) => {
+  const handleSetLock = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -34,30 +35,40 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
       return;
     }
 
-    if (isCurrentlyLocked) {
-      // Unlocking check
-      if (note.lock_pin && note.lock_pin !== pin) {
-        setError('Incorrect PIN. Please try again.');
-        return;
+    setIsProcessing(true);
+    try {
+      if (isCurrentlyLocked) {
+        // Unlock verification using salted SHA-256
+        const isMatch = await StorageManager.unlockNoteWithPin(note, pin);
+        if (!isMatch) {
+          setError('Incorrect PIN. Please try again.');
+          setIsProcessing(false);
+          return;
+        }
+
+        const updated = StorageManager.updateNote(note.id, {
+          is_locked: false,
+          pin_hash: undefined,
+          pin_salt: undefined,
+          lock_pin: undefined,
+        });
+
+        if (updated) {
+          onSuccess(updated);
+          onClose();
+        }
+      } else {
+        // Apply salted SHA-256 hashed PIN
+        const updated = await StorageManager.setNotePinLock(note.id, pin);
+        if (updated) {
+          onSuccess(updated);
+          onClose();
+        }
       }
-      const updated = SQLiteDatabase.updateNote(note.id, {
-        is_locked: false,
-        lock_pin: undefined,
-      });
-      if (updated) {
-        onSuccess(updated);
-        onClose();
-      }
-    } else {
-      // Locking
-      const updated = SQLiteDatabase.updateNote(note.id, {
-        is_locked: true,
-        lock_pin: pin,
-      });
-      if (updated) {
-        onSuccess(updated);
-        onClose();
-      }
+    } catch (err: any) {
+      setError(err.message || 'Security validation error occurred.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -86,8 +97,8 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
 
         <p className="text-xs text-zinc-400">
           {isCurrentlyLocked
-            ? 'Enter the 4-digit PIN to remove password protection from this note.'
-            : 'Set a security PIN. The note content will be hidden from casual viewing.'}
+            ? 'Enter your security PIN to remove password protection from this note.'
+            : 'Set a security PIN. It is hashed with SHA-256 & salt to keep your note safe.'}
         </p>
 
         {error && (
@@ -108,6 +119,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
               autoFocus
               placeholder="••••"
               value={pin}
+              disabled={isProcessing}
               onChange={(e) => setPin(e.target.value)}
               className="w-full text-center tracking-widest text-lg font-mono p-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:border-zinc-400"
               required
@@ -124,6 +136,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
                 maxLength={8}
                 placeholder="••••"
                 value={confirmPin}
+                disabled={isProcessing}
                 onChange={(e) => setConfirmPin(e.target.value)}
                 className="w-full text-center tracking-widest text-lg font-mono p-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:border-zinc-400"
                 required
@@ -135,15 +148,17 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
             <button
               type="button"
               onClick={onClose}
+              disabled={isProcessing}
               className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isProcessing}
               className="px-4 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-lg shadow-2xs transition-opacity"
             >
-              {isCurrentlyLocked ? 'Remove Lock' : 'Lock Note'}
+              {isProcessing ? 'Verifying...' : isCurrentlyLocked ? 'Remove Lock' : 'Lock Note'}
             </button>
           </div>
         </form>

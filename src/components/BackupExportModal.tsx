@@ -11,7 +11,7 @@ import {
   Copy,
   Share2,
 } from 'lucide-react';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { NativeBridge } from '../lib/nativeBridge';
 
 interface BackupExportModalProps {
@@ -28,7 +28,7 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleExportJson = async () => {
-    const backupJson = SQLiteDatabase.exportFullBackup();
+    const backupJson = StorageManager.exportFullBackup();
     const fileName = `VellumScribe_Backup_${new Date().toISOString().split('T')[0]}.json`;
     const res = await NativeBridge.shareOrDownloadFile(
       fileName,
@@ -43,7 +43,7 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
   };
 
   const handleExportMarkdownZip = async () => {
-    const notes = SQLiteDatabase.getNotes();
+    const notes = StorageManager.getNotes();
     const markdownContent = notes
       .map(
         (n) =>
@@ -67,7 +67,7 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
   };
 
   const handleCopyJson = async () => {
-    const backupJson = SQLiteDatabase.exportFullBackup();
+    const backupJson = StorageManager.exportFullBackup();
     const success = await NativeBridge.copyText(backupJson);
     if (success) {
       setCopied(true);
@@ -83,7 +83,7 @@ export const BackupExportModal: React.FC<BackupExportModalProps> = ({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        const res = SQLiteDatabase.importFullBackup(text);
+        const res = StorageManager.importFullBackup(text);
         if (res.success) {
           setFeedback({ type: 'success', message: res.message });
           onDataRestored();

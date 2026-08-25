@@ -33,7 +33,7 @@ export const INITIAL_CLOUD_ACCOUNTS: CloudAccount[] = [
   {
     provider: 'dropbox',
     connected: false,
-    cloud_backup_path: '/Dropbox/Apps/VellumScribe_Vault/',
+    cloud_backup_path: '/Dropbox/Apps/VellumScribe_Backups/',
   },
   {
     provider: 'onedrive',
@@ -53,7 +53,7 @@ export const INITIAL_CLOUD_ACCOUNTS: CloudAccount[] = [
   {
     provider: 's3',
     connected: false,
-    cloud_backup_path: 's3://vellumscribe-vault/',
+    cloud_backup_path: 's3://vellumscribe-backups/',
   },
 ];
 

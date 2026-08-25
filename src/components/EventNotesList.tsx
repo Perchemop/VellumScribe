@@ -26,7 +26,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { MergeNotesModal } from './MergeNotesModal';
 import { BatchActionBar } from './BatchActionBar';
 import { NoteShareModal } from './NoteShareModal';
@@ -209,14 +209,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   };
 
   const executeEmptyTrash = () => {
-    SQLiteDatabase.emptyTrash();
+    StorageManager.emptyTrash();
     setConfirmEmptyTrashModal(false);
     onRefresh();
   };
 
   const handleRestoreNote = (e: React.MouseEvent, noteId: number) => {
     e.stopPropagation();
-    SQLiteDatabase.restoreNote(noteId);
+    StorageManager.restoreNote(noteId);
     onRefresh();
   };
 
@@ -227,7 +227,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
   const executePermanentDeleteNote = () => {
     if (confirmDeleteNoteId !== null) {
-      SQLiteDatabase.deleteNote(confirmDeleteNoteId);
+      StorageManager.deleteNote(confirmDeleteNoteId);
       setConfirmDeleteNoteId(null);
       onRefresh();
     }
@@ -235,7 +235,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
   const handleUnarchiveNote = (e: React.MouseEvent, noteId: number) => {
     e.stopPropagation();
-    SQLiteDatabase.unarchiveNote(noteId);
+    StorageManager.unarchiveNote(noteId);
     onRefresh();
   };
 
@@ -544,8 +544,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             {filteredNotes.map((note) => {
               const isSelectedInBatch = selectedNoteIds.includes(note.id);
               const isActiveEditor = selectedNoteId === note.id;
-              const recordings = SQLiteDatabase.getRecordingsForNote(note.id);
-              const ocrScans = SQLiteDatabase.getOcrScansForNote(note.id);
+              const recordings = StorageManager.getRecordingsForNote(note.id);
+              const ocrScans = StorageManager.getOcrScansForNote(note.id);
               const isChecklist = note.note_type === 'checklist';
               const isSketch = note.note_type === 'sketch';
               const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
@@ -711,7 +711,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              SQLiteDatabase.archiveNote(note.id);
+                              StorageManager.archiveNote(note.id);
                               onRefresh();
                             }}
                             title="Archive Note (Hide from active notes)"

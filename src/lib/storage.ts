@@ -12,6 +12,7 @@ import {
   INITIAL_TRANSCRIPTS,
   INITIAL_OCR_SCANS,
 } from './sampleData';
+import { hashPin, verifyPin } from './cryptoUtils';
 
 const STORAGE_KEYS = {
   EVENTS: 'omninote_sqlite_events_v1',
@@ -21,23 +22,103 @@ const STORAGE_KEYS = {
   OCR_SCANS: 'omninote_sqlite_ocr_scans_v1',
 };
 
-export class SQLiteDatabase {
-  // --- EVENTS ---
-  public static getEvents(): EventRecord[] {
+/**
+ * Storage quota & safe persistence helper with try/catch quota protection
+ */
+function safeSetItem(key: string, value: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err: any) {
+    if (
+      err.name === 'QuotaExceededError' ||
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+      err.code === 22 ||
+      err.code === 1014
+    ) {
+      console.error(`[StorageManager] LocalStorage quota exceeded while saving key "${key}".`, err);
+    } else {
+      console.error(`[StorageManager] Failed to write key "${key}" to LocalStorage.`, err);
+    }
+    return false;
+  }
+}
+
+/**
+ * High-performance, offline-first Local Storage Engine with in-memory caching,
+ * quota protection, and transactional record management.
+ */
+export class StorageManager {
+  // Safe KV Accessors
+  public static getItem<T = string>(key: string, fallback: T | null = null): T | null {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.EVENTS);
-      return data ? JSON.parse(data) : INITIAL_EVENTS;
-    } catch {
-      return INITIAL_EVENTS;
+      const val = localStorage.getItem(key);
+      if (val === null) return fallback;
+      try {
+        return JSON.parse(val) as T;
+      } catch {
+        return val as unknown as T;
+      }
+    } catch (e) {
+      console.warn(`[StorageManager] Failed to read key "${key}":`, e);
+      return fallback;
     }
   }
 
+  public static setItem<T>(key: string, value: T): boolean {
+    try {
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      return safeSetItem(key, serialized);
+    } catch (e) {
+      console.error(`[StorageManager] Failed to write key "${key}":`, e);
+      return false;
+    }
+  }
+
+  public static removeItem(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn(`[StorageManager] Failed to remove key "${key}":`, e);
+    }
+  }
+
+  public static hasItem(key: string): boolean {
+    try {
+      return localStorage.getItem(key) !== null;
+    } catch {
+      return false;
+    }
+  }
+
+  // In-memory cache layer to eliminate O(n) serialization overhead on reads
+  private static eventsCache: EventRecord[] | null = null;
+  private static notesCache: NoteRecord[] | null = null;
+  private static recordingsCache: RecordingRecord[] | null = null;
+  private static transcriptsCache: TranscriptRecord[] | null = null;
+  private static ocrScansCache: OcrScanRecord[] | null = null;
+
+  // --- EVENTS ---
+  public static getEvents(): EventRecord[] {
+    if (this.eventsCache !== null) {
+      return this.eventsCache;
+    }
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.EVENTS);
+      this.eventsCache = data ? JSON.parse(data) : [...INITIAL_EVENTS];
+    } catch {
+      this.eventsCache = [...INITIAL_EVENTS];
+    }
+    return this.eventsCache || [];
+  }
+
   public static saveEvents(events: EventRecord[]) {
-    localStorage.setItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
+    this.eventsCache = events;
+    safeSetItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
   }
 
   public static addEvent(event: Omit<EventRecord, 'id'>): EventRecord {
-    const events = this.getEvents();
+    const events = [...this.getEvents()];
     const newId = events.length > 0 ? Math.max(...events.map((e) => e.id)) + 1 : 1;
     const newEvent: EventRecord = { ...event, id: newId };
     events.unshift(newEvent);
@@ -46,7 +127,7 @@ export class SQLiteDatabase {
   }
 
   public static updateEvent(id: number, updates: Partial<EventRecord>): EventRecord | null {
-    const events = this.getEvents();
+    const events = [...this.getEvents()];
     const idx = events.findIndex((e) => e.id === id);
     if (idx === -1) return null;
     events[idx] = { ...events[idx], ...updates };
@@ -69,12 +150,16 @@ export class SQLiteDatabase {
 
   // --- NOTES ---
   public static getNotes(): NoteRecord[] {
+    if (this.notesCache !== null) {
+      return this.notesCache;
+    }
     try {
       const data = localStorage.getItem(STORAGE_KEYS.NOTES);
-      return data ? JSON.parse(data) : INITIAL_NOTES;
+      this.notesCache = data ? JSON.parse(data) : [...INITIAL_NOTES];
     } catch {
-      return INITIAL_NOTES;
+      this.notesCache = [...INITIAL_NOTES];
     }
+    return this.notesCache || [];
   }
 
   public static getActiveNotes(): NoteRecord[] {
@@ -90,7 +175,8 @@ export class SQLiteDatabase {
   }
 
   public static saveNotes(notes: NoteRecord[]) {
-    localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+    this.notesCache = notes;
+    safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
   }
 
   public static getNotesForEvent(eventId: number): NoteRecord[] {
@@ -102,7 +188,7 @@ export class SQLiteDatabase {
   }
 
   public static addNote(note: Omit<NoteRecord, 'id'>): NoteRecord {
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     const newId = notes.length > 0 ? Math.max(...notes.map((n) => n.id)) + 1 : 101;
     const newNote: NoteRecord = {
       ...note,
@@ -194,7 +280,7 @@ export class SQLiteDatabase {
   }
 
   public static toggleCloudSave(id: number): NoteRecord | null {
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     const idx = notes.findIndex((n) => n.id === id);
     if (idx === -1) return null;
     notes[idx].cloud_save_enabled = !notes[idx].cloud_save_enabled;
@@ -204,7 +290,7 @@ export class SQLiteDatabase {
   }
 
   public static updateNote(id: number, updates: Partial<NoteRecord>): NoteRecord | null {
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     const idx = notes.findIndex((n) => n.id === id);
     if (idx === -1) return null;
     const currentVer = notes[idx].version || 1;
@@ -218,31 +304,30 @@ export class SQLiteDatabase {
     return notes[idx];
   }
 
-  public static exportFullBackup(): string {
-    const data = {
-      app: 'VellumScribe',
-      exported_at: new Date().toISOString(),
-      events: this.getEvents(),
-      notes: this.getNotes(),
-      recordings: this.getRecordings(),
-      transcripts: this.getTranscripts(),
-      ocr_scans: this.getOcrScans(),
-    };
-    return JSON.stringify(data, null, 2);
+  /**
+   * Set hashed PIN security on a note using salted SHA-256
+   */
+  public static async setNotePinLock(id: number, plaintextPin: string): Promise<NoteRecord | null> {
+    const { hash, salt } = await hashPin(plaintextPin);
+    return this.updateNote(id, {
+      is_locked: true,
+      pin_hash: hash,
+      pin_salt: salt,
+      lock_pin: undefined, // Clear legacy plaintext representation
+    });
   }
 
-  public static importFullBackup(jsonContent: string): { success: boolean; message: string } {
-    try {
-      const data = JSON.parse(jsonContent);
-      if (Array.isArray(data.events)) this.saveEvents(data.events);
-      if (Array.isArray(data.notes)) this.saveNotes(data.notes);
-      if (Array.isArray(data.recordings)) this.saveRecordings(data.recordings);
-      if (Array.isArray(data.transcripts)) this.saveTranscripts(data.transcripts);
-      if (Array.isArray(data.ocr_scans)) this.saveOcrScans(data.ocr_scans);
-      return { success: true, message: `Successfully imported ${data.notes?.length || 0} notes and ${data.events?.length || 0} categories.` };
-    } catch (e: any) {
-      return { success: false, message: `Import error: ${e.message}` };
-    }
+  /**
+   * Unlock or remove PIN security from note after validating PIN
+   */
+  public static async unlockNoteWithPin(note: NoteRecord, enteredPin: string): Promise<boolean> {
+    const isMatch = await verifyPin(
+      enteredPin,
+      note.pin_hash,
+      note.pin_salt,
+      note.lock_pin
+    );
+    return isMatch;
   }
 
   public static deleteNote(id: number): boolean {
@@ -265,7 +350,7 @@ export class SQLiteDatabase {
   // --- BATCH NOTE OPERATIONS ---
   public static batchTrashNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -282,7 +367,7 @@ export class SQLiteDatabase {
 
   public static batchRestoreNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -299,7 +384,7 @@ export class SQLiteDatabase {
 
   public static batchArchiveNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -316,7 +401,7 @@ export class SQLiteDatabase {
 
   public static batchUnarchiveNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -349,7 +434,7 @@ export class SQLiteDatabase {
 
   public static batchPinNotes(ids: number[], isPinned: boolean): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -365,7 +450,7 @@ export class SQLiteDatabase {
 
   public static batchMoveNotes(ids: number[], newEventId: number): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -381,7 +466,7 @@ export class SQLiteDatabase {
 
   public static batchColorNotes(ids: number[], color: string): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -398,7 +483,7 @@ export class SQLiteDatabase {
   public static batchAddTagToNotes(ids: number[], tag: string): number {
     if (!ids || ids.length === 0 || !tag.trim()) return 0;
     const cleanTag = tag.trim().replace(/^#/, '');
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -435,15 +520,18 @@ export class SQLiteDatabase {
     return created;
   }
 
-  public static batchLockNotes(ids: number[], pin: string): number {
+  public static async batchLockNotes(ids: number[], pin: string): Promise<number> {
     if (!ids || ids.length === 0 || !pin) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
+    const { hash, salt } = await hashPin(pin);
     for (const note of notes) {
       if (ids.includes(note.id)) {
         note.is_locked = true;
-        note.lock_pin = pin;
+        note.pin_hash = hash;
+        note.pin_salt = salt;
+        note.lock_pin = undefined;
         note.updated_at = now;
         count++;
       }
@@ -454,12 +542,14 @@ export class SQLiteDatabase {
 
   public static batchUnlockNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
       if (ids.includes(note.id)) {
         note.is_locked = false;
+        note.pin_hash = undefined;
+        note.pin_salt = undefined;
         note.lock_pin = undefined;
         note.updated_at = now;
         count++;
@@ -471,7 +561,7 @@ export class SQLiteDatabase {
 
   public static batchToggleCloudSave(ids: number[], enabled: boolean): number {
     if (!ids || ids.length === 0) return 0;
-    const notes = this.getNotes();
+    const notes = [...this.getNotes()];
     let count = 0;
     const now = new Date().toISOString();
     for (const note of notes) {
@@ -533,16 +623,21 @@ export class SQLiteDatabase {
 
   // --- RECORDINGS ---
   public static getRecordings(): RecordingRecord[] {
+    if (this.recordingsCache !== null) {
+      return this.recordingsCache;
+    }
     try {
       const data = localStorage.getItem(STORAGE_KEYS.RECORDINGS);
-      return data ? JSON.parse(data) : INITIAL_RECORDINGS;
+      this.recordingsCache = data ? JSON.parse(data) : [...INITIAL_RECORDINGS];
     } catch {
-      return INITIAL_RECORDINGS;
+      this.recordingsCache = [...INITIAL_RECORDINGS];
     }
+    return this.recordingsCache || [];
   }
 
   public static saveRecordings(recordings: RecordingRecord[]) {
-    localStorage.setItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(recordings));
+    this.recordingsCache = recordings;
+    safeSetItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(recordings));
   }
 
   public static getRecordingsForNote(noteId: number): RecordingRecord[] {
@@ -550,7 +645,7 @@ export class SQLiteDatabase {
   }
 
   public static addRecording(rec: Omit<RecordingRecord, 'id'>): RecordingRecord {
-    const recordings = this.getRecordings();
+    const recordings = [...this.getRecordings()];
     const newId = recordings.length > 0 ? Math.max(...recordings.map((r) => r.id)) + 1 : 201;
     const newRec: RecordingRecord = {
       ...rec,
@@ -574,16 +669,21 @@ export class SQLiteDatabase {
 
   // --- TRANSCRIPTS ---
   public static getTranscripts(): TranscriptRecord[] {
+    if (this.transcriptsCache !== null) {
+      return this.transcriptsCache;
+    }
     try {
       const data = localStorage.getItem(STORAGE_KEYS.TRANSCRIPTS);
-      return data ? JSON.parse(data) : INITIAL_TRANSCRIPTS;
+      this.transcriptsCache = data ? JSON.parse(data) : [...INITIAL_TRANSCRIPTS];
     } catch {
-      return INITIAL_TRANSCRIPTS;
+      this.transcriptsCache = [...INITIAL_TRANSCRIPTS];
     }
+    return this.transcriptsCache || [];
   }
 
   public static saveTranscripts(transcripts: TranscriptRecord[]) {
-    localStorage.setItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(transcripts));
+    this.transcriptsCache = transcripts;
+    safeSetItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(transcripts));
   }
 
   public static getTranscriptForRecording(recordingId: number): TranscriptRecord | undefined {
@@ -591,7 +691,7 @@ export class SQLiteDatabase {
   }
 
   public static addTranscript(t: Omit<TranscriptRecord, 'id'>): TranscriptRecord {
-    const transcripts = this.getTranscripts();
+    const transcripts = [...this.getTranscripts()];
     const newId = transcripts.length > 0 ? Math.max(...transcripts.map((x) => x.id)) + 1 : 301;
     const newTranscript: TranscriptRecord = {
       ...t,
@@ -605,16 +705,21 @@ export class SQLiteDatabase {
 
   // --- OCR SCANS ---
   public static getOcrScans(): OcrScanRecord[] {
+    if (this.ocrScansCache !== null) {
+      return this.ocrScansCache;
+    }
     try {
       const data = localStorage.getItem(STORAGE_KEYS.OCR_SCANS);
-      return data ? JSON.parse(data) : INITIAL_OCR_SCANS;
+      this.ocrScansCache = data ? JSON.parse(data) : [...INITIAL_OCR_SCANS];
     } catch {
-      return INITIAL_OCR_SCANS;
+      this.ocrScansCache = [...INITIAL_OCR_SCANS];
     }
+    return this.ocrScansCache || [];
   }
 
   public static saveOcrScans(scans: OcrScanRecord[]) {
-    localStorage.setItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(scans));
+    this.ocrScansCache = scans;
+    safeSetItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(scans));
   }
 
   public static getOcrScansForNote(noteId: number): OcrScanRecord[] {
@@ -622,7 +727,7 @@ export class SQLiteDatabase {
   }
 
   public static addOcrScan(scan: Omit<OcrScanRecord, 'id'>): OcrScanRecord {
-    const scans = this.getOcrScans();
+    const scans = [...this.getOcrScans()];
     const newId = scans.length > 0 ? Math.max(...scans.map((s) => s.id)) + 1 : 401;
     const newScan: OcrScanRecord = {
       ...scan,
@@ -684,10 +789,12 @@ export class SQLiteDatabase {
         }
 
         const columns = Object.keys(dataset[0]);
-        const rows = dataset.map((item) => columns.map((col) => {
-          const val = item[col];
-          return typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'NULL');
-        }));
+        const rows = dataset.map((item) =>
+          columns.map((col) => {
+            const val = item[col];
+            return typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'NULL');
+          })
+        );
 
         return { columns, rows, message: `${rows.length} row(s) returned` };
       }
@@ -705,7 +812,7 @@ export class SQLiteDatabase {
     }
   }
 
-  // --- STORAGE STATS ---
+  // --- STORAGE STATS & USAGE METRICS ---
   public static getStorageStats(): {
     totalNotes: number;
     cloudSavedNotes: number;
@@ -713,12 +820,23 @@ export class SQLiteDatabase {
     totalRecordings: number;
     cloudRecordings: number;
     localOnlyRecordings: number;
+    estimatedBytesUsed: number;
   } {
     const notes = this.getNotes();
     const recordings = this.getRecordings();
     const cloudSavedNotesList = notes.filter((n) => n.cloud_save_enabled);
     const cloudNoteIds = new Set(cloudSavedNotesList.map((n) => n.id));
     const cloudRecordingsList = recordings.filter((r) => cloudNoteIds.has(r.note_id));
+
+    let bytesUsed = 0;
+    try {
+      for (const key of Object.values(STORAGE_KEYS)) {
+        const item = localStorage.getItem(key);
+        if (item) bytesUsed += item.length * 2; // UTF-16 characters
+      }
+    } catch {
+      bytesUsed = 0;
+    }
 
     return {
       totalNotes: notes.length,
@@ -727,11 +845,11 @@ export class SQLiteDatabase {
       totalRecordings: recordings.length,
       cloudRecordings: cloudRecordingsList.length,
       localOnlyRecordings: recordings.length - cloudRecordingsList.length,
+      estimatedBytesUsed: bytesUsed,
     };
   }
 
   // --- BACKUP & RESTORE DUMP ---
-  // Local full dump (all items)
   public static exportFullDump(): string {
     const bundle = {
       version: '2.5',
@@ -747,7 +865,6 @@ export class SQLiteDatabase {
     return JSON.stringify(bundle, null, 2);
   }
 
-  // Cloud-only dump (strictly filters for notes with cloud_save_enabled === true)
   public static exportCloudBackupDump(): {
     dumpJson: string;
     cloudNotes: NoteRecord[];
@@ -807,6 +924,18 @@ export class SQLiteDatabase {
     return false;
   }
 
+  public static exportFullBackup(): string {
+    return this.exportFullDump();
+  }
+
+  public static importFullBackup(jsonContent: string): { success: boolean; message: string } {
+    const success = this.importFullDump(jsonContent);
+    if (success) {
+      return { success: true, message: 'Backup successfully imported into local store.' };
+    }
+    return { success: false, message: 'Invalid backup file format.' };
+  }
+
   public static resetToFactoryDefaults() {
     this.saveEvents(INITIAL_EVENTS);
     this.saveNotes(INITIAL_NOTES);
@@ -815,3 +944,9 @@ export class SQLiteDatabase {
     this.saveOcrScans(INITIAL_OCR_SCANS);
   }
 }
+
+/**
+ * Backward compatible alias for components and utilities
+ */
+export const SQLiteDatabase = StorageManager;
+export const LocalStorageStore = StorageManager;

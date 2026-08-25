@@ -82,8 +82,17 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
 
   const stopCameraStream = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {
+          // ignore
+        }
+      });
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraActive(false);
   };

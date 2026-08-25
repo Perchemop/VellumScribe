@@ -2,7 +2,22 @@
   "appId": "com.vellumscribe.app",
   "appName": "VellumScribe",
   "webDir": "dist",
+  "backgroundColor": "#121215",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "Camera": {
+      "presentationStyle": "fullscreen"
+    },
+    "Haptics": {
+      "enabled": true
+    }
   }
 }

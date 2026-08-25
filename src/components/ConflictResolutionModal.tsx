@@ -189,7 +189,7 @@ export const ConflictResolutionModal: React.FC<ConflictResolutionModalProps> = (
                       </span>
                     </div>
                     <p className="text-[11px] text-zinc-500">
-                      {new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(c.created_at || c.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 ))}
