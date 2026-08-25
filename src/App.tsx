@@ -1,30 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Cloud,
   RefreshCw,
   Moon,
   Sun,
   FileText,
   Plus,
-  Maximize2,
-  Minimize2,
-  Shield,
-  Download,
-  Smartphone,
   CheckSquare,
   PenTool,
-  ChevronDown,
   Clock,
   Settings,
-  X,
-  Layers,
   Archive,
-  Sparkles,
 } from 'lucide-react';
-import { EventRecord, NoteRecord, ConflictLog } from './types';
-import { SQLiteDatabase } from './lib/storage';
+import { EventRecord, NoteRecord } from './types';
+import { StorageManager } from './lib/storage';
 import { CloudSyncEngine, SyncProgressUpdate } from './lib/cloudSync';
 import { NativeBridge } from './lib/nativeBridge';
+import { useApp } from './context/AppContext';
 import { EventNotesList } from './components/EventNotesList';
 import { NoteEditor } from './components/NoteEditor';
 import { RecentNotesSection } from './components/RecentNotesSection';
@@ -39,65 +30,45 @@ import {
 import { AppLogo } from './components/AppLogo';
 
 export default function App() {
-  // State from Local Storage
-  const [events, setEvents] = useState<EventRecord[]>(() => SQLiteDatabase.getEvents());
-  const [notes, setNotes] = useState<NoteRecord[]>(() => SQLiteDatabase.getNotes());
-  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
-  const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
+  const {
+    events,
+    notes,
+    selectedEventId,
+    setSelectedEventId,
+    selectedNoteId,
+    setSelectedNoteId,
+    darkMode,
+    setDarkMode,
+    isSyncing,
+    unresolvedConflicts,
+    backupFrequency,
+    refreshData,
+    deleteEvent,
+    deleteNote,
+  } = useApp();
 
-  // UI Navigation
+  // Local UI Navigation & modal states
   const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
-  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates'>('cloud');
+  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>('cloud');
   const [showConflictModal, setShowConflictModal] = useState(false);
-  const [showNewMenu, setShowNewMenu] = useState(false);
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
-
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
-
-  // Sync & Progress state
-  const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
-  const [backupFrequency, setBackupFrequency] = useState<string>(() => CloudSyncEngine.getBackupFrequency());
-  const [unresolvedConflicts, setUnresolvedConflicts] = useState<ConflictLog[]>(() =>
-    CloudSyncEngine.getConflicts().filter((c) => c.status !== 'resolved')
-  );
-
-  // Refresh helper
-  const refreshLocalState = () => {
-    setEvents(SQLiteDatabase.getEvents());
-    setNotes(SQLiteDatabase.getNotes());
-    setBackupFrequency(CloudSyncEngine.getBackupFrequency());
-    setUnresolvedConflicts(
-      CloudSyncEngine.getConflicts().filter((c) => c.status !== 'resolved')
-    );
-  };
-
-  useEffect(() => {
-    refreshLocalState();
-  }, []);
 
   // Quick Top Bar Sync with Granular Progress
   const handleQuickSync = async () => {
     if (isSyncing) return;
-    setIsSyncing(true);
     setSyncProgress({ percent: 10, message: 'Initiating cloud backup...', phase: 'init' });
 
     try {
       await CloudSyncEngine.triggerSync({
         onProgress: (p) => setSyncProgress(p),
       });
-      refreshLocalState();
+      refreshData();
     } catch {
       setSyncProgress({ percent: 100, message: 'Sync failed. Please check network connection.', phase: 'complete' });
     } finally {
-      setIsSyncing(false);
       setTimeout(() => {
         setSyncProgress(null);
       }, 2500);
@@ -106,8 +77,8 @@ export default function App() {
 
   // Event & Note CRUD Handlers
   const handleCreateEvent = (newEvent: Omit<EventRecord, 'id'>) => {
-    const created = SQLiteDatabase.addEvent(newEvent);
-    refreshLocalState();
+    const created = StorageManager.addEvent(newEvent);
+    refreshData();
     setSelectedEventId(created.id);
   };
 
@@ -117,7 +88,7 @@ export default function App() {
       if (events.length > 0) {
         targetEventId = events[0].id;
       } else {
-        const defaultCat = SQLiteDatabase.addEvent({
+        const defaultCat = StorageManager.addEvent({
           title: 'General',
           event_date: new Date().toISOString().split('T')[0],
           category: 'personal',
@@ -127,7 +98,7 @@ export default function App() {
       }
     }
 
-    const newNote = SQLiteDatabase.addNote({
+    const newNote = StorageManager.addNote({
       event_id: targetEventId,
       title: type === 'checklist' ? 'New To-Do List' : type === 'sketch' ? 'New Sketch Note' : 'Untitled Note',
       body: type === 'checklist' ? 'Notes & subtasks' : type === 'sketch' ? 'Visual annotations' : '## Thoughts\n\nBegin typing here...',
@@ -138,27 +109,26 @@ export default function App() {
       is_pinned: false,
       cloud_save_enabled: false,
     });
-    refreshLocalState();
+    refreshData();
     setSelectedNoteId(newNote.id);
     setActiveView('notes');
-    setShowNewMenu(false);
     setShowFabSpeedDial(false);
   };
 
   const handleDeleteEvent = (eventId: number) => {
-    SQLiteDatabase.deleteEvent(eventId);
-    refreshLocalState();
+    deleteEvent(eventId);
+    refreshData();
     if (selectedEventId === eventId) setSelectedEventId(null);
   };
 
   const handleDeleteNote = (noteId: number) => {
-    SQLiteDatabase.deleteNote(noteId);
-    refreshLocalState();
+    deleteNote(noteId);
+    refreshData();
     if (selectedNoteId === noteId) setSelectedNoteId(null);
   };
 
   const handleNoteUpdated = (_updated: NoteRecord) => {
-    refreshLocalState();
+    refreshData();
   };
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId);
@@ -262,44 +232,17 @@ export default function App() {
 
             {/* Right Action Icons */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Quick Note Dropdown on Desktop */}
-              <div className="relative hidden sm:block">
+              {/* Quick Note Button on Desktop */}
+              <div className="hidden sm:block">
                 <button
                   id="header-new-note-dropdown-btn"
-                  onClick={() => setShowNewMenu((p) => !p)}
-                  title="Create New Note..."
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  onClick={() => handleCreateNote(undefined, 'text')}
+                  title="Create New Note"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   <span>New Note</span>
-                  <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
                 </button>
-
-                {showNewMenu && (
-                  <div className="absolute right-0 top-10 w-48 bg-white dark:bg-[#16161a] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-1.5 shadow-2xl z-30 space-y-0.5 text-xs animate-fade-in">
-                    <button
-                      onClick={() => handleCreateNote(undefined, 'text')}
-                      className="w-full px-3 py-2 text-left rounded-xl text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5"
-                    >
-                      <FileText className="w-4 h-4 text-zinc-500" />
-                      <span>Text Document</span>
-                    </button>
-                    <button
-                      onClick={() => handleCreateNote(undefined, 'checklist')}
-                      className="w-full px-3 py-2 text-left rounded-xl text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5"
-                    >
-                      <CheckSquare className="w-4 h-4 text-zinc-500" />
-                      <span>To-Do Checklist</span>
-                    </button>
-                    <button
-                      onClick={() => handleCreateNote(undefined, 'sketch')}
-                      className="w-full px-3 py-2 text-left rounded-xl text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5"
-                    >
-                      <PenTool className="w-4 h-4 text-zinc-500" />
-                      <span>Sketch Canvas</span>
-                    </button>
-                  </div>
-                )}
               </div>
 
               {/* Sync Trigger with Tooltip & Live spinner */}
@@ -336,7 +279,7 @@ export default function App() {
               {/* Theme Toggle */}
               <button
                 id="theme-toggle-btn"
-                onClick={() => setDarkMode((prev) => !prev)}
+                onClick={() => setDarkMode((prev: boolean) => !prev)}
                 title={darkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
                 className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-xl transition-colors"
               >
@@ -377,7 +320,7 @@ export default function App() {
                     onCreateNote={handleCreateNote}
                     onDeleteEvent={handleDeleteEvent}
                     onDeleteNote={handleDeleteNote}
-                    onRefresh={refreshLocalState}
+                    onRefresh={refreshData}
                   />
                 </div>
               )}
@@ -437,7 +380,7 @@ export default function App() {
                 setSelectedNoteId(nid);
                 setActiveView('notes');
               }}
-              onRefresh={refreshLocalState}
+              onRefresh={refreshData}
             />
           ) : (
             /* Dedicated Integrated Settings & Cloud View */
@@ -445,7 +388,7 @@ export default function App() {
               <SettingsView
                 initialSubtab={settingsSubtab}
                 onOpenConflictModal={() => setShowConflictModal(true)}
-                onRefreshNotes={refreshLocalState}
+                onRefreshNotes={refreshData}
                 onBackToNotes={selectedNote ? () => setActiveView('notes') : undefined}
                 activeEditingNoteTitle={selectedNote?.title || (selectedNote ? 'Untitled Note' : undefined)}
               />
@@ -609,7 +552,7 @@ export default function App() {
           <ConflictResolutionModal
             conflict={unresolvedConflicts[0] || null}
             onResolved={(_body) => {
-              refreshLocalState();
+              refreshData();
               setShowConflictModal(false);
             }}
             onClose={() => setShowConflictModal(false)}

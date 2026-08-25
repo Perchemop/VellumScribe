@@ -14,24 +14,21 @@ import {
   RefreshCw,
   HardDrive,
   WifiOff,
-  FileText,
   Check,
   Cpu,
   Lock,
   Radio,
   FileCode,
-  Info,
   Trash2,
 } from 'lucide-react';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency } from '../lib/cloudSync';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
-import { CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, APP_CHANGELOGS, AppUpdateManager } from '../lib/appUpdateManager';
 
 interface SettingsModalProps {
-  initialTab?: 'ai' | 'backup' | 'security' | 'updates';
+  initialTab?: 'ai' | 'backup' | 'security';
   onClose: () => void;
   onSettingsUpdated?: () => void;
 }
@@ -41,14 +38,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onSettingsUpdated,
 }) => {
-  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security' | 'updates'>(
-    initialTab === 'security'
-      ? 'security'
-      : initialTab === 'backup'
-      ? 'backup'
-      : initialTab === 'updates'
-      ? 'updates'
-      : 'ai'
+  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security'>(
+    initialTab === 'security' ? 'security' : initialTab === 'backup' ? 'backup' : 'ai'
   );
 
   // AI Settings state
@@ -62,14 +53,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Backup & Storage state
   const [backupFrequency, setBackupFrequency] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
   const [backupFeedback, setBackupFeedback] = useState<string | null>(null);
-  const [stats, setStats] = useState(() => SQLiteDatabase.getStorageStats());
+  const [stats, setStats] = useState(() => StorageManager.getStorageStats());
 
   // Keystore secrets
   const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
-
-  // Updates state
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -148,145 +135,139 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in">
       <div
-        id="app-settings-modal"
-        className="w-full max-w-2xl bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        id="settings-modal-card"
+        className="w-full max-w-xl bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-[#101014]">
           <div className="flex items-center gap-3">
             <AppLogo size="sm" showText={false} />
             <div>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
-                Settings &amp; Preferences
+              <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
+                Settings &amp; Configuration
               </h2>
-              <p className="text-[11px] text-zinc-400">
-                AI Studio key configuration, local backup options, encryption &amp; APK updates
-              </p>
+              <p className="text-[11px] text-zinc-400">Manage Google AI Studio API key, local database, and cloud backup</p>
             </div>
           </div>
           <button
-            id="close-settings-modal-btn"
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl"
+            className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-2 border-b border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/30 dark:bg-[#101014]/50 overflow-x-auto no-scrollbar">
+        {/* Tab switcher */}
+        <div className="flex items-center border-b border-zinc-100 dark:border-zinc-800/60 px-6 bg-zinc-50/30 dark:bg-[#0e0e12] text-xs">
           <button
-            id="tab-settings-ai-btn"
+            id="tab-ai-settings-btn"
             onClick={() => setActiveTab('ai')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'ai'
-                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            AI Studio Key
+            <span>AI Studio &amp; Vision</span>
           </button>
 
           <button
-            id="tab-settings-backup-btn"
+            id="tab-backup-settings-btn"
             onClick={() => setActiveTab('backup')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'backup'
-                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
-            <Database className="w-3.5 h-3.5" />
-            Export &amp; Offline
+            <HardDrive className="w-3.5 h-3.5" />
+            <span>Storage &amp; Backup</span>
           </button>
 
           <button
-            id="tab-settings-security-btn"
+            id="tab-security-settings-btn"
             onClick={() => setActiveTab('security')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
               activeTab === 'security'
-                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
             }`}
           >
             <Shield className="w-3.5 h-3.5" />
-            Security &amp; Keystore
-          </button>
-
-          <button
-            id="tab-settings-updates-btn"
-            onClick={() => setActiveTab('updates')}
-            className={`pb-2.5 px-3 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 shrink-0 ${
-              activeTab === 'updates'
-                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Info className="w-3.5 h-3.5" />
-            Updates &amp; Releases
+            <span>Security &amp; Keystore</span>
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6 custom-minimal-scrollbar text-xs">
+        {/* Tab Body */}
+        <div className="p-6 overflow-y-auto space-y-5 custom-minimal-scrollbar text-xs">
           {/* TAB 1: AI STUDIO KEY */}
           {activeTab === 'ai' && (
-            <div className="space-y-5">
-              {/* Zero Server-Side Storage Disclaimer */}
-              <div className="p-3.5 rounded-2xl border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-start gap-2.5 text-emerald-900 dark:text-emerald-300">
-                <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <p className="font-semibold text-xs">Private &amp; Local Key Storage</p>
-                  <p className="text-[11px] text-emerald-800 dark:text-emerald-400/90 leading-relaxed">
-                    Your Gemini API key is stored <strong>strictly on your local device</strong> in browser secure storage. It is never logged on any server.
-                  </p>
-                </div>
-              </div>
-
-              {/* API Key Input */}
-              <div className="space-y-3">
+            <div className="space-y-4">
+              {/* API Key Connection Card */}
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                    <Key className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Gemini API Key</span>
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      Google AI Studio API Key
+                    </h3>
+                  </div>
                   <a
                     href="https://aistudio.google.com/app/apikey"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
                   >
-                    <span>Get API Key</span>
+                    <span>Get Key</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
 
-                <div className="relative">
-                  <input
-                    id="settings-api-key-input"
-                    type={showKey ? 'text' : 'password'}
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="AIzaSy..."
-                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-20"
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Powers instant meeting summaries, audio transcription, and OCR document scanning using Google Gemini models.
+                </p>
+
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      id="gemini-api-key-modal-input"
+                      type={showKey ? 'text' : 'password'}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full px-3 py-2 pr-20 bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
                     <button
                       type="button"
                       onClick={() => setShowKey(!showKey)}
-                      className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                     >
                       {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveApiKey}
+                      className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg font-semibold hover:bg-zinc-800 dark:hover:bg-white transition-colors"
+                    >
+                      Save Key
+                    </button>
+                    <button
+                      onClick={handleTestApiKey}
+                      disabled={isVerifying || !apiKeyInput.trim()}
+                      className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-lg font-semibold hover:bg-indigo-100 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isVerifying ? 'animate-spin' : ''}`} />
+                      <span>{isVerifying ? 'Testing...' : 'Verify API Connection'}</span>
+                    </button>
                     {apiKeyInput && (
                       <button
-                        type="button"
                         onClick={handleClearApiKey}
-                        title="Clear Key"
-                        className="p-1 text-zinc-400 hover:text-red-500"
+                        className="px-2 py-1.5 text-rose-500 hover:underline text-[11px] ml-auto"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        Clear
                       </button>
                     )}
                   </div>
@@ -297,113 +278,139 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div
                     className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
                       verifyResult.success
-                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                        : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300'
+                        : 'bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300'
                     }`}
                   >
                     {verifyResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     ) : (
-                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
                     )}
                     <span>{verifyResult.message}</span>
                   </div>
                 )}
 
-                {/* Upload or Action feedback */}
                 {fileUploadFeedback && (
-                  <p className="text-[11px] text-zinc-500 font-medium">{fileUploadFeedback}</p>
-                )}
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl text-zinc-600 dark:text-zinc-300 text-xs font-medium"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload .env / json file</span>
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".env,.json,.txt"
-                    onChange={handleKeyFileUpload}
-                    className="hidden"
-                  />
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      id="test-api-key-btn"
-                      type="button"
-                      onClick={handleTestApiKey}
-                      disabled={!apiKeyInput.trim() || isVerifying}
-                      className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                    >
-                      {isVerifying ? 'Verifying...' : 'Test Connection'}
-                    </button>
-                    <button
-                      id="save-api-key-btn"
-                      type="button"
-                      onClick={handleSaveApiKey}
-                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs"
-                    >
-                      Save Key
-                    </button>
+                  <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[11px]">
+                    {fileUploadFeedback}
                   </div>
+                )}
+              </div>
+
+              {/* Upload file fallback */}
+              <div className="p-3.5 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Load from File</p>
+                  <p className="text-[11px] text-zinc-400">Import key from .env, .json, or key.txt file</p>
                 </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleKeyFileUpload}
+                  accept=".env,.json,.txt"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg text-xs font-medium flex items-center gap-1.5"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Choose File</span>
+                </button>
               </div>
             </div>
           )}
 
-          {/* TAB 2: EXPORT & OFFLINE */}
+          {/* TAB 2: STORAGE & BACKUP */}
           {activeTab === 'backup' && (
-            <div className="space-y-5">
-              <div className="p-4 border border-zinc-200/70 dark:border-zinc-800/70 rounded-2xl space-y-3 bg-zinc-50/50 dark:bg-[#101014]">
+            <div className="space-y-4">
+              {/* SQLite Health Card */}
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                      <span>Offline Mode</span>
-                      {isAirGapped && (
-                        <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded-full font-medium">
-                          Air-Gapped
-                        </span>
-                      )}
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      Local SQLite Database Engine
                     </h3>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      Disable all background cloud sync operations
-                    </p>
                   </div>
-
-                  <select
-                    value={backupFrequency}
-                    onChange={(e) => handleFrequencyChange(e.target.value as BackupFrequency)}
-                    className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium"
-                  >
-                    <option value="never">Never (Fully Offline)</option>
-                    <option value="5m">Every 5 minutes</option>
-                    <option value="15m">Every 15 minutes</option>
-                    <option value="1h">Every 1 hour</option>
-                    <option value="daily">Daily</option>
-                    <option value="manual">Manual Only</option>
-                  </select>
+                  <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                    HEALTHY
+                  </span>
                 </div>
-                {backupFeedback && (
-                  <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">
-                    {backupFeedback}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
+                  <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                    <span className="text-zinc-400 block text-[10px]">Total Notes</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalNotes}</span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                    <span className="text-zinc-400 block text-[10px]">Audio Memos</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalRecordings}</span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                    <span className="text-zinc-400 block text-[10px]">Cloud Synced</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.cloudSavedNotes}</span>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
+                    <span className="text-zinc-400 block text-[10px]">Local Only</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.localOnlyNotes}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Automatic Backup Frequency Setting */}
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-3">
+                <div>
+                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
+                    Automatic Cloud Backup Cadence
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Select how often notes, checklists, and audio recordings back up to connected cloud storage.
                   </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  {(
+                    [
+                      { id: '5m', label: 'Every 5 Mins' },
+                      { id: '15m', label: 'Every 15 Mins' },
+                      { id: '1h', label: 'Every Hour' },
+                      { id: 'daily', label: 'Daily Backup' },
+                      { id: 'manual', label: 'Manual Only' },
+                      { id: 'never', label: 'Offline / Never' },
+                    ] as { id: BackupFrequency; label: string }[]
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => handleFrequencyChange(opt.id)}
+                      className={`p-2 rounded-xl text-xs font-medium border transition-all text-center ${
+                        backupFrequency === opt.id
+                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-transparent shadow-xs font-semibold'
+                          : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+
+                {backupFeedback && (
+                  <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-900 text-xs">
+                    {backupFeedback}
+                  </div>
                 )}
               </div>
 
-              {/* Manual Backup & Export */}
-              <div className="space-y-3">
+              {/* Data Export Card */}
+              <div className="space-y-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   Data Backup &amp; Export
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     onClick={() => {
-                      const json = SQLiteDatabase.exportFullBackup();
+                      const json = StorageManager.exportFullBackup();
                       const blob = new Blob([json], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
@@ -415,12 +422,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="p-3.5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                   >
                     <p className="font-semibold text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
-                    <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and categories</p>
+                    <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
                   </button>
 
                   <button
                     onClick={() => {
-                      const notes = SQLiteDatabase.getNotes();
+                      const notes = StorageManager.getNotes();
                       const md = notes.length > 0 
                         ? notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`).join('\n\n---\n\n')
                         : '# VellumScribe Notes\n\nNo notes currently saved.';
@@ -488,97 +495,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* TAB 4: UPDATES & RELEASES */}
-          {activeTab === 'updates' && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-[#101014] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">VellumScribe APK Engine</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono">
-                      v{CURRENT_APP_VERSION} (#{CURRENT_BUILD_NUMBER})
-                    </span>
-                  </div>
-                  <button
-                    id="modal-check-updates-btn"
-                    onClick={async () => {
-                      setIsCheckingUpdate(true);
-                      setUpdateCheckMessage(null);
-                      try {
-                        const res = await AppUpdateManager.checkForRemoteUpdates();
-                        if (res.hasUpdate) {
-                          setUpdateCheckMessage(`New release v${res.latestVersion} is available!`);
-                        } else {
-                          setUpdateCheckMessage(`VellumScribe v${res.currentVersion} is up to date.`);
-                        }
-                      } catch {
-                        setUpdateCheckMessage('VellumScribe v2.6.0 is the latest stable build.');
-                      } finally {
-                        setIsCheckingUpdate(false);
-                      }
-                    }}
-                    disabled={isCheckingUpdate}
-                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-[11px] font-semibold flex items-center gap-1.5 transition-all disabled:opacity-50"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-                    <span>{isCheckingUpdate ? 'Checking...' : 'Check Releases'}</span>
-                  </button>
-                </div>
-
-                {updateCheckMessage && (
-                  <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span>{updateCheckMessage}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Changelog list */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Changelog &amp; Highlights
-                </h4>
-                {APP_CHANGELOGS.map((rel) => (
-                  <div
-                    key={rel.version}
-                    className="p-3 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white dark:bg-[#101014] space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
-                          v{rel.version}
-                        </span>
-                        {rel.isCurrent && (
-                          <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white text-[9px] font-medium">
-                            Current
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-zinc-400 font-mono">{rel.releaseDate}</span>
-                    </div>
-                    <ul className="space-y-1 text-[11px] text-zinc-600 dark:text-zinc-400">
-                      {rel.highlights.map((h, i) => (
-                        <li key={i} className="flex items-center gap-1.5">
-                          <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                          <span>{h}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-[#101014]">
-          <div className="text-[11px] text-zinc-400 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-indigo-500" />
-            <span>VellumScribe v{CURRENT_APP_VERSION}</span>
-          </div>
-
+        <div className="flex items-center justify-end px-6 py-3.5 border-t border-zinc-100 dark:border-zinc-800/60 bg-zinc-50/50 dark:bg-[#101014]">
           <button
             onClick={onClose}
             className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs"

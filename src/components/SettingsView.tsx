@@ -15,33 +15,25 @@ import {
   Database,
   RefreshCw,
   Cpu,
-  Lock,
   Trash2,
   Check,
-  Server,
   Folder,
-  Globe,
-  Radio,
-  FileCode,
-  Info,
   ChevronRight,
-  ShieldAlert,
   WifiOff,
-  Download,
   Clock,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate } from '../lib/cloudSync';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
-import { AppUpdateManager, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, APP_CHANGELOGS } from '../lib/appUpdateManager';
+import { CURRENT_APP_VERSION } from '../lib/appUpdateManager';
 import { AppLogo } from './AppLogo';
 import { CloudConnectModal } from './CloudConnectModal';
 import { SyncProgressBar } from './SyncProgressBar';
 
 interface SettingsViewProps {
-  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates';
+  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
   onOpenConflictModal: () => void;
   onRefreshNotes: () => void;
   onBackToNotes?: () => void;
@@ -108,7 +100,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onBackToNotes,
   activeEditingNoteTitle,
 }) => {
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'updates'>(initialSubtab);
+  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>(
+    initialSubtab === 'ai'
+      ? 'ai'
+      : initialSubtab === 'storage'
+      ? 'storage'
+      : initialSubtab === 'security'
+      ? 'security'
+      : initialSubtab === 'diagnostics'
+      ? 'diagnostics'
+      : 'cloud'
+  );
 
   // Cloud Sync State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
@@ -120,10 +122,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [selectedProviderForConnect, setSelectedProviderForConnect] = useState<CloudStorageProvider | null>(null);
 
-  // APK update state
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
-
   // AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => AiSettingsManager.getApiKey());
@@ -133,11 +131,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
 
   // Storage stats & Keystore
-  const [stats, setStats] = useState(() => SQLiteDatabase.getStorageStats());
+  const [stats, setStats] = useState(() => StorageManager.getStorageStats());
   const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAirGapped = backupFrequency === 'never';
   const activeAccounts = accounts.filter((a) => a.connected);
@@ -158,7 +155,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       });
       setTelemetryList(CloudSyncEngine.getTelemetry());
       setAccounts(CloudSyncEngine.getAccounts());
-      setNotes(SQLiteDatabase.getNotes());
+      setNotes(StorageManager.getNotes());
       setSyncFeedback(result.message);
       onRefreshNotes();
     } catch {
@@ -185,9 +182,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Toggle note cloud save
   const handleToggleNoteCloudSave = (noteId: number) => {
-    const updated = SQLiteDatabase.toggleCloudSave(noteId);
+    const updated = StorageManager.toggleCloudSave(noteId);
     if (updated) {
-      setNotes(SQLiteDatabase.getNotes());
+      setNotes(StorageManager.getNotes());
       onRefreshNotes();
     }
   };
@@ -244,31 +241,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     reader.readAsText(file);
   };
 
-  // Restore JSON Backup
-  const handleRestoreJsonBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        const success = SQLiteDatabase.importFullBackup(content);
-        if (success) {
-          setStats(SQLiteDatabase.getStorageStats());
-          setNotes(SQLiteDatabase.getNotes());
-          onRefreshNotes();
-          alert('Backup restored successfully!');
-        } else {
-          alert('Invalid backup JSON format.');
-        }
-      } catch {
-        alert('Failed to parse backup JSON.');
-      }
-    };
-    reader.readAsText(file);
-  };
-
   return (
     <div id="dedicated-settings-view" className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden">
       {/* Return to Note Banner (if opened during active note editing) */}
@@ -300,7 +272,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Multi-cloud sync, Gemini AI vision &amp; keys, local database, hardware security, and APK updates.
+              Multi-cloud sync, Google Gemini AI API key, local database, and hardware keystore encryption.
             </p>
           </div>
         </div>
@@ -314,7 +286,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs flex items-center gap-2 transition-all disabled:opacity-40"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Vault Now'}</span>
+            <span>{isSyncing ? 'Syncing...' : 'Sync Cloud Backups'}</span>
           </button>
         </div>
       </div>
@@ -394,19 +366,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         >
           <Layers className="w-4 h-4" />
           <span>Architecture &amp; Logs</span>
-        </button>
-
-        <button
-          id="subtab-updates-btn"
-          onClick={() => setActiveTab('updates')}
-          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
-            activeTab === 'updates'
-              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-          }`}
-        >
-          <Info className="w-4 h-4" />
-          <span>APK Updates &amp; Releases</span>
         </button>
       </div>
 
@@ -499,9 +458,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Cloud Destinations &amp; Vaults
+                  Cloud Destinations &amp; Providers
                 </h3>
-                <span className="text-xs text-zinc-400">Click &ldquo;Connect&rdquo; to configure credentials and vault path</span>
+                <span className="text-xs text-zinc-400">Click &ldquo;Connect&rdquo; to configure third-party credentials and backup directory</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -545,7 +504,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               <Check className="w-3 h-3" />
                               {account?.user_email || account?.account_email || 'Authenticated'}
                             </span>
-                            <span className="text-[10px] text-emerald-600/80">Active Vault</span>
+                            <span className="text-[10px] text-emerald-600/80">Active</span>
                           </div>
                           <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
                             {account?.cloud_backup_path}
@@ -577,7 +536,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         >
                           {isConnected ? (
                             <>
-                              <span>Manage / Settings</span>
+                              <span>Manage Settings</span>
                               <ChevronRight className="w-3 h-3" />
                             </>
                           ) : (
@@ -623,7 +582,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             {note.title || 'Untitled Document'}
                           </p>
                           <p className="text-[10px] text-zinc-400 truncate">
-                            Updated {new Date(note.updated_at || note.created_at).toLocaleString()} • {note.note_type || 'text'}
+                            Updated {new Date(note.updated_at || note.created_at).toLocaleString()}
                           </p>
                         </div>
 
@@ -802,78 +761,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Export & Import Data */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">
-                <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Download className="w-4 h-4 text-indigo-500" />
-                  <span>Export Vault Data</span>
-                </h4>
-                <p className="text-xs text-zinc-400">
-                  Download a complete backup archive containing notes, categories, tags, voice transcripts, and sketches.
-                </p>
-                <div className="flex flex-col gap-2 pt-2">
-                  <button
-                    onClick={() => {
-                      const json = SQLiteDatabase.exportFullBackup();
-                      const blob = new Blob([json], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `VellumScribe_Backup_${new Date().toISOString().split('T')[0]}.json`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="w-full px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl text-xs font-semibold shadow-2xs text-center"
-                  >
-                    Export Full JSON Backup (.json)
-                  </button>
+            {/* Export options */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                Manual Archive &amp; Full Data Export
+              </h3>
 
-                  <button
-                    onClick={() => {
-                      const allNotes = SQLiteDatabase.getNotes();
-                      const md = allNotes.length > 0 
-                        ? allNotes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`).join('\n\n---\n\n')
-                        : '# VellumScribe Notes\n\nNo notes currently saved.';
-                      const blob = new Blob([md], { type: 'text/markdown' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `VellumScribe_Notes_${new Date().toISOString().split('T')[0]}.md`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="w-full px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-2xl text-xs font-semibold text-center"
-                  >
-                    Export Clean Markdown Archive (.md)
-                  </button>
-                </div>
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button
+                  onClick={() => {
+                    const json = StorageManager.exportFullBackup();
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `VellumScribe_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
+                >
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
+                  <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
+                </button>
 
-              <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">
-                <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-indigo-500" />
-                  <span>Restore from Backup</span>
-                </h4>
-                <p className="text-xs text-zinc-400">
-                  Import a previously exported JSON backup to restore your events, notes, and preferences.
-                </p>
-                <div className="pt-2">
-                  <button
-                    onClick={() => restoreFileInputRef.current?.click()}
-                    className="w-full px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-2xl text-xs font-semibold text-center flex items-center justify-center gap-2"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Select Backup JSON File</span>
-                  </button>
-                  <input
-                    ref={restoreFileInputRef}
-                    type="file"
-                    accept=".json"
-                    onChange={handleRestoreJsonBackup}
-                    className="hidden"
-                  />
-                </div>
+                <button
+                  onClick={() => {
+                    const notes = StorageManager.getNotes();
+                    const md = notes.length > 0 
+                      ? notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`).join('\n\n---\n\n')
+                      : '# VellumScribe Notes\n\nNo notes currently saved.';
+                    const blob = new Blob([md], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `VellumScribe_Notes_${new Date().toISOString().split('T')[0]}.md`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
+                >
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export Markdown Archive</p>
+                  <p className="text-[11px] text-zinc-400">Clean Markdown text files readable in any standard text editor</p>
+                </button>
               </div>
             </div>
           </div>
@@ -881,22 +811,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 4: SECURITY & KEYSTORE */}
         {activeTab === 'security' && (
-          <div className="max-w-2xl mx-auto space-y-5">
-            <div className="p-5 bg-zinc-950 rounded-3xl text-white border border-zinc-850 space-y-3">
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="p-6 bg-zinc-950 rounded-3xl text-white border border-zinc-850 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-5 h-5 text-emerald-400" />
-                  <span className="text-xs font-bold tracking-wider text-zinc-200 uppercase">
-                    Hardware Keystore Encryption
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold tracking-wide">Hardware Keystore Encryption</h3>
+                    <p className="text-xs text-zinc-400">Android Keystore / Apple Secure Enclave hardware binding</p>
+                  </div>
                 </div>
-                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-0.5 rounded-full font-mono">
+                <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
                   AES-256-GCM
                 </span>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Cryptographic master keys and locked note PINs are handled using hardware keystore sandboxing. Remote syncing encrypts note payloads client-side before dispatch.
-              </p>
             </div>
 
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
@@ -966,102 +896,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
           </div>
         )}
-
-        {/* TAB 6: APK UPDATES & RELEASES */}
-        {activeTab === 'updates' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            {/* Installed Version Overview */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-lg">
-                    <AppLogo size="md" showText={false} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial flex items-center gap-2">
-                      <span>VellumScribe APK Engine</span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-mono font-medium">
-                        v{CURRENT_APP_VERSION} (Build #{CURRENT_BUILD_NUMBER})
-                      </span>
-                    </h3>
-                    <p className="text-xs text-zinc-400">
-                      Automatic SQLite data migration &amp; preservation active across APK upgrades.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  id="settings-check-updates-btn"
-                  onClick={async () => {
-                    setIsCheckingUpdate(true);
-                    setUpdateCheckMessage(null);
-                    try {
-                      const res = await AppUpdateManager.checkForRemoteUpdates();
-                      if (res.hasUpdate) {
-                        setUpdateCheckMessage(`New release v${res.latestVersion} is available!`);
-                      } else {
-                        setUpdateCheckMessage(`VellumScribe v${res.currentVersion} is up to date.`);
-                      }
-                    } catch {
-                      setUpdateCheckMessage('VellumScribe v2.6.0 is the latest stable build.');
-                    } finally {
-                      setIsCheckingUpdate(false);
-                    }
-                  }}
-                  disabled={isCheckingUpdate}
-                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-2 transition-all disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-                  <span>{isCheckingUpdate ? 'Checking Releases...' : 'Check For Updates'}</span>
-                </button>
-              </div>
-
-              {updateCheckMessage && (
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                  <span>{updateCheckMessage}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Changelog History */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Release History &amp; What's New
-              </h4>
-              <div className="space-y-4">
-                {APP_CHANGELOGS.map((rel) => (
-                  <div
-                    key={rel.version}
-                    className="p-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/50 dark:bg-[#101014] space-y-2"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                          v{rel.version}
-                        </span>
-                        {rel.isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-medium">
-                            Current Version
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-zinc-400 font-mono">{rel.releaseDate}</span>
-                    </div>
-                    <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
-                      {rel.highlights.map((h, i) => (
-                        <li key={i} className="flex items-center gap-1.5">
-                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{h}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Cloud Provider Connection Modal */}
@@ -1070,7 +904,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           provider={selectedProviderForConnect}
           existingAccount={accounts.find((a) => a.provider === selectedProviderForConnect)}
           onClose={() => setSelectedProviderForConnect(null)}
-          onConnected={(updatedAccount) => {
+          onConnected={(_updatedAccount) => {
             setAccounts(CloudSyncEngine.getAccounts());
             setSyncFeedback(`Successfully configured ${PROVIDERS[selectedProviderForConnect].name}!`);
             setSelectedProviderForConnect(null);

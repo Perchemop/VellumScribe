@@ -16,7 +16,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 
 interface ArchiveSectionProps {
   notes: NoteRecord[];
@@ -76,7 +76,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 
   const handleUnarchive = (noteId: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    SQLiteDatabase.unarchiveNote(noteId);
+    StorageManager.unarchiveNote(noteId);
     onRefresh();
   };
 
@@ -87,7 +87,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 
   const executePermanentDelete = () => {
     if (confirmDeleteNote) {
-      SQLiteDatabase.deleteNote(confirmDeleteNote.id);
+      StorageManager.deleteNote(confirmDeleteNote.id);
       setConfirmDeleteNote(null);
       onRefresh();
     }
@@ -99,7 +99,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
   };
 
   const executeRestoreAll = () => {
-    archivedNotes.forEach((n) => SQLiteDatabase.unarchiveNote(n.id));
+    archivedNotes.forEach((n) => StorageManager.unarchiveNote(n.id));
     setConfirmRestoreAll(false);
     onRefresh();
   };

@@ -31,7 +31,9 @@ export interface NoteRecord {
   latitude?: number;
   longitude?: number;
   is_locked?: boolean; // Password/PIN protected
-  lock_pin?: string;
+  pin_hash?: string; // Salted SHA-256 hash of security PIN
+  pin_salt?: string; // Cryptographic salt for PIN hashing
+  lock_pin?: string; // Legacy plaintext PIN (automatically upgraded on verification)
   created_at: string; // ISO string
   updated_at?: string;
   tags?: string[];
@@ -78,6 +80,8 @@ export type CloudStorageProvider =
   | 'icloud' 
   | 'nextcloud' 
   | 's3';
+
+export type BackupFrequency = 'never' | '5m' | '15m' | '1h' | 'daily' | 'manual';
 
 export interface CloudAccount {
   id?: string;

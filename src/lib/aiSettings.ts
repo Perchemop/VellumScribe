@@ -1,3 +1,5 @@
+import { StorageManager } from './storage';
+
 export interface AiIntegrationSettings {
   apiKey: string;
   preferredModel: string;
@@ -26,26 +28,18 @@ export class AiSettingsManager {
    * Retrieves user API key stored strictly in local browser storage / keystore.
    */
   public static getApiKey(): string {
-    try {
-      return localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
-    } catch {
-      return '';
-    }
+    return StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
   }
 
   /**
    * Saves API key to local storage only.
    */
   public static setApiKey(key: string): void {
-    try {
-      const trimmed = key.trim();
-      if (trimmed) {
-        localStorage.setItem(STORAGE_KEYS.API_KEY, trimmed);
-      } else {
-        localStorage.removeItem(STORAGE_KEYS.API_KEY);
-      }
-    } catch (e) {
-      console.error('Failed to save API key to local storage', e);
+    const trimmed = key.trim();
+    if (trimmed) {
+      StorageManager.setItem(STORAGE_KEYS.API_KEY, trimmed);
+    } else {
+      StorageManager.removeItem(STORAGE_KEYS.API_KEY);
     }
   }
 
@@ -53,11 +47,7 @@ export class AiSettingsManager {
    * Clears API key from local storage.
    */
   public static clearApiKey(): void {
-    try {
-      localStorage.removeItem(STORAGE_KEYS.API_KEY);
-    } catch (e) {
-      console.error('Failed to clear API key from local storage', e);
-    }
+    StorageManager.removeItem(STORAGE_KEYS.API_KEY);
   }
 
   /**
@@ -71,17 +61,12 @@ export class AiSettingsManager {
    * Get general AI settings.
    */
   public static getSettings(): AiIntegrationSettings {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        apiKey: this.getApiKey(),
-      };
-    } catch {
-      return { ...DEFAULT_SETTINGS, apiKey: this.getApiKey() };
-    }
+    const parsed = StorageManager.getItem<Partial<AiIntegrationSettings>>(STORAGE_KEYS.SETTINGS, {});
+    return {
+      ...DEFAULT_SETTINGS,
+      ...(parsed || {}),
+      apiKey: this.getApiKey(),
+    };
   }
 
   /**
@@ -97,7 +82,7 @@ export class AiSettingsManager {
       // Delete apiKey from settings object to keep apiKey strictly in its dedicated storage key
       const toSave = { ...updated };
       delete (toSave as any).apiKey;
-      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(toSave));
+      StorageManager.setItem(STORAGE_KEYS.SETTINGS, toSave);
     } catch (e) {
       console.error('Failed to save AI settings', e);
     }
@@ -171,7 +156,7 @@ export class AiSettingsManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-gemini-api-key': keyToTest,
+          Authorization: `Bearer ${keyToTest}`,
         },
         body: JSON.stringify({ customApiKey: keyToTest }),
       });

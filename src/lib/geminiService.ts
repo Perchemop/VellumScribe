@@ -47,7 +47,7 @@ export class GeminiApiService {
     };
     const localKey = AiSettingsManager.getApiKey();
     if (localKey) {
-      headers['x-gemini-api-key'] = localKey;
+      headers['Authorization'] = `Bearer ${localKey}`;
     }
     return headers;
   }
@@ -80,9 +80,6 @@ export class GeminiApiService {
       },
       body: JSON.stringify({
         contents: contentsPayload,
-        generationConfig: {
-          temperature: 0.2,
-        },
       }),
     });
 

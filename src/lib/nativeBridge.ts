@@ -3,6 +3,7 @@ import { Share } from '@capacitor/share';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Clipboard } from '@capacitor/clipboard';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
+import { Camera } from '@capacitor/camera';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -11,6 +12,44 @@ export class NativeBridge {
 
   public static isAndroid(): boolean {
     return Capacitor.getPlatform() === 'android';
+  }
+
+  /**
+   * Request / verify camera permissions for Android & iOS
+   */
+  public static async checkAndRequestCameraPermissions(): Promise<boolean> {
+    try {
+      if (this.isNative()) {
+        const check = await Camera.checkPermissions();
+        if (check.camera === 'granted') return true;
+        const req = await Camera.requestPermissions({ permissions: ['camera'] });
+        return req.camera === 'granted';
+      }
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+        return true;
+      }
+    } catch (e) {
+      console.warn('Camera permission check encountered exception:', e);
+    }
+    return false;
+  }
+
+  /**
+   * Request / verify filesystem permissions
+   */
+  public static async checkAndRequestFilesystemPermissions(): Promise<boolean> {
+    try {
+      if (this.isNative()) {
+        const check = await Filesystem.checkPermissions();
+        if (check.publicStorage === 'granted') return true;
+        const req = await Filesystem.requestPermissions();
+        return req.publicStorage === 'granted';
+      }
+      return true;
+    } catch (e) {
+      console.warn('Filesystem permission check encountered exception:', e);
+      return true;
+    }
   }
 
   /**
@@ -25,12 +64,16 @@ export class NativeBridge {
           heavy: ImpactStyle.Heavy,
         };
         await Haptics.impact({ style: impactMap[style] });
-      } else if (navigator.vibrate) {
+      } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(style === 'heavy' ? 25 : style === 'medium' ? 15 : 8);
       }
     } catch {
       // Haptics not supported or permitted, silent fallback
     }
+  }
+
+  public static hapticsVibrate() {
+    this.hapticImpact('light');
   }
 
   public static async hapticNotification(type: 'success' | 'warning' | 'error' = 'success') {
@@ -42,7 +85,7 @@ export class NativeBridge {
           error: NotificationType.Error,
         };
         await Haptics.notification({ type: typeMap[type] });
-      } else if (navigator.vibrate) {
+      } else if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(type === 'error' ? [30, 50, 30] : [15, 30, 15]);
       }
     } catch {
@@ -60,7 +103,7 @@ export class NativeBridge {
         this.hapticImpact('light');
         return true;
       }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
         this.hapticImpact('light');
         return true;
@@ -96,6 +139,7 @@ export class NativeBridge {
   ): Promise<{ success: boolean; message: string }> {
     try {
       if (this.isNative()) {
+        await this.checkAndRequestFilesystemPermissions();
         // Write file to Cache directory for sharing via Android Intent
         const writeResult = await Filesystem.writeFile({
           path: fileName,
@@ -155,7 +199,7 @@ export class NativeBridge {
           this.hapticImpact('light');
           return true;
         }
-      } else if (navigator.share) {
+      } else if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
           title,
           text: `${title}\n\n${text}`,

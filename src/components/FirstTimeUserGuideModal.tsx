@@ -12,6 +12,8 @@ import {
   CheckSquare,
   Lock,
 } from 'lucide-react';
+import { AppLogo } from './AppLogo';
+import { StorageManager } from '../lib/storage';
 
 interface FirstTimeUserGuideModalProps {
   isOpen: boolean;
@@ -21,19 +23,11 @@ interface FirstTimeUserGuideModalProps {
 const STORAGE_KEY = 'vellumscribe_onboarding_completed_v1';
 
 export function hasCompletedOnboarding(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  return StorageManager.getItem<string>(STORAGE_KEY, 'false') === 'true';
 }
 
 export function markOnboardingCompleted(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true');
-  } catch (e) {
-    console.error('Failed to mark onboarding completed', e);
-  }
+  StorageManager.setItem(STORAGE_KEY, 'true');
 }
 
 export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = ({
@@ -126,9 +120,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
         {/* Header */}
         <div className="p-6 pb-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-850">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 flex items-center justify-center font-serif text-base font-semibold shadow-2xs">
-              V
-            </div>
+            <AppLogo size="md" showText={false} />
             <div>
               <span className="text-[11px] font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">
                 {step.badge}

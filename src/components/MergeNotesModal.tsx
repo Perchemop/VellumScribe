@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GitMerge, X, Check, Archive, ArrowDownUp } from 'lucide-react';
 import { NoteRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 
 interface MergeNotesModalProps {
   notes: NoteRecord[];
@@ -42,10 +42,10 @@ export const MergeNotesModal: React.FC<MergeNotesModalProps> = ({
 
   const handleMerge = () => {
     if (selectedIds.length < 2) return;
-    const merged = SQLiteDatabase.mergeNotes(selectedIds, mergedTitle.trim());
+    const merged = StorageManager.mergeNotes(selectedIds, mergedTitle.trim());
     if (merged) {
       if (archiveOriginals) {
-        SQLiteDatabase.batchArchiveNotes(selectedIds);
+        StorageManager.batchArchiveNotes(selectedIds);
       }
       onMerged(merged);
       onClose();

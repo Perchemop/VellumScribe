@@ -20,7 +20,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
+import { StorageManager } from '../lib/storage';
 import { NativeBridge } from '../lib/nativeBridge';
 
 interface BatchActionBarProps {
@@ -81,14 +81,14 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
   // Batch actions
   const executeBatchTrash = () => {
-    SQLiteDatabase.batchTrashNotes(selectedNoteIds);
+    StorageManager.batchTrashNotes(selectedNoteIds);
     setConfirmModal(null);
     onClearSelection();
     onRefresh();
   };
 
   const executeBatchPermanentDelete = () => {
-    SQLiteDatabase.batchDeleteNotesPermanently(selectedNoteIds);
+    StorageManager.batchDeleteNotesPermanently(selectedNoteIds);
     setConfirmModal(null);
     onClearSelection();
     onRefresh();
@@ -103,36 +103,36 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const handleBatchRestore = () => {
-    SQLiteDatabase.batchRestoreNotes(selectedNoteIds);
+    StorageManager.batchRestoreNotes(selectedNoteIds);
     onClearSelection();
     onRefresh();
   };
 
   const handleBatchArchive = () => {
     if (activeTab === 'archived') {
-      SQLiteDatabase.batchUnarchiveNotes(selectedNoteIds);
+      StorageManager.batchUnarchiveNotes(selectedNoteIds);
     } else {
-      SQLiteDatabase.batchArchiveNotes(selectedNoteIds);
+      StorageManager.batchArchiveNotes(selectedNoteIds);
     }
     onClearSelection();
     onRefresh();
   };
 
   const handleBatchPin = () => {
-    SQLiteDatabase.batchPinNotes(selectedNoteIds, hasUnpinned);
+    StorageManager.batchPinNotes(selectedNoteIds, hasUnpinned);
     onClearSelection();
     onRefresh();
   };
 
   const handleBatchMoveCategory = (eventId: number) => {
-    SQLiteDatabase.batchMoveNotes(selectedNoteIds, eventId);
+    StorageManager.batchMoveNotes(selectedNoteIds, eventId);
     setShowCategorySheet(false);
     onClearSelection();
     onRefresh();
   };
 
   const handleBatchColor = (color: string) => {
-    SQLiteDatabase.batchColorNotes(selectedNoteIds, color);
+    StorageManager.batchColorNotes(selectedNoteIds, color);
     setShowColorSheet(false);
     onClearSelection();
     onRefresh();
@@ -141,7 +141,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const handleBatchAddTag = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tagInput.trim()) return;
-    SQLiteDatabase.batchAddTagToNotes(selectedNoteIds, tagInput.trim());
+    StorageManager.batchAddTagToNotes(selectedNoteIds, tagInput.trim());
     setTagInput('');
     setShowTagSheet(false);
     onClearSelection();
@@ -149,7 +149,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const handleBatchDuplicate = () => {
-    SQLiteDatabase.batchDuplicateNotes(selectedNoteIds);
+    StorageManager.batchDuplicateNotes(selectedNoteIds);
     setShowMoreMenu(false);
     onClearSelection();
     onRefresh();
@@ -158,7 +158,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const handleBatchLock = (e: React.FormEvent) => {
     e.preventDefault();
     if (!lockPinInput.trim()) return;
-    SQLiteDatabase.batchLockNotes(selectedNoteIds, lockPinInput.trim());
+    StorageManager.batchLockNotes(selectedNoteIds, lockPinInput.trim());
     setLockPinInput('');
     setShowLockSheet(false);
     onClearSelection();
@@ -166,21 +166,21 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const handleBatchUnlock = () => {
-    SQLiteDatabase.batchUnlockNotes(selectedNoteIds);
+    StorageManager.batchUnlockNotes(selectedNoteIds);
     setShowMoreMenu(false);
     onClearSelection();
     onRefresh();
   };
 
   const handleBatchToggleCloud = () => {
-    SQLiteDatabase.batchToggleCloudSave(selectedNoteIds, hasCloudDisabled);
+    StorageManager.batchToggleCloudSave(selectedNoteIds, hasCloudDisabled);
     setShowMoreMenu(false);
     onClearSelection();
     onRefresh();
   };
 
   const handleExportMarkdown = async () => {
-    const md = SQLiteDatabase.exportNotesAsMarkdown(selectedNoteIds);
+    const md = StorageManager.exportNotesAsMarkdown(selectedNoteIds);
     const fileName = `VellumScribe_Notes_${new Date().toISOString().slice(0, 10)}.md`;
     await NativeBridge.shareOrDownloadFile(fileName, md, 'text/markdown', 'Share Selected Markdown Notes');
     setShowExportMenu(false);
@@ -188,7 +188,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   };
 
   const handleExportJson = async () => {
-    const jsonStr = SQLiteDatabase.exportNotesAsJson(selectedNoteIds);
+    const jsonStr = StorageManager.exportNotesAsJson(selectedNoteIds);
     const fileName = `VellumScribe_Backup_${new Date().toISOString().slice(0, 10)}.json`;
     await NativeBridge.shareOrDownloadFile(fileName, jsonStr, 'application/json', 'Share Selected Notes JSON');
     setShowExportMenu(false);

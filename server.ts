@@ -7,16 +7,70 @@ import { createServer as createViteServer } from "vite";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+// Respect Cloud Run's injected $PORT while defaulting to 3000
+const PORT = Number(process.env.PORT) || 3000;
 
-// Middleware for parsing large JSON payloads (for audio & OCR base64 payloads)
+// Trust proxy headers behind Cloud Run / reverse proxies so req.ip reflects actual client IP
+app.set("trust proxy", 1);
+
+// Middleware for parsing JSON & URL-encoded payloads
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// --- RATE LIMITING SUBSYSTEM ---
+interface RateLimitRecord {
+  timestamps: number[];
+}
+
+const rateLimitMap = new Map<string, RateLimitRecord>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_REQUESTS_PER_WINDOW = 30; // 30 AI requests per minute per IP
+
+// Periodically clean up stale rate limit records
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap.entries()) {
+    record.timestamps = record.timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+    if (record.timestamps.length === 0) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 2 * 60 * 1000);
+
+function geminiRateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const clientIp = req.ip || req.socket.remoteAddress || "anonymous";
+  const now = Date.now();
+
+  let record = rateLimitMap.get(clientIp);
+  if (!record) {
+    record = { timestamps: [] };
+    rateLimitMap.set(clientIp, record);
+  }
+
+  // Filter timestamps within current sliding window
+  record.timestamps = record.timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+
+  if (record.timestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+    const oldest = record.timestamps[0];
+    const retryAfterSec = Math.ceil((oldest + RATE_LIMIT_WINDOW_MS - now) / 1000);
+    res.setHeader("Retry-After", String(Math.max(1, retryAfterSec)));
+    return res.status(429).json({
+      error: "Rate limit exceeded. Too many AI processing requests. Please wait a moment before retrying.",
+      retryAfterSeconds: Math.max(1, retryAfterSec),
+    });
+  }
+
+  record.timestamps.push(now);
+  next();
+}
+
+// Apply rate limiter to all /api/gemini routes
+app.use("/api/gemini", geminiRateLimiter);
+
 // Lazy initialize Gemini client
 function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
-  const apiKey = (typeof customApiKey === 'string' && customApiKey.trim()) 
-    ? customApiKey.trim() 
+  const apiKey = (typeof customApiKey === "string" && customApiKey.trim())
+    ? customApiKey.trim()
     : process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -33,6 +87,11 @@ function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
 }
 
 function resolveApiKey(req: express.Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token) return token;
+  }
   const headerKey = req.headers["x-gemini-api-key"];
   if (typeof headerKey === "string" && headerKey.trim()) {
     return headerKey.trim();
@@ -61,14 +120,13 @@ app.post("/api/gemini/verify", async (req, res) => {
     if (!ai) {
       return res.status(400).json({
         success: false,
-        error: "No API key provided or configured in environment. Please enter a valid Google AI Studio API key.",
+        error: "No API key provided or configured in environment. Please configure an API key.",
       });
     }
 
     // Perform lightweight probe
     const { text, modelUsed } = await generateContentWithFallback(ai, {
       contents: "Respond with the word OK",
-      config: { temperature: 0.1 },
     });
 
     return res.json({
@@ -81,7 +139,7 @@ app.post("/api/gemini/verify", async (req, res) => {
     const errorMessage =
       error?.message ||
       (typeof error === "string" ? error : "") ||
-      "Invalid Google AI Studio API key or connection error. Please verify key permissions in AI Studio.";
+      "Invalid Google AI Studio API key or connection error. Please verify key permissions.";
     console.error("Gemini API Verification Error:", errorMessage);
     return res.status(401).json({
       success: false,
@@ -210,7 +268,7 @@ app.post("/api/gemini/ocr", async (req, res) => {
     const validMime = normalizeImageMimeType(mimeType, imageBase64);
 
     const prompt = "Extract all handwritten text verbatim without markdown alterations.";
-    
+
     try {
       const { text, modelUsed } = await generateContentWithFallback(ai, {
         contents: {
@@ -225,9 +283,6 @@ app.post("/api/gemini/ocr", async (req, res) => {
               text: prompt,
             },
           ],
-        },
-        config: {
-          temperature: 0.2,
         },
       });
 
@@ -255,7 +310,7 @@ app.post("/api/gemini/ocr", async (req, res) => {
 // 2. Audio Transcription Endpoint
 app.post("/api/gemini/transcribe", async (req, res) => {
   try {
-    const { audioBase64, mimeType, sampleDuration = 0 } = req.body;
+    const { audioBase64, mimeType } = req.body;
     if (!audioBase64) {
       return res.status(400).json({ error: "Missing audioBase64 in request body." });
     }
@@ -291,9 +346,6 @@ app.post("/api/gemini/transcribe", async (req, res) => {
               text: prompt,
             },
           ],
-        },
-        config: {
-          temperature: 0.2,
         },
       });
 
@@ -352,9 +404,6 @@ ${currentBody}
     try {
       const { text, modelUsed } = await generateContentWithFallback(ai, {
         contents: prompt,
-        config: {
-          temperature: 0.3,
-        },
       });
 
       const meetingMinutes = `\n\n---\n### Meeting Summary\n${text || ""}`;
@@ -415,9 +464,6 @@ Merge both versions cleanly preserving all unique notes, action items, and struc
     try {
       const { text, modelUsed } = await generateContentWithFallback(ai, {
         contents: prompt,
-        config: {
-          temperature: 0.1,
-        },
       });
 
       return res.json({
@@ -440,7 +486,15 @@ Merge both versions cleanly preserving all unique notes, action items, and struc
   }
 });
 
-// Vite middleware setup
+// Explicit 404 handler for unmatched /api/* routes (prevents falling through to SPA HTML)
+app.all("/api/*", (req, res) => {
+  res.status(404).json({
+    error: "API route not found",
+    path: req.originalUrl || req.path,
+  });
+});
+
+// Vite middleware setup & SPA static fallback
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -457,7 +511,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Android Note-Taking & Gemini Sync Server running on port ${PORT}`);
+    console.log(`VellumScribe Server running on port ${PORT}`);
   });
 }
 
