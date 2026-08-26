@@ -68,6 +68,10 @@ export class AndroidKeystoreManager {
     return newSecret;
   }
 
+  public static setSecret(alias: string, rawValue: string, keyType: KeystoreSecret['key_type']): KeystoreSecret {
+    return this.saveSecret(alias, rawValue, keyType);
+  }
+
   public static deleteSecret(alias: string): boolean {
     const secrets = this.getStored().filter((s) => s.alias !== alias);
     this.save(secrets);
@@ -88,3 +92,5 @@ export class AndroidKeystoreManager {
     return secrets[idx];
   }
 }
+
+export const SecureKeystore = AndroidKeystoreManager;

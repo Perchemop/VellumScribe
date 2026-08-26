@@ -41,11 +41,11 @@ function extractMimeType(input: string, fallback: string): string {
 }
 
 export class GeminiApiService {
-  private static getHeaders(): Record<string, string> {
+  private static async getHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
     if (localKey) {
       headers['Authorization'] = `Bearer ${localKey}`;
     }
@@ -97,13 +97,13 @@ export class GeminiApiService {
     imageBase64: string,
     mimeType = 'image/jpeg'
   ): Promise<OcrResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint first
     try {
       const res = await fetch('/api/gemini/ocr', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ imageBase64, mimeType }),
       });
 
@@ -164,13 +164,13 @@ export class GeminiApiService {
     mimeType = 'audio/webm',
     sampleDuration = 0
   ): Promise<TranscribeResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint
     try {
       const res = await fetch('/api/gemini/transcribe', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ audioBase64, mimeType, sampleDuration }),
       });
 
@@ -227,13 +227,13 @@ export class GeminiApiService {
     currentBody = '',
     eventTitle = 'Meeting'
   ): Promise<MeetingMinutesResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint first
     try {
       const res = await fetch('/api/gemini/meeting-minutes', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ transcript, currentBody, eventTitle }),
       });
 
@@ -295,13 +295,13 @@ ${currentBody}
     remoteContent: string,
     documentTitle = 'Note'
   ): Promise<ConflictMergeResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint
     try {
       const res = await fetch('/api/gemini/intelligent-merge', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({
           baseContent,
           localContent,

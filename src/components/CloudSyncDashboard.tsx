@@ -300,9 +300,19 @@ export const CloudSyncDashboard: React.FC<CloudSyncDashboardProps> = ({
                       <span className="text-[9px] font-medium uppercase px-1.5 py-0.2 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
                         {meta.category}
                       </span>
+                      {isConnected ? (
+                        <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" />
+                          SSO Active
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.2 rounded-md">
+                          1-Click SSO
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">
-                      {isConnected ? (acc.account_email || acc.user_email || 'Connected') : meta.description}
+                      {isConnected ? (acc.account_email || acc.user_email || 'SSO Connected') : meta.description}
                     </p>
                   </div>
                 </div>
@@ -316,7 +326,7 @@ export const CloudSyncDashboard: React.FC<CloudSyncDashboardProps> = ({
                       : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-white'
                   }`}
                 >
-                  {isConnected ? 'Disconnect' : 'Connect'}
+                  {isConnected ? 'Manage SSO' : 'SSO Login'}
                 </button>
               </div>
             );

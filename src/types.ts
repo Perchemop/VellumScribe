@@ -31,9 +31,10 @@ export interface NoteRecord {
   latitude?: number;
   longitude?: number;
   is_locked?: boolean; // Password/PIN protected
-  pin_hash?: string; // Salted SHA-256 hash of security PIN
+  pin_hash?: string; // Salted PBKDF2 hash of security PIN
   pin_salt?: string; // Cryptographic salt for PIN hashing
   lock_pin?: string; // Legacy plaintext PIN (automatically upgraded on verification)
+  encrypted_payload?: string; // AES-256-GCM encrypted payload { body, checklist_items, sketch_data }
   created_at: string; // ISO string
   updated_at?: string;
   tags?: string[];
@@ -104,6 +105,10 @@ export interface CloudAccount {
   quota_used_bytes?: number;
   quota_total_bytes?: number;
   auth_status?: string;
+  sso_provider?: string;
+  sso_auth_mode?: 'sso_oauth' | 'sso_oidc' | 'sso_saml' | 'api_credential';
+  sso_session_id?: string;
+  sso_idp_name?: string;
   server_url?: string; // For WebDAV/Nextcloud/S3 custom endpoints
   bucket_name?: string; // For S3/MinIO
 }

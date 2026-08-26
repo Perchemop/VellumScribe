@@ -61,7 +61,17 @@ export class CloudSyncEngine {
     provider: CloudStorageProvider,
     email: string,
     name: string,
-    extra?: { server_url?: string; bucket_name?: string }
+    extra?: {
+      server_url?: string;
+      bucket_name?: string;
+      sso_provider?: string;
+      sso_auth_mode?: 'sso_oauth' | 'sso_oidc' | 'sso_saml' | 'api_credential';
+      sso_session_id?: string;
+      sso_idp_name?: string;
+      access_token?: string;
+      refresh_token_alias?: string;
+      cloud_backup_path?: string;
+    }
   ): CloudAccount {
     const accounts = this.getAccounts();
     const idx = accounts.findIndex((a) => a.provider === provider);
@@ -82,9 +92,15 @@ export class CloudSyncEngine {
       user_name: name,
       account_email: email,
       display_name: name,
-      auth_status: 'Authenticated & Verified',
+      auth_status: 'SSO Authenticated & Active',
       oauth_token_type: 'Bearer',
-      cloud_backup_path: defaultPaths[provider] || '/Backups/VellumScribe/',
+      access_token: extra?.access_token || `sso_tok_${provider}_${Date.now()}`,
+      refresh_token_alias: extra?.refresh_token_alias || `sso_refresh_${provider}`,
+      sso_provider: extra?.sso_provider || 'Single Sign-On (SSO)',
+      sso_auth_mode: extra?.sso_auth_mode || 'sso_oauth',
+      sso_session_id: extra?.sso_session_id || `sso_sess_${Date.now()}`,
+      sso_idp_name: extra?.sso_idp_name || provider,
+      cloud_backup_path: extra?.cloud_backup_path || defaultPaths[provider] || '/Backups/VellumScribe/',
       last_synced_at: new Date().toISOString(),
       storage_used_bytes: 1500000,
       storage_total_bytes: 15000000000,

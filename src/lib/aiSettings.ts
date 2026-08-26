@@ -24,11 +24,34 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
 };
 
 export class AiSettingsManager {
+  private static initPromise: Promise<void> | null = null;
+
+  /**
+   * Initializes AI settings and hydrates cached keys from storage.
+   */
+  public static async initialize(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        // Pre-warm storage and check compatibility
+        this.getApiKey();
+      })();
+    }
+    return this.initPromise;
+  }
+
   /**
    * Retrieves user API key stored strictly in local browser storage / keystore.
    */
   public static getApiKey(): string {
     return StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
+  }
+
+  /**
+   * Async accessor ensuring initialization has completed before reading key.
+   */
+  public static async getApiKeyAsync(): Promise<string> {
+    await this.initialize();
+    return this.getApiKey();
   }
 
   /**

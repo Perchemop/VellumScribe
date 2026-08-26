@@ -1,27 +1,36 @@
 import React, { useState } from 'react';
-import { Lock, Unlock, X, AlertCircle } from 'lucide-react';
+import { Lock, Unlock, X, AlertCircle, ShieldAlert } from 'lucide-react';
 import { NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { NotePayloadData } from '../lib/cryptoUtils';
 
 interface NoteSecurityModalProps {
   note: NoteRecord;
+  mode?: 'gate' | 'manage' | 'set';
+  currentPayload?: NotePayloadData;
+  onUnlockSession?: (payload: NotePayloadData, pin: string) => void;
   onSuccess: (updatedNote: NoteRecord) => void;
   onClose: () => void;
 }
 
 export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
   note,
+  mode: initialMode,
+  currentPayload,
+  onUnlockSession,
   onSuccess,
   onClose,
 }) => {
+  const isCurrentlyLocked = note.is_locked;
+  const effectiveMode = initialMode || (isCurrentlyLocked ? 'gate' : 'set');
+
+  const [mode, setMode] = useState<'gate' | 'manage' | 'set'>(effectiveMode);
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const isCurrentlyLocked = note.is_locked;
-
-  const handleSetLock = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -30,36 +39,40 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
       return;
     }
 
-    if (!isCurrentlyLocked && pin !== confirmPin) {
+    if (mode === 'set' && pin !== confirmPin) {
       setError('PINs do not match.');
       return;
     }
 
     setIsProcessing(true);
     try {
-      if (isCurrentlyLocked) {
-        // Unlock verification using salted SHA-256
-        const isMatch = await StorageManager.unlockNoteWithPin(note, pin);
-        if (!isMatch) {
+      if (mode === 'gate') {
+        // Session-only verification and decryption (non-destructive)
+        const result = await StorageManager.verifyAndUnlockNote(note, pin);
+        if (!result.success || !result.payload) {
           setError('Incorrect PIN. Please try again.');
           setIsProcessing(false);
           return;
         }
 
-        const updated = StorageManager.updateNote(note.id, {
-          is_locked: false,
-          pin_hash: undefined,
-          pin_salt: undefined,
-          lock_pin: undefined,
-        });
-
-        if (updated) {
-          onSuccess(updated);
-          onClose();
+        if (onUnlockSession) {
+          onUnlockSession(result.payload, pin);
         }
+        onSuccess(note);
+        onClose();
+      } else if (mode === 'manage') {
+        // Explicit removal of PIN lock
+        const updated = await StorageManager.removeNotePinLock(note.id, pin);
+        if (!updated) {
+          setError('Incorrect PIN. Could not remove protection.');
+          setIsProcessing(false);
+          return;
+        }
+        onSuccess(updated);
+        onClose();
       } else {
-        // Apply salted SHA-256 hashed PIN
-        const updated = await StorageManager.setNotePinLock(note.id, pin);
+        // mode === 'set' (apply new PIN and encrypt payload)
+        const updated = await StorageManager.setNotePinLock(note.id, pin, currentPayload);
         if (updated) {
           onSuccess(updated);
           onClose();
@@ -78,13 +91,19 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {isCurrentlyLocked ? (
-              <Unlock className="w-4 h-4 text-amber-500" />
+            {mode === 'gate' ? (
+              <Lock className="w-4 h-4 text-amber-500" />
+            ) : mode === 'manage' ? (
+              <ShieldAlert className="w-4 h-4 text-rose-500" />
             ) : (
               <Lock className="w-4 h-4 text-zinc-700 dark:text-zinc-300" />
             )}
             <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
-              {isCurrentlyLocked ? 'Unlock Confidential Note' : 'Protect Note with PIN'}
+              {mode === 'gate'
+                ? 'Unlock Confidential Note'
+                : mode === 'manage'
+                ? 'Remove Security PIN'
+                : 'Protect Note with PIN'}
             </h3>
           </div>
           <button
@@ -96,9 +115,11 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
         </div>
 
         <p className="text-xs text-zinc-400">
-          {isCurrentlyLocked
-            ? 'Enter your security PIN to remove password protection from this note.'
-            : 'Set a security PIN. It is hashed with SHA-256 & salt to keep your note safe.'}
+          {mode === 'gate'
+            ? 'Enter your security PIN to view and edit this note in your active session.'
+            : mode === 'manage'
+            ? 'Enter your PIN to permanently remove lock protection and decrypt content.'
+            : 'Set a security PIN. Note content is encrypted with AES-256-GCM.'}
         </p>
 
         {error && (
@@ -108,10 +129,10 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSetLock} className="space-y-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="text-[11px] font-semibold text-zinc-500 block mb-1">
-              {isCurrentlyLocked ? 'Current PIN' : 'Security PIN (4+ digits)'}
+              {mode === 'set' ? 'Security PIN (4+ digits)' : 'Current PIN'}
             </label>
             <input
               type="password"
@@ -126,7 +147,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
             />
           </div>
 
-          {!isCurrentlyLocked && (
+          {mode === 'set' && (
             <div>
               <label className="text-[11px] font-semibold text-zinc-500 block mb-1">
                 Confirm PIN
@@ -156,9 +177,19 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
             <button
               type="submit"
               disabled={isProcessing}
-              className="px-4 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-lg shadow-2xs transition-opacity"
+              className={`px-4 py-1.5 text-xs font-semibold rounded-lg shadow-2xs transition-opacity ${
+                mode === 'manage'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                  : 'bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900'
+              }`}
             >
-              {isProcessing ? 'Verifying...' : isCurrentlyLocked ? 'Remove Lock' : 'Lock Note'}
+              {isProcessing
+                ? 'Verifying...'
+                : mode === 'gate'
+                ? 'Unlock'
+                : mode === 'manage'
+                ? 'Remove Protection'
+                : 'Lock Note'}
             </button>
           </div>
         </form>
