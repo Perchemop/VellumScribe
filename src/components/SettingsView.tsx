@@ -115,7 +115,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Cloud Sync State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
   const [telemetryList, setTelemetryList] = useState<SyncTelemetry[]>(() => CloudSyncEngine.getTelemetry());
-  const [notes, setNotes] = useState<NoteRecord[]>(() => SQLiteDatabase.getNotes());
+  const [notes, setNotes] = useState<NoteRecord[]>(() => StorageManager.getNotes());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
   const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
@@ -458,9 +458,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Cloud Destinations &amp; Providers
+                  Cloud Destinations &amp; Single Sign-On (SSO)
                 </h3>
-                <span className="text-xs text-zinc-400">Click &ldquo;Connect&rdquo; to configure third-party credentials and backup directory</span>
+                <span className="text-xs text-zinc-400">Instant 1-Click SSO with OAuth 2.0 PKCE &amp; hardware keystore token protection</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -490,6 +490,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               <span className={`text-[10px] px-1.5 py-0.2 rounded-md border font-medium ${meta.badgeBg}`}>
                                 {meta.category}
                               </span>
+                              {isConnected ? (
+                                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
+                                  SSO Active
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.2 rounded-md">
+                                  1-Click SSO
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">{meta.description}</p>
                           </div>
@@ -502,9 +511,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
                             <span className="flex items-center gap-1">
                               <Check className="w-3 h-3" />
-                              {account?.user_email || account?.account_email || 'Authenticated'}
+                              {account?.user_email || account?.account_email || 'SSO Authenticated'}
                             </span>
-                            <span className="text-[10px] text-emerald-600/80">Active</span>
+                            <span className="text-[10px] text-emerald-600/80">Active SSO</span>
                           </div>
                           <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
                             {account?.cloud_backup_path}
@@ -522,7 +531,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <span className="text-[10px] text-zinc-400">
                           {isConnected && account?.last_synced_at
                             ? `Last Synced: ${new Date(account.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                            : 'Not configured'}
+                            : 'Not connected'}
                         </span>
 
                         <button
@@ -536,13 +545,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         >
                           {isConnected ? (
                             <>
-                              <span>Manage Settings</span>
+                              <span>Manage SSO</span>
                               <ChevronRight className="w-3 h-3" />
                             </>
                           ) : (
                             <>
                               <Cloud className="w-3 h-3" />
-                              <span>Connect Provider</span>
+                              <span>SSO Login</span>
                             </>
                           )}
                         </button>

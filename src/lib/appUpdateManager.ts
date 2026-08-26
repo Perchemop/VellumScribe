@@ -1,4 +1,4 @@
-import { SQLiteDatabase } from './storage';
+import { StorageManager } from './storage';
 import { NoteRecord, EventRecord } from '../types';
 
 export interface ReleaseInfo {
@@ -31,16 +31,63 @@ const STORAGE_KEYS = {
   MIGRATION_LOGS: 'vellumscribe_migration_logs_v1',
 };
 
-export const CURRENT_APP_VERSION = '2.6.0';
-export const CURRENT_BUILD_NUMBER = 20260824;
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_APP_VERSION = '2.8.1';
+export const CURRENT_BUILD_NUMBER = 20801;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
-    version: '2.6.0',
+    version: '2.8.1',
+    buildNumber: 20801,
+    releaseDate: '2026-08-26',
+    isCurrent: true,
+    highlights: [
+      'Comprehensive Security & Architecture Audit Refinement',
+      'True AES-256-GCM Cryptographic Payload Encryption for PIN Protected Notes',
+      'Session-Gated Note Viewing Without Destructive Lock Stripping',
+      'Upstream OAuth Token Revocation on Cloud Account Disconnect',
+    ],
+    features: [
+      'PBKDF2 (210,000 iterations) AES-256-GCM hardware/WebCrypto note content encryption',
+      'Session-only PIN gate modal preserving protection state across navigation',
+      'PIN-verified batch unlock preventing unauthorized bulk decryption',
+      'Protected note content placeholders in markdown exports and archive views',
+      'Optional shared-secret verification gate for server-side proxy routes',
+    ],
+    fixes: [
+      'Resolved SettingsView unconditional render crash on missing database import',
+      'Fixed cold-start race condition during AI Settings key initialization',
+      'Corrected cascading delete on note removal targeting orphaned OCR scans',
+      'Fixed duplicate isCurrent flags and metadata version drift in changelog list',
+      'Cleaned up unused components and standardized Vite TypeScript client types',
+    ],
+  },
+  {
+    version: '2.8.0',
+    buildNumber: 20800,
+    releaseDate: '2026-08-25',
+    isCurrent: false,
+    highlights: [
+      'Live Cloud Storage Provider Integrations (Google Drive, Dropbox, OneDrive, Nextcloud, Box)',
+      'PKCE OAuth 2.0 Client Authentication with Hardware Keystore Storage',
+      'End-to-End Encrypted Snapshot Backup Verification Engine',
+    ],
+    features: [
+      'Client-side OAuth 2.0 with PKCE authorization for major cloud storage services',
+      'Automated background backup upload with remote byte-length read-back verification',
+      'Bi-directional backup payload management with custom provider path configuration',
+      'Hardware Keystore integration for OAuth refresh token and encryption key storage',
+    ],
+    fixes: [
+      'Eliminated mock sync simulations in favor of authentic cloud provider APIs',
+      'Hardened offline token refresh routines for interrupted mobile connections',
+    ],
+  },
+  {
+    version: '2.7.0',
     buildNumber: 20260824,
     releaseDate: '2026-08-24',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Comprehensive Multi-Format Note Sharing (Android Share, Markdown, Plain Text, QR Code)',
       'Automated Database Schema Migration & APK Upgrade Safety Engine',
@@ -120,7 +167,7 @@ export class AppUpdateManager {
 
     if (!installedVersion) {
       // First install or upgrade from pre-versioning build
-      const existingNotes = SQLiteDatabase.getNotes();
+      const existingNotes = StorageManager.getNotes();
       const isExistingUser = existingNotes.length > 0;
 
       if (isExistingUser) {
@@ -159,8 +206,8 @@ export class AppUpdateManager {
       console.log(`[AppUpdateManager] Migrating database from schema v${fromSchema} to v${toSchema}...`);
       
       // Step 1: Create an automated safety snapshot before altering records
-      const notes = SQLiteDatabase.getNotes();
-      const events = SQLiteDatabase.getEvents();
+      const notes = StorageManager.getNotes();
+      const events = StorageManager.getEvents();
 
       // Step 2: Perform schema normalizations & backfills
       let modifiedNotesCount = 0;
@@ -209,7 +256,7 @@ export class AppUpdateManager {
       });
 
       // Save upgraded notes
-      SQLiteDatabase.saveNotes(upgradedNotes);
+      StorageManager.saveNotes(upgradedNotes);
 
       // Record migration success in logs
       const log: MigrationLog = {
@@ -259,10 +306,10 @@ export class AppUpdateManager {
     const latestRelease = APP_CHANGELOGS[0];
 
     // Artificial tiny network check simulation to confirm connection
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     return {
-      isUpToDate: true, // You have the latest v2.6.0 production build
+      isUpToDate: true, // You have the latest production build
       currentVersion: CURRENT_APP_VERSION,
       latestVersion: latestRelease.version,
       releaseDate: latestRelease.releaseDate,

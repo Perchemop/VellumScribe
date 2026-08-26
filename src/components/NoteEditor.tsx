@@ -89,6 +89,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   // Unlocking protected note in current session
   const [isUnlockedLocally, setIsUnlockedLocally] = useState(!note.is_locked);
+  const [activePin, setActivePin] = useState<string | null>(null);
 
   // Attached recordings & scans from local StorageManager
   const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
@@ -110,6 +111,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setReminderAt(note.reminder_at || '');
     setLocationName(note.location_name || '');
     setIsUnlockedLocally(!note.is_locked);
+    if (!note.is_locked) {
+      setActivePin(null);
+    }
     setRecordings(StorageManager.getRecordingsForNote(note.id));
     setOcrScans(StorageManager.getOcrScansForNote(note.id));
   }, [note.id]);
@@ -125,10 +129,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleBodyChange = (newBody: string) => {
     setBody(newBody);
-    const updated = StorageManager.updateNote(note.id, { body: newBody });
-    if (updated) {
-      setSaveIndicator(true);
-      setTimeout(() => setSaveIndicator(false), 1200);
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { body: newBody }, activePin).then((updated) => {
+        if (updated) {
+          setSaveIndicator(true);
+          setTimeout(() => setSaveIndicator(false), 1200);
+        }
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, { body: newBody });
+      if (updated) {
+        setSaveIndicator(true);
+        setTimeout(() => setSaveIndicator(false), 1200);
+      }
     }
   };
 
@@ -139,8 +152,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleChecklistChange = (items: ChecklistItem[]) => {
     setChecklistItems(items);
-    const updated = StorageManager.updateNote(note.id, { checklist_items: items });
-    if (updated) onNoteUpdated(updated);
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { checklist_items: items }, activePin).then((updated) => {
+        if (updated) onNoteUpdated(updated);
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, { checklist_items: items });
+      if (updated) onNoteUpdated(updated);
+    }
   };
 
   const handleAddChecklistItem = () => {
@@ -152,35 +171,62 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const updatedItems = [...checklistItems, newItem];
     setChecklistItems(updatedItems);
     setShowChecklistSection(true);
-    const updated = StorageManager.updateNote(note.id, { checklist_items: updatedItems });
-    if (updated) onNoteUpdated(updated);
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { checklist_items: updatedItems }, activePin).then((updated) => {
+        if (updated) onNoteUpdated(updated);
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, { checklist_items: updatedItems });
+      if (updated) onNoteUpdated(updated);
+    }
   };
 
   const handleRemoveChecklistSection = () => {
     setChecklistItems([]);
     setShowChecklistSection(false);
-    const updated = StorageManager.updateNote(note.id, { checklist_items: [] });
-    if (updated) onNoteUpdated(updated);
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { checklist_items: [] }, activePin).then((updated) => {
+        if (updated) onNoteUpdated(updated);
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, { checklist_items: [] });
+      if (updated) onNoteUpdated(updated);
+    }
   };
 
   const handleSketchSaved = (dataUrl: string) => {
     setSketchData(dataUrl);
-    const updated = StorageManager.updateNote(note.id, {
-      sketch_data: dataUrl,
-    });
-    if (updated) {
-      onNoteUpdated(updated);
-      CloudSyncEngine.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { sketch_data: dataUrl }, activePin).then((updated) => {
+        if (updated) {
+          onNoteUpdated(updated);
+          CloudSyncEngine.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+        }
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, {
+        sketch_data: dataUrl,
+      });
+      if (updated) {
+        onNoteUpdated(updated);
+        CloudSyncEngine.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+      }
     }
     setShowSketchModal(false);
   };
 
   const handleRemoveSketch = () => {
     setSketchData(undefined);
-    const updated = StorageManager.updateNote(note.id, {
-      sketch_data: undefined,
-    });
-    if (updated) onNoteUpdated(updated);
+    if (note.is_locked && activePin) {
+      StorageManager.saveUnlockedNote(note.id, { sketch_data: undefined }, activePin).then((updated) => {
+        if (updated) onNoteUpdated(updated);
+      });
+    } else {
+      const updated = StorageManager.updateNote(note.id, {
+        sketch_data: undefined,
+      });
+      if (updated) onNoteUpdated(updated);
+    }
   };
 
   const handleSetReminder = (datetime: string) => {
@@ -345,6 +391,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {showSecurityModal && (
           <NoteSecurityModal
             note={note}
+            mode="gate"
+            onUnlockSession={(payload, pin) => {
+              setActivePin(pin);
+              setBody(payload.body || '');
+              setChecklistItems(payload.checklist_items || []);
+              setShowChecklistSection(Boolean(payload.checklist_items && payload.checklist_items.length > 0));
+              setSketchData(payload.sketch_data);
+              setIsUnlockedLocally(true);
+            }}
             onSuccess={(updated) => {
               setIsUnlockedLocally(true);
               onNoteUpdated(updated);
@@ -907,7 +962,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {showSecurityModal && (
         <NoteSecurityModal
           note={note}
+          mode={note.is_locked ? 'manage' : 'set'}
+          currentPayload={{
+            body,
+            checklist_items: checklistItems,
+            sketch_data: sketchData,
+          }}
           onSuccess={(updated) => {
+            if (!updated.is_locked) {
+              setActivePin(null);
+            }
             setIsUnlockedLocally(true);
             onNoteUpdated(updated);
           }}

@@ -60,10 +60,13 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const [showColorSheet, setShowColorSheet] = useState(false);
   const [showTagSheet, setShowTagSheet] = useState(false);
   const [showLockSheet, setShowLockSheet] = useState(false);
+  const [showUnlockSheet, setShowUnlockSheet] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [lockPinInput, setLockPinInput] = useState('');
+  const [unlockPinInput, setUnlockPinInput] = useState('');
+  const [unlockError, setUnlockError] = useState<string | null>(null);
 
   const count = selectedNoteIds.length;
   if (count === 0) return null;
@@ -165,8 +168,17 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     onRefresh();
   };
 
-  const handleBatchUnlock = () => {
-    StorageManager.batchUnlockNotes(selectedNoteIds);
+  const handleBatchUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!unlockPinInput.trim()) return;
+    const result = await StorageManager.batchUnlockNotes(selectedNoteIds, unlockPinInput.trim());
+    if (result.unlockedCount === 0) {
+      setUnlockError('Incorrect PIN or unable to decrypt selected notes.');
+      return;
+    }
+    setUnlockPinInput('');
+    setUnlockError(null);
+    setShowUnlockSheet(false);
     setShowMoreMenu(false);
     onClearSelection();
     onRefresh();
@@ -347,7 +359,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
                     {hasLocked ? (
                       <button
-                        onClick={handleBatchUnlock}
+                        onClick={() => {
+                          setShowUnlockSheet(true);
+                          setShowMoreMenu(false);
+                        }}
                         className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
                       >
                         <Unlock className="w-3.5 h-3.5 text-emerald-500" />
@@ -612,6 +627,64 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                   className="px-4 py-1.5 text-xs bg-amber-600 text-white font-semibold rounded-lg"
                 >
                   Set Lock
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Unlock with PIN Sheet */}
+      {showUnlockSheet && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/50 backdrop-blur-xs animate-fade-in">
+          <div className="w-full sm:max-w-sm bg-white dark:bg-[#16161a] rounded-t-2xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Unlock {count} note{count > 1 ? 's' : ''} with PIN
+              </h3>
+              <button
+                onClick={() => {
+                  setShowUnlockSheet(false);
+                  setUnlockError(null);
+                }}
+                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {unlockError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 rounded-xl text-xs">
+                {unlockError}
+              </div>
+            )}
+
+            <form onSubmit={handleBatchUnlock} className="space-y-3">
+              <input
+                type="password"
+                maxLength={8}
+                placeholder="Enter current PIN..."
+                value={unlockPinInput}
+                onChange={(e) => setUnlockPinInput(e.target.value)}
+                autoFocus
+                className="w-full p-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs tracking-widest text-center"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUnlockSheet(false);
+                    setUnlockError(null);
+                  }}
+                  className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs bg-emerald-600 text-white font-semibold rounded-lg"
+                >
+                  Unlock Notes
                 </button>
               </div>
             </form>

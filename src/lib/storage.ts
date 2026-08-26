@@ -12,7 +12,13 @@ import {
   INITIAL_TRANSCRIPTS,
   INITIAL_OCR_SCANS,
 } from './sampleData';
-import { hashPin, verifyPin } from './cryptoUtils';
+import {
+  hashPin,
+  verifyPin,
+  encryptNotePayload,
+  decryptNotePayload,
+  NotePayloadData,
+} from './cryptoUtils';
 
 const STORAGE_KEYS = {
   EVENTS: 'omninote_sqlite_events_v1',
@@ -305,20 +311,139 @@ export class StorageManager {
   }
 
   /**
-   * Set hashed PIN security on a note using salted SHA-256
+   * Set hashed PIN security and AES-256-GCM encryption on a note.
+   * Blanks the plaintext body, checklist_items, and sketch_data in persistent storage.
    */
-  public static async setNotePinLock(id: number, plaintextPin: string): Promise<NoteRecord | null> {
+  public static async setNotePinLock(
+    id: number,
+    plaintextPin: string,
+    payload?: NotePayloadData
+  ): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
     const { hash, salt } = await hashPin(plaintextPin);
+    const dataToEncrypt: NotePayloadData = payload || {
+      body: note.body || '',
+      checklist_items: note.checklist_items || [],
+      sketch_data: note.sketch_data || undefined,
+    };
+
+    const encryptedPayload = await encryptNotePayload(dataToEncrypt, plaintextPin, salt);
+
     return this.updateNote(id, {
       is_locked: true,
       pin_hash: hash,
       pin_salt: salt,
+      encrypted_payload: encryptedPayload,
+      body: '', // Zero out plaintext fields
+      checklist_items: [],
+      sketch_data: undefined,
       lock_pin: undefined, // Clear legacy plaintext representation
     });
   }
 
   /**
-   * Unlock or remove PIN security from note after validating PIN
+   * Session-only verification and decryption of a locked note.
+   * Does NOT modify is_locked or destroy the encryption payload.
+   */
+  public static async verifyAndUnlockNote(
+    note: NoteRecord,
+    enteredPin: string
+  ): Promise<{ success: boolean; payload?: NotePayloadData }> {
+    const isMatch = await verifyPin(
+      enteredPin,
+      note.pin_hash,
+      note.pin_salt,
+      note.lock_pin
+    );
+
+    if (!isMatch) {
+      return { success: false };
+    }
+
+    // If encrypted_payload exists, decrypt it with the entered PIN
+    if (note.encrypted_payload && note.pin_salt) {
+      const decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+      if (decrypted) {
+        return { success: true, payload: decrypted };
+      }
+    }
+
+    // Legacy unencrypted lock fallback (note had body in plaintext)
+    return {
+      success: true,
+      payload: {
+        body: note.body,
+        checklist_items: note.checklist_items,
+        sketch_data: note.sketch_data,
+      },
+    };
+  }
+
+  /**
+   * Explicit removal of PIN protection. Verifies PIN, decrypts note, restores plaintext, and clears lock.
+   */
+  public static async removeNotePinLock(id: number, enteredPin: string): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
+    const verifyResult = await this.verifyAndUnlockNote(note, enteredPin);
+    if (!verifyResult.success || !verifyResult.payload) {
+      return null;
+    }
+
+    return this.updateNote(id, {
+      is_locked: false,
+      pin_hash: undefined,
+      pin_salt: undefined,
+      encrypted_payload: undefined,
+      lock_pin: undefined,
+      body: verifyResult.payload.body,
+      checklist_items: verifyResult.payload.checklist_items || [],
+      sketch_data: verifyResult.payload.sketch_data || undefined,
+    });
+  }
+
+  /**
+   * Save an active editing session of a note. If note is PIN-locked, re-encrypts the payload.
+   */
+  public static async saveUnlockedNote(
+    id: number,
+    updates: Partial<NoteRecord>,
+    pinHeld?: string
+  ): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
+    if (note.is_locked && pinHeld && note.pin_salt) {
+      const payload: NotePayloadData = {
+        body: updates.body !== undefined ? updates.body : (note.body || ''),
+        checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : (note.checklist_items || []),
+        sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : (note.sketch_data || undefined),
+      };
+
+      const encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt);
+
+      const sanitizedUpdates = { ...updates };
+      delete sanitizedUpdates.body;
+      delete sanitizedUpdates.checklist_items;
+      delete sanitizedUpdates.sketch_data;
+
+      return this.updateNote(id, {
+        ...sanitizedUpdates,
+        encrypted_payload: encryptedPayload,
+        body: '',
+        checklist_items: [],
+        sketch_data: undefined,
+      });
+    }
+
+    return this.updateNote(id, updates);
+  }
+
+  /**
+   * Unlock or remove PIN security from note after validating PIN (compatibility helper)
    */
   public static async unlockNoteWithPin(note: NoteRecord, enteredPin: string): Promise<boolean> {
     const isMatch = await verifyPin(
@@ -526,11 +651,23 @@ export class StorageManager {
     let count = 0;
     const now = new Date().toISOString();
     const { hash, salt } = await hashPin(pin);
+
     for (const note of notes) {
       if (ids.includes(note.id)) {
+        const payload: NotePayloadData = {
+          body: note.body || '',
+          checklist_items: note.checklist_items || [],
+          sketch_data: note.sketch_data || undefined,
+        };
+        const encryptedPayload = await encryptNotePayload(payload, pin, salt);
+
         note.is_locked = true;
         note.pin_hash = hash;
         note.pin_salt = salt;
+        note.encrypted_payload = encryptedPayload;
+        note.body = '';
+        note.checklist_items = [];
+        note.sketch_data = undefined;
         note.lock_pin = undefined;
         note.updated_at = now;
         count++;
@@ -540,23 +677,45 @@ export class StorageManager {
     return count;
   }
 
-  public static batchUnlockNotes(ids: number[]): number {
-    if (!ids || ids.length === 0) return 0;
+  public static async batchUnlockNotes(
+    ids: number[],
+    pin: string
+  ): Promise<{ unlockedCount: number; failedIds: number[] }> {
+    if (!ids || ids.length === 0 || !pin) {
+      return { unlockedCount: 0, failedIds: ids || [] };
+    }
+
     const notes = [...this.getNotes()];
-    let count = 0;
+    let unlockedCount = 0;
+    const failedIds: number[] = [];
     const now = new Date().toISOString();
+
     for (const note of notes) {
       if (ids.includes(note.id)) {
-        note.is_locked = false;
-        note.pin_hash = undefined;
-        note.pin_salt = undefined;
-        note.lock_pin = undefined;
-        note.updated_at = now;
-        count++;
+        if (!note.is_locked) {
+          continue;
+        }
+
+        const verifyResult = await this.verifyAndUnlockNote(note, pin);
+        if (verifyResult.success && verifyResult.payload) {
+          note.is_locked = false;
+          note.pin_hash = undefined;
+          note.pin_salt = undefined;
+          note.encrypted_payload = undefined;
+          note.lock_pin = undefined;
+          note.body = verifyResult.payload.body;
+          note.checklist_items = verifyResult.payload.checklist_items || [];
+          note.sketch_data = verifyResult.payload.sketch_data || undefined;
+          note.updated_at = now;
+          unlockedCount++;
+        } else {
+          failedIds.push(note.id);
+        }
       }
     }
+
     this.saveNotes(notes);
-    return count;
+    return { unlockedCount, failedIds };
   }
 
   public static batchToggleCloudSave(ids: number[], enabled: boolean): number {
@@ -589,6 +748,11 @@ export class StorageManager {
         if (tags) content += `*Tags: ${tags}*\n`;
         if (n.location_name) content += `*Location: ${n.location_name}*\n`;
         content += '\n';
+
+        if (n.is_locked) {
+          content += '*[Protected Note Content - Unlock in VellumScribe to view]*\n';
+          return content;
+        }
 
         if (n.note_type === 'checklist' && n.checklist_items) {
           content += n.checklist_items
