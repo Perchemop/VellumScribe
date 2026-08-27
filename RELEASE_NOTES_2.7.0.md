@@ -1,5 +1,19 @@
 # VellumScribe 2.7.0 — Reliability & Android Hardening
 
+> **Correction (added in 2.9.0, 2026-08-27):** most of the claims below did
+> not match the code actually shipped in this build. There was no
+> `@capacitor-community/sqlite` migration - storage was, and still is,
+> plain browser `localStorage` (see "Local Storage" in Settings, not
+> "SQLite"). Secure Android secret storage and the `VITE_UPDATE_MANIFEST_URL`
+> check did not exist in the wired-up code at this version, though both
+> are real as of 2.9.0 (see `CHANGELOG.md`). The fabricated-content and
+> fake-cloud-connection fixes described below were also not actually
+> applied to the files the app imports - see `RELEASE_NOTES_2.8.0.md`'s
+> correction notice for how that happened. Android CI still does not run
+> a TypeScript check at this version. We're leaving the rest of this file
+> as originally written below, for the record, rather than silently
+> rewriting it.
+
 ## Major changes
 
 - Native Android structured data now uses `@capacitor-community/sqlite` with one-time migration from the legacy localStorage collections.

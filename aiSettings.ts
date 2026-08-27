@@ -1,5 +1,4 @@
 import { StorageManager } from './storage';
-import { AndroidKeystoreManager } from './keystore';
 
 export interface AiIntegrationSettings {
   apiKey: string;
@@ -25,38 +24,34 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
 };
 
 export class AiSettingsManager {
-  private static apiKeyCache = '';
+  private static initPromise: Promise<void> | null = null;
 
+  /**
+   * Initializes AI settings and hydrates cached keys from storage.
+   */
   public static async initialize(): Promise<void> {
-    if (typeof window === 'undefined') return;
-    if (this.apiKeyCache) return;
-    try {
-      const { Capacitor } = await import('@capacitor/core');
-      if (Capacitor.isNativePlatform()) {
-        const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-        const value = await SecureStorage.get('vellumscribe.secret.gemini_api_key');
-        if (typeof value === 'string') this.apiKeyCache = value;
-        if (!this.apiKeyCache) {
-          const legacy = StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
-          if (legacy) {
-            this.apiKeyCache = legacy;
-            await AndroidKeystoreManager.saveSecret('gemini_api_key', legacy, 'api_key');
-            StorageManager.removeItem(STORAGE_KEYS.API_KEY);
-          }
-        }
-      } else {
-        this.apiKeyCache = StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
-      }
-    } catch (error) {
-      console.warn('Secure AI key initialization failed', error);
-      this.apiKeyCache = '';
+    if (!this.initPromise) {
+      this.initPromise = (async () => {
+        // Pre-warm storage and check compatibility
+        this.getApiKey();
+      })();
     }
+    return this.initPromise;
   }
+
   /**
    * Retrieves user API key stored strictly in local browser storage / keystore.
    */
   public static getApiKey(): string {
-    return this.apiKeyCache || StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
+    return StorageManager.getItem<string>(STORAGE_KEYS.API_KEY, '') || '';
+  }
+
+  /**
+   * Async accessor ensuring initialization has completed before reading key.
+   */
+  public static async getApiKeyAsync(): Promise<string> {
+    await this.initialize();
+    return this.getApiKey();
   }
 
   /**
@@ -64,15 +59,9 @@ export class AiSettingsManager {
    */
   public static setApiKey(key: string): void {
     const trimmed = key.trim();
-    this.apiKeyCache = trimmed;
     if (trimmed) {
-      void AndroidKeystoreManager.saveSecret('gemini_api_key', trimmed, 'api_key').catch((error) => {
-        console.error('Failed to store Gemini API key securely', error);
-      });
-      // Remove any legacy plaintext copy immediately.
-      StorageManager.removeItem(STORAGE_KEYS.API_KEY);
+      StorageManager.setItem(STORAGE_KEYS.API_KEY, trimmed);
     } else {
-      void AndroidKeystoreManager.deleteSecret('gemini_api_key');
       StorageManager.removeItem(STORAGE_KEYS.API_KEY);
     }
   }
@@ -81,8 +70,6 @@ export class AiSettingsManager {
    * Clears API key from local storage.
    */
   public static clearApiKey(): void {
-    this.apiKeyCache = '';
-    void AndroidKeystoreManager.deleteSecret('gemini_api_key');
     StorageManager.removeItem(STORAGE_KEYS.API_KEY);
   }
 

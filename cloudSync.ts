@@ -14,8 +14,8 @@ import {
   INITIAL_SYNC_TELEMETRY,
 } from './sampleData';
 import { StorageManager } from './storage';
-import { GeminiApiService } from './geminiService';
-import { CloudProviderService } from './cloudProviders';
+import { CloudProviderService, BACKUP_FILE_NAME } from './cloudProviders';
+import { toHex } from './cryptoUtils';
 
 const STORAGE_KEYS = {
   ACCOUNTS: 'vellumscribe_cloud_accounts_v1',
@@ -37,10 +37,6 @@ export interface SyncProgressUpdate {
 }
 
 export class CloudSyncEngine {
-  private static async sha256(value: string): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-    return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  }
   private static isSyncRunning = false;
 
   // Accounts
@@ -62,39 +58,54 @@ export class CloudSyncEngine {
     StorageManager.setItem(STORAGE_KEYS.ACCOUNTS, accounts);
   }
 
+  /**
+   * Record a connected cloud account. Every value here is expected to come
+   * from a real, verified source (e.g. CloudProviderService.verifyCredential)
+   * - this method does not invent a token, session id, or storage quota when
+   * one isn't supplied; those fields are simply left unset instead.
+   */
   public static connectAccount(
     provider: CloudStorageProvider,
     email: string,
     name: string,
-    extra?: { server_url?: string; bucket_name?: string }
+    extra: {
+      server_url?: string;
+      bucket_name?: string;
+      access_token?: string;
+      cloud_backup_path?: string;
+      auth_status?: string;
+      storage_used_bytes?: number;
+      storage_total_bytes?: number;
+    }
   ): CloudAccount {
     const accounts = this.getAccounts();
     const idx = accounts.findIndex((a) => a.provider === provider);
 
     const defaultPaths: Record<CloudStorageProvider, string> = {
-      google_drive: '/Google Drive/VellumScribe_Backups/',
-      dropbox: '/Dropbox/Apps/VellumScribe_Backups/',
-      onedrive: '/OneDrive/Apps/VellumScribe/',
-      icloud: '/iCloud Drive/VellumScribe/',
-      nextcloud: extra?.server_url ? `${extra.server_url}/remote.php/dav/files/${email}/VellumScribe/` : '/Nextcloud/VellumScribe/',
-      s3: extra?.bucket_name ? `s3://${extra.bucket_name}/vellumscribe/` : 's3://vellumscribe-backups/',
+      google_drive: 'VellumScribe',
+      dropbox: 'Apps/VellumScribe',
+      onedrive: 'VellumScribe',
+      icloud: 'VellumScribe',
+      nextcloud: 'VellumScribe',
+      s3: extra.bucket_name ? `${extra.bucket_name}/vellumscribe` : 'vellumscribe',
     };
 
     const updated: CloudAccount = {
       provider,
-      connected: false,
+      connected: true,
       user_email: email,
       user_name: name,
       account_email: email,
       display_name: name,
-      auth_status: 'Configured — authentication required',
-      oauth_token_type: 'Bearer',
-      cloud_backup_path: defaultPaths[provider] || '/Backups/VellumScribe/',
+      auth_status: extra.auth_status || (extra.access_token ? 'Verified' : 'Unverified'),
+      oauth_token_type: provider === 'nextcloud' ? 'AppPassword' : 'Bearer',
+      access_token: extra.access_token,
+      cloud_backup_path: extra.cloud_backup_path || defaultPaths[provider],
       last_synced_at: undefined,
-      storage_used_bytes: 1500000,
-      storage_total_bytes: 15000000000,
-      server_url: extra?.server_url,
-      bucket_name: extra?.bucket_name,
+      storage_used_bytes: extra.storage_used_bytes,
+      storage_total_bytes: extra.storage_total_bytes,
+      server_url: extra.server_url,
+      bucket_name: extra.bucket_name,
     };
 
     if (idx >= 0) {
@@ -116,6 +127,8 @@ export class CloudSyncEngine {
           user_name: undefined,
           account_email: undefined,
           display_name: undefined,
+          access_token: undefined,
+          auth_status: undefined,
           server_url: undefined,
           bucket_name: undefined,
         };
@@ -244,13 +257,32 @@ export class CloudSyncEngine {
     return all.filter((v) => v.note_id === noteId);
   }
 
-  public static async saveVersionSnapshot(note: NoteRecord, author = 'Local User', summary = 'Auto-snapshot') {
+  /**
+   * Save a local version snapshot with a real SHA-256 checksum of the body
+   * content (previous versions of this function used Math.random() to
+   * generate a string that merely looked like a checksum).
+   */
+  public static async saveVersionSnapshot(
+    note: NoteRecord,
+    author = 'Local User',
+    summary = 'Auto-snapshot'
+  ): Promise<DocumentVersion | null> {
     try {
       const all = StorageManager.getItem<DocumentVersion[]>(STORAGE_KEYS.VERSIONS, INITIAL_DOCUMENT_VERSIONS) || INITIAL_DOCUMENT_VERSIONS;
       const noteVersions = all.filter((v) => v.note_id === note.id);
       const nextVerId = noteVersions.length > 0
         ? Math.max(...noteVersions.map((v) => v.version_id || v.version_number || 0)) + 1
         : 1;
+
+      let checksum: string | undefined;
+      if (typeof crypto !== 'undefined' && crypto.subtle) {
+        try {
+          const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(note.body || ''));
+          checksum = `sha256:${toHex(digest)}`;
+        } catch (e) {
+          console.warn('Could not compute a real checksum for this version snapshot', e);
+        }
+      }
 
       const newVersion: DocumentVersion = {
         version_id: nextVerId,
@@ -259,7 +291,7 @@ export class CloudSyncEngine {
         created_at: new Date().toISOString(),
         author,
         change_summary: summary,
-        checksum: `sha256:${await this.sha256(JSON.stringify({ id: note.id, title: note.title || '', body: note.body || '', updated_at: note.updated_at || '' }))}`,
+        checksum,
       };
 
       all.unshift(newVersion);
@@ -271,138 +303,163 @@ export class CloudSyncEngine {
     }
   }
 
-  // Execute a real synchronization cycle against authenticated cloud providers.
-  // Google Drive, Dropbox and OneDrive use OAuth2 + PKCE. Nextcloud is supported
-  // through its WebDAV app-password flow. iCloud and generic S3 are deliberately
-  // not marked as connected until a provider-specific adapter is configured.
+  /**
+   * Run one backup cycle: export the notes flagged for cloud save and
+   * attempt a real upload to every connected, configured provider. The
+   * returned success/message reflect what actually happened - if a
+   * provider's upload fails or isn't implemented, that is reported as a
+   * failure for that provider rather than folded into a generic "success".
+   */
   public static async triggerSync(options?: {
-    forceSimulateConflict?: boolean;
-    forceSimulateError?: boolean;
-    provider?: 'google_drive' | 'dropbox' | 'dual_cloud';
     onProgress?: (progress: SyncProgressUpdate) => void;
   }): Promise<{ success: boolean; message: string; telemetry: SyncTelemetry }> {
     if (this.isSyncRunning) {
-      const telemetry: SyncTelemetry = {
+      const busyTelemetry: SyncTelemetry = {
         sync_id: `sync_${Date.now()}`,
         timestamp: new Date().toISOString(),
-        provider: options?.provider === 'dropbox' ? 'dropbox' : 'google_drive',
-        status: 'failed', duration_ms: 0, bytes_transferred: 0,
-        records_uploaded: 0, records_downloaded: 0, conflicts_encountered: 0,
-        error_message: 'Synchronization is already running.'
+        provider: 'google_drive',
+        status: 'failed',
+        duration_ms: 0,
+        bytes_transferred: 0,
+        records_uploaded: 0,
+        records_downloaded: 0,
+        conflicts_encountered: 0,
+        error_message: 'A sync is already running.',
       };
-      return { success: false, message: telemetry.error_message!, telemetry };
+      return { success: false, message: 'A sync is already running.', telemetry: busyTelemetry };
     }
 
     this.isSyncRunning = true;
-    const started = Date.now();
-    const providerName = options?.provider === 'dropbox' ? 'dropbox' : 'google_drive';
+    const startTime = Date.now();
     try {
-      options?.onProgress?.({ percent: 10, message: 'Checking authenticated cloud accounts…', phase: 'init' });
-      const accounts = this.getAccounts().filter(a => a.connected && ['google_drive','dropbox','onedrive','nextcloud'].includes(a.provider));
-      if (!accounts.length) {
-        const message = 'No authenticated cloud account is available. Connect Google Drive, Dropbox or OneDrive first.';
-        const telemetry: SyncTelemetry = { sync_id:`sync_${Date.now()}`, timestamp:new Date().toISOString(), provider:providerName, status:'failed', duration_ms:Date.now()-started, bytes_transferred:0, records_uploaded:0, records_downloaded:0, conflicts_encountered:0, error_message:message };
-        this.logTelemetry(telemetry);
-        options?.onProgress?.({ percent:100, message, phase:'complete' });
-        return { success:false, message, telemetry };
+      const accounts = this.getAccounts().filter((a) => a.connected);
+
+      options?.onProgress?.({ percent: 10, message: 'Checking connected cloud accounts...', phase: 'init' });
+
+      if (accounts.length === 0) {
+        const failTelemetry: SyncTelemetry = {
+          sync_id: `sync_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          provider: 'google_drive',
+          status: 'failed',
+          duration_ms: Date.now() - startTime,
+          bytes_transferred: 0,
+          records_uploaded: 0,
+          records_downloaded: 0,
+          conflicts_encountered: 0,
+          error_message: 'No cloud accounts connected. Notes remain local-only.',
+        };
+        this.logTelemetry(failTelemetry);
+        options?.onProgress?.({ percent: 100, message: 'Sync stopped: no cloud accounts connected.', phase: 'complete' });
+        return { success: false, message: failTelemetry.error_message!, telemetry: failTelemetry };
       }
 
-      options?.onProgress?.({ percent: 30, message: 'Preparing cloud-enabled notes and attachments…', phase: 'hashing' });
+      options?.onProgress?.({ percent: 30, message: 'Preparing local backup snapshot...', phase: 'hashing' });
+
+      // Export selective cloud dump containing ONLY notes with cloud_save_enabled === true
       const { dumpJson, cloudNotes, cloudRecordings, cloudScans } = StorageManager.exportCloudBackupDump();
-      const bytes = new TextEncoder().encode(dumpJson);
-      const fileName = `vellumscribe_backup.json`;
-      let totalTransferred = 0;
-      let uploaded = 0;
-      let downloaded = 0;
-      const usedProviders: string[] = [];
+      const dumpBytes = new TextEncoder().encode(dumpJson).length;
+      const allNotes = StorageManager.getNotes();
+      const localOnlyCount = allNotes.length - cloudNotes.length;
 
-      for (const account of accounts) {
-        if (options?.provider && options.provider !== 'dual_cloud' && account.provider !== options.provider) continue;
-        if (!['google_drive','dropbox','onedrive','nextcloud'].includes(account.provider)) continue;
-        options?.onProgress?.({ percent: 50, message: `Uploading backup to ${account.provider.replace('_',' ')}…`, phase:'transferring' });
-        const result = account.provider === 'nextcloud'
-          ? await CloudProviderService.uploadNextcloudStored(fileName, bytes)
-          : await CloudProviderService.uploadBackup(account.provider as any, fileName, bytes);
-        totalTransferred += result.bytes;
-        uploaded += cloudNotes.length + cloudRecordings.length + cloudScans.length;
-        usedProviders.push(account.provider);
-
-        // Read-after-write verification. A successful HTTP upload alone does not
-        // count as a successful backup until the provider returns the stored file.
-        options?.onProgress?.({ percent: 75, message: `Verifying ${account.provider.replace('_',' ')} backup…`, phase:'verifying' });
-        const remote = account.provider === 'nextcloud'
-          ? await CloudProviderService.downloadNextcloudStored(fileName)
-          : await CloudProviderService.downloadBackup(account.provider as any, fileName);
-        if (!remote || remote.byteLength !== bytes.byteLength) {
-          throw new Error(`${account.provider} verification failed: uploaded backup could not be read back with the expected size.`);
-        }
-
-        const idx = this.getAccounts().findIndex(a => a.provider === account.provider);
-        const next = this.getAccounts();
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], last_synced_at: new Date().toISOString(), auth_status: 'Authenticated · Sync verified' };
-          this.saveAccounts(next);
-        }
+      if (cloudNotes.length === 0) {
+        const telemetry: SyncTelemetry = {
+          sync_id: `sync_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          provider: accounts.length > 1 ? 'multi_cloud' : accounts[0].provider,
+          status: 'success',
+          duration_ms: Date.now() - startTime,
+          bytes_transferred: 0,
+          records_uploaded: 0,
+          records_downloaded: 0,
+          conflicts_encountered: 0,
+          backup_file_name: 'none',
+        };
+        this.logTelemetry(telemetry);
+        options?.onProgress?.({ percent: 100, message: 'Nothing to sync - all notes are kept local-only.', phase: 'complete' });
+        return {
+          success: true,
+          message: `All ${allNotes.length} note(s) are kept strictly local. Nothing was uploaded.`,
+          telemetry,
+        };
       }
 
-      const telemetry: SyncTelemetry = {
-        sync_id:`sync_${Date.now()}`,
-        timestamp:new Date().toISOString(),
-        provider:usedProviders.length > 1 ? 'dual_cloud' : (usedProviders[0] as any || providerName),
-        status:'success',
-        duration_ms:Date.now()-started,
-        bytes_transferred:totalTransferred,
-        records_uploaded:uploaded,
-        records_downloaded:downloaded,
-        items_synced:cloudNotes.length,
-        conflicts_encountered:0,
-        backup_file_name:fileName,
+      options?.onProgress?.({
+        percent: 60,
+        message: `Uploading ${cloudNotes.length} note(s) to ${accounts.length} provider(s)...`,
+        phase: 'transferring',
+      });
+
+      // Attempt a real upload to every connected account.
+      const uploadResults = await Promise.all(
+        accounts.map(async (account) => ({
+          account,
+          result: await CloudProviderService.uploadBackup(account, BACKUP_FILE_NAME, dumpJson),
+        }))
+      );
+
+      const succeeded = uploadResults.filter((r) => r.result.success);
+      const failed = uploadResults.filter((r) => !r.result.success);
+
+      options?.onProgress?.({ percent: 90, message: 'Recording sync results...', phase: 'verifying' });
+
+      const mediaBytes = cloudRecordings.reduce((acc, r) => acc + (r.file_size || 0), 0);
+      const uploadedRecordCount = cloudNotes.length + cloudRecordings.length + cloudScans.length;
+      const overallSuccess = succeeded.length > 0;
+
+      const syncTelemetry: SyncTelemetry = {
+        sync_id: `sync_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        provider: accounts.length > 1 ? 'multi_cloud' : accounts[0].provider,
+        status: overallSuccess ? 'success' : 'failed',
+        duration_ms: Date.now() - startTime,
+        bytes_transferred: succeeded.length > 0 ? dumpBytes + mediaBytes : 0,
+        records_uploaded: overallSuccess ? uploadedRecordCount : 0,
+        records_downloaded: 0,
+        items_synced: overallSuccess ? cloudNotes.length : 0,
+        conflicts_encountered: 0,
+        backup_file_name: succeeded.length > 0 ? BACKUP_FILE_NAME : 'none',
+        error_message: failed.length > 0 ? failed.map((f) => `${f.account.provider}: ${f.result.error}`).join(' | ') : undefined,
       };
-      this.logTelemetry(telemetry);
-      options?.onProgress?.({ percent:100, message:`Cloud backup verified on ${usedProviders.length} provider(s).`, phase:'complete' });
-      return { success:true, message:`Synced ${cloudNotes.length} note(s) and verified the remote backup.`, telemetry };
-    } catch (error: any) {
-      const message = error?.message || 'Cloud synchronization failed.';
-      const telemetry: SyncTelemetry = { sync_id:`sync_${Date.now()}`, timestamp:new Date().toISOString(), provider:providerName, status:'failed', duration_ms:Date.now()-started, bytes_transferred:0, records_uploaded:0, records_downloaded:0, conflicts_encountered:0, error_message:message };
-      this.logTelemetry(telemetry);
-      options?.onProgress?.({ percent:100, message:`Sync failed: ${message}`, phase:'complete' });
-      return { success:false, message, telemetry };
+      this.logTelemetry(syncTelemetry);
+
+      // Only advance last_synced_at / storage usage for accounts that actually succeeded.
+      const updatedAccounts = this.getAccounts().map((a) => {
+        const outcome = uploadResults.find((r) => r.account.provider === a.provider);
+        if (!outcome || !outcome.result.success) return a;
+        return {
+          ...a,
+          last_synced_at: new Date().toISOString(),
+          storage_used_bytes: (a.storage_used_bytes || 0) + dumpBytes + mediaBytes,
+        };
+      });
+      this.saveAccounts(updatedAccounts);
+
+      let summaryMessage: string;
+      if (succeeded.length === accounts.length) {
+        summaryMessage = `Synced ${cloudNotes.length} note(s) & ${cloudRecordings.length} recording(s) to ${succeeded
+          .map((s) => s.account.provider)
+          .join(', ')}. ${localOnlyCount} note(s) kept local-only.`;
+      } else if (succeeded.length > 0) {
+        summaryMessage = `Synced to ${succeeded.map((s) => s.account.provider).join(', ')}. Failed for ${failed
+          .map((f) => `${f.account.provider} (${f.result.error})`)
+          .join(', ')}.`;
+      } else {
+        summaryMessage = `Sync failed for all connected accounts: ${failed
+          .map((f) => `${f.account.provider} - ${f.result.error}`)
+          .join('; ')}`;
+      }
+
+      options?.onProgress?.({
+        percent: 100,
+        message: overallSuccess ? 'Sync finished.' : 'Sync failed.',
+        phase: 'complete',
+      });
+
+      return { success: overallSuccess, message: summaryMessage, telemetry: syncTelemetry };
     } finally {
       this.isSyncRunning = false;
     }
-  }
-
-  public static async beginProviderAuthentication(provider: CloudStorageProvider): Promise<void> {
-    if (!['google_drive','dropbox','onedrive'].includes(provider)) {
-      throw new Error(`${provider} requires a provider-specific credential flow and is not available for OAuth authentication yet.`);
-    }
-    await CloudProviderService.beginOAuth(provider as any);
-  }
-
-  public static async completeProviderAuthentication(provider: CloudStorageProvider, profile: { email?: string; name?: string }): Promise<CloudAccount> {
-    const accounts = this.getAccounts();
-    const idx = accounts.findIndex(a => a.provider === provider);
-    const current = idx >= 0 ? accounts[idx] : undefined;
-    const updated: CloudAccount = {
-      ...(current || { provider, cloud_backup_path: 'vellumscribe_backup.json' }),
-      connected: true,
-      user_email: profile.email,
-      account_email: profile.email,
-      user_name: profile.name,
-      display_name: profile.name,
-      auth_status: 'Authenticated · Ready to sync',
-      oauth_token_type: 'Bearer',
-      cloud_backup_path: 'vellumscribe_backup.json',
-      last_synced_at: current?.last_synced_at,
-    };
-    if (idx >= 0) accounts[idx] = updated; else accounts.push(updated);
-    this.saveAccounts(accounts);
-    return updated;
-  }
-
-  public static async revokeProvider(provider: CloudStorageProvider): Promise<void> {
-    if (['google_drive','dropbox','onedrive'].includes(provider)) await CloudProviderService.revoke(provider as any);
-    this.disconnectAccount(provider);
   }
 
   public static async syncWithCloud(

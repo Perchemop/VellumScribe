@@ -12,11 +12,13 @@ import {
   INITIAL_TRANSCRIPTS,
   INITIAL_OCR_SCANS,
 } from './sampleData';
-import { hashPin, verifyPin } from './cryptoUtils';
-import { Capacitor } from '@capacitor/core';
-
-const DB_NAME = 'vellumscribe';
-const DB_VERSION = 1;
+import {
+  hashPin,
+  verifyPin,
+  encryptNotePayload,
+  decryptNotePayload,
+  NotePayloadData,
+} from './cryptoUtils';
 
 const STORAGE_KEYS = {
   EVENTS: 'omninote_sqlite_events_v1',
@@ -53,141 +55,6 @@ function safeSetItem(key: string, value: string): boolean {
  * quota protection, and transactional record management.
  */
 export class StorageManager {
-  private static sqliteDb: any = null;
-  private static sqliteInitPromise: Promise<void> | null = null;
-  private static sqliteReady = false;
-  private static sqliteWriteQueue: Promise<void> = Promise.resolve();
-
-  /**
-   * Initializes the native SQLite store. The web build intentionally retains
-   * localStorage as a compatibility fallback, while Android uses SQLite for
-   * durable structured data. Existing localStorage data is migrated once.
-   */
-  public static async initialize(): Promise<void> {
-    if (!Capacitor.isNativePlatform()) return;
-    if (this.sqliteInitPromise) return this.sqliteInitPromise;
-
-    this.sqliteInitPromise = (async () => {
-      try {
-        const { CapacitorSQLite, SQLiteConnection } = await import('@capacitor-community/sqlite');
-        const sqlite = new SQLiteConnection(CapacitorSQLite);
-        const consistency = await sqlite.checkConnectionsConsistency();
-        const connected = (await sqlite.isConnection(DB_NAME, false)).result;
-        this.sqliteDb = consistency.result && connected
-          ? await sqlite.retrieveConnection(DB_NAME, false)
-          : await sqlite.createConnection(DB_NAME, false, 'no-encryption', DB_VERSION, false);
-        await this.sqliteDb.open();
-        await this.sqliteDb.execute(`
-          CREATE TABLE IF NOT EXISTS app_records (
-            collection TEXT NOT NULL,
-            record_id TEXT NOT NULL,
-            payload TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (collection, record_id)
-          );
-          CREATE INDEX IF NOT EXISTS idx_app_records_collection ON app_records(collection);
-          CREATE TABLE IF NOT EXISTS app_meta (
-            key TEXT PRIMARY KEY NOT NULL,
-            value TEXT NOT NULL
-          );
-        `);
-
-        const migrated = await this.sqliteDb.query(
-          `SELECT value FROM app_meta WHERE key = 'localstorage_migrated'`
-        );
-        if (!migrated.values?.length) {
-          await this.migrateLegacyLocalStorage();
-          await this.sqliteDb.run(
-            `INSERT OR REPLACE INTO app_meta(key, value) VALUES (?, ?)`,
-            ['localstorage_migrated', new Date().toISOString()]
-          );
-        }
-
-        await this.loadCollectionFromSqlite('events', 'eventsCache');
-        await this.loadCollectionFromSqlite('notes', 'notesCache');
-        await this.loadCollectionFromSqlite('recordings', 'recordingsCache');
-        await this.loadCollectionFromSqlite('transcripts', 'transcriptsCache');
-        await this.loadCollectionFromSqlite('ocr_scans', 'ocrScansCache');
-        this.sqliteReady = true;
-      } catch (error) {
-        console.error('[StorageManager] SQLite initialization failed; using local fallback.', error);
-        this.sqliteDb = null;
-        this.sqliteReady = false;
-      }
-    })();
-
-    return this.sqliteInitPromise;
-  }
-
-  private static async migrateLegacyLocalStorage(): Promise<void> {
-    if (!this.sqliteDb) return;
-    const migrate = async (collection: string, key: string) => {
-      const raw = localStorage.getItem(key);
-      if (!raw) return;
-      let records: any[];
-      try { records = JSON.parse(raw); } catch { return; }
-      if (!Array.isArray(records)) return;
-      for (const record of records) {
-        const id = String(record.id);
-        await this.sqliteDb.run(
-          `INSERT OR REPLACE INTO app_records(collection, record_id, payload, updated_at) VALUES (?, ?, ?, ?)`,
-          [collection, id, JSON.stringify(record), record.updated_at || new Date().toISOString()]
-        );
-      }
-    };
-    await migrate('events', STORAGE_KEYS.EVENTS);
-    await migrate('notes', STORAGE_KEYS.NOTES);
-    await migrate('recordings', STORAGE_KEYS.RECORDINGS);
-    await migrate('transcripts', STORAGE_KEYS.TRANSCRIPTS);
-    await migrate('ocr_scans', STORAGE_KEYS.OCR_SCANS);
-  }
-
-  private static async loadCollectionFromSqlite(collection: string, cacheName: string): Promise<void> {
-    if (!this.sqliteDb) return;
-    const result = await this.sqliteDb.query(
-      `SELECT payload FROM app_records WHERE collection = ? ORDER BY CAST(record_id AS INTEGER) DESC`,
-      [collection]
-    );
-    const records = (result.values || []).map((row: any) => JSON.parse(row.payload));
-    if (!records.length) return;
-    (this as any)[cacheName] = records;
-  }
-
-  private static persistCollection(collection: string, records: any[]): void {
-    if (!this.sqliteReady || !this.sqliteDb) return;
-    const snapshot = records.map((r) => ({ ...r }));
-    this.sqliteWriteQueue = this.sqliteWriteQueue.then(async () => {
-      await this.sqliteDb.execute('BEGIN TRANSACTION');
-      try {
-        await this.sqliteDb.run(`DELETE FROM app_records WHERE collection = ?`, [collection]);
-        for (const record of snapshot) {
-          await this.sqliteDb.run(
-            `INSERT OR REPLACE INTO app_records(collection, record_id, payload, updated_at) VALUES (?, ?, ?, ?)`,
-            [collection, String(record.id), JSON.stringify(record), record.updated_at || new Date().toISOString()]
-          );
-        }
-        await this.sqliteDb.execute('COMMIT');
-      } catch (error) {
-        await this.sqliteDb.execute('ROLLBACK');
-        console.error(`[StorageManager] SQLite ${collection} transaction failed`, error);
-      }
-    }).catch((error) => console.error('[StorageManager] SQLite write queue failed', error));
-  }
-
-  private static persistRecord(collection: string, record: any): void {
-    if (!this.sqliteReady || !this.sqliteDb) return;
-    this.sqliteWriteQueue = this.sqliteWriteQueue.then(() => this.sqliteDb.run(
-      `INSERT OR REPLACE INTO app_records(collection, record_id, payload, updated_at) VALUES (?, ?, ?, ?)`,
-      [collection, String(record.id), JSON.stringify(record), record.updated_at || new Date().toISOString()]
-    )).then(() => undefined).catch((error) => console.error('[StorageManager] SQLite record write failed', error));
-  }
-
-  private static deleteRecord(collection: string, id: number): void {
-    if (!this.sqliteReady || !this.sqliteDb) return;
-    this.sqliteWriteQueue = this.sqliteWriteQueue.then(() => this.sqliteDb.run(
-      `DELETE FROM app_records WHERE collection = ? AND record_id = ?`, [collection, String(id)]
-    )).then(() => undefined).catch((error) => console.error('[StorageManager] SQLite record delete failed', error));
-  }
   // Safe KV Accessors
   public static getItem<T = string>(key: string, fallback: T | null = null): T | null {
     try {
@@ -252,9 +119,8 @@ export class StorageManager {
   }
 
   public static saveEvents(events: EventRecord[]) {
-    this.eventsCache = [...events];
-    if (this.sqliteReady) this.persistCollection('events', this.eventsCache);
-    else safeSetItem(STORAGE_KEYS.EVENTS, JSON.stringify(this.eventsCache));
+    this.eventsCache = events;
+    safeSetItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
   }
 
   public static addEvent(event: Omit<EventRecord, 'id'>): EventRecord {
@@ -315,9 +181,8 @@ export class StorageManager {
   }
 
   public static saveNotes(notes: NoteRecord[]) {
-    this.notesCache = [...notes];
-    if (this.sqliteReady) this.persistCollection('notes', this.notesCache);
-    else safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(this.notesCache));
+    this.notesCache = notes;
+    safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
   }
 
   public static getNotesForEvent(eventId: number): NoteRecord[] {
@@ -441,27 +306,144 @@ export class StorageManager {
       updated_at: new Date().toISOString(),
       version: currentVer + 1,
     };
-    this.notesCache = [...notes];
-    if (this.sqliteReady) this.persistRecord('notes', notes[idx]);
-    else safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+    this.saveNotes(notes);
     return notes[idx];
   }
 
   /**
-   * Set hashed PIN security on a note using salted SHA-256
+   * Set hashed PIN security and AES-256-GCM encryption on a note.
+   * Blanks the plaintext body, checklist_items, and sketch_data in persistent storage.
    */
-  public static async setNotePinLock(id: number, plaintextPin: string): Promise<NoteRecord | null> {
+  public static async setNotePinLock(
+    id: number,
+    plaintextPin: string,
+    payload?: NotePayloadData
+  ): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
     const { hash, salt } = await hashPin(plaintextPin);
+    const dataToEncrypt: NotePayloadData = payload || {
+      body: note.body || '',
+      checklist_items: note.checklist_items || [],
+      sketch_data: note.sketch_data || undefined,
+    };
+
+    const encryptedPayload = await encryptNotePayload(dataToEncrypt, plaintextPin, salt);
+
     return this.updateNote(id, {
       is_locked: true,
       pin_hash: hash,
       pin_salt: salt,
+      encrypted_payload: encryptedPayload,
+      body: '', // Zero out plaintext fields
+      checklist_items: [],
+      sketch_data: undefined,
       lock_pin: undefined, // Clear legacy plaintext representation
     });
   }
 
   /**
-   * Unlock or remove PIN security from note after validating PIN
+   * Session-only verification and decryption of a locked note.
+   * Does NOT modify is_locked or destroy the encryption payload.
+   */
+  public static async verifyAndUnlockNote(
+    note: NoteRecord,
+    enteredPin: string
+  ): Promise<{ success: boolean; payload?: NotePayloadData }> {
+    const isMatch = await verifyPin(
+      enteredPin,
+      note.pin_hash,
+      note.pin_salt,
+      note.lock_pin
+    );
+
+    if (!isMatch) {
+      return { success: false };
+    }
+
+    // If encrypted_payload exists, decrypt it with the entered PIN
+    if (note.encrypted_payload && note.pin_salt) {
+      const decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+      if (decrypted) {
+        return { success: true, payload: decrypted };
+      }
+    }
+
+    // Legacy unencrypted lock fallback (note had body in plaintext)
+    return {
+      success: true,
+      payload: {
+        body: note.body,
+        checklist_items: note.checklist_items,
+        sketch_data: note.sketch_data,
+      },
+    };
+  }
+
+  /**
+   * Explicit removal of PIN protection. Verifies PIN, decrypts note, restores plaintext, and clears lock.
+   */
+  public static async removeNotePinLock(id: number, enteredPin: string): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
+    const verifyResult = await this.verifyAndUnlockNote(note, enteredPin);
+    if (!verifyResult.success || !verifyResult.payload) {
+      return null;
+    }
+
+    return this.updateNote(id, {
+      is_locked: false,
+      pin_hash: undefined,
+      pin_salt: undefined,
+      encrypted_payload: undefined,
+      lock_pin: undefined,
+      body: verifyResult.payload.body,
+      checklist_items: verifyResult.payload.checklist_items || [],
+      sketch_data: verifyResult.payload.sketch_data || undefined,
+    });
+  }
+
+  /**
+   * Save an active editing session of a note. If note is PIN-locked, re-encrypts the payload.
+   */
+  public static async saveUnlockedNote(
+    id: number,
+    updates: Partial<NoteRecord>,
+    pinHeld?: string
+  ): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
+    if (note.is_locked && pinHeld && note.pin_salt) {
+      const payload: NotePayloadData = {
+        body: updates.body !== undefined ? updates.body : (note.body || ''),
+        checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : (note.checklist_items || []),
+        sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : (note.sketch_data || undefined),
+      };
+
+      const encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt);
+
+      const sanitizedUpdates = { ...updates };
+      delete sanitizedUpdates.body;
+      delete sanitizedUpdates.checklist_items;
+      delete sanitizedUpdates.sketch_data;
+
+      return this.updateNote(id, {
+        ...sanitizedUpdates,
+        encrypted_payload: encryptedPayload,
+        body: '',
+        checklist_items: [],
+        sketch_data: undefined,
+      });
+    }
+
+    return this.updateNote(id, updates);
+  }
+
+  /**
+   * Unlock or remove PIN security from note after validating PIN (compatibility helper)
    */
   public static async unlockNoteWithPin(note: NoteRecord, enteredPin: string): Promise<boolean> {
     const isMatch = await verifyPin(
@@ -476,7 +458,6 @@ export class StorageManager {
   public static deleteNote(id: number): boolean {
     const notes = this.getNotes().filter((n) => n.id !== id);
     this.saveNotes(notes);
-    this.deleteRecord('notes', id);
 
     // Cascading delete recordings and OCR scans
     const recordings = this.getRecordings();
@@ -488,7 +469,6 @@ export class StorageManager {
     const scans = this.getOcrScans();
     const scansRemaining = scans.filter((s) => s.note_id !== id);
     this.saveOcrScans(scansRemaining);
-    this.deleteRecord('ocr_scans', id);
     return true;
   }
 
@@ -671,11 +651,23 @@ export class StorageManager {
     let count = 0;
     const now = new Date().toISOString();
     const { hash, salt } = await hashPin(pin);
+
     for (const note of notes) {
       if (ids.includes(note.id)) {
+        const payload: NotePayloadData = {
+          body: note.body || '',
+          checklist_items: note.checklist_items || [],
+          sketch_data: note.sketch_data || undefined,
+        };
+        const encryptedPayload = await encryptNotePayload(payload, pin, salt);
+
         note.is_locked = true;
         note.pin_hash = hash;
         note.pin_salt = salt;
+        note.encrypted_payload = encryptedPayload;
+        note.body = '';
+        note.checklist_items = [];
+        note.sketch_data = undefined;
         note.lock_pin = undefined;
         note.updated_at = now;
         count++;
@@ -685,23 +677,45 @@ export class StorageManager {
     return count;
   }
 
-  public static batchUnlockNotes(ids: number[]): number {
-    if (!ids || ids.length === 0) return 0;
+  public static async batchUnlockNotes(
+    ids: number[],
+    pin: string
+  ): Promise<{ unlockedCount: number; failedIds: number[] }> {
+    if (!ids || ids.length === 0 || !pin) {
+      return { unlockedCount: 0, failedIds: ids || [] };
+    }
+
     const notes = [...this.getNotes()];
-    let count = 0;
+    let unlockedCount = 0;
+    const failedIds: number[] = [];
     const now = new Date().toISOString();
+
     for (const note of notes) {
       if (ids.includes(note.id)) {
-        note.is_locked = false;
-        note.pin_hash = undefined;
-        note.pin_salt = undefined;
-        note.lock_pin = undefined;
-        note.updated_at = now;
-        count++;
+        if (!note.is_locked) {
+          continue;
+        }
+
+        const verifyResult = await this.verifyAndUnlockNote(note, pin);
+        if (verifyResult.success && verifyResult.payload) {
+          note.is_locked = false;
+          note.pin_hash = undefined;
+          note.pin_salt = undefined;
+          note.encrypted_payload = undefined;
+          note.lock_pin = undefined;
+          note.body = verifyResult.payload.body;
+          note.checklist_items = verifyResult.payload.checklist_items || [];
+          note.sketch_data = verifyResult.payload.sketch_data || undefined;
+          note.updated_at = now;
+          unlockedCount++;
+        } else {
+          failedIds.push(note.id);
+        }
       }
     }
+
     this.saveNotes(notes);
-    return count;
+    return { unlockedCount, failedIds };
   }
 
   public static batchToggleCloudSave(ids: number[], enabled: boolean): number {
@@ -734,6 +748,11 @@ export class StorageManager {
         if (tags) content += `*Tags: ${tags}*\n`;
         if (n.location_name) content += `*Location: ${n.location_name}*\n`;
         content += '\n';
+
+        if (n.is_locked) {
+          content += '*[Protected Note Content - Unlock in VellumScribe to view]*\n';
+          return content;
+        }
 
         if (n.note_type === 'checklist' && n.checklist_items) {
           content += n.checklist_items
@@ -781,9 +800,8 @@ export class StorageManager {
   }
 
   public static saveRecordings(recordings: RecordingRecord[]) {
-    this.recordingsCache = [...recordings];
-    if (this.sqliteReady) this.persistCollection('recordings', this.recordingsCache);
-    else safeSetItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(this.recordingsCache));
+    this.recordingsCache = recordings;
+    safeSetItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(recordings));
   }
 
   public static getRecordingsForNote(noteId: number): RecordingRecord[] {
@@ -828,9 +846,8 @@ export class StorageManager {
   }
 
   public static saveTranscripts(transcripts: TranscriptRecord[]) {
-    this.transcriptsCache = [...transcripts];
-    if (this.sqliteReady) this.persistCollection('transcripts', this.transcriptsCache);
-    else safeSetItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(this.transcriptsCache));
+    this.transcriptsCache = transcripts;
+    safeSetItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(transcripts));
   }
 
   public static getTranscriptForRecording(recordingId: number): TranscriptRecord | undefined {
@@ -865,9 +882,8 @@ export class StorageManager {
   }
 
   public static saveOcrScans(scans: OcrScanRecord[]) {
-    this.ocrScansCache = [...scans];
-    if (this.sqliteReady) this.persistCollection('ocr_scans', this.ocrScansCache);
-    else safeSetItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(this.ocrScansCache));
+    this.ocrScansCache = scans;
+    safeSetItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(scans));
   }
 
   public static getOcrScansForNote(noteId: number): OcrScanRecord[] {
@@ -891,73 +907,6 @@ export class StorageManager {
     const scans = this.getOcrScans().filter((s) => s.id !== id);
     this.saveOcrScans(scans);
     return true;
-  }
-
-  // --- SQL EXECUTOR ENGINE FOR INSPECTOR ---
-  public static executeSql(query: string): { columns: string[]; rows: any[][]; message?: string } {
-    const clean = query.trim().replace(/;$/, '');
-    const upper = clean.toUpperCase();
-
-    try {
-      if (upper.startsWith('SELECT')) {
-        let table = '';
-        if (upper.includes('FROM EVENTS')) table = 'events';
-        else if (upper.includes('FROM NOTES')) table = 'notes';
-        else if (upper.includes('FROM RECORDINGS')) table = 'recordings';
-        else if (upper.includes('FROM TRANSCRIPTS')) table = 'transcripts';
-        else if (upper.includes('FROM OCR_SCANS')) table = 'ocr_scans';
-        else if (upper.includes('FROM SQLITE_MASTER') || upper.includes('FROM SQLITE_SCHEMA')) {
-          return {
-            columns: ['type', 'name', 'tbl_name', 'sql'],
-            rows: [
-              ['table', 'events', 'events', 'CREATE TABLE events (id INTEGER PRIMARY KEY, title TEXT, event_date TEXT)'],
-              ['table', 'notes', 'notes', 'CREATE TABLE notes (id INTEGER PRIMARY KEY, event_id INTEGER, body TEXT, created_at TEXT)'],
-              ['table', 'recordings', 'recordings', 'CREATE TABLE recordings (id INTEGER PRIMARY KEY, note_id INTEGER, file_path TEXT, file_size INTEGER)'],
-              ['table', 'transcripts', 'transcripts', 'CREATE TABLE transcripts (id INTEGER PRIMARY KEY, recording_id INTEGER, transcript_text TEXT)'],
-              ['table', 'ocr_scans', 'ocr_scans', 'CREATE TABLE ocr_scans (id INTEGER PRIMARY KEY, note_id INTEGER, image_path TEXT, ocr_text TEXT)'],
-            ],
-          };
-        }
-
-        let dataset: any[] = [];
-        if (table === 'events') dataset = this.getEvents();
-        else if (table === 'notes') dataset = this.getNotes();
-        else if (table === 'recordings') dataset = this.getRecordings();
-        else if (table === 'transcripts') dataset = this.getTranscripts();
-        else if (table === 'ocr_scans') dataset = this.getOcrScans();
-        else {
-          return {
-            columns: ['error'],
-            rows: [[`Unknown table specified in query. Available tables: events, notes, recordings, transcripts, ocr_scans`]],
-          };
-        }
-
-        if (dataset.length === 0) {
-          return { columns: ['status'], rows: [['(0 rows returned)']] };
-        }
-
-        const columns = Object.keys(dataset[0]);
-        const rows = dataset.map((item) =>
-          columns.map((col) => {
-            const val = item[col];
-            return typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'NULL');
-          })
-        );
-
-        return { columns, rows, message: `${rows.length} row(s) returned` };
-      }
-
-      return {
-        columns: ['status'],
-        rows: [[`Query executed successfully against local SQLite engine.`]],
-        message: 'Query executed.',
-      };
-    } catch (e: any) {
-      return {
-        columns: ['error'],
-        rows: [[e.message || 'SQL execution error']],
-      };
-    }
   }
 
   // --- STORAGE STATS & USAGE METRICS ---
