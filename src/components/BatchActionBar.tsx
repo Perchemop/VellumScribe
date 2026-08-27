@@ -386,7 +386,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                       className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
                     >
                       <Cloud className="w-3.5 h-3.5 text-blue-500" />
-                      <span>{hasCloudDisabled ? 'Enable Cloud Sync' : 'Disable Cloud Sync'}</span>
+                      <span>{hasCloudDisabled ? 'Enable Cloud Backup' : 'Disable Cloud Backup'}</span>
                     </button>
 
                     <div className="border-t border-zinc-200 dark:border-zinc-800 my-1" />

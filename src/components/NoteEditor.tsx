@@ -313,7 +313,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setTimeout(() => setAiNotice(null), 4000);
     } catch (e: any) {
       console.error('Failed to generate AI meeting summary:', e);
-      const fallback = `\n\n---\n### AI Generated Summary (${new Date().toLocaleDateString()})\n#### Executive Overview\nReviewed project notes, transcriptions, and active items.\n\n#### Key Decisions\n* Standardize structured notes and local persistence.\n* Maintain cloud synchronization.\n\n#### Action Items\n* [ ] Review current action items.\n* [ ] Confirm backup sync pipeline.`;
+      const fallback = `\n\n---\n### AI Generated Summary (${new Date().toLocaleDateString()})\n#### Executive Overview\nReviewed project notes, transcriptions, and active items.\n\n#### Key Decisions\n* Standardize structured notes and local persistence.\n* Maintain cloud backuphronization.\n\n#### Action Items\n* [ ] Review current action items.\n* [ ] Confirm backup sync pipeline.`;
       const newBody = `${body}${fallback}`;
       setBody(newBody);
       const updated = StorageManager.updateNote(note.id, { body: newBody });
@@ -933,7 +933,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {cloudSaveEnabled ? (
               <>
                 <Cloud className="w-3 h-3 text-zinc-700 dark:text-zinc-300" />
-                <span>Cloud sync</span>
+                <span>Cloud backup</span>
               </>
             ) : (
               <span>Local only</span>

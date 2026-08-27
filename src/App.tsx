@@ -22,7 +22,6 @@ import { RecentNotesSection } from './components/RecentNotesSection';
 import { ArchiveSection } from './components/ArchiveSection';
 import { SettingsView } from './components/SettingsView';
 import { SyncProgressBar } from './components/SyncProgressBar';
-import { ConflictResolutionModal } from './components/ConflictResolutionModal';
 import {
   FirstTimeUserGuideModal,
   hasCompletedOnboarding,
@@ -40,7 +39,6 @@ export default function App() {
     darkMode,
     setDarkMode,
     isSyncing,
-    unresolvedConflicts,
     backupFrequency,
     refreshData,
     deleteEvent,
@@ -50,7 +48,6 @@ export default function App() {
   // Local UI Navigation & modal states
   const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
   const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>('cloud');
-  const [showConflictModal, setShowConflictModal] = useState(false);
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
@@ -224,9 +221,6 @@ export default function App() {
               >
                 <Settings className="w-3.5 h-3.5" />
                 <span>Settings &amp; Cloud</span>
-                {unresolvedConflicts.length > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                )}
               </button>
             </div>
 
@@ -339,7 +333,6 @@ export default function App() {
                     onToggleFocus={() => setFocusMode((prev) => !prev)}
                     onNoteUpdated={handleNoteUpdated}
                     onNoteDeleted={handleDeleteNote}
-                    onOpenVersions={() => setShowConflictModal(true)}
                     onClose={() => {
                       setSelectedNoteId(null);
                       setFocusMode(false);
@@ -387,7 +380,6 @@ export default function App() {
             <div className="h-full overflow-y-auto custom-minimal-scrollbar bg-white dark:bg-[#0c0c0e]">
               <SettingsView
                 initialSubtab={settingsSubtab}
-                onOpenConflictModal={() => setShowConflictModal(true)}
                 onRefreshNotes={refreshData}
                 onBackToNotes={selectedNote ? () => setActiveView('notes') : undefined}
                 activeEditingNoteTitle={selectedNote?.title || (selectedNote ? 'Untitled Note' : undefined)}
@@ -530,9 +522,6 @@ export default function App() {
                 }`}
               >
                 <Settings className="w-4 h-4" />
-                {unresolvedConflicts.length > 0 && (
-                  <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                )}
               </div>
               <span className="text-[10px] tracking-tight">Settings</span>
             </button>
@@ -544,18 +533,6 @@ export default function App() {
           <FirstTimeUserGuideModal
             isOpen={showOnboardingGuide}
             onClose={() => setShowOnboardingGuide(false)}
-          />
-        )}
-
-        {/* Sync Conflict Resolution Modal */}
-        {showConflictModal && (
-          <ConflictResolutionModal
-            conflict={unresolvedConflicts[0] || null}
-            onResolved={(_body) => {
-              refreshData();
-              setShowConflictModal(false);
-            }}
-            onClose={() => setShowConflictModal(false)}
           />
         )}
       </div>

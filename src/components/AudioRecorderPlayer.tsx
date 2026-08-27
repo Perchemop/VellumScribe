@@ -190,7 +190,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     } catch (err: any) {
       console.error(err);
       setTranscriptionText(
-        "Voice transcript: Key project action items were documented. Focus on responsive layout, offline persistence, and automated cloud synchronization."
+        "Voice transcript: Key project action items were documented. Focus on responsive layout, offline persistence, and automated cloud backuphronization."
       );
     } finally {
       setIsTranscribing(false);

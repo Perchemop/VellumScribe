@@ -349,7 +349,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalRecordings}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Cloud Synced</span>
+                    <span className="text-zinc-400 block text-[10px]">Cloud Backuped</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.cloudSavedNotes}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">

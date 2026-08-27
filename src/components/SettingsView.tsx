@@ -112,7 +112,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       : 'cloud'
   );
 
-  // Cloud Sync State
+  // Cloud Backup State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
   const [telemetryList, setTelemetryList] = useState<SyncTelemetry[]>(() => CloudSyncEngine.getTelemetry());
   const [notes, setNotes] = useState<NoteRecord[]>(() => StorageManager.getNotes());
@@ -272,7 +272,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Multi-cloud sync, Google Gemini AI API key, local database, and hardware keystore encryption.
+              Multi-cloud backup, Google Gemini AI API key, local database, and hardware keystore encryption.
             </p>
           </div>
         </div>
@@ -303,7 +303,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Cloud className="w-4 h-4" />
-          <span>Cloud Sync &amp; Providers</span>
+          <span>Cloud Backup &amp; Providers</span>
           {activeAccounts.length > 0 && (
             <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold">
               {activeAccounts.length}
@@ -401,7 +401,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      Cloud Synchronization Engine
+                      Cloud Backuphronization Engine
                     </h3>
                     {isAirGapped ? (
                       <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
@@ -562,12 +562,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Per-Document Cloud Sync Toggle Table */}
+            {/* Per-Document Cloud Backup Toggle Table */}
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                    Granular Document Cloud Sync Preferences
+                    Granular Document Cloud Backup Preferences
                   </h3>
                   <p className="text-[11px] text-zinc-400">
                     Control which individual notes sync to the cloud versus remain strictly offline on this device.
@@ -604,7 +604,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           }`}
                         >
                           <Cloud className="w-3 h-3" />
-                          <span>{isEnabled ? 'Cloud Sync On' : 'Device Only (Air-Gapped)'}</span>
+                          <span>{isEnabled ? 'Cloud Backup On' : 'Device Only (Air-Gapped)'}</span>
                         </button>
                       </div>
                     );
@@ -755,7 +755,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                 <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
                   <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.cloudSavedNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Cloud Synced</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">Cloud Backuped</p>
                 </div>
 
                 <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">

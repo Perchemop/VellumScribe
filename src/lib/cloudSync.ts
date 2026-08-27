@@ -212,42 +212,6 @@ export class CloudSyncEngine {
     StorageManager.setItem(STORAGE_KEYS.TELEMETRY, list.slice(0, 100));
   }
 
-  // Conflicts
-  public static getConflicts(): ConflictLog[] {
-    const data = StorageManager.getItem<ConflictLog[]>(STORAGE_KEYS.CONFLICTS, null);
-    return data || INITIAL_CONFLICT_LOGS;
-  }
-
-  public static addConflict(conflict: ConflictLog) {
-    const list = this.getConflicts();
-    list.unshift(conflict);
-    StorageManager.setItem(STORAGE_KEYS.CONFLICTS, list);
-  }
-
-  public static updateConflict(id: string, updates: Partial<ConflictLog>) {
-    const list = this.getConflicts();
-    const idx = list.findIndex((c) => c.id === id);
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...updates };
-      StorageManager.setItem(STORAGE_KEYS.CONFLICTS, list);
-    }
-  }
-
-  public static resolveConflict(conflictId: string, winner: 'local' | 'cloud') {
-    const list = this.getConflicts();
-    const conflict = list.find((c) => c.id === conflictId);
-    if (conflict) {
-      const resolvedContent = winner === 'local' ? conflict.local_content : conflict.remote_content;
-      this.updateConflict(conflictId, {
-        status: 'resolved',
-        resolved_by: 'user_manual',
-        resolved_content: resolvedContent,
-      });
-      if (winner === 'cloud') {
-        StorageManager.updateNote(conflict.document_id, { body: resolvedContent });
-      }
-    }
-  }
 
   // Versions
   public static getVersionsForNote(noteId: number): DocumentVersion[] {
@@ -284,7 +248,6 @@ export class CloudSyncEngine {
 
   // Execute Full Synchronization Cycle
   public static async triggerSync(options?: {
-    forceSimulateConflict?: boolean;
     forceSimulateError?: boolean;
     provider?: 'google_drive' | 'dropbox' | 'dual_cloud';
     onProgress?: (progress: SyncProgressUpdate) => void;
@@ -384,55 +347,6 @@ export class CloudSyncEngine {
       });
       await new Promise((r) => setTimeout(r, 220));
 
-      // Check if conflict should occur (only on cloud-synced notes)
-      let conflictsEncountered = 0;
-      if (options?.forceSimulateConflict && cloudNotes.length > 0) {
-        conflictsEncountered = 1;
-        const targetNote = cloudNotes[0];
-        const localBody = targetNote.body;
-        const remoteBody = `${localBody}\n\n## Remote Cloud Edits (from Desktop Workstation)\n* Added compliance audit checklists.\n* Updated risk matrix deadline to Sept 1st.`;
-
-        const conflictLog: ConflictLog = {
-          id: `conf_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          document_type: 'note',
-          document_id: targetNote.id,
-          document_title: targetNote.title || 'Untitled Note',
-          local_version_id: targetNote.version || 1,
-          remote_version_id: (targetNote.version || 1) + 1,
-          local_content: localBody,
-          remote_content: remoteBody,
-          base_content: targetNote.body,
-          resolution_strategy: this.getDefaultStrategy(),
-          status: 'pending',
-          notes: 'Simulated multi-user concurrent edit across cloud nodes.',
-        };
-
-        // Auto resolve if strategy is not manual
-        if (conflictLog.resolution_strategy === 'last_write_wins') {
-          conflictLog.status = 'resolved';
-          conflictLog.resolved_by = 'system_auto';
-          conflictLog.resolved_content = remoteBody;
-          StorageManager.updateNote(targetNote.id, { body: remoteBody });
-        } else if (conflictLog.resolution_strategy === 'gemini_intelligent_merge') {
-          try {
-            const mergeResult = await GeminiApiService.intelligent3WayMerge(
-              targetNote.body,
-              localBody,
-              remoteBody,
-              targetNote.title
-            );
-            conflictLog.status = 'resolved';
-            conflictLog.resolved_by = 'gemini_ai';
-            conflictLog.resolved_content = mergeResult.mergedContent;
-            StorageManager.updateNote(targetNote.id, { body: mergeResult.mergedContent });
-          } catch {
-            conflictLog.status = 'pending';
-          }
-        }
-
-        this.addConflict(conflictLog);
-      }
 
       options?.onProgress?.({
         percent: 90,
@@ -449,13 +363,13 @@ export class CloudSyncEngine {
         sync_id: `sync_${Date.now()}`,
         timestamp: new Date().toISOString(),
         provider: accounts.length > 1 ? 'dual_cloud' : accounts[0].provider,
-        status: conflictsEncountered > 0 ? 'conflict_detected' : 'success',
+        status: 'success',
         duration_ms,
         bytes_transferred: cloudNotes.length > 0 ? dumpBytes + mediaBytes : 0,
         records_uploaded: uploadedRecordCount,
         records_downloaded: Math.floor(Math.random() * 2),
         items_synced: cloudNotes.length,
-        conflicts_encountered: conflictsEncountered,
+        conflicts_encountered: 0,
         backup_file_name: cloudNotes.length > 0
           ? `vellumscribe_cloud_backup_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.db`
           : 'none',
@@ -474,8 +388,6 @@ export class CloudSyncEngine {
       let summaryMessage = '';
       if (cloudNotes.length === 0) {
         summaryMessage = `All ${allNotes.length} notes are kept strictly local. Sync verified.`;
-      } else if (conflictsEncountered > 0) {
-        summaryMessage = `Synced ${cloudNotes.length} note(s). ${localOnlyCount} note(s) kept local-only. Conflict reconciled.`;
       } else {
         summaryMessage = `Synced ${cloudNotes.length} note(s) & ${cloudRecordings.length} recording(s). Complete!`;
       }

@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   EventRecord,
   NoteRecord,
-  ConflictLog,
   BackupFrequency,
   CloudAccount,
 } from '../types';
@@ -24,7 +23,6 @@ interface AppContextValue {
   isSyncing: boolean;
   syncProgress: number;
   syncStatusMessage: string;
-  unresolvedConflicts: ConflictLog[];
   backupFrequency: BackupFrequency;
   cloudAccounts: CloudAccount[];
   isOnline: boolean;
@@ -54,7 +52,6 @@ interface AppContextValue {
   trashNote: (id: number) => void;
   restoreNote: (id: number) => void;
   triggerSync: () => Promise<void>;
-  resolveConflict: (conflictId: string, winner: 'local' | 'cloud') => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -71,7 +68,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
   const [syncStatusMessage, setSyncStatusMessage] = useState('');
-  const [unresolvedConflicts, setUnresolvedConflicts] = useState<ConflictLog[]>([]);
   const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
   const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -110,9 +106,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEvents(StorageManager.getEvents());
     setNotes(StorageManager.getNotes());
     setCloudAccounts(CloudSyncEngine.getAccounts());
-    setUnresolvedConflicts(
-      CloudSyncEngine.getConflicts().filter((c: ConflictLog) => c.status === 'pending' || c.status === 'flagged')
-    );
   }, []);
 
   // Online / Offline listener
@@ -245,7 +238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       );
       refreshData();
-      showToast('Cloud sync completed successfully.');
+      showToast('Cloud backup completed successfully.');
     } catch (e: any) {
       showToast(`Sync warning: ${e.message || 'Sync failed.'}`);
     } finally {
@@ -254,12 +247,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSyncStatusMessage('');
     }
   }, [isSyncing, refreshData, showToast]);
-
-  const resolveConflict = useCallback((conflictId: string, winner: 'local' | 'cloud') => {
-    CloudSyncEngine.resolveConflict(conflictId, winner);
-    refreshData();
-    showToast(`Conflict resolved (${winner} version retained).`);
-  }, [refreshData, showToast]);
 
   const value = useMemo<AppContextValue>(
     () => ({
@@ -275,7 +262,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSyncing,
       syncProgress,
       syncStatusMessage,
-      unresolvedConflicts,
       backupFrequency,
       cloudAccounts,
       isOnline,
@@ -301,7 +287,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       trashNote,
       restoreNote,
       triggerSync,
-      resolveConflict,
     }),
     [
       events,
@@ -316,7 +301,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSyncing,
       syncProgress,
       syncStatusMessage,
-      unresolvedConflicts,
       backupFrequency,
       cloudAccounts,
       isOnline,
@@ -336,7 +320,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       trashNote,
       restoreNote,
       triggerSync,
-      resolveConflict,
     ]
   );
 
