@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
-import { MergeNotesModal } from './MergeNotesModal';
 import { BatchActionBar } from './BatchActionBar';
 import { NoteShareModal } from './NoteShareModal';
 
@@ -65,7 +64,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   const [sortBy, setSortBy] = useState<SortOption>('updated');
   const [viewLayout, setViewLayout] = useState<'list' | 'grid'>('list');
   const [showNewEventModal, setShowNewEventModal] = useState(false);
-  const [showMergeModal, setShowMergeModal] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
   const [newEventCategory, setNewEventCategory] = useState<EventRecord['category']>('meeting');
   const [newEventColor, setNewEventColor] = useState('#3b82f6');
@@ -254,7 +252,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           onClearSelection={handleClearSelection}
           onSelectAll={handleSelectAll}
           onDeselectAll={handleDeselectAll}
-          onOpenMergeModal={() => setShowMergeModal(true)}
           onRefresh={() => {
             onRefresh();
             setSelectedNoteIds([]);
@@ -507,17 +504,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             )
           ) : (
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => {
-                  setSelectedNoteIds(filteredNotes.slice(0, 2).map((n) => n.id));
-                  setShowMergeModal(true);
-                }}
-                title="Merge notes"
-                className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-0.5"
-              >
-                <GitMerge className="w-3 h-3" />
-                <span>Merge</span>
-              </button>
               <button
                 id="create-new-note-btn"
                 onClick={() => onCreateNote(selectedEventId || (events[0]?.id ?? 1), 'text')}
@@ -822,21 +808,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             </form>
           </div>
         </div>
-      )}
-
-      {/* Merge Notes Modal */}
-      {showMergeModal && (
-        <MergeNotesModal
-          notes={notes.filter((n) => n.status !== 'trash')}
-          initialSelectedIds={selectedNoteIds}
-          onMerged={(merged) => {
-            onRefresh();
-            setSelectedNoteIds([]);
-            setIsSelectionMode(false);
-            onSelectNote(merged.id);
-          }}
-          onClose={() => setShowMergeModal(false)}
-        />
       )}
 
       {/* Confirm Empty Trash Modal */}

@@ -153,7 +153,7 @@ export class GeminiApiService {
 
     // 3. Fallback when no API key is provided
     return {
-      ocrText: 'Action Items:\n- Review and organize project notes\n- Record and attach voice memos\n- Configure cloud synchronization in settings',
+      ocrText: 'Action Items:\n- Review and organize project notes\n- Record and attach voice memos\n- Configure cloud backuphronization in settings',
       confidence: 0.9,
       source: 'offline_fallback',
     };

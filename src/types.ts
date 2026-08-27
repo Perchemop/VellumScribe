@@ -113,36 +113,6 @@ export interface CloudAccount {
   bucket_name?: string; // For S3/MinIO
 }
 
-export type ConflictStrategy = 
-  | 'last_write_wins' 
-  | 'gemini_intelligent_merge' 
-  | 'local_priority' 
-  | 'remote_priority' 
-  | 'manual_diff';
-
-export interface ConflictLog {
-  id: string;
-  timestamp?: string;
-  created_at?: string;
-  resolved_at?: string;
-  document_type?: 'note' | 'sqlite_db' | 'recording';
-  document_id: number;
-  document_title: string;
-  local_version_id?: number;
-  remote_version_id?: number;
-  local_version?: number;
-  remote_version?: number;
-  local_content: string;
-  remote_content: string;
-  base_content?: string;
-  resolution_strategy?: ConflictStrategy;
-  strategy_used?: ConflictStrategy;
-  resolved_content?: string;
-  status: 'resolved' | 'pending' | 'flagged';
-  resolved_by?: 'system_auto' | 'gemini_ai' | 'user_manual';
-  notes?: string;
-}
-
 export interface DocumentVersion {
   id?: string;
   version_id?: number;
