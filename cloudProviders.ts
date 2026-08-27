@@ -1,339 +1,629 @@
-import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
+/**
+ * Cloud Storage Providers Service
+ *
+ * Honesty policy for this module: every function here either performs a
+ * real network request to the provider's API and reports what actually
+ * happened, or returns/throws a clear "not implemented" result. Nothing in
+ * this file fabricates a success response, a token, an email address, a
+ * checksum, or a byte count. See /CLOUD_PROVIDER_SETUP.md for the current
+ * status of each provider and what a user needs to supply to connect it.
+ *
+ * Current status:
+ *  - google_drive, dropbox, onedrive: the user supplies an existing OAuth
+ *    access token they generated themselves (see CLOUD_PROVIDER_SETUP.md).
+ *    There is no in-app "1-click" browser-redirect login flow yet.
+ *    getAuthUrl()/exchangeCodeForToken() below are a real, working PKCE
+ *    implementation for that flow - they are just not wired to a redirect
+ *    page/UI yet. Wiring them up is a good first contribution; see
+ *    CONTRIBUTING.md.
+ *  - nextcloud: real WebDAV app-password authentication (server URL,
+ *    username, app password) - no OAuth involved.
+ *  - icloud, s3: not implemented. The UI disables connecting these.
+ */
 
-const REDIRECT_BASE = 'com.vellumscribe.app://oauth';
-const REDIRECT_OVERRIDES: Record<OAuthProvider, string | undefined> = {
-  google_drive: (import.meta as any).env?.VITE_GOOGLE_REDIRECT_URI,
-  dropbox: (import.meta as any).env?.VITE_DROPBOX_REDIRECT_URI,
-  onedrive: (import.meta as any).env?.VITE_MICROSOFT_REDIRECT_URI,
-};
-const STATE_PREFIX = 'vellumscribe.oauth.state.';
-const TOKEN_PREFIX = 'vellumscribe.oauth.token.';
+import { CloudAccount, CloudStorageProvider } from '../types';
+import { SecureKeystore } from './keystore';
 
-type OAuthProvider = 'google_drive' | 'dropbox' | 'onedrive';
+/** Fixed remote filename used for the single rolling backup snapshot. */
+export const BACKUP_FILE_NAME = 'vellumscribe_backup.json';
 
-interface OAuthTokenSet {
-  access_token: string;
-  refresh_token?: string;
-  expires_at?: number;
-  token_type?: string;
-  scope?: string;
-  expires_in?: number;
+export interface VerifiedCredential {
+  email?: string;
+  name?: string;
+  storageUsedBytes?: number;
+  storageTotalBytes?: number;
 }
 
-interface ProviderConfig {
-  clientId: string;
-  authorizationEndpoint: string;
-  tokenEndpoint: string;
-  scopes: string[];
+export interface CredentialInput {
+  token?: string;
+  serverUrl?: string;
+  username?: string;
+  appPassword?: string;
 }
 
-const config: Record<OAuthProvider, ProviderConfig> = {
+// OAuth configuration for the redirect-based PKCE flow. Client IDs are only
+// populated when a real one is supplied via env vars; there is no
+// placeholder/demo client ID here because a fake one cannot actually
+// authenticate anyone and would produce a confusing failure instead of a
+// clear "not configured" message.
+export const OAUTH_CONFIGS: Record<
+  CloudStorageProvider,
+  {
+    name: string;
+    authUrl: string;
+    tokenUrl: string;
+    revokeUrl?: string;
+    clientId: string;
+    scopes: string[];
+    redirectUri: string;
+    defaultPath: string;
+  }
+> = {
   google_drive: {
-    clientId: (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '',
-    authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-    tokenEndpoint: 'https://oauth2.googleapis.com/token',
-    scopes: ['https://www.googleapis.com/auth/drive.file'],
+    name: 'Google Drive',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    revokeUrl: 'https://oauth2.googleapis.com/revoke',
+    clientId: (import.meta as any).env?.VITE_GOOGLE_DRIVE_CLIENT_ID || '',
+    scopes: [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ],
+    redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/oauth/callback` : 'http://localhost:3000/oauth/callback',
+    defaultPath: 'VellumScribe',
   },
   dropbox: {
-    clientId: (import.meta as any).env?.VITE_DROPBOX_APP_KEY || '',
-    authorizationEndpoint: 'https://www.dropbox.com/oauth2/authorize',
-    tokenEndpoint: 'https://api.dropboxapi.com/oauth2/token',
-    scopes: [],
+    name: 'Dropbox',
+    authUrl: 'https://www.dropbox.com/oauth2/authorize',
+    tokenUrl: 'https://api.dropboxapi.com/oauth2/token',
+    revokeUrl: 'https://api.dropboxapi.com/2/auth/token/revoke',
+    clientId: (import.meta as any).env?.VITE_DROPBOX_CLIENT_ID || '',
+    scopes: ['files.content.write', 'files.content.read', 'account_info.read'],
+    redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/oauth/callback` : 'http://localhost:3000/oauth/callback',
+    defaultPath: 'Apps/VellumScribe',
   },
   onedrive: {
-    clientId: (import.meta as any).env?.VITE_MICROSOFT_CLIENT_ID || '',
-    authorizationEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-    tokenEndpoint: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
-    scopes: ['offline_access', 'Files.ReadWrite.AppFolder', 'User.Read'],
+    name: 'Microsoft OneDrive',
+    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    clientId: (import.meta as any).env?.VITE_ONEDRIVE_CLIENT_ID || '',
+    scopes: ['Files.ReadWrite', 'User.Read', 'offline_access'],
+    redirectUri: typeof window !== 'undefined' ? `${window.location.origin}/oauth/callback` : 'http://localhost:3000/oauth/callback',
+    defaultPath: 'VellumScribe',
+  },
+  nextcloud: {
+    name: 'Nextcloud / ownCloud',
+    authUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    scopes: [],
+    redirectUri: '',
+    defaultPath: 'VellumScribe',
+  },
+  s3: {
+    name: 'AWS S3 / Compatible',
+    authUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    scopes: [],
+    redirectUri: '',
+    defaultPath: '',
+  },
+  icloud: {
+    name: 'Apple iCloud',
+    authUrl: '',
+    tokenUrl: '',
+    clientId: '',
+    scopes: [],
+    redirectUri: '',
+    defaultPath: '',
   },
 };
 
-function base64Url(bytes: Uint8Array): string {
-  let s = '';
-  bytes.forEach((b) => { s += String.fromCharCode(b); });
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-async function randomVerifier(): Promise<string> {
-  const bytes = new Uint8Array(64);
-  crypto.getRandomValues(bytes);
-  return base64Url(bytes);
-}
-
-async function challenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  return base64Url(new Uint8Array(digest));
-}
-
-async function secureSet(key: string, value: unknown): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-  await SecureStorage.set(key, value);
-}
-
-async function secureGet<T>(key: string): Promise<T | null> {
-  if (!Capacitor.isNativePlatform()) return null;
-  try {
-    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-    return (await SecureStorage.get(key)) as T | null;
-  } catch {
-    return null;
+/** Generate a PKCE code verifier and S256 code challenge. */
+async function generatePkcePair(): Promise<{ verifier: string; challenge: string }> {
+  const randomBytes = new Uint8Array(32);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(randomBytes);
+  } else {
+    throw new Error('This device does not support the Web Crypto API, so a secure OAuth login cannot be started.');
   }
+
+  const base64Url = (bytes: Uint8Array) => {
+    let str = '';
+    for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+    return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  };
+
+  const verifier = base64Url(randomBytes);
+
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const encoder = new TextEncoder();
+    const digest = await crypto.subtle.digest('SHA-256', encoder.encode(verifier));
+    return { verifier, challenge: base64Url(new Uint8Array(digest)) };
+  }
+
+  throw new Error('This device does not support the Web Crypto API, so a secure OAuth login cannot be started.');
 }
 
-async function secureRemove(key: string): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
-  try {
-    const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-    await SecureStorage.remove(key);
-  } catch { /* best effort */ }
+function joinRemotePath(...segments: string[]): string {
+  return segments
+    .map((s) => s.replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .join('/');
 }
 
 export class CloudProviderService {
-  public static redirectUri(provider: OAuthProvider): string {
-    return REDIRECT_OVERRIDES[provider] || `${REDIRECT_BASE}/${provider}`;
+  public static isOAuthConfigured(provider: CloudStorageProvider): boolean {
+    return Boolean(OAUTH_CONFIGS[provider]?.clientId);
   }
 
-  public static isConfigured(provider: OAuthProvider): boolean {
-    return Boolean(config[provider]?.clientId);
-  }
-
-  public static async beginOAuth(provider: OAuthProvider): Promise<void> {
-    if (!this.isConfigured(provider)) {
-      throw new Error(`No ${provider} OAuth client ID is configured. Set the corresponding VITE_*_CLIENT_ID build variable.`);
+  /**
+   * Build a real OAuth 2.0 + PKCE authorization URL for interactive login.
+   * NOTE: this is not yet called from the UI (see module docstring) - it is
+   * kept here, working and ready, for whoever picks up the "wire up 1-click
+   * OAuth login" contribution.
+   */
+  public static async getAuthUrl(
+    provider: CloudStorageProvider,
+    customRedirectUri?: string
+  ): Promise<{ url: string; state: string; verifier: string }> {
+    const config = OAUTH_CONFIGS[provider];
+    if (!config || !config.authUrl) {
+      throw new Error(`${provider} does not support standard web OAuth.`);
     }
-    const c = config[provider];
-    const verifier = await randomVerifier();
-    const state = base64Url(crypto.getRandomValues(new Uint8Array(24)));
-    const codeChallenge = await challenge(verifier);
-    const redirectUri = this.redirectUri(provider);
-    const pending = { verifier, state, redirectUri, createdAt: Date.now() };
-    if (Capacitor.isNativePlatform()) await secureSet(`${STATE_PREFIX}${provider}`, pending);
-    else sessionStorage.setItem(`${STATE_PREFIX}${provider}`, JSON.stringify(pending));
+    if (!config.clientId) {
+      throw new Error(
+        `No OAuth client ID is configured for ${config.name}. Set the corresponding VITE_*_CLIENT_ID build variable - see CLOUD_PROVIDER_SETUP.md.`
+      );
+    }
+
+    const { verifier, challenge } = await generatePkcePair();
+    const state = crypto.getRandomValues(new Uint32Array(4)).join('');
+    const redirectUri = customRedirectUri || config.redirectUri;
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(`pkce_verifier_${provider}`, verifier);
+      sessionStorage.setItem(`oauth_state_${provider}`, state);
+    }
 
     const params = new URLSearchParams({
-      client_id: c.clientId,
-      response_type: 'code',
+      client_id: config.clientId,
       redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: config.scopes.join(' '),
       state,
-      code_challenge: codeChallenge,
+      code_challenge: challenge,
       code_challenge_method: 'S256',
     });
     if (provider === 'google_drive') {
       params.set('access_type', 'offline');
       params.set('prompt', 'consent');
-      params.set('scope', c.scopes.join(' '));
-    } else if (provider === 'onedrive') {
-      params.set('scope', c.scopes.join(' '));
-    } else if (provider === 'dropbox') {
-      params.set('token_access_type', 'offline');
     }
 
-    await Browser.open({ url: `${c.authorizationEndpoint}?${params.toString()}` });
+    return { url: `${config.authUrl}?${params.toString()}`, state, verifier };
   }
 
-  public static async handleOAuthCallback(url: string): Promise<{ provider: OAuthProvider; account: any } | null> {
-    const parsed = new URL(url);
-    const provider = parsed.pathname.split('/').filter(Boolean).pop() as OAuthProvider;
-    if (!provider || !(provider in config)) return null;
-    const error = parsed.searchParams.get('error');
-    if (error) throw new Error(`Cloud authorization failed: ${error}`);
-    const code = parsed.searchParams.get('code');
-    const returnedState = parsed.searchParams.get('state');
-    if (!code || !returnedState) throw new Error('Cloud authorization callback is incomplete.');
-
-    let pending: any = null;
-    if (Capacitor.isNativePlatform()) pending = await secureGet<any>(`${STATE_PREFIX}${provider}`);
-    else {
-      const raw = sessionStorage.getItem(`${STATE_PREFIX}${provider}`);
-      pending = raw ? JSON.parse(raw) : null;
-    }
-    if (!pending || pending.state !== returnedState || Date.now() - pending.createdAt > 10 * 60 * 1000) {
-      throw new Error('Cloud authorization state is invalid or expired. Please try again.');
+  /**
+   * Exchange an authorization code for real tokens via PKCE. Throws with a
+   * descriptive error on any failure - it never returns a fabricated token.
+   */
+  public static async exchangeCodeForToken(
+    provider: CloudStorageProvider,
+    code: string,
+    verifier: string,
+    customRedirectUri?: string
+  ): Promise<{ access_token: string; refresh_token?: string; expires_in?: number; email?: string }> {
+    const config = OAUTH_CONFIGS[provider];
+    if (!config || !config.tokenUrl) {
+      throw new Error(`Token exchange is not supported for ${provider}.`);
     }
 
-    const c = config[provider];
-    const body = new URLSearchParams({
+    const redirectUri = customRedirectUri || config.redirectUri;
+    const bodyParams = new URLSearchParams({
+      client_id: config.clientId,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: pending.redirectUri,
-      code_verifier: pending.verifier,
-      client_id: c.clientId,
+      code_verifier: verifier,
+      redirect_uri: redirectUri,
     });
-    const response = await fetch(c.tokenEndpoint, {
+
+    const response = await fetch(config.tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
+      body: bodyParams.toString(),
     });
-    if (!response.ok) throw new Error(`Cloud token exchange failed (${response.status}).`);
-    const token = await response.json() as OAuthTokenSet;
-    const tokenKey = `${TOKEN_PREFIX}${provider}`;
-    await secureSet(tokenKey, token);
-    if (!Capacitor.isNativePlatform()) sessionStorage.removeItem(`${STATE_PREFIX}${provider}`);
 
-    const profile = await this.fetchProfile(provider, token.access_token);
-    return { provider, account: { ...profile, token } };
-  }
-
-  private static async fetchProfile(provider: OAuthProvider, accessToken: string): Promise<{ email?: string; name?: string }> {
-    const endpoints: Record<OAuthProvider, string> = {
-      google_drive: 'https://www.googleapis.com/oauth2/v3/userinfo',
-      dropbox: 'https://api.dropboxapi.com/2/users/get_current_account',
-      onedrive: 'https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName',
-    };
-    const response = await fetch(endpoints[provider], {
-      method: provider === 'dropbox' ? 'POST' : 'GET',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!response.ok) throw new Error(`Cloud account verification failed (${response.status}).`);
-    const data = await response.json();
-    return {
-      email: data.email || data.mail || data.userPrincipalName || data.email_address,
-      name: data.name || data.displayName,
-    };
-  }
-
-  public static async getToken(provider: OAuthProvider): Promise<OAuthTokenSet | null> {
-    const token = await secureGet<OAuthTokenSet>(`${TOKEN_PREFIX}${provider}`);
-    if (!token) return null;
-    if (token.expires_at && token.expires_at < Date.now() + 60_000 && token.refresh_token) {
-      return this.refresh(provider, token);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      throw new Error(`${config.name} token exchange failed (HTTP ${response.status}). ${errText}`.trim());
     }
-    return token;
-  }
 
-  private static async refresh(provider: OAuthProvider, current: OAuthTokenSet): Promise<OAuthTokenSet> {
-    const c = config[provider];
-    if (!current.refresh_token) return current;
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: current.refresh_token,
-      client_id: c.clientId,
-    });
-    const response = await fetch(c.tokenEndpoint, {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
-    });
-    if (!response.ok) throw new Error(`Cloud token refresh failed (${response.status}).`);
-    const next = await response.json() as OAuthTokenSet;
-    const merged = { ...current, ...next, refresh_token: next.refresh_token || current.refresh_token, expires_at: next.expires_in ? Date.now() + next.expires_in * 1000 : current.expires_at } as any;
-    await secureSet(`${TOKEN_PREFIX}${provider}`, merged);
-    return merged;
-  }
-
-  public static async revoke(provider: OAuthProvider): Promise<void> {
-    await secureRemove(`${TOKEN_PREFIX}${provider}`);
-  }
-
-  public static async uploadBackup(provider: OAuthProvider, path: string, content: Uint8Array): Promise<{ bytes: number; remoteId?: string }> {
-    const token = await this.getToken(provider);
-    if (!token) throw new Error(`No authenticated ${provider} session. Reconnect the account.`);
-    if (provider === 'google_drive') return this.uploadGoogleDrive(token.access_token, path, content);
-    if (provider === 'dropbox') return this.uploadDropbox(token.access_token, path, content);
-    return this.uploadOneDrive(token.access_token, path, content);
-  }
-
-  public static async downloadBackup(provider: OAuthProvider, path: string): Promise<Uint8Array | null> {
-    const token = await this.getToken(provider);
-    if (!token) throw new Error(`No authenticated ${provider} session. Reconnect the account.`);
-    if (provider === 'google_drive') return this.downloadGoogleDrive(token.access_token, path);
-    if (provider === 'dropbox') return this.downloadDropbox(token.access_token, path);
-    return this.downloadOneDrive(token.access_token, path);
-  }
-
-  private static async uploadGoogleDrive(token: string, name: string, content: Uint8Array) {
-    const metadata = new Blob([JSON.stringify({ name, mimeType: 'application/json', parents: [] })], { type: 'application/json' });
-    const payload = new Blob([content], { type: 'application/json' });
-    const form = new FormData();
-    form.append('metadata', metadata);
-    form.append('file', payload);
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-    if (!res.ok) throw new Error(`Google Drive upload failed (${res.status}).`);
-    const data = await res.json();
-    return { bytes: content.byteLength, remoteId: data.id };
-  }
-
-  private static async downloadGoogleDrive(token: string, name: string) {
-    const q = encodeURIComponent(`name='${name.replace(/'/g, "\\'")}' and trashed=false`);
-    const list = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=1&fields=files(id,name)`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!list.ok) throw new Error(`Google Drive lookup failed (${list.status}).`);
-    const files = await list.json();
-    if (!files.files?.length) return null;
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${files.files[0].id}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error(`Google Drive download failed (${res.status}).`);
-    return new Uint8Array(await res.arrayBuffer());
-  }
-
-  private static async uploadDropbox(token: string, path: string, content: Uint8Array) {
-    const res = await fetch('https://content.dropboxapi.com/2/files/upload', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'Dropbox-API-Arg': JSON.stringify({ path: `/${path.replace(/^\/+/, '')}`, mode: 'overwrite', autorename: false, mute: true }) }, body: content });
-    if (!res.ok) throw new Error(`Dropbox upload failed (${res.status}).`);
-    const data = await res.json();
-    return { bytes: content.byteLength, remoteId: data.id };
-  }
-
-  private static async downloadDropbox(token: string, path: string) {
-    const res = await fetch('https://content.dropboxapi.com/2/files/download', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Dropbox-API-Arg': JSON.stringify({ path: `/${path.replace(/^\/+/, '')}` }) } });
-    if (res.status === 409) return null;
-    if (!res.ok) throw new Error(`Dropbox download failed (${res.status}).`);
-    return new Uint8Array(await res.arrayBuffer());
-  }
-
-  private static async uploadOneDrive(token: string, path: string, content: Uint8Array) {
-    const safePath = path.replace(/^\/+/, '');
-    const url = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${encodeURIComponent(safePath)}:/content`;
-    const res = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: content });
-    if (!res.ok) throw new Error(`OneDrive upload failed (${res.status}).`);
-    const data = await res.json();
-    return { bytes: content.byteLength, remoteId: data.id };
-  }
-
-  private static async downloadOneDrive(token: string, path: string) {
-    const safePath = path.replace(/^\/+/, '');
-    const url = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${encodeURIComponent(safePath)}:/content`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`OneDrive download failed (${res.status}).`);
-    return new Uint8Array(await res.arrayBuffer());
-  }
-
-  public static async verifyNextcloud(serverUrl: string, username: string, appPassword: string): Promise<{ email: string; name: string }> {
-    const base = serverUrl.replace(/\/$/, '');
-    const auth = btoa(`${username}:${appPassword}`);
-    const response = await fetch(`${base}/ocs/v1.php/cloud/user`, {
-      headers: { Authorization: `Basic ${auth}`, 'OCS-APIRequest': 'true', Accept: 'application/json' },
-    });
-    if (!response.ok) throw new Error(`Nextcloud authentication failed (${response.status}).`);
     const data = await response.json();
-    const user = data?.ocs?.data;
-    if (!user?.id) throw new Error('Nextcloud did not return a valid authenticated user.');
-    await secureSet(`${TOKEN_PREFIX}nextcloud`, { serverUrl: base, username, appPassword });
-    return { email: username, name: user.displayname || username };
+    if (!data.access_token) {
+      throw new Error(`${config.name} token exchange did not return an access token.`);
+    }
+    return {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_in: data.expires_in,
+      email: data.user_email || data.email,
+    };
   }
 
-  public static async uploadNextcloudStored(path: string, content: Uint8Array) {
-    const creds = await secureGet<any>(`${TOKEN_PREFIX}nextcloud`);
-    if (!creds) throw new Error('Nextcloud is not authenticated.');
-    return this.uploadNextcloud(creds.serverUrl, creds.username, creds.appPassword, path, content);
+  /**
+   * Verify a user-supplied credential against the real provider API. Returns
+   * whatever profile info the API gives back, or throws a descriptive error.
+   * This is the credential check used both when connecting an account and
+   * when the user taps "Test connection" on an already-connected account.
+   */
+  public static async verifyCredential(
+    provider: CloudStorageProvider,
+    credential: CredentialInput
+  ): Promise<VerifiedCredential> {
+    switch (provider) {
+      case 'google_drive': {
+        if (!credential.token) throw new Error('An access token is required.');
+        const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
+          headers: { Authorization: `Bearer ${credential.token}` },
+        });
+        if (!res.ok) {
+          throw new Error(`Google Drive verification failed (HTTP ${res.status}). Check that the token is valid and has drive.file scope.`);
+        }
+        const data = await res.json();
+        return {
+          email: data.user?.emailAddress,
+          name: data.user?.displayName,
+          storageUsedBytes: data.storageQuota?.usage ? Number(data.storageQuota.usage) : undefined,
+          storageTotalBytes: data.storageQuota?.limit ? Number(data.storageQuota.limit) : undefined,
+        };
+      }
+      case 'dropbox': {
+        if (!credential.token) throw new Error('An access token is required.');
+        const res = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${credential.token}`, 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) {
+          throw new Error(`Dropbox verification failed (HTTP ${res.status}). Check that the access token is valid.`);
+        }
+        const data = await res.json();
+        let storageUsedBytes: number | undefined;
+        let storageTotalBytes: number | undefined;
+        try {
+          const spaceRes = await fetch('https://api.dropboxapi.com/2/users/get_space_usage', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${credential.token}`, 'Content-Type': 'application/json' },
+          });
+          if (spaceRes.ok) {
+            const space = await spaceRes.json();
+            storageUsedBytes = space.used;
+            storageTotalBytes = space.allocation?.allocated;
+          }
+        } catch {
+          // Storage usage is optional context; ignore failures here.
+        }
+        return { email: data.email, name: data.name?.display_name, storageUsedBytes, storageTotalBytes };
+      }
+      case 'onedrive': {
+        if (!credential.token) throw new Error('An access token is required.');
+        const res = await fetch('https://graph.microsoft.com/v1.0/me', {
+          headers: { Authorization: `Bearer ${credential.token}` },
+        });
+        if (!res.ok) {
+          throw new Error(`OneDrive verification failed (HTTP ${res.status}). Check that the access token is valid.`);
+        }
+        const data = await res.json();
+        let storageUsedBytes: number | undefined;
+        let storageTotalBytes: number | undefined;
+        try {
+          const driveRes = await fetch('https://graph.microsoft.com/v1.0/me/drive', {
+            headers: { Authorization: `Bearer ${credential.token}` },
+          });
+          if (driveRes.ok) {
+            const drive = await driveRes.json();
+            storageUsedBytes = drive.quota?.used;
+            storageTotalBytes = drive.quota?.total;
+          }
+        } catch {
+          // Optional context.
+        }
+        return { email: data.mail || data.userPrincipalName, name: data.displayName, storageUsedBytes, storageTotalBytes };
+      }
+      case 'nextcloud': {
+        if (!credential.serverUrl || !credential.username || !credential.appPassword) {
+          throw new Error('Server URL, username, and app password are all required.');
+        }
+        const base = credential.serverUrl.replace(/\/+$/, '');
+        const auth = btoa(`${credential.username}:${credential.appPassword}`);
+        const res = await fetch(`${base}/ocs/v1.php/cloud/user?format=json`, {
+          headers: { Authorization: `Basic ${auth}`, 'OCS-APIRequest': 'true', Accept: 'application/json' },
+        });
+        if (!res.ok) {
+          throw new Error(`Nextcloud verification failed (HTTP ${res.status}). Check the server URL, username, and app password.`);
+        }
+        const data = await res.json();
+        const user = data?.ocs?.data;
+        if (!user?.id) {
+          throw new Error('Nextcloud did not return a valid authenticated user for those credentials.');
+        }
+        return {
+          email: user.id,
+          name: user.displayname || user.id,
+          storageUsedBytes: typeof user.quota?.used === 'number' ? user.quota.used : undefined,
+          storageTotalBytes: typeof user.quota?.total === 'number' ? user.quota.total : undefined,
+        };
+      }
+      default:
+        throw new Error(`${provider} isn't implemented as a live sync backend yet.`);
+    }
   }
 
-  public static async downloadNextcloudStored(path: string): Promise<Uint8Array | null> {
-    const creds = await secureGet<any>(`${TOKEN_PREFIX}nextcloud`);
-    if (!creds) throw new Error('Nextcloud is not authenticated.');
-    const base = creds.serverUrl.replace(/\/$/, '');
-    const url = `${base}/remote.php/dav/files/${encodeURIComponent(creds.username)}/${path.replace(/^\/+/, '')}`;
-    const auth = btoa(`${creds.username}:${creds.appPassword}`);
-    const response = await fetch(url, { headers: { Authorization: `Basic ${auth}` } });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Nextcloud download failed (${response.status}).`);
-    return new Uint8Array(await response.arrayBuffer());
+  /** Re-check an already-connected account's stored credential. */
+  public static async testSsoSession(
+    account: CloudAccount
+  ): Promise<{ success: boolean; latencyMs: number; message: string }> {
+    const start = performance.now();
+    try {
+      const profile = await this.verifyCredential(account.provider, this.credentialFromAccount(account));
+      const latencyMs = Math.round(performance.now() - start);
+      return {
+        success: true,
+        latencyMs,
+        message: `Connection verified${profile.email ? ` as ${profile.email}` : ''} (${latencyMs}ms).`,
+      };
+    } catch (e: any) {
+      return {
+        success: false,
+        latencyMs: Math.round(performance.now() - start),
+        message: e?.message || 'Connection check failed.',
+      };
+    }
   }
 
-  public static async uploadNextcloud(serverUrl: string, username: string, appPassword: string, path: string, content: Uint8Array) {
-    const base = serverUrl.replace(/\/$/, '');
-    const url = `${base}/remote.php/dav/files/${encodeURIComponent(username)}/${path.replace(/^\/+/, '')}`;
-    const auth = btoa(`${username}:${appPassword}`);
-    const res = await fetch(url, { method: 'PUT', headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }, body: content });
-    if (!res.ok) throw new Error(`Nextcloud upload failed (${res.status}).`);
-    return { bytes: content.byteLength };
+  private static credentialFromAccount(account: CloudAccount): CredentialInput {
+    if (account.provider === 'nextcloud') {
+      return { serverUrl: account.server_url, username: account.user_email, appPassword: account.access_token };
+    }
+    return { token: account.access_token };
+  }
+
+  /** Revoke tokens upstream on disconnect (best-effort; not all providers support it). */
+  public static async revoke(account: CloudAccount): Promise<void> {
+    const config = OAUTH_CONFIGS[account.provider];
+    const token = account.access_token;
+
+    if (config?.revokeUrl && token) {
+      try {
+        if (account.provider === 'google_drive') {
+          await fetch(`${config.revokeUrl}?token=${encodeURIComponent(token)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          });
+        } else if (account.provider === 'dropbox') {
+          await fetch(config.revokeUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      } catch (e) {
+        console.warn(`Upstream revocation failed for ${account.provider}`, e);
+      }
+    }
+
+    if (account.refresh_token_alias) {
+      try {
+        await SecureKeystore.deleteSecret(account.refresh_token_alias);
+      } catch {
+        // Best-effort local cleanup only.
+      }
+    }
+  }
+
+  public static async signOutSso(account: CloudAccount): Promise<void> {
+    await this.revoke(account);
+  }
+
+  /**
+   * Upload the local backup snapshot to the connected provider. Returns
+   * success only when a real upload actually succeeded; otherwise returns
+   * success:false with a human-readable reason. Never fabricates success.
+   */
+  public static async uploadBackup(
+    account: CloudAccount,
+    fileName: string,
+    content: string
+  ): Promise<{ success: boolean; bytesUploaded: number; fileId?: string; error?: string }> {
+    const bytes = new TextEncoder().encode(content);
+
+    try {
+      switch (account.provider) {
+        case 'google_drive': {
+          if (!account.access_token) {
+            return { success: false, bytesUploaded: 0, error: 'Google Drive account is not connected.' };
+          }
+          const token = account.access_token;
+          const q = encodeURIComponent(`name='${fileName.replace(/'/g, "\\'")}' and trashed=false`);
+          const listRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=1&fields=files(id)`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const existingId = listRes.ok ? (await listRes.json()).files?.[0]?.id : undefined;
+
+          if (existingId) {
+            const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=media`, {
+              method: 'PATCH',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: bytes,
+            });
+            if (!res.ok) return { success: false, bytesUploaded: 0, error: `Google Drive update failed (HTTP ${res.status}).` };
+            const data = await res.json();
+            return { success: true, bytesUploaded: bytes.byteLength, fileId: data.id };
+          }
+
+          const metadata = { name: fileName, mimeType: 'application/json' };
+          const form = new FormData();
+          form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+          form.append('file', new Blob([bytes], { type: 'application/json' }));
+          const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: form,
+          });
+          if (!res.ok) return { success: false, bytesUploaded: 0, error: `Google Drive upload failed (HTTP ${res.status}).` };
+          const data = await res.json();
+          return { success: true, bytesUploaded: bytes.byteLength, fileId: data.id };
+        }
+
+        case 'dropbox': {
+          if (!account.access_token) {
+            return { success: false, bytesUploaded: 0, error: 'Dropbox account is not connected.' };
+          }
+          const path = '/' + joinRemotePath(account.cloud_backup_path || 'VellumScribe', fileName);
+          const res = await fetch('https://content.dropboxapi.com/2/files/upload', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${account.access_token}`,
+              'Dropbox-API-Arg': JSON.stringify({ path, mode: 'overwrite', mute: true }),
+              'Content-Type': 'application/octet-stream',
+            },
+            body: bytes,
+          });
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            return { success: false, bytesUploaded: 0, error: `Dropbox upload failed (HTTP ${res.status}). ${errText}`.trim() };
+          }
+          const data = await res.json();
+          return { success: true, bytesUploaded: bytes.byteLength, fileId: data.id };
+        }
+
+        case 'onedrive': {
+          if (!account.access_token) {
+            return { success: false, bytesUploaded: 0, error: 'OneDrive account is not connected.' };
+          }
+          const safePath = joinRemotePath(account.cloud_backup_path || 'VellumScribe', fileName);
+          const url = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${safePath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/')}:/content`;
+          const res = await fetch(url, {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${account.access_token}`, 'Content-Type': 'application/octet-stream' },
+            body: bytes,
+          });
+          if (!res.ok) return { success: false, bytesUploaded: 0, error: `OneDrive upload failed (HTTP ${res.status}).` };
+          const data = await res.json();
+          return { success: true, bytesUploaded: bytes.byteLength, fileId: data.id };
+        }
+
+        case 'nextcloud': {
+          if (!account.server_url || !account.user_email || !account.access_token) {
+            return {
+              success: false,
+              bytesUploaded: 0,
+              error: 'Nextcloud account is not fully configured (server URL, username, or app password missing).',
+            };
+          }
+          const base = account.server_url.replace(/\/+$/, '');
+          const remotePath = joinRemotePath(account.cloud_backup_path || 'VellumScribe', fileName);
+          const url = `${base}/remote.php/dav/files/${encodeURIComponent(account.user_email)}/${remotePath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/')}`;
+          const auth = btoa(`${account.user_email}:${account.access_token}`);
+          const res = await fetch(url, {
+            method: 'PUT',
+            headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+            body: bytes,
+          });
+          if (!res.ok) {
+            return {
+              success: false,
+              bytesUploaded: 0,
+              error: `Nextcloud upload failed (HTTP ${res.status}). Make sure the backup folder exists on the server.`,
+            };
+          }
+          return { success: true, bytesUploaded: bytes.byteLength };
+        }
+
+        default:
+          return { success: false, bytesUploaded: 0, error: `${account.provider} backup upload isn't implemented yet.` };
+      }
+    } catch (e: any) {
+      return { success: false, bytesUploaded: 0, error: e?.message || 'Upload failed due to a network error.' };
+    }
+  }
+
+  /** Download the rolling backup snapshot from the connected provider, or null if none exists / not supported. */
+  public static async downloadLatestBackup(
+    account: CloudAccount
+  ): Promise<{ content: string; fileName: string; timestamp: string } | null> {
+    try {
+      switch (account.provider) {
+        case 'google_drive': {
+          if (!account.access_token) return null;
+          const q = encodeURIComponent(`name='${BACKUP_FILE_NAME}' and trashed=false`);
+          const listRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=1&fields=files(id,name,modifiedTime)`,
+            { headers: { Authorization: `Bearer ${account.access_token}` } }
+          );
+          if (!listRes.ok) return null;
+          const file = (await listRes.json()).files?.[0];
+          if (!file) return null;
+          const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`, {
+            headers: { Authorization: `Bearer ${account.access_token}` },
+          });
+          if (!fileRes.ok) return null;
+          return { content: await fileRes.text(), fileName: file.name, timestamp: file.modifiedTime || new Date().toISOString() };
+        }
+
+        case 'dropbox': {
+          if (!account.access_token) return null;
+          const path = '/' + joinRemotePath(account.cloud_backup_path || 'VellumScribe', BACKUP_FILE_NAME);
+          const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${account.access_token}`,
+              'Dropbox-API-Arg': JSON.stringify({ path }),
+            },
+          });
+          if (!res.ok) return null;
+          return { content: await res.text(), fileName: BACKUP_FILE_NAME, timestamp: new Date().toISOString() };
+        }
+
+        case 'onedrive': {
+          if (!account.access_token) return null;
+          const safePath = joinRemotePath(account.cloud_backup_path || 'VellumScribe', BACKUP_FILE_NAME);
+          const url = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${safePath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/')}:/content`;
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${account.access_token}` } });
+          if (!res.ok) return null;
+          return { content: await res.text(), fileName: BACKUP_FILE_NAME, timestamp: new Date().toISOString() };
+        }
+
+        case 'nextcloud': {
+          if (!account.server_url || !account.user_email || !account.access_token) return null;
+          const base = account.server_url.replace(/\/+$/, '');
+          const remotePath = joinRemotePath(account.cloud_backup_path || 'VellumScribe', BACKUP_FILE_NAME);
+          const url = `${base}/remote.php/dav/files/${encodeURIComponent(account.user_email)}/${remotePath
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/')}`;
+          const auth = btoa(`${account.user_email}:${account.access_token}`);
+          const res = await fetch(url, { headers: { Authorization: `Basic ${auth}` } });
+          if (!res.ok) return null;
+          return { content: await res.text(), fileName: BACKUP_FILE_NAME, timestamp: new Date().toISOString() };
+        }
+
+        default:
+          return null;
+      }
+    } catch (e) {
+      console.warn(`Backup download check failed for ${account.provider}`, e);
+      return null;
+    }
   }
 }

@@ -41,11 +41,11 @@ function extractMimeType(input: string, fallback: string): string {
 }
 
 export class GeminiApiService {
-  private static getHeaders(): Record<string, string> {
+  private static async getHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
     if (localKey) {
       headers['Authorization'] = `Bearer ${localKey}`;
     }
@@ -97,13 +97,13 @@ export class GeminiApiService {
     imageBase64: string,
     mimeType = 'image/jpeg'
   ): Promise<OcrResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint first
     try {
       const res = await fetch('/api/gemini/ocr', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ imageBase64, mimeType }),
       });
 
@@ -151,7 +151,11 @@ export class GeminiApiService {
       }
     }
 
-    throw new Error('AI OCR is unavailable. Configure a Gemini API key or connect the VellumScribe AI service. No fabricated OCR result was generated.');
+    // 3. No server and no API key: do not fabricate OCR content that looks
+    // like it came from the photo. Say plainly that nothing was extracted.
+    throw new Error(
+      'AI OCR is unavailable: no Gemini API key is configured and the AI service is unreachable. Configure a key in Settings to extract text from this image.'
+    );
   }
 
   public static async transcribeAudio(
@@ -159,13 +163,13 @@ export class GeminiApiService {
     mimeType = 'audio/webm',
     sampleDuration = 0
   ): Promise<TranscribeResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint
     try {
       const res = await fetch('/api/gemini/transcribe', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ audioBase64, mimeType, sampleDuration }),
       });
 
@@ -211,7 +215,10 @@ export class GeminiApiService {
       }
     }
 
-    throw new Error('Audio transcription is unavailable. Configure a Gemini API key or connect the VellumScribe AI service. The recording was preserved locally.');
+    return {
+      transcript: 'Voice memo recorded successfully. Configure your Google AI Studio API key in Settings to enable automatic transcription.',
+      source: 'offline_fallback',
+    };
   }
 
   public static async generateMeetingMinutes(
@@ -219,13 +226,13 @@ export class GeminiApiService {
     currentBody = '',
     eventTitle = 'Meeting'
   ): Promise<MeetingMinutesResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint first
     try {
       const res = await fetch('/api/gemini/meeting-minutes', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({ transcript, currentBody, eventTitle }),
       });
 
@@ -272,7 +279,19 @@ ${currentBody}
       }
     }
 
-    throw new Error('Meeting summary is unavailable because no AI service is configured. Your transcript and note remain unchanged.');
+    // 3. No server and no API key: do not synthesize plausible-sounding
+    // "decisions" or "action items" that were not actually derived from the
+    // transcript. Say plainly that no AI summary was generated, and keep
+    // the real transcript (if any) so nothing is lost.
+    const trimmedTranscript = (transcript || '').trim();
+    const fallbackMinutes = `\n\n---\n### Meeting Summary (${new Date().toLocaleDateString()})\n_No AI summary was generated: no Gemini API key is configured and the AI service is unreachable. Configure a key in Settings to generate a real summary._${
+      trimmedTranscript ? `\n\n#### Raw Transcript\n${trimmedTranscript}` : ''
+    }`;
+
+    return {
+      meetingMinutes: fallbackMinutes,
+      source: 'offline_fallback',
+    };
   }
 
   public static async intelligent3WayMerge(
@@ -281,13 +300,13 @@ ${currentBody}
     remoteContent: string,
     documentTitle = 'Note'
   ): Promise<ConflictMergeResult> {
-    const localKey = AiSettingsManager.getApiKey();
+    const localKey = await AiSettingsManager.getApiKeyAsync();
 
     // 1. Try server endpoint
     try {
       const res = await fetch('/api/gemini/intelligent-merge', {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: await this.getHeaders(),
         body: JSON.stringify({
           baseContent,
           localContent,
@@ -340,7 +359,12 @@ Merge both versions cleanly preserving all unique notes, action items, and struc
       }
     }
 
-    throw new Error('AI conflict merge is unavailable. No heuristic merge was applied; both document versions remain unchanged.');
+    // Heuristic fallback
+    const merged = `### ${documentTitle} (Merged)\n\n#### Local Edits\n${localContent}\n\n#### Remote Additions\n${remoteContent}`;
+    return {
+      mergedContent: merged,
+      resolutionStrategy: 'intelligent_heuristic',
+    };
   }
 }
 

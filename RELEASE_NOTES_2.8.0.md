@@ -1,5 +1,19 @@
 # VellumScribe 2.8.0 — Real Cloud Synchronization
 
+> **Correction (added in 2.9.0, 2026-08-27):** despite what this document
+> claims below, the code actually wired into the shipped app at this
+> version still simulated cloud sync (fake progress delays, no network
+> calls in `triggerSync`), used a fabricated "1-click SSO" login that
+> never contacted any provider, and stored a hardcoded placeholder email
+> address as a default identity. A more honest, mostly-working
+> implementation existed in unused duplicate files at the repository root
+> that were never part of the actual Vite build - this document was
+> apparently written to describe that orphaned code, not what was
+> actually shipping. This was fixed for real in 2.9.0; see
+> `CHANGELOG.md` and `CLOUD_PROVIDER_SETUP.md` for the current, accurate
+> state. We're leaving the rest of this file as originally written below,
+> for the record, rather than silently rewriting it.
+
 ## Cloud
 
 - Replaced simulated cloud synchronization with real provider adapters.
@@ -29,3 +43,4 @@
 ## Provider availability
 
 iCloud and generic S3 remain explicitly unsupported until a provider-specific production adapter is configured. They are not reported as connected or synchronized.
+

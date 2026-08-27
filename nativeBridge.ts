@@ -38,9 +38,18 @@ export class NativeBridge {
    * Request / verify filesystem permissions
    */
   public static async checkAndRequestFilesystemPermissions(): Promise<boolean> {
-    // VellumScribe stores app data in app-private storage. Modern Android does
-    // not require broad public-storage permission for these operations.
-    return true;
+    try {
+      if (this.isNative()) {
+        const check = await Filesystem.checkPermissions();
+        if (check.publicStorage === 'granted') return true;
+        const req = await Filesystem.requestPermissions();
+        return req.publicStorage === 'granted';
+      }
+      return true;
+    } catch (e) {
+      console.warn('Filesystem permission check encountered exception:', e);
+      return true;
+    }
   }
 
   /**
