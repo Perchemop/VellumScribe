@@ -203,7 +203,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       StorageManager.saveUnlockedNote(note.id, { sketch_data: dataUrl }, activePin).then((updated) => {
         if (updated) {
           onNoteUpdated(updated);
-          CloudSyncEngine.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+          VersionControlManager.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
         }
       });
     } else {
@@ -212,7 +212,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       });
       if (updated) {
         onNoteUpdated(updated);
-        CloudSyncEngine.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+        VersionControlManager.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
       }
     }
     setShowSketchModal(false);
@@ -968,15 +968,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {/* AI Summary Studio Modal */}
       {showAiSummaryModal && (
         <AiSummaryModal
-          noteId={note.id}
-          noteTitle={title}
-          noteBody={body}
-          checklistItems={checklistItems}
-          recordings={recordings}
+          isOpen={showAiSummaryModal}
+          note={note}
+          transcripts={StorageManager.getTranscripts().filter(t => recordings.some(r => r.id === t.recording_id))}
           ocrScans={ocrScans}
           eventTitle={events.find((e) => e.id === eventId)?.title}
           onApplySummary={handleApplyAiSummary}
-          onOpenKeySettings={() => setShowAiKeyModal(true)}
           onClose={() => setShowAiSummaryModal(false)}
         />
       )}
@@ -984,8 +981,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {/* Google AI Studio Free Key Authentication Modal */}
       {showAiKeyModal && (
         <AiStudioKeyModal
+          isOpen={showAiKeyModal}
           onClose={() => setShowAiKeyModal(false)}
-          onKeySaved={() => {
+          onSuccess={() => {
             setAiNotice('Google AI Studio API key verified and saved successfully!');
             setTimeout(() => setAiNotice(null), 3500);
           }}

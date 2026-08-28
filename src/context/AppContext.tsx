@@ -151,6 +151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       note_type: params?.note_type || 'text',
       checklist_items: params?.checklist_items || [],
       tags: params?.tags || [],
+      created_at: new Date().toISOString(),
     });
     setNotes(StorageManager.getNotes());
     setSelectedNoteId(newNote.id);

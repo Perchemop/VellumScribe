@@ -1,7 +1,9 @@
 {
   "name": "vellumscribe",
   "private": true,
-  "version": "2.8.0",
+  "description": "Offline-first multimodal note-taking studio with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync.",
+  "license": "MIT",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

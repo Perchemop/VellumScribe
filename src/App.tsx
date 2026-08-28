@@ -15,6 +15,7 @@ import {
 import { EventRecord, NoteRecord } from './types';
 import { StorageManager } from './lib/storage';
 import { NativeBridge } from './lib/nativeBridge';
+import { CloudSyncEngine } from './lib/cloudSync';
 import { useApp } from './context/AppContext';
 import { EventNotesList } from './components/EventNotesList';
 import { NoteEditor } from './components/NoteEditor';
@@ -48,7 +49,7 @@ export default function App() {
 
   // Local UI Navigation & modal states
   const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
-  const [settingsSubtab, setSettingsSubtab] = useState<'ai' | 'storage' | 'security' | 'diagnostics'>('ai');
+  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>('cloud');
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
@@ -57,6 +58,17 @@ export default function App() {
 
   // Run schema checks and check for remote updates once per session on startup
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('cloud') === 'connected') {
+      CloudSyncEngine.fetchConfig().then(() => {
+        setActiveView('settings');
+        setSettingsSubtab('cloud' as any);
+        window.history.replaceState({}, document.title, '/');
+      });
+    } else {
+      CloudSyncEngine.fetchConfig();
+    }
+
     const migrationResult = AppUpdateManager.checkAndRunMigrations();
     if (migrationResult.showChangelog) {
       setShowUpdateModal(true);
@@ -107,7 +119,6 @@ export default function App() {
       created_at: new Date().toISOString(),
       tags: [type === 'checklist' ? 'Tasks' : type === 'sketch' ? 'Drawings' : 'General'],
       is_pinned: false,
-      cloud_save_enabled: false,
     });
     refreshData();
     setSelectedNoteId(newNote.id);
@@ -552,8 +563,9 @@ export default function App() {
         {/* User Google AI Studio Free Key Authentication Modal */}
         {showAiKeyModal && (
           <AiStudioKeyModal
+            isOpen={showAiKeyModal}
             onClose={() => setShowAiKeyModal(false)}
-            onKeySaved={() => {
+            onSuccess={() => {
               refreshData();
             }}
           />

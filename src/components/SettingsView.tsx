@@ -58,40 +58,12 @@ const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
     brandColor: '#34a853',
     badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   },
-  dropbox: {
-    name: 'Dropbox',
-    category: 'Cloud Storage',
-    description: 'Automatic version-controlled document backups stored safely in Dropbox App folder.',
-    brandColor: '#0061ff',
-    badgeBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-  },
-  onedrive: {
+  microsoft: {
     name: 'Microsoft OneDrive',
     category: 'Microsoft 365',
     description: 'Store notes and attachments securely in personal or Microsoft 365 OneDrive cloud.',
     brandColor: '#0078d4',
     badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
-  },
-  icloud: {
-    name: 'Apple iCloud Drive',
-    category: 'Apple CloudKit',
-    description: 'Seamless cross-platform sync across Apple macOS, iOS, and WebDAV containers.',
-    brandColor: '#5ac8fa',
-    badgeBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
-  },
-  nextcloud: {
-    name: 'Nextcloud / ownCloud',
-    category: 'Enterprise / Self-Hosted',
-    description: '100% self-hosted, private cloud storage using secure WebDAV protocol.',
-    brandColor: '#0082c9',
-    badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
-  },
-  s3: {
-    name: 'Amazon S3 / MinIO / Backblaze',
-    category: 'Custom Object Storage',
-    description: 'High-speed object storage for AWS S3 buckets, MinIO clusters, or Wasabi/B2.',
-    brandColor: '#ff9900',
-    badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
   },
 };
 
@@ -139,8 +111,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isAirGapped = backupFrequency === 'never';
-  const activeAccounts = accounts.filter((a) => a.connected);
+  const isAirGapped = backupFrequency === 'off';
+  const activeAccounts = accounts; // Everyone connected is active now
 
   // Manual Sync trigger
   const handleManualSync = async () => {
@@ -153,13 +125,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSyncProgress({ percent: 10, message: 'Starting cloud backup...', phase: 'init' });
 
     try {
-      const result = await CloudSyncEngine.triggerSync({
+      await CloudSyncEngine.triggerSync({
         onProgress: (p) => setSyncProgress(p),
       });
       setTelemetryList(CloudSyncEngine.getTelemetry());
       setAccounts(CloudSyncEngine.getAccounts());
       setNotes(StorageManager.getNotes());
-      setSyncFeedback(result.message);
+      setSyncFeedback('Sync complete');
       onRefreshNotes();
     } catch {
       setSyncFeedback('Sync failed. Please check network connectivity.');
@@ -175,8 +147,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleFrequencyChange = (val: BackupFrequency) => {
     setBackupFrequencyState(val);
     CloudSyncEngine.setBackupFrequency(val);
-    if (val === 'never') {
-      setSyncFeedback('Backup frequency set to Never. System is operating in 100% offline air-gapped mode.');
+    if (val === 'off') {
+      setSyncFeedback('Backup frequency set to Off. Operating completely offline.');
     } else {
       setSyncFeedback(`Backup frequency updated to: ${val}`);
     }
@@ -431,12 +403,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => handleFrequencyChange(e.target.value as BackupFrequency)}
                     className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="5m">Every 5 minutes (Continuous)</option>
-                    <option value="15m">Every 15 minutes</option>
-                    <option value="1h">Every 1 hour</option>
                     <option value="daily">Daily</option>
                     <option value="manual">Manual Only</option>
-                    <option value="never">Never (Fully Offline Air-Gapped)</option>
+                    <option value="off">Off</option>
                   </select>
                 </div>
               </div>
@@ -463,16 +432,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                  Cloud Destinations &amp; Single Sign-On (SSO)
+                  Cloud Destinations
                 </h3>
-                <span className="text-xs text-zinc-400">Instant 1-Click SSO with OAuth 2.0 PKCE &amp; hardware keystore token protection</span>
+                <span className="text-xs text-zinc-400">One-click connect</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(Object.keys(PROVIDERS) as CloudStorageProvider[]).map((providerKey) => {
                   const meta = PROVIDERS[providerKey];
                   const account = accounts.find((a) => a.provider === providerKey);
-                  const isConnected = !!account?.connected;
+                  const isConnected = !!account?.connectedAt;
 
                   return (
                     <div
@@ -497,13 +466,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               </span>
                               {isConnected ? (
                                 <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
-                                  SSO Active
+                                  Connected
                                 </span>
-                              ) : (
-                                <span className="text-[9px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.2 rounded-md">
-                                  1-Click SSO
-                                </span>
-                              )}
+                              ) : null}
                             </div>
                             <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">{meta.description}</p>
                           </div>
@@ -516,26 +481,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
                             <span className="flex items-center gap-1">
                               <Check className="w-3 h-3" />
-                              {account?.user_email || account?.account_email || 'SSO Authenticated'}
+                              {account?.email || account?.displayName || 'Connected'}
                             </span>
-                            <span className="text-[10px] text-emerald-600/80">Active SSO</span>
                           </div>
                           <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                            {account?.cloud_backup_path}
+                            /vellumscribe_backup.json
                           </p>
                         </div>
-                      ) : (
-                        <div className="p-2.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl text-[11px] text-zinc-400 flex items-center gap-1.5">
-                          <Folder className="w-3 h-3 text-zinc-400 shrink-0" />
-                          <span className="truncate">Default: {account?.cloud_backup_path || '/VellumScribe_Backups/'}</span>
-                        </div>
-                      )}
+                      ) : null}
 
                       {/* Action buttons */}
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[10px] text-zinc-400">
-                          {isConnected && account?.last_synced_at
-                            ? `Last Synced: ${new Date(account.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                          {isConnected && account?.connectedAt
+                            ? `Connected on: ${new Date(account.connectedAt).toLocaleDateString()}`
                             : 'Not connected'}
                         </span>
 
@@ -550,13 +509,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         >
                           {isConnected ? (
                             <>
-                              <span>Manage SSO</span>
+                              <span>Manage</span>
                               <ChevronRight className="w-3 h-3" />
                             </>
                           ) : (
                             <>
                               <Cloud className="w-3 h-3" />
-                              <span>SSO Login</span>
+                              <span>Connect</span>
                             </>
                           )}
                         </button>
@@ -759,13 +718,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.cloudSavedNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Cloud Backuped</p>
+                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.activeNotes}</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">Active Notes</p>
                 </div>
 
                 <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.localOnlyNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Local Only</p>
+                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.archivedNotes}</p>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">Archived</p>
                 </div>
 
                 <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
@@ -781,7 +740,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Manual Archive &amp; Full Data Export
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
                   onClick={() => {
                     const json = StorageManager.exportFullBackup();
@@ -798,6 +757,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
                   <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
                 </button>
+
+                <label className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216] cursor-pointer">
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from Backup File</p>
+                  <p className="text-[11px] text-zinc-400">Import a previously saved JSON backup file</p>
+                  <input 
+                    type="file" 
+                    accept=".json" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const res = StorageManager.importFullBackup(ev.target?.result as string);
+                          if (res.success) {
+                            onRefreshNotes();
+                            setSyncFeedback(res.message);
+                            setStats(StorageManager.getStorageStats());
+                          } else {
+                            setSyncFeedback(res.message);
+                          }
+                          setTimeout(() => setSyncFeedback(null), 3000);
+                        };
+                        reader.readAsText(file);
+                      }
+                      e.target.value = '';
+                    }} 
+                  />
+                </label>
 
                 <button
                   onClick={() => {
@@ -911,15 +899,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   telemetryList.map((t, i) => (
                     <div key={i} className="py-2.5 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${t.status === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span className={`w-2 h-2 rounded-full ${t.lastSyncStatus === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         <span className="font-semibold text-zinc-900 dark:text-zinc-100 capitalize">{t.provider}</span>
                         <span className="text-zinc-400">
-                          {t.status === 'success' ? `${t.records_uploaded ?? t.items_synced ?? 0} synced (${Math.round((t.bytes_transferred || 0) / 1024)} KB)` : t.error_message || 'Sync failed'}
+                          {t.lastSyncStatus === 'success' ? `Synced (${Math.round((t.lastTransferBytes || 0) / 1024)} KB)` : t.lastSyncError || 'Sync failed'}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
-                        <span>{t.duration_ms}ms</span>
-                        <span>{new Date(t.timestamp).toLocaleTimeString()}</span>
+                        <span>{t.lastTransferDurationMs}ms</span>
+                        <span>{new Date(t.lastSyncAt).toLocaleTimeString()}</span>
                       </div>
                     </div>
                   ))

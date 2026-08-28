@@ -40,6 +40,26 @@ export interface NoteRecord {
   tags?: string[];
   is_pinned?: boolean;
   version?: number;
+  cloud_save_enabled?: boolean;
+}
+
+export type CloudStorageProvider = 'google_drive' | 'microsoft';
+
+export interface CloudAccount {
+  provider: CloudStorageProvider;
+  accountId: string;
+  email: string;
+  displayName: string;
+  connectedAt: string; // ISO timestamp
+}
+
+export interface SyncTelemetry {
+  provider: CloudStorageProvider;
+  lastSyncAt: string; // ISO timestamp
+  lastSyncStatus: 'success' | 'error';
+  lastSyncError?: string;
+  lastTransferBytes?: number;
+  lastTransferDurationMs?: number;
 }
 
 export interface RecordingRecord {

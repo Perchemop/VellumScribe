@@ -912,12 +912,49 @@ export class StorageManager {
       totalNotes: notes.length,
       activeNotes: notes.filter((n) => n.status === 'active').length,
       archivedNotes: notes.filter((n) => n.status === 'archived').length,
-      trashedNotes: notes.filter((n) => n.status === 'trashed').length,
+      trashedNotes: notes.filter((n) => n.status === 'trash').length,
       totalRecordings: recordings.length,
       totalTranscripts: transcripts.length,
       totalOcrScans: ocrScans.length,
       estimatedBytesUsed: bytesUsed,
     };
+  }
+
+  // --- CLOUD BACKUP ---
+  public static exportCloudBackup(): string {
+    const allNotes = this.getNotes();
+    const cloudNotes = allNotes.filter(n => n.cloud_save_enabled !== false);
+    
+    const noteIds = new Set(cloudNotes.map(n => n.id));
+    const eventIds = new Set(cloudNotes.map(n => n.event_id));
+
+    const cloudEvents = this.getEvents().filter(e => eventIds.has(e.id));
+    const cloudRecordings = this.getRecordings().filter(r => noteIds.has(r.note_id));
+    
+    const recordingIds = new Set(cloudRecordings.map(r => r.id));
+    const cloudTranscripts = this.getTranscripts().filter(t => recordingIds.has(t.recording_id));
+    const cloudOcrScans = this.getOcrScans().filter(o => noteIds.has(o.note_id));
+
+    const bundle = {
+      version: '3.0',
+      export_timestamp: new Date().toISOString(),
+      schema: {
+        events: cloudEvents,
+        notes: cloudNotes,
+        recordings: cloudRecordings,
+        transcripts: cloudTranscripts,
+        ocr_scans: cloudOcrScans,
+      },
+    };
+    return JSON.stringify(bundle);
+  }
+
+  public static toggleCloudSave(noteId: number): boolean {
+    const note = this.getNotes().find(n => n.id === noteId);
+    if (!note) return false;
+    const current = note.cloud_save_enabled !== false;
+    const updated = this.updateNote(noteId, { cloud_save_enabled: !current });
+    return !!updated;
   }
 
   // --- BACKUP & RESTORE DUMP ---
