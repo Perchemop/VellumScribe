@@ -22,7 +22,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
-import { CloudSyncEngine, BackupFrequency } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
@@ -51,7 +50,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
 
   // Backup & Storage state
-  const [backupFrequency, setBackupFrequency] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
   const [backupFeedback, setBackupFeedback] = useState<string | null>(null);
   const [stats, setStats] = useState(() => StorageManager.getStorageStats());
 
@@ -117,21 +115,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     reader.readAsText(file);
   };
 
-  // Backup frequency toggle
-  const handleFrequencyChange = (freq: BackupFrequency) => {
-    setBackupFrequency(freq);
-    CloudSyncEngine.setBackupFrequency(freq);
-    if (freq === 'never') {
-      setBackupFeedback('Fully offline mode enabled. All cloud backup operations are disabled.');
-    } else {
-      setBackupFeedback(`Backup frequency set to: ${freq}`);
-    }
-    setTimeout(() => setBackupFeedback(null), 3500);
-    onSettingsUpdated?.();
-  };
-
-  const isAirGapped = backupFrequency === 'never';
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in">
       <div
@@ -146,7 +129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Settings &amp; Configuration
               </h2>
-              <p className="text-[11px] text-zinc-400">Manage Google AI Studio API key, local database, and cloud backup</p>
+              <p className="text-[11px] text-zinc-400">Manage Google AI Studio API key, local database, and storage</p>
             </div>
           </div>
           <button
@@ -325,13 +308,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 2: STORAGE & BACKUP */}
           {activeTab === 'backup' && (
             <div className="space-y-4">
-              {/* SQLite Health Card */}
+              {/* Storage Health Card */}
               <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">
-                      Local SQLite Database Engine
+                      Local Browser Storage Engine
                     </h3>
                   </div>
                   <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
@@ -349,57 +332,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalRecordings}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Cloud Backuped</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.cloudSavedNotes}</span>
+                    <span className="text-zinc-400 block text-[10px]">Active Notes</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.activeNotes}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Local Only</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.localOnlyNotes}</span>
+                    <span className="text-zinc-400 block text-[10px]">Archived</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.archivedNotes}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Automatic Backup Frequency Setting */}
-              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-3">
-                <div>
+              {/* Offline-first Information Card */}
+              <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2">
+                  <WifiOff className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs">
-                    Automatic Cloud Backup Cadence
+                    100% Offline Air-Gapped Operation
                   </h3>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">
-                    Select how often notes, checklists, and audio recordings back up to connected cloud storage.
-                  </p>
                 </div>
-
-                <div className="grid grid-cols-3 gap-2 pt-1">
-                  {(
-                    [
-                      { id: '5m', label: 'Every 5 Mins' },
-                      { id: '15m', label: 'Every 15 Mins' },
-                      { id: '1h', label: 'Every Hour' },
-                      { id: 'daily', label: 'Daily Backup' },
-                      { id: 'manual', label: 'Manual Only' },
-                      { id: 'never', label: 'Offline / Never' },
-                    ] as { id: BackupFrequency; label: string }[]
-                  ).map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => handleFrequencyChange(opt.id)}
-                      className={`p-2 rounded-xl text-xs font-medium border transition-all text-center ${
-                        backupFrequency === opt.id
-                          ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-transparent shadow-xs font-semibold'
-                          : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {backupFeedback && (
-                  <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-900 text-xs">
-                    {backupFeedback}
-                  </div>
-                )}
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  All notes, sketches, checklists, and audio recordings are saved locally inside this browser. You can export complete snapshots below or import from previously saved JSON backups anytime.
+                </p>
               </div>
 
               {/* Data Export Card */}

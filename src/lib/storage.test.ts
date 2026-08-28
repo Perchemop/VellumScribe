@@ -64,7 +64,6 @@ describe('StorageManager notes', () => {
     const note = StorageManager.addNote(makeNote(event.id, { body: 'Hello world' }));
     expect(note.status).toBe('active');
     expect(note.note_type).toBe('text');
-    expect(note.cloud_save_enabled).toBe(false);
     expect(note.body).toBe('Hello world');
   });
 

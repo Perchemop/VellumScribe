@@ -202,7 +202,6 @@ export class StorageManager {
       status: note.status || 'active',
       note_type: note.note_type || 'text',
       checklist_items: note.checklist_items || [],
-      cloud_save_enabled: note.cloud_save_enabled ?? false,
       created_at: note.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       version: 1,
@@ -283,16 +282,6 @@ export class StorageManager {
       this.deleteNote(id);
     }
     return trashIds.length;
-  }
-
-  public static toggleCloudSave(id: number): NoteRecord | null {
-    const notes = [...this.getNotes()];
-    const idx = notes.findIndex((n) => n.id === id);
-    if (idx === -1) return null;
-    notes[idx].cloud_save_enabled = !notes[idx].cloud_save_enabled;
-    notes[idx].updated_at = new Date().toISOString();
-    this.saveNotes(notes);
-    return notes[idx];
   }
 
   public static updateNote(id: number, updates: Partial<NoteRecord>): NoteRecord | null {
@@ -718,22 +707,6 @@ export class StorageManager {
     return { unlockedCount, failedIds };
   }
 
-  public static batchToggleCloudSave(ids: number[], enabled: boolean): number {
-    if (!ids || ids.length === 0) return 0;
-    const notes = [...this.getNotes()];
-    let count = 0;
-    const now = new Date().toISOString();
-    for (const note of notes) {
-      if (ids.includes(note.id)) {
-        note.cloud_save_enabled = enabled;
-        note.updated_at = now;
-        count++;
-      }
-    }
-    this.saveNotes(notes);
-    return count;
-  }
-
   public static exportNotesAsMarkdown(ids: number[]): string {
     const allNotes = this.getNotes();
     const targetNotes = allNotes.filter((n) => ids.includes(n.id));
@@ -909,88 +882,21 @@ export class StorageManager {
     return true;
   }
 
-  // --- SQL EXECUTOR ENGINE FOR INSPECTOR ---
-  public static executeSql(query: string): { columns: string[]; rows: any[][]; message?: string } {
-    const clean = query.trim().replace(/;$/, '');
-    const upper = clean.toUpperCase();
-
-    try {
-      if (upper.startsWith('SELECT')) {
-        let table = '';
-        if (upper.includes('FROM EVENTS')) table = 'events';
-        else if (upper.includes('FROM NOTES')) table = 'notes';
-        else if (upper.includes('FROM RECORDINGS')) table = 'recordings';
-        else if (upper.includes('FROM TRANSCRIPTS')) table = 'transcripts';
-        else if (upper.includes('FROM OCR_SCANS')) table = 'ocr_scans';
-        else if (upper.includes('FROM SQLITE_MASTER') || upper.includes('FROM SQLITE_SCHEMA')) {
-          return {
-            columns: ['type', 'name', 'tbl_name', 'sql'],
-            rows: [
-              ['table', 'events', 'events', 'CREATE TABLE events (id INTEGER PRIMARY KEY, title TEXT, event_date TEXT)'],
-              ['table', 'notes', 'notes', 'CREATE TABLE notes (id INTEGER PRIMARY KEY, event_id INTEGER, body TEXT, created_at TEXT)'],
-              ['table', 'recordings', 'recordings', 'CREATE TABLE recordings (id INTEGER PRIMARY KEY, note_id INTEGER, file_path TEXT, file_size INTEGER)'],
-              ['table', 'transcripts', 'transcripts', 'CREATE TABLE transcripts (id INTEGER PRIMARY KEY, recording_id INTEGER, transcript_text TEXT)'],
-              ['table', 'ocr_scans', 'ocr_scans', 'CREATE TABLE ocr_scans (id INTEGER PRIMARY KEY, note_id INTEGER, image_path TEXT, ocr_text TEXT)'],
-            ],
-          };
-        }
-
-        let dataset: any[] = [];
-        if (table === 'events') dataset = this.getEvents();
-        else if (table === 'notes') dataset = this.getNotes();
-        else if (table === 'recordings') dataset = this.getRecordings();
-        else if (table === 'transcripts') dataset = this.getTranscripts();
-        else if (table === 'ocr_scans') dataset = this.getOcrScans();
-        else {
-          return {
-            columns: ['error'],
-            rows: [[`Unknown table specified in query. Available tables: events, notes, recordings, transcripts, ocr_scans`]],
-          };
-        }
-
-        if (dataset.length === 0) {
-          return { columns: ['status'], rows: [['(0 rows returned)']] };
-        }
-
-        const columns = Object.keys(dataset[0]);
-        const rows = dataset.map((item) =>
-          columns.map((col) => {
-            const val = item[col];
-            return typeof val === 'object' ? JSON.stringify(val) : String(val ?? 'NULL');
-          })
-        );
-
-        return { columns, rows, message: `${rows.length} row(s) returned` };
-      }
-
-      return {
-        columns: ['status'],
-        rows: [[`Query executed successfully against local SQLite engine.`]],
-        message: 'Query executed.',
-      };
-    } catch (e: any) {
-      return {
-        columns: ['error'],
-        rows: [[e.message || 'SQL execution error']],
-      };
-    }
-  }
-
   // --- STORAGE STATS & USAGE METRICS ---
   public static getStorageStats(): {
     totalNotes: number;
-    cloudSavedNotes: number;
-    localOnlyNotes: number;
+    activeNotes: number;
+    archivedNotes: number;
+    trashedNotes: number;
     totalRecordings: number;
-    cloudRecordings: number;
-    localOnlyRecordings: number;
+    totalTranscripts: number;
+    totalOcrScans: number;
     estimatedBytesUsed: number;
   } {
     const notes = this.getNotes();
     const recordings = this.getRecordings();
-    const cloudSavedNotesList = notes.filter((n) => n.cloud_save_enabled);
-    const cloudNoteIds = new Set(cloudSavedNotesList.map((n) => n.id));
-    const cloudRecordingsList = recordings.filter((r) => cloudNoteIds.has(r.note_id));
+    const transcripts = this.getTranscripts();
+    const ocrScans = this.getOcrScans();
 
     let bytesUsed = 0;
     try {
@@ -1004,11 +910,12 @@ export class StorageManager {
 
     return {
       totalNotes: notes.length,
-      cloudSavedNotes: cloudSavedNotesList.length,
-      localOnlyNotes: notes.length - cloudSavedNotesList.length,
+      activeNotes: notes.filter((n) => n.status === 'active').length,
+      archivedNotes: notes.filter((n) => n.status === 'archived').length,
+      trashedNotes: notes.filter((n) => n.status === 'trashed').length,
       totalRecordings: recordings.length,
-      cloudRecordings: cloudRecordingsList.length,
-      localOnlyRecordings: recordings.length - cloudRecordingsList.length,
+      totalTranscripts: transcripts.length,
+      totalOcrScans: ocrScans.length,
       estimatedBytesUsed: bytesUsed,
     };
   }
@@ -1027,48 +934,6 @@ export class StorageManager {
       },
     };
     return JSON.stringify(bundle, null, 2);
-  }
-
-  public static exportCloudBackupDump(): {
-    dumpJson: string;
-    cloudNotes: NoteRecord[];
-    cloudRecordings: RecordingRecord[];
-    cloudTranscripts: TranscriptRecord[];
-    cloudScans: OcrScanRecord[];
-  } {
-    const allNotes = this.getNotes();
-    const cloudNotes = allNotes.filter((n) => n.cloud_save_enabled === true);
-    const cloudNoteIds = new Set(cloudNotes.map((n) => n.id));
-
-    const cloudRecordings = this.getRecordings().filter((r) => cloudNoteIds.has(r.note_id));
-    const cloudRecIds = new Set(cloudRecordings.map((r) => r.id));
-
-    const cloudTranscripts = this.getTranscripts().filter((t) => cloudRecIds.has(t.recording_id));
-    const cloudScans = this.getOcrScans().filter((s) => cloudNoteIds.has(s.note_id));
-
-    const relevantEventIds = new Set(cloudNotes.map((n) => n.event_id));
-    const cloudEvents = this.getEvents().filter((e) => relevantEventIds.has(e.id));
-
-    const bundle = {
-      version: '2.5',
-      export_timestamp: new Date().toISOString(),
-      backup_type: 'selective_cloud_save',
-      schema: {
-        events: cloudEvents,
-        notes: cloudNotes,
-        recordings: cloudRecordings,
-        transcripts: cloudTranscripts,
-        ocr_scans: cloudScans,
-      },
-    };
-
-    return {
-      dumpJson: JSON.stringify(bundle, null, 2),
-      cloudNotes,
-      cloudRecordings,
-      cloudTranscripts,
-      cloudScans,
-    };
   }
 
   public static importFullDump(jsonStr: string): boolean {

@@ -188,10 +188,9 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
       );
       setTranscriptionText(res.transcript);
     } catch (err: any) {
-      console.error(err);
-      setTranscriptionText(
-        "Voice transcript: Key project action items were documented. Focus on responsive layout, offline persistence, and automated cloud backuphronization."
-      );
+      console.error('Audio transcription failed:', err);
+      const errMsg = err?.message || 'Could not transcribe audio. Please verify your AI configuration.';
+      setTranscriptionText(`Transcription unavailable: ${errMsg}`);
     } finally {
       setIsTranscribing(false);
     }

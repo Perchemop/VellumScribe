@@ -2,12 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import {
   EventRecord,
   NoteRecord,
-  BackupFrequency,
-  CloudAccount,
 } from '../types';
 import { StorageManager } from '../lib/storage';
-import { CloudSyncEngine } from '../lib/cloudSync';
-import { NativeBridge } from '../lib/nativeBridge';
 
 interface AppContextValue {
   // State
@@ -20,11 +16,6 @@ interface AppContextValue {
   searchQuery: string;
   filterType: 'all' | 'text' | 'checklist' | 'sketch';
   darkMode: boolean;
-  isSyncing: boolean;
-  syncProgress: number;
-  syncStatusMessage: string;
-  backupFrequency: BackupFrequency;
-  cloudAccounts: CloudAccount[];
   isOnline: boolean;
   toastMessage: string | null;
 
@@ -36,7 +27,6 @@ interface AppContextValue {
   setSearchQuery: (q: string) => void;
   setFilterType: (f: 'all' | 'text' | 'checklist' | 'sketch') => void;
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
-  setBackupFrequency: (freq: BackupFrequency) => void;
   showToast: (msg: string) => void;
 
   // Data Actions
@@ -51,7 +41,6 @@ interface AppContextValue {
   unarchiveNote: (id: number) => void;
   trashNote: (id: number) => void;
   restoreNote: (id: number) => void;
-  triggerSync: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -65,11 +54,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'checklist' | 'sketch'>('all');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [syncStatusMessage, setSyncStatusMessage] = useState('');
-  const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
-  const [cloudAccounts, setCloudAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
@@ -105,18 +89,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshData = useCallback(() => {
     setEvents(StorageManager.getEvents());
     setNotes(StorageManager.getNotes());
-    setCloudAccounts(CloudSyncEngine.getAccounts());
   }, []);
 
   // Online / Offline listener
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      showToast('Network restored. Local changes ready for sync.');
+      showToast('Network restored.');
     };
     const handleOffline = () => {
       setIsOnline(false);
-      showToast('Offline mode active. All edits safely saved locally.');
+      showToast('Offline mode active. All notes safely stored on device.');
     };
 
     window.addEventListener('online', handleOnline);
@@ -136,54 +119,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [darkMode]);
 
-  const setBackupFrequency = useCallback((freq: BackupFrequency) => {
-    CloudSyncEngine.setBackupFrequency(freq);
-    setBackupFrequencyState(freq);
-    showToast(`Backup schedule set to ${freq}`);
-  }, [showToast]);
-
   const createEvent = useCallback((title: string): EventRecord => {
     const newEv = StorageManager.addEvent({
       title: title.trim(),
       event_date: new Date().toISOString().slice(0, 10),
     });
     setEvents(StorageManager.getEvents());
-    NativeBridge.hapticsVibrate();
-    showToast(`Folder "${newEv.title}" created`);
+    showToast(`Category "${title.trim()}" created`);
     return newEv;
   }, [showToast]);
 
   const updateEvent = useCallback((id: number, updates: Partial<EventRecord>) => {
     StorageManager.updateEvent(id, updates);
     setEvents(StorageManager.getEvents());
-  }, []);
+    showToast('Event updated.');
+  }, [showToast]);
 
   const deleteEvent = useCallback((id: number) => {
     StorageManager.deleteEvent(id);
-    setEvents(StorageManager.getEvents());
-    setNotes(StorageManager.getNotes());
+    refreshData();
     if (selectedEventId === id) setSelectedEventId(null);
-    showToast('Folder and associated items removed.');
-  }, [selectedEventId, showToast]);
+    showToast('Category and its notes removed.');
+  }, [refreshData, selectedEventId, showToast]);
 
   const createNote = useCallback((params?: Partial<NoteRecord>): NoteRecord => {
-    const defaultEventId = selectedEventId || (events[0]?.id ?? 1);
+    const targetEventId = params?.event_id ?? selectedEventId ?? (events[0]?.id || 1);
     const newNote = StorageManager.addNote({
-      event_id: params?.event_id ?? defaultEventId,
+      event_id: targetEventId,
       title: params?.title || '',
       body: params?.body || '',
       note_type: params?.note_type || 'text',
       checklist_items: params?.checklist_items || [],
-      sketch_data: params?.sketch_data,
-      status: 'active',
-      cloud_save_enabled: false,
-      created_at: new Date().toISOString(),
+      tags: params?.tags || [],
     });
     setNotes(StorageManager.getNotes());
     setSelectedNoteId(newNote.id);
-    NativeBridge.hapticsVibrate();
+    showToast('New note created.');
     return newNote;
-  }, [events, selectedEventId]);
+  }, [events, selectedEventId, showToast]);
 
   const updateNote = useCallback((id: number, updates: Partial<NoteRecord>): NoteRecord | null => {
     const updated = StorageManager.updateNote(id, updates);
@@ -197,19 +170,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     StorageManager.deleteNote(id);
     setNotes(StorageManager.getNotes());
     if (selectedNoteId === id) setSelectedNoteId(null);
-    showToast('Note deleted permanently.');
+    showToast('Note deleted.');
   }, [selectedNoteId, showToast]);
 
   const archiveNote = useCallback((id: number) => {
     StorageManager.archiveNote(id);
     setNotes(StorageManager.getNotes());
-    showToast('Note archived.');
-  }, [showToast]);
+    if (selectedNoteId === id) setSelectedNoteId(null);
+    showToast('Note moved to Archive.');
+  }, [selectedNoteId, showToast]);
 
   const unarchiveNote = useCallback((id: number) => {
     StorageManager.unarchiveNote(id);
     setNotes(StorageManager.getNotes());
-    showToast('Note unarchived.');
+    showToast('Note restored to active.');
   }, [showToast]);
 
   const trashNote = useCallback((id: number) => {
@@ -225,29 +199,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Note restored to active.');
   }, [showToast]);
 
-  const triggerSync = useCallback(async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    setSyncProgress(10);
-    setSyncStatusMessage('Connecting to cloud storage...');
-    try {
-      await CloudSyncEngine.syncWithCloud(
-        (progress, msg) => {
-          setSyncProgress(progress);
-          setSyncStatusMessage(msg);
-        }
-      );
-      refreshData();
-      showToast('Cloud backup completed successfully.');
-    } catch (e: any) {
-      showToast(`Sync warning: ${e.message || 'Sync failed.'}`);
-    } finally {
-      setIsSyncing(false);
-      setSyncProgress(0);
-      setSyncStatusMessage('');
-    }
-  }, [isSyncing, refreshData, showToast]);
-
   const value = useMemo<AppContextValue>(
     () => ({
       events,
@@ -259,11 +210,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       searchQuery,
       filterType,
       darkMode,
-      isSyncing,
-      syncProgress,
-      syncStatusMessage,
-      backupFrequency,
-      cloudAccounts,
       isOnline,
       toastMessage,
       setSelectedEventId,
@@ -273,7 +219,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSearchQuery,
       setFilterType,
       setDarkMode,
-      setBackupFrequency,
       showToast,
       refreshData,
       createEvent,
@@ -286,7 +231,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unarchiveNote,
       trashNote,
       restoreNote,
-      triggerSync,
     }),
     [
       events,
@@ -298,15 +242,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       searchQuery,
       filterType,
       darkMode,
-      isSyncing,
-      syncProgress,
-      syncStatusMessage,
-      backupFrequency,
-      cloudAccounts,
       isOnline,
       toastMessage,
       setDarkMode,
-      setBackupFrequency,
       showToast,
       refreshData,
       createEvent,
@@ -319,7 +257,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unarchiveNote,
       trashNote,
       restoreNote,
-      triggerSync,
     ]
   );
 

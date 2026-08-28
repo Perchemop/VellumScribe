@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "vellumscribe",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.8.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -12,9 +12,13 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm run test"
   },
   "dependencies": {
+    "@aparajita/capacitor-secure-storage": "^8.0.0",
     "@capacitor/android": "^8.5.0",
     "@capacitor/camera": "^8.2.3",
     "@capacitor/cli": "^8.5.0",
@@ -42,9 +46,11 @@
     "@types/react-dom": "^19.2.5",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^4.1.11"
   }
 }

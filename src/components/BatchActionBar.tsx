@@ -12,7 +12,6 @@ import {
   Copy,
   Lock,
   Unlock,
-  Cloud,
   CheckSquare,
   RotateCcw,
   MoreVertical,
@@ -31,7 +30,7 @@ interface BatchActionBarProps {
   onClearSelection: () => void;
   onSelectAll: () => void;
   onDeselectAll: () => void;
-  onOpenMergeModal: () => void;
+  onOpenMergeModal?: () => void;
   onRefresh: () => void;
 }
 
@@ -77,7 +76,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const selectedNotes = allNotes.filter((n) => selectedNoteIds.includes(n.id));
   const hasUnpinned = selectedNotes.some((n) => !n.is_pinned);
   const hasLocked = selectedNotes.some((n) => n.is_locked);
-  const hasCloudDisabled = selectedNotes.some((n) => !n.cloud_save_enabled);
 
   // In-app confirmation modal state for deletion/trashing (avoids iframe window.confirm blocks)
   const [confirmModal, setConfirmModal] = useState<'trash' | 'permanent_delete' | null>(null);
@@ -184,13 +182,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     onRefresh();
   };
 
-  const handleBatchToggleCloud = () => {
-    StorageManager.batchToggleCloudSave(selectedNoteIds, hasCloudDisabled);
-    setShowMoreMenu(false);
-    onClearSelection();
-    onRefresh();
-  };
-
   const handleExportMarkdown = async () => {
     const md = StorageManager.exportNotesAsMarkdown(selectedNoteIds);
     const fileName = `VellumScribe_Notes_${new Date().toISOString().slice(0, 10)}.md`;
@@ -263,7 +254,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           ) : (
             <>
               {/* Merge Notes Button (Requires at least 2 notes) */}
-              {count >= 2 && (
+              {count >= 2 && onOpenMergeModal && (
                 <button
                   id="batch-merge-btn"
                   onClick={onOpenMergeModal}
@@ -380,14 +371,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                         <span>Lock with PIN</span>
                       </button>
                     )}
-
-                    <button
-                      onClick={handleBatchToggleCloud}
-                      className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
-                    >
-                      <Cloud className="w-3.5 h-3.5 text-blue-500" />
-                      <span>{hasCloudDisabled ? 'Enable Cloud Backup' : 'Disable Cloud Backup'}</span>
-                    </button>
 
                     <div className="border-t border-zinc-200 dark:border-zinc-800 my-1" />
 

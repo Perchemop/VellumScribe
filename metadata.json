@@ -1,6 +1,6 @@
 {
   "name": "VellumScribe",
-  "description": "Unique offline-first multimodal note-taking studio with interactive checklists, sketch canvas, voice transcripts, OCR extraction, version history, and cloud sync.",
+  "description": "Unique offline-first multimodal note-taking studio with interactive checklists, sketch canvas, voice transcripts, OCR extraction, version history, and intelligent Gemini AI summaries powered by your free Google AI Studio key.",
   "requestFramePermissions": ["camera", "microphone", "geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

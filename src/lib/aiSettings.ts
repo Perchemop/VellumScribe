@@ -1,17 +1,23 @@
 import { StorageManager } from './storage';
 
+export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
+
 export interface AiIntegrationSettings {
   apiKey: string;
   preferredModel: string;
   enableAnnotationOcr: boolean;
   enableMeetingSummary: boolean;
-  enableIntelligentMerge: boolean;
-  summaryFormat: 'standard' | 'action_oriented' | 'executive';
+  summaryFormat: SummaryFormat;
+  autoExtractActionItems: boolean;
+  includeTranscriptsInSummary: boolean;
+  includeOcrInSummary: boolean;
+  lastVerifiedAt?: string;
 }
 
 const STORAGE_KEYS = {
   API_KEY: 'vellumscribe_ai_studio_api_key_v1',
   SETTINGS: 'vellumscribe_ai_settings_v1',
+  LAST_VERIFIED: 'vellumscribe_ai_last_verified_v1',
 };
 
 const DEFAULT_SETTINGS: AiIntegrationSettings = {
@@ -19,8 +25,10 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
   preferredModel: 'gemini-3.7-flash',
   enableAnnotationOcr: true,
   enableMeetingSummary: true,
-  enableIntelligentMerge: true,
-  summaryFormat: 'standard',
+  summaryFormat: 'executive',
+  autoExtractActionItems: true,
+  includeTranscriptsInSummary: true,
+  includeOcrInSummary: true,
 };
 
 export class AiSettingsManager {
@@ -32,7 +40,6 @@ export class AiSettingsManager {
   public static async initialize(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = (async () => {
-        // Pre-warm storage and check compatibility
         this.getApiKey();
       })();
     }
@@ -63,6 +70,7 @@ export class AiSettingsManager {
       StorageManager.setItem(STORAGE_KEYS.API_KEY, trimmed);
     } else {
       StorageManager.removeItem(STORAGE_KEYS.API_KEY);
+      StorageManager.removeItem(STORAGE_KEYS.LAST_VERIFIED);
     }
   }
 
@@ -71,6 +79,7 @@ export class AiSettingsManager {
    */
   public static clearApiKey(): void {
     StorageManager.removeItem(STORAGE_KEYS.API_KEY);
+    StorageManager.removeItem(STORAGE_KEYS.LAST_VERIFIED);
   }
 
   /**
@@ -81,14 +90,26 @@ export class AiSettingsManager {
   }
 
   /**
+   * Returns a masked preview of the key, e.g. "AIzaSy...4F2x".
+   */
+  public static getMaskedKey(): string {
+    const key = this.getApiKey();
+    if (!key) return '';
+    if (key.length <= 10) return '••••••••';
+    return `${key.slice(0, 6)}••••••••${key.slice(-4)}`;
+  }
+
+  /**
    * Get general AI settings.
    */
   public static getSettings(): AiIntegrationSettings {
     const parsed = StorageManager.getItem<Partial<AiIntegrationSettings>>(STORAGE_KEYS.SETTINGS, {});
+    const lastVerified = StorageManager.getItem<string>(STORAGE_KEYS.LAST_VERIFIED, '');
     return {
       ...DEFAULT_SETTINGS,
       ...(parsed || {}),
       apiKey: this.getApiKey(),
+      lastVerifiedAt: lastVerified || undefined,
     };
   }
 
@@ -102,7 +123,6 @@ export class AiSettingsManager {
       }
       const current = this.getSettings();
       const updated = { ...current, ...settings };
-      // Delete apiKey from settings object to keep apiKey strictly in its dedicated storage key
       const toSave = { ...updated };
       delete (toSave as any).apiKey;
       StorageManager.setItem(STORAGE_KEYS.SETTINGS, toSave);
@@ -121,18 +141,18 @@ export class AiSettingsManager {
 
     const trimmed = content.trim();
 
-    // 1. Check if direct AI Studio key (starts with AIzaSy)
+    // 1. Direct AI Studio key (starts with AIzaSy)
     if (/^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed)) {
       return { key: trimmed };
     }
 
-    // 2. Check for .env style (GEMINI_API_KEY=AIzaSy... or API_KEY=AIzaSy...)
+    // 2. .env style (GEMINI_API_KEY=AIzaSy... or API_KEY=AIzaSy...)
     const envMatch = trimmed.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY|AI_STUDIO_API_KEY|API_KEY)\s*=\s*["']?([A-Za-z0-9_-]+)["']?/i);
     if (envMatch && envMatch[1]) {
       return { key: envMatch[1].trim() };
     }
 
-    // 3. Check JSON format { "apiKey": "AIzaSy..." } or { "GEMINI_API_KEY": "..." }
+    // 3. JSON format { "apiKey": "AIzaSy..." } or { "GEMINI_API_KEY": "..." }
     try {
       const parsed = JSON.parse(trimmed);
       const possibleKeys = ['apiKey', 'api_key', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'key', 'token'];
@@ -142,16 +162,16 @@ export class AiSettingsManager {
         }
       }
     } catch {
-      // Not JSON, continue searching
+      // Continue search
     }
 
-    // 4. Fallback search for any AIza token pattern anywhere in content
+    // 4. Pattern match for AIza token pattern anywhere in content
     const generalMatch = trimmed.match(/AIzaSy[A-Za-z0-9_-]{33}/);
     if (generalMatch && generalMatch[0]) {
       return { key: generalMatch[0] };
     }
 
-    // 5. If it looks like a generic key format (at least 20 chars without spaces)
+    // 5. Generic format (at least 24 chars)
     if (/^[A-Za-z0-9_-]{24,64}$/.test(trimmed)) {
       return { key: trimmed };
     }
@@ -160,94 +180,50 @@ export class AiSettingsManager {
   }
 
   /**
-   * Verifies the provided or locally stored API key against the test verification endpoint,
-   * with automatic client-side fallback if running in a standalone mobile APK (where /api routes return HTML).
+   * Verifies the provided or locally stored API key against the server verification endpoint.
    */
   public static async testApiKey(customKey?: string): Promise<{ success: boolean; message: string; model?: string }> {
-    const keyToTest = (customKey || this.getApiKey()).trim();
+    const keyToTest = (customKey !== undefined ? customKey : this.getApiKey()).trim();
 
-    if (!keyToTest) {
-      return {
-        success: false,
-        message: 'Please enter a Google AI Studio API key (starts with "AIzaSy").',
-      };
-    }
-
-    // 1. Try server verification endpoint first
     try {
       const res = await fetch('/api/gemini/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${keyToTest}`,
+          ...(keyToTest ? { Authorization: `Bearer ${keyToTest}` } : {}),
         },
         body: JSON.stringify({ customApiKey: keyToTest }),
       });
 
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
+      let data: any = {};
 
-      // Check if response is actual JSON (not HTML fallback from Capacitor / WebView)
       if (contentType.includes('application/json') || (!text.trim().startsWith('<') && text.trim().startsWith('{'))) {
         try {
-          const data = JSON.parse(text);
-          if (res.ok && data.success) {
-            return {
-              success: true,
-              message: data.message || 'API Key verified successfully! Connected to Google AI Studio.',
-              model: data.model || 'gemini-3.7-flash',
-            };
-          } else if (data.error) {
-            return {
-              success: false,
-              message: data.error,
-            };
-          }
-        } catch {
-          // JSON parse failed, proceed to direct client fallback
-        }
+          data = JSON.parse(text);
+        } catch {}
       }
-    } catch {
-      // Server request failed, proceed to direct fallback
-    }
 
-    // 2. Direct client-side verification fallback (essential for standalone APK on Android)
-    try {
-      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=${encodeURIComponent(keyToTest)}`;
-      const directRes = await fetch(directUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Respond with OK' }] }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 10,
-          },
-        }),
-      });
-
-      const data = await directRes.json().catch(() => ({}));
-
-      if (directRes.ok) {
+      if (res.ok && data.success) {
+        const now = new Date().toISOString();
+        StorageManager.setItem(STORAGE_KEYS.LAST_VERIFIED, now);
         return {
           success: true,
-          message: 'API Key verified successfully! Connected to Google AI Studio (gemini-3.7-flash).',
-          model: 'gemini-3.7-flash',
+          message: data.message || 'API Key verified successfully! Connected to Google AI Studio.',
+          model: data.model || 'gemini-3.7-flash',
         };
       }
 
-      // Handle specific Google API error messages
-      const apiError = data.error?.message || data.error?.status || `Google API returned status ${directRes.status}`;
+      const errorMessage = data.error || (res.status ? `Verification failed (status ${res.status}).` : 'Verification failed.');
       return {
         success: false,
-        message: `API Key verification failed: ${apiError}`,
+        message: errorMessage,
       };
-    } catch (directErr: any) {
+    } catch (err: any) {
       return {
         success: false,
-        message: directErr.message || 'Network error while connecting to Google AI Studio. Please check your internet connection.',
+        message: err?.message || 'Network error while connecting to server verification service.',
       };
     }
   }

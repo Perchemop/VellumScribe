@@ -218,7 +218,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
       <div className="max-w-md mx-auto w-full text-center space-y-1">
         <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span>Local SQLite Database Active</span>
+          <span>Local Browser Storage Active</span>
         </div>
         <p className="text-[10px] text-zinc-400">
           Offline-first architecture with cloud backup support.

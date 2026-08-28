@@ -68,14 +68,7 @@ function geminiRateLimiter(req: express.Request, res: express.Response, next: ex
 app.use("/api/gemini", geminiRateLimiter);
 
 // Lazy initialize Gemini client
-function getGeminiClient(customApiKey?: string): GoogleGenAI | null {
-  const apiKey = (typeof customApiKey === "string" && customApiKey.trim())
-    ? customApiKey.trim()
-    : process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return null;
-  }
+function createGeminiInstance(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
     apiKey,
     httpOptions: {
@@ -114,26 +107,30 @@ app.get("/api/health", (req, res) => {
 // Verification endpoint for testing user-provided or environment API key
 app.post("/api/gemini/verify", async (req, res) => {
   try {
-    const key = resolveApiKey(req);
-    const ai = getGeminiClient(key);
+    const customKey = resolveApiKey(req);
+    const serverKey = process.env.GEMINI_API_KEY?.trim();
+    const keyToTest = customKey || serverKey;
 
-    if (!ai) {
+    if (!keyToTest) {
       return res.status(400).json({
         success: false,
         error: "No API key provided or configured in environment. Please configure an API key.",
       });
     }
 
-    // Perform lightweight probe
-    const { text, modelUsed } = await generateContentWithFallback(ai, {
+    const ai = createGeminiInstance(keyToTest);
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
       contents: "Respond with the word OK",
     });
+
+    const text = (typeof response.text === "string" ? response.text : "").trim();
 
     return res.json({
       success: true,
       message: "Successfully authenticated with Google AI Studio!",
-      model: modelUsed,
-      sampleResponse: (text || "OK").trim(),
+      model: "gemini-3.7-flash",
+      sampleResponse: text || "OK",
     });
   } catch (error: any) {
     const errorMessage =
@@ -190,55 +187,95 @@ function normalizeImageMimeType(mime?: string, rawDataUrl?: string): string {
   return "image/jpeg";
 }
 
-// Helper function to call Gemini with retry on 503 (high demand) and fallback model
-async function generateContentWithFallback(
-  ai: GoogleGenAI,
+// Helper function to call Gemini with key fallback, retry on 503/429, and model fallback
+async function executeGeminiWithFallback(
+  req: express.Request,
   params: {
     contents: any;
     config?: any;
+  },
+  preferredModels: string[] = ["gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
+): Promise<{ text: string; modelUsed: string; keyUsed: "custom" | "server_env" }> {
+  const customKey = resolveApiKey(req);
+  const serverKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : undefined;
+
+  const keysToTry: Array<{ key: string; source: "custom" | "server_env" }> = [];
+  if (customKey && customKey.trim()) {
+    keysToTry.push({ key: customKey.trim(), source: "custom" });
   }
-): Promise<{ text: string; modelUsed: string }> {
-  // Model priority list: primary gemini-3.7-flash, fallback to gemini-flash-latest
-  const candidateModels = ["gemini-3.7-flash", "gemini-flash-latest"];
-  let lastError: any = new Error("No response received from Gemini model.");
+  if (serverKey && (!customKey || customKey.trim() !== serverKey)) {
+    keysToTry.push({ key: serverKey, source: "server_env" });
+  }
 
-  for (const model of candidateModels) {
-    // Attempt with retries for transient 503 (high demand) or 429
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: params.contents,
-          config: params.config,
-        });
+  if (keysToTry.length === 0) {
+    const error: any = new Error("No Google AI Studio key configured. Please add your free AI Studio API key.");
+    error.requiresKey = true;
+    throw error;
+  }
 
-        if (response) {
-          const rawText =
-            typeof response.text === "string"
-              ? response.text
-              : response.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") || "";
-          return { text: rawText, modelUsed: model };
+  let lastError: any = null;
+
+  for (const { key, source } of keysToTry) {
+    const ai = createGeminiInstance(key);
+
+    for (const model of preferredModels) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const response = await ai.models.generateContent({
+            model,
+            contents: params.contents,
+            config: params.config,
+          });
+
+          if (response) {
+            const rawText =
+              typeof response.text === "string"
+                ? response.text
+                : response.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") || "";
+            return { text: rawText, modelUsed: model, keyUsed: source };
+          }
+        } catch (err: any) {
+          lastError = err;
+          const errMsg = err?.message || String(err);
+          const isTransient =
+            errMsg.includes("503") ||
+            errMsg.includes("UNAVAILABLE") ||
+            errMsg.includes("high demand") ||
+            errMsg.includes("429") ||
+            errMsg.includes("RESOURCE_EXHAUSTED") ||
+            errMsg.includes("resource_exhausted");
+
+          if (isTransient && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 600));
+            continue;
+          }
+          break; // Try next model
         }
-      } catch (err: any) {
-        lastError = err || new Error(`Failed to generate content with ${model}`);
-        const errMsg = err?.message || String(err);
-        const isUnavailableOrRateLimited =
-          errMsg.includes("503") ||
-          errMsg.includes("UNAVAILABLE") ||
-          errMsg.includes("high demand") ||
-          errMsg.includes("429") ||
-          errMsg.includes("RESOURCE_EXHAUSTED");
-
-        if (isUnavailableOrRateLimited && attempt === 0) {
-          // Wait 600ms before immediate retry
-          await new Promise((r) => setTimeout(r, 600));
-          continue;
-        }
-
-        // If not transient or second attempt, break to try fallback model
-        break;
       }
     }
+
+    if (source === "custom" && keysToTry.length > 1) {
+      console.warn(
+        `Custom API key failed (${lastError?.message || lastError}). Retrying with server environment GEMINI_API_KEY...`
+      );
+    }
+  }
+
+  const errStr = String(lastError?.message || lastError || "");
+  const isQuota =
+    errStr.includes("resource_exhausted") ||
+    errStr.includes("RESOURCE_EXHAUSTED") ||
+    errStr.includes("quota") ||
+    errStr.includes("429") ||
+    errStr.includes("limit: 25000000");
+
+  if (isQuota) {
+    const friendlyError: any = new Error(
+      "Google AI Studio quota limit exceeded for this key. Please add your free personal API key from aistudio.google.com to continue with your private quota."
+    );
+    friendlyError.isQuotaExceeded = true;
+    friendlyError.requiresKey = true;
+    throw friendlyError;
   }
 
   throw lastError || new Error("Failed to communicate with Google AI Studio.");
@@ -252,48 +289,35 @@ app.post("/api/gemini/ocr", async (req, res) => {
       return res.status(400).json({ error: "Missing imageBase64 in request body." });
     }
 
-    const key = resolveApiKey(req);
-    const ai = getGeminiClient(key);
-    if (!ai) {
-      return res.status(503).json({ error: "AI OCR is not configured. No fabricated OCR result is returned." });
-    }
-
-    // Clean raw base64 string and normalized mime type
     const cleanBase64 = extractRawBase64(imageBase64);
     const validMime = normalizeImageMimeType(mimeType, imageBase64);
+    const prompt = "Extract all handwritten and printed text verbatim without markdown alterations.";
 
-    const prompt = "Extract all handwritten text verbatim without markdown alterations.";
-
-    try {
-      const { text, modelUsed } = await generateContentWithFallback(ai, {
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: cleanBase64,
-                mimeType: validMime,
-              },
+    const { text, modelUsed } = await executeGeminiWithFallback(req, {
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              data: cleanBase64,
+              mimeType: validMime,
             },
-            {
-              text: prompt,
-            },
-          ],
-        },
-      });
+          },
+          {
+            text: prompt,
+          },
+        ],
+      },
+    });
 
-      return res.json({
-        ocrText: text || "",
-        confidence: 0.98,
-        source: modelUsed,
-      });
-    } catch (genError: any) {
-      console.warn("Gemini OCR encountered transient high demand/error, providing seamless fallback:", genError?.message || genError);
-      return res.status(503).json({ error: "Gemini OCR failed. No fabricated OCR result is returned." });
-    }
+    return res.json({
+      ocrText: text || "",
+      confidence: 0.98,
+      source: modelUsed,
+    });
   } catch (error: any) {
     console.error("Gemini OCR Error:", error);
     res.status(500).json({
-      error: error.message || "Failed to process OCR scan with Gemini.",
+      error: error?.message || "Failed to process OCR scan with Gemini.",
     });
   }
 });
@@ -306,21 +330,14 @@ app.post("/api/gemini/transcribe", async (req, res) => {
       return res.status(400).json({ error: "Missing audioBase64 in request body." });
     }
 
-    const key = resolveApiKey(req);
-    const ai = getGeminiClient(key);
-    if (!ai) {
-      return res.status(503).json({ error: "AI transcription is not configured. No fabricated transcript is returned." });
-    }
-
-    // Robust base64 extraction and mime normalization
     const cleanBase64 = extractRawBase64(audioBase64);
     const validMime = normalizeAudioMimeType(mimeType, audioBase64);
-
     const prompt =
       "Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms.";
 
-    try {
-      const { text, modelUsed } = await generateContentWithFallback(ai, {
+    const { text, modelUsed } = await executeGeminiWithFallback(
+      req,
+      {
         contents: {
           parts: [
             {
@@ -334,123 +351,186 @@ app.post("/api/gemini/transcribe", async (req, res) => {
             },
           ],
         },
-      });
-      return res.json({
-        transcript: text || "",
-        source: modelUsed,
-      });
-    } catch (genError: any) {
-      console.warn("Gemini transcription failed:", genError?.message || genError);
-      return res.status(503).json({ error: "Gemini transcription failed. No fabricated transcript is returned." });
-    }
+      },
+      ["gemini-3.5-transcribe", "gemini-3.7-flash", "gemini-flash-latest"]
+    );
+
+    return res.json({
+      transcript: text || "",
+      source: modelUsed,
+    });
   } catch (error: any) {
     console.error("Gemini Transcription Error:", error);
     res.status(500).json({
-      error: error.message || "Failed to transcribe audio with Gemini.",
+      error: error?.message || "Failed to transcribe audio with Gemini.",
     });
   }
 });
 
-// 3. Meeting Minutes Generation Endpoint
+// 3. AI Summary Studio & Synthesis Endpoint
+app.post("/api/gemini/summary", async (req, res) => {
+  try {
+    const {
+      format = "executive",
+      eventTitle = "Untitled Note",
+      currentBody = "",
+      transcripts = [],
+      ocrScans = [],
+      checklists = [],
+      customInstructions = "",
+    } = req.body;
+
+    const rawTitle = typeof eventTitle === "string" && eventTitle.trim() ? eventTitle.trim() : "Untitled Note";
+    const rawBody = typeof currentBody === "string" ? currentBody.trim() : "";
+
+    // Normalize transcripts
+    let transcriptsText = "";
+    if (Array.isArray(transcripts)) {
+      transcriptsText = transcripts
+        .map((t: any) => (typeof t === "string" ? t : t?.transcript_text || ""))
+        .filter(Boolean)
+        .join("\n\n");
+    } else if (typeof transcripts === "string") {
+      transcriptsText = transcripts.trim();
+    }
+
+    // Normalize OCR scans
+    let ocrText = "";
+    if (Array.isArray(ocrScans)) {
+      ocrText = ocrScans
+        .map((s: any) => (typeof s === "string" ? s : s?.ocr_text || ""))
+        .filter(Boolean)
+        .join("\n\n");
+    } else if (typeof ocrScans === "string") {
+      ocrText = ocrScans.trim();
+    }
+
+    // Normalize checklists
+    let checklistText = "";
+    if (Array.isArray(checklists)) {
+      checklistText = checklists
+        .map((c: any) => (typeof c === "string" ? c : `[${c.is_completed ? "x" : " "}] ${c.text || ""}`))
+        .filter(Boolean)
+        .join("\n");
+    }
+
+    const aggregatedContext = [
+      rawBody ? `### Note Content:\n"""\n${rawBody}\n"""` : "",
+      transcriptsText ? `### Audio Transcripts:\n"""\n${transcriptsText}\n"""` : "",
+      ocrText ? `### Handwritten OCR Scans:\n"""\n${ocrText}\n"""` : "",
+      checklistText ? `### Checklist Tasks:\n"""\n${checklistText}\n"""` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    let formatPrompt = "";
+    switch (format) {
+      case "action_items":
+        formatPrompt = `Extract ALL actionable tasks, deliverables, deadlines, and follow-ups. Format exclusively as an interactive markdown checklist with empty checkboxes [ ] (or checked [x] if already completed). Include assignee and deadline in parentheses if mentioned. If no explicit tasks exist, derive 3-5 logical next steps.`;
+        break;
+      case "tldr":
+        formatPrompt = `Generate a high-density, executive TL;DR summary. Provide:
+1. A single 1-2 sentence core thesis.
+2. 3 to 5 high-impact bullet points highlighting key insights, numbers, or decisions.
+Keep it strictly under 150 words. Do not use emojis.`;
+        break;
+      case "outline":
+        formatPrompt = `Synthesize into a clear, hierarchical conceptual outline. Use clean Markdown headings (### Main Topic, #### Sub-topic) with indented bullet points, key definitions, and open questions for future discussion.`;
+        break;
+      case "clean_notes":
+        formatPrompt = `Refactor and polish the raw content into clean, readable, professional notes. Fix fragmented thoughts, eliminate verbal filler from speech transcripts, structure into logical paragraphs with bold key terms, and preserve all facts, names, and decisions.`;
+        break;
+      case "executive":
+      default:
+        formatPrompt = `Generate comprehensive Executive Meeting Minutes & Synthesis. Structure with clean Markdown sections:
+### Executive Summary
+(2-3 clear sentences summarizing purpose and primary outcomes)
+
+### Key Decisions
+(Bulleted list of agreed choices and finalized directions)
+
+### Action Items
+(Checklist items [ ] with assignees and timelines if known)
+
+### Discussion Highlights
+(Brief thematic bullets covering notable points raised)`;
+        break;
+    }
+
+    const fullPrompt = `You are an expert executive synthesis assistant powered by Google AI Studio.
+
+Note/Meeting Title: "${rawTitle}"
+
+Target Format: ${format}
+${customInstructions ? `Custom User Guidance: ${customInstructions}\n` : ""}
+
+Task Instructions:
+${formatPrompt}
+
+Available Context:
+${aggregatedContext || "No note body or transcripts provided. Please generate a clean template matching the requested format for the given title."}
+
+CRITICAL RULES:
+- Output clean Markdown directly.
+- Do NOT wrap in conversational intro/outro (e.g. "Here is your summary").
+- Avoid emojis.
+- Maintain high information density and professional tone.`;
+
+    const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
+      contents: fullPrompt,
+    });
+
+    return res.json({
+      summary: text || "",
+      format,
+      source: modelUsed,
+      keyUsed,
+    });
+  } catch (error: any) {
+    console.error("Gemini Summary Error:", error);
+    const isQuota = Boolean(error?.isQuotaExceeded) || String(error?.message || "").includes("quota") || String(error?.message || "").includes("resource_exhausted") || String(error?.message || "").includes("RESOURCE_EXHAUSTED");
+    res.status(isQuota ? 429 : 500).json({
+      error: error?.message || "Failed to generate AI summary with Gemini.",
+      isQuotaExceeded: isQuota,
+      requiresKey: isQuota || Boolean(error?.requiresKey),
+    });
+  }
+});
+
+// 4. Meeting Minutes Generation Endpoint (backward compatible alias)
 app.post("/api/gemini/meeting-minutes", async (req, res) => {
   try {
     const { transcript, currentBody = "", eventTitle = "Project Meeting" } = req.body;
-    if (!transcript && !currentBody) {
-      return res.status(400).json({ error: "Missing transcript or note body for meeting minutes generation." });
-    }
+    const rawTranscript = typeof transcript === "string" ? transcript.trim() : "";
+    const rawBody = typeof currentBody === "string" ? currentBody.trim() : "";
+    const rawTitle = typeof eventTitle === "string" && eventTitle.trim() ? eventTitle.trim() : "Project Meeting";
 
-    const key = resolveApiKey(req);
-    const ai = getGeminiClient(key);
-    if (!ai) {
-      return res.status(503).json({ error: "AI meeting minutes are not configured. No fabricated summary is returned." });
-    }
+    const prompt = (rawTranscript || rawBody)
+      ? `Analyse the following transcript and notes. Generate concise bullet points for key decisions, action items, and summaries. Format with clean markdown headers (### Executive Summary, ### Key Decisions, ### Action Items with checkboxes [ ] and assignees if mentioned). Do not include emojis in the output.
 
+Event Title: ${rawTitle}
 
-    const prompt = `Analyse the following transcript and notes. Generate concise bullet points for key decisions, action items, and summaries. Format with clean markdown headers (### Executive Summary, ### Key Decisions, ### Action Items with checkboxes [ ] and assignees if mentioned). Do not include emojis in the output.
+${rawTranscript ? `Transcript Content:\n"""\n${rawTranscript}\n"""\n` : ""}
+${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
+      : `Create a structured, professional meeting agenda and minutes outline for a meeting titled "${rawTitle}". Include formatted markdown sections for ### Executive Summary, ### Discussion Topics, ### Key Decisions, and ### Action Items (with empty checkboxes [ ]). Keep it concise, practical, and clean without emojis.`;
 
-Event Title: ${eventTitle}
+    const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
+      contents: prompt,
+    });
 
-Transcript Content:
-"""
-${transcript || "No transcript available. Use current note content."}
-"""
-
-Additional Note Context:
-"""
-${currentBody}
-"""`;
-
-    try {
-      const { text, modelUsed } = await generateContentWithFallback(ai, {
-        contents: prompt,
-      });
-
-      const meetingMinutes = `\n\n---\n### Meeting Summary\n${text || ""}`;
-      return res.json({
-        meetingMinutes,
-        source: modelUsed,
-      });
-    } catch (genError: any) {
-      console.warn("Gemini Meeting Minutes failed:", genError?.message || genError);
-      return res.status(503).json({ error: "Gemini meeting summary failed. No fabricated summary is returned." });
-    }
-
+    const meetingMinutes = `\n\n---\n### Meeting Summary\n${text || ""}`;
+    return res.json({
+      meetingMinutes,
+      source: modelUsed,
+      keyUsed,
+    });
   } catch (error: any) {
     console.error("Gemini Meeting Minutes Error:", error);
-    res.status(500).json({
-      error: error.message || "Failed to generate meeting minutes with Gemini.",
-    });
-  }
-});
-
-// 4. Intelligent 3-Way Merge Conflict Resolution Endpoint
-app.post("/api/gemini/intelligent-merge", async (req, res) => {
-  try {
-    const { baseContent, localContent, remoteContent, documentTitle = "Note" } = req.body;
-
-    const key = resolveApiKey(req);
-    const ai = getGeminiClient(key);
-    if (!ai) {
-      return res.status(503).json({ error: "AI conflict merge is not configured. No heuristic merge is returned." });
-    }
-
-
-    const prompt = `You are a distributed database conflict resolution engine. Perform an intelligent 3-way merge on the following document.
-Original Base:
-"""
-${baseContent || "None"}
-"""
-
-Local Version (Client):
-"""
-${localContent}
-"""
-
-Remote Version (Cloud):
-"""
-${remoteContent}
-"""
-
-Merge both versions cleanly preserving all unique notes, action items, and structural headers without repeating identical lines. Return only the merged markdown text.`;
-
-    try {
-      const { text, modelUsed } = await generateContentWithFallback(ai, {
-        contents: prompt,
-      });
-
-      return res.json({
-        mergedContent: text || localContent,
-        resolutionStrategy: `${modelUsed}_semantic_merge`,
-      });
-    } catch (genError: any) {
-      console.warn("Gemini Merge failed:", genError?.message || genError);
-      return res.status(503).json({ error: "Gemini conflict merge failed. No heuristic merge is returned." });
-    }
-
-  } catch (error: any) {
-    console.error("Gemini Merge Error:", error);
-    res.status(500).json({
-      error: error.message || "Failed to resolve conflict with Gemini.",
+    const isQuota = Boolean(error?.isQuotaExceeded) || String(error?.message || "").includes("quota") || String(error?.message || "").includes("resource_exhausted") || String(error?.message || "").includes("RESOURCE_EXHAUSTED");
+    res.status(isQuota ? 429 : 500).json({
+      error: error?.message || "Failed to generate meeting minutes with Gemini.",
+      isQuotaExceeded: isQuota,
+      requiresKey: isQuota || Boolean(error?.requiresKey),
     });
   }
 });
