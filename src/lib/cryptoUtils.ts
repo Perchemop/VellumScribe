@@ -62,28 +62,23 @@ export async function hashPin(pin: string, salt?: string): Promise<{ hash: strin
       );
 
       return { hash: toHex(derivedBits), salt: activeSalt };
-    } catch {
-      // Fall through to SHA-256 digest or fallback if PBKDF2 is restricted
+    } catch (e) {
+      // PBKDF2 itself failed (e.g. restricted in a locked-down WebView). Do not
+      // silently downgrade to a weaker scheme - surface the failure so the
+      // caller can tell the user PIN protection is unavailable here.
+      throw new Error('Secure PIN hashing (PBKDF2) failed on this device: ' + (e instanceof Error ? e.message : String(e)));
     }
   }
 
-  // Fallback digest if PBKDF2 not fully supported
-  if (typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.digest) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(`${pin}:${VERIFICATION_SALT_PREFIX}${activeSalt}`);
-    const buffer = await crypto.subtle.digest('SHA-256', data);
-    return { hash: toHex(buffer), salt: activeSalt };
-  }
-
-  // Pure JS hash fallback for legacy WebView sandbox
-  let hashNum = 0;
-  const combined = `${pin}:${activeSalt}`;
-  for (let i = 0; i < combined.length; i++) {
-    const char = combined.charCodeAt(i);
-    hashNum = (hashNum << 5) - hashNum + char;
-    hashNum |= 0;
-  }
-  return { hash: `fallback_${Math.abs(hashNum).toString(16)}`, salt: activeSalt };
+  // No Web Crypto API available at all. Previous versions of this function
+  // silently fell back to a trivial, non-cryptographic hash (a 32-bit rolling
+  // checksum) in this situation, which is fast to brute-force and provided a
+  // false sense of security. We fail loudly instead: a device without
+  // WebCrypto cannot provide the encryption guarantees this feature claims.
+  throw new Error(
+    'This device does not support the Web Crypto API, so a security PIN cannot be safely created. ' +
+    'Please update your browser/WebView or use an unlocked note.'
+  );
 }
 
 /**
@@ -174,42 +169,36 @@ export async function encryptNotePayload(
   const jsonStr = JSON.stringify(payload);
 
   if (typeof crypto !== 'undefined' && crypto.subtle && crypto.getRandomValues) {
-    try {
-      const key = await deriveAesKey(pin, salt);
-      if (key) {
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encoder = new TextEncoder();
-        const encoded = encoder.encode(jsonStr);
+    const key = await deriveAesKey(pin, salt);
+    if (key) {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const encoder = new TextEncoder();
+      const encoded = encoder.encode(jsonStr);
 
-        const ciphertext = await crypto.subtle.encrypt(
-          { name: 'AES-GCM', iv },
-          key,
-          encoded
-        );
+      const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encoded
+      );
 
-        return JSON.stringify({
-          v: 1,
-          iv: toHex(iv),
-          data: toHex(ciphertext),
-        });
-      }
-    } catch (e) {
-      console.warn('WebCrypto encryption failed, using obfuscation fallback', e);
+      return JSON.stringify({
+        v: 1,
+        iv: toHex(iv),
+        data: toHex(ciphertext),
+      });
     }
   }
 
-  // Simple XOR fallback if WebCrypto AES-GCM is not available in test/legacy environment
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(jsonStr);
-  const keyBytes = encoder.encode(pin + salt);
-  const xorBytes = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) {
-    xorBytes[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
-  }
-  return JSON.stringify({
-    v: 0,
-    data: toHex(xorBytes),
-  });
+  // Earlier versions of this function fell back to a reversible XOR
+  // "obfuscation" scheme when AES-GCM wasn't available, which is not
+  // meaningfully more secure than storing the note in plain text. A PIN
+  // lock that silently downgrades to XOR would tell the user their note is
+  // encrypted when it isn't. Fail loudly instead so the caller can tell the
+  // user PIN protection isn't available on this device rather than storing
+  // content under a false sense of security.
+  throw new Error(
+    'This device does not support AES-256-GCM encryption (Web Crypto API), so this note cannot be safely locked.'
+  );
 }
 
 /**
@@ -231,9 +220,9 @@ export async function decryptNotePayload(
           const ciphertext = fromHex(parsed.data);
 
           const decryptedBuffer = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv },
+            { name: 'AES-GCM', iv: iv as BufferSource },
             key,
-            ciphertext
+            ciphertext as BufferSource
           );
 
           const decoder = new TextDecoder();

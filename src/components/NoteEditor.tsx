@@ -7,7 +7,6 @@ import {
   Edit3,
   Loader2,
   ArrowLeft,
-  Cloud,
   PenTool,
   CheckSquare,
   Bell,
@@ -20,11 +19,13 @@ import {
   Settings,
   Plus,
   Trash2,
+  Key,
+  HardDrive,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
 import { StorageManager } from '../lib/storage';
-import { CloudSyncEngine } from '../lib/cloudSync';
+import { VersionControlManager } from '../lib/versionControl';
 import { GeminiApiService } from '../lib/geminiService';
 import { AudioRecorderPlayer } from './AudioRecorderPlayer';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
@@ -34,6 +35,8 @@ import { SketchCanvasModal } from './SketchCanvasModal';
 import { NoteSecurityModal } from './NoteSecurityModal';
 import { NoteShareModal } from './NoteShareModal';
 import { SettingsModal } from './SettingsModal';
+import { AiSummaryModal } from './AiSummaryModal';
+import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { AiSettingsManager } from '../lib/aiSettings';
 
 interface NoteEditorProps {
@@ -43,7 +46,7 @@ interface NoteEditorProps {
   onToggleFocus?: () => void;
   onNoteUpdated: (updatedNote: NoteRecord) => void;
   onNoteDeleted: (noteId: number) => void;
-  onOpenVersions: () => void;
+  onOpenVersions?: () => void;
   onClose?: () => void;
 }
 
@@ -62,7 +65,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(note.checklist_items || []);
   const [sketchData, setSketchData] = useState<string | undefined>(note.sketch_data);
   const [eventId, setEventId] = useState(note.event_id);
-  const [cloudSaveEnabled, setCloudSaveEnabled] = useState(note.cloud_save_enabled || false);
   const [tags, setTags] = useState<string[]>(note.tags || []);
   const [newTagInput, setNewTagInput] = useState('');
   const [reminderAt, setReminderAt] = useState<string>(note.reminder_at || '');
@@ -77,6 +79,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
   const [isGeneratingMinutes, setIsGeneratingMinutes] = useState(false);
   const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
+  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [showAudioRecorder, setShowAudioRecorder] = useState(false);
   const [showOcrScanner, setShowOcrScanner] = useState(false);
   const [showSketchModal, setShowSketchModal] = useState(false);
@@ -106,7 +110,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setShowChecklistSection(Boolean(note.checklist_items && note.checklist_items.length > 0));
     setSketchData(note.sketch_data);
     setEventId(note.event_id);
-    setCloudSaveEnabled(note.cloud_save_enabled || false);
     setTags(note.tags || []);
     setReminderAt(note.reminder_at || '');
     setLocationName(note.location_name || '');
@@ -268,16 +271,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setShowLocationPicker(false);
   };
 
-  const handleToggleCloudSave = () => {
-    const newStatus = !cloudSaveEnabled;
-    setCloudSaveEnabled(newStatus);
-    const updated = StorageManager.updateNote(note.id, {
-      cloud_save_enabled: newStatus,
-    });
-    if (updated) onNoteUpdated(updated);
+  const handleApplyAiSummary = (summaryText: string, mode: 'append' | 'prepend' | 'replace') => {
+    let newBody = body;
+    if (mode === 'replace') {
+      newBody = summaryText;
+    } else if (mode === 'prepend') {
+      newBody = `${summaryText}\n\n---\n\n${body}`;
+    } else {
+      newBody = body ? `${body}\n\n${summaryText}` : summaryText;
+    }
+    setBody(newBody);
+    const updated = StorageManager.updateNote(note.id, { body: newBody });
+    if (updated) {
+      VersionControlManager.saveVersionSnapshot(updated, 'Gemini AI', 'Applied AI Summary synthesis');
+      onNoteUpdated(updated);
+    }
+    setAiNotice('AI Summary successfully applied to note!');
+    setTimeout(() => setAiNotice(null), 4000);
   };
 
-  // Generate AI Summarization / Meeting Minutes with Google Gemini API
+  // Quick One-Click AI Summarization / Meeting Minutes with Google Gemini API
   const handleGenerateMeetingMinutes = async () => {
     setIsGeneratingMinutes(true);
     setAiNotice(null);
@@ -306,22 +319,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       setBody(newBody);
       const updated = StorageManager.updateNote(note.id, { body: newBody });
       if (updated) {
-        CloudSyncEngine.saveVersionSnapshot(updated, 'Gemini AI', `Appended AI summary (${res.source || 'Gemini 3.7 Flash'})`);
+        VersionControlManager.saveVersionSnapshot(updated, 'Gemini AI', `Appended AI summary (${res.source || 'Gemini 3.7 Flash'})`);
         onNoteUpdated(updated);
       }
       setAiNotice('AI Summary successfully generated and appended!');
       setTimeout(() => setAiNotice(null), 4000);
     } catch (e: any) {
       console.error('Failed to generate AI meeting summary:', e);
-      const fallback = `\n\n---\n### AI Generated Summary (${new Date().toLocaleDateString()})\n#### Executive Overview\nReviewed project notes, transcriptions, and active items.\n\n#### Key Decisions\n* Standardize structured notes and local persistence.\n* Maintain cloud backuphronization.\n\n#### Action Items\n* [ ] Review current action items.\n* [ ] Confirm backup sync pipeline.`;
-      const newBody = `${body}${fallback}`;
-      setBody(newBody);
-      const updated = StorageManager.updateNote(note.id, { body: newBody });
-      if (updated) {
-        onNoteUpdated(updated);
+      const errMsg = e?.message || 'Failed to generate AI meeting summary.';
+      if (errMsg.includes('quota') || errMsg.includes('key') || errMsg.includes('resource_exhausted')) {
+        setAiNotice(`AI Quota: Please add your free Google AI Studio key to continue unlimited summaries.`);
+        setShowAiKeyModal(true);
+      } else {
+        setAiNotice(`AI Summary: ${errMsg}`);
       }
-      setAiNotice('Summary appended from offline model engine.');
-      setTimeout(() => setAiNotice(null), 4000);
+      setTimeout(() => setAiNotice(null), 6000);
     } finally {
       setIsGeneratingMinutes(false);
     }
@@ -488,18 +500,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           {/* AI Summarization & Synthesis */}
           <button
-            id="generate-meeting-minutes-btn"
-            onClick={handleGenerateMeetingMinutes}
-            disabled={isGeneratingMinutes}
-            title="Generate AI Summary with Google Gemini API"
-            className="flex items-center gap-1 px-2.5 py-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50/70 hover:bg-indigo-100/70 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 rounded-lg text-xs font-medium transition-colors disabled:opacity-40"
+            id="open-ai-summary-btn"
+            onClick={() => setShowAiSummaryModal(true)}
+            title="Generate AI Summary with Google Gemini (Executive, Action Items, Outline)"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
           >
-            {isGeneratingMinutes ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5" />
-            )}
-            <span className="font-semibold">AI Summary</span>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AI Summary</span>
+          </button>
+
+          {/* Quick AI Studio Key Authenticator */}
+          <button
+            id="ai-studio-key-btn"
+            onClick={() => setShowAiKeyModal(true)}
+            title={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+              AiSettingsManager.hasLocalKey()
+                ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+            }`}
+          >
+            <Key className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline">{AiSettingsManager.hasLocalKey() ? 'Key Active' : 'Add Key'}</span>
           </button>
 
           {/* Voice Memo Recording */}
@@ -925,20 +947,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            id="toggle-cloud-save-btn"
-            onClick={handleToggleCloudSave}
-            className="hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors flex items-center gap-1 font-sans"
+          <div
+            id="storage-status-indicator"
+            className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 font-sans"
+            title="All notes and attached media are stored locally in browser offline storage"
           >
-            {cloudSaveEnabled ? (
-              <>
-                <Cloud className="w-3 h-3 text-zinc-700 dark:text-zinc-300" />
-                <span>Cloud backup</span>
-              </>
-            ) : (
-              <span>Local only</span>
-            )}
-          </button>
+            <HardDrive className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+            <span>Stored locally</span>
+          </div>
 
           <button
             onClick={onOpenVersions}
@@ -948,6 +964,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </button>
         </div>
       </div>
+
+      {/* AI Summary Studio Modal */}
+      {showAiSummaryModal && (
+        <AiSummaryModal
+          noteId={note.id}
+          noteTitle={title}
+          noteBody={body}
+          checklistItems={checklistItems}
+          recordings={recordings}
+          ocrScans={ocrScans}
+          eventTitle={events.find((e) => e.id === eventId)?.title}
+          onApplySummary={handleApplyAiSummary}
+          onOpenKeySettings={() => setShowAiKeyModal(true)}
+          onClose={() => setShowAiSummaryModal(false)}
+        />
+      )}
+
+      {/* Google AI Studio Free Key Authentication Modal */}
+      {showAiKeyModal && (
+        <AiStudioKeyModal
+          onClose={() => setShowAiKeyModal(false)}
+          onKeySaved={() => {
+            setAiNotice('Google AI Studio API key verified and saved successfully!');
+            setTimeout(() => setAiNotice(null), 3500);
+          }}
+        />
+      )}
 
       {/* Sketch Canvas Modal */}
       {showSketchModal && (

@@ -39,7 +39,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
     try {
       const res = await AppUpdateManager.checkForRemoteUpdates();
       setCheckResult({
-        isUpToDate: res.isUpToDate,
+        isUpToDate: !res.hasUpdate,
         latestVersion: res.latestVersion,
         releaseDate: res.releaseDate,
         checkedAt: new Date().toLocaleTimeString(),
@@ -79,7 +79,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">
-                Installed Build #{CURRENT_BUILD_NUMBER} &bull; SQLite Schema v3
+                Installed Build #{CURRENT_BUILD_NUMBER} &bull; Local Storage Schema v3
               </p>
             </div>
           </div>
@@ -214,15 +214,27 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
               </div>
 
               {checkResult && (
-                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-2 animate-fade-in">
-                  <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <span>You are running the latest version (v{checkResult.latestVersion})</span>
+                checkResult.isUpToDate ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-2 animate-fade-in">
+                    <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      <span>You are running the latest version (v{checkResult.latestVersion})</span>
+                    </div>
+                    <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80 pl-6">
+                      Release timestamp: {checkResult.releaseDate} &bull; Verified at {checkResult.checkedAt}
+                    </p>
                   </div>
-                  <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80 pl-6">
-                    Release timestamp: {checkResult.releaseDate} &bull; Verified at {checkResult.checkedAt}
-                  </p>
-                </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 space-y-2 animate-fade-in">
+                    <div className="flex items-center gap-2 text-indigo-800 dark:text-indigo-300 text-xs font-semibold">
+                      <Sparkles className="w-4 h-4 text-indigo-500 shrink-0" />
+                      <span>Newer Version Available: v{checkResult.latestVersion}</span>
+                    </div>
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-400/80 pl-6">
+                      Release timestamp: {checkResult.releaseDate} &bull; Checked at {checkResult.checkedAt}
+                    </p>
+                  </div>
+                )
               )}
 
               {/* Version Specs */}
@@ -237,7 +249,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                 </div>
                 <div>
                   <div className="text-zinc-400 text-[10px]">Database Architecture</div>
-                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-[11px]">SQLite3 / Local Schema v3</div>
+                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-[11px]">Local Storage / Schema v3</div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-[10px]">Storage Migration</div>

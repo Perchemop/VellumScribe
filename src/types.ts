@@ -39,7 +39,6 @@ export interface NoteRecord {
   updated_at?: string;
   tags?: string[];
   is_pinned?: boolean;
-  cloud_save_enabled?: boolean; // When false or undefined, stored strictly on local device
   version?: number;
 }
 
@@ -74,45 +73,6 @@ export interface OcrScanRecord {
   confidence?: number;
 }
 
-export type CloudStorageProvider = 
-  | 'google_drive' 
-  | 'dropbox' 
-  | 'onedrive' 
-  | 'icloud' 
-  | 'nextcloud' 
-  | 's3';
-
-export type BackupFrequency = 'never' | '5m' | '15m' | '1h' | 'daily' | 'manual';
-
-export interface CloudAccount {
-  id?: string;
-  provider: CloudStorageProvider;
-  connected: boolean;
-  user_email?: string;
-  user_name?: string;
-  account_email?: string;
-  display_name?: string;
-  access_token?: string;
-  refresh_token_alias?: string;
-  token_expiry?: string;
-  oauth_scopes?: string[];
-  oauth_token_type?: string;
-  oauth_client_id?: string;
-  cloud_backup_path: string;
-  last_synced_at?: string;
-  storage_used_bytes?: number;
-  storage_total_bytes?: number;
-  quota_used_bytes?: number;
-  quota_total_bytes?: number;
-  auth_status?: string;
-  sso_provider?: string;
-  sso_auth_mode?: 'sso_oauth' | 'sso_oidc' | 'sso_saml' | 'api_credential';
-  sso_session_id?: string;
-  sso_idp_name?: string;
-  server_url?: string; // For WebDAV/Nextcloud/S3 custom endpoints
-  bucket_name?: string; // For S3/MinIO
-}
-
 export interface DocumentVersion {
   id?: string;
   version_id?: number;
@@ -127,25 +87,9 @@ export interface DocumentVersion {
   checksum?: string;
 }
 
-export interface SyncTelemetry {
-  sync_id: string;
-  timestamp: string;
-  provider: CloudStorageProvider | 'dual_cloud' | 'multi_cloud';
-  status: 'success' | 'failed' | 'conflict_detected' | 'stalled';
-  duration_ms: number;
-  bytes_transferred: number;
-  items_synced?: number;
-  records_uploaded?: number;
-  records_downloaded?: number;
-  conflicts_encountered: number;
-  auto_triggered?: boolean;
-  error_message?: string;
-  backup_file_name?: string;
-}
-
 export interface KeystoreSecret {
   alias: string;
-  key_type: 'api_key' | 'oauth_refresh_token' | 'sqlite_cipher_key';
+  key_type: 'api_key' | 'sqlite_cipher_key';
   masked_value: string;
   created_at: string;
   hardware_backed: boolean;

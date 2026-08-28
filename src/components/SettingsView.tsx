@@ -23,6 +23,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
+import { Capacitor } from '@capacitor/core';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
@@ -34,7 +35,8 @@ import { SyncProgressBar } from './SyncProgressBar';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
-  onOpenConflictModal: () => void;
+  onOpenConflictModal?: () => void;
+  onOpenUpdateModal?: () => void;
   onRefreshNotes: () => void;
   onBackToNotes?: () => void;
   activeEditingNoteTitle?: string;
@@ -96,6 +98,7 @@ const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
 export const SettingsView: React.FC<SettingsViewProps> = ({
   initialSubtab = 'cloud',
   onOpenConflictModal,
+  onOpenUpdateModal,
   onRefreshNotes,
   onBackToNotes,
   activeEditingNoteTitle,
@@ -444,13 +447,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Clock className="w-3.5 h-3.5 text-zinc-400" />
                   Automatic multi-version snapshots preserved on conflict detection
                 </span>
-                <button
-                  id="open-conflicts-modal-btn"
-                  onClick={onOpenConflictModal}
-                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl text-zinc-700 dark:text-zinc-300 font-medium transition-colors"
-                >
-                  Inspect Conflict Logs &amp; Versions
-                </button>
+                {onOpenConflictModal && (
+                  <button
+                    id="open-conflicts-modal-btn"
+                    onClick={onOpenConflictModal}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl text-zinc-700 dark:text-zinc-300 font-medium transition-colors"
+                  >
+                    Inspect Conflict Logs &amp; Versions
+                  </button>
+                )}
               </div>
             </div>
 
@@ -744,7 +749,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             {/* Storage breakdown card */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Local SQLite Database Storage
+                Local Browser Storage
               </h3>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
@@ -828,12 +833,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Cpu className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold tracking-wide">Hardware Keystore Encryption</h3>
-                    <p className="text-xs text-zinc-400">Android Keystore / Apple Secure Enclave hardware binding</p>
+                    <h3 className="text-sm font-bold tracking-wide">
+                      {Capacitor.isNativePlatform() ? 'Hardware Keystore Encryption' : 'Local Secret Registry'}
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      {Capacitor.isNativePlatform()
+                        ? 'Android Keystore / Apple Secure Enclave hardware binding'
+                        : 'Web build: local metadata registry (not hardware-backed)'}
+                    </p>
                   </div>
                 </div>
                 <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
-                  AES-256-GCM
+                  {Capacitor.isNativePlatform() ? 'AES-256-GCM' : 'Local Storage'}
                 </span>
               </div>
             </div>
@@ -873,8 +884,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Offline-First Architectural Engine
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                VellumScribe runs on an offline-first foundation. All edits write immediately to the local SQLite database. When cloud providers are connected, a background sync worker computes cryptographic hashes and streams delta changes.
+                VellumScribe runs on an offline-first foundation. All edits write immediately to local browser storage. When cloud providers are connected, cloud sync exports notes flagged for cloud save into a verified backup snapshot.
               </p>
+              {onOpenUpdateModal && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={onOpenUpdateModal}
+                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Check for App Updates</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">

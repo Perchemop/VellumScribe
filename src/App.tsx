@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  RefreshCw,
   Moon,
   Sun,
   FileText,
@@ -10,10 +9,11 @@ import {
   Clock,
   Settings,
   Archive,
+  Key,
+  Sparkles,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from './types';
 import { StorageManager } from './lib/storage';
-import { CloudSyncEngine, SyncProgressUpdate } from './lib/cloudSync';
 import { NativeBridge } from './lib/nativeBridge';
 import { useApp } from './context/AppContext';
 import { EventNotesList } from './components/EventNotesList';
@@ -21,7 +21,10 @@ import { NoteEditor } from './components/NoteEditor';
 import { RecentNotesSection } from './components/RecentNotesSection';
 import { ArchiveSection } from './components/ArchiveSection';
 import { SettingsView } from './components/SettingsView';
-import { SyncProgressBar } from './components/SyncProgressBar';
+import { AppUpdateModal } from './components/AppUpdateModal';
+import { AppUpdateManager } from './lib/appUpdateManager';
+import { AiStudioKeyModal } from './components/AiStudioKeyModal';
+import { AiSettingsManager } from './lib/aiSettings';
 import {
   FirstTimeUserGuideModal,
   hasCompletedOnboarding,
@@ -38,8 +41,6 @@ export default function App() {
     setSelectedNoteId,
     darkMode,
     setDarkMode,
-    isSyncing,
-    backupFrequency,
     refreshData,
     deleteEvent,
     deleteNote,
@@ -47,30 +48,32 @@ export default function App() {
 
   // Local UI Navigation & modal states
   const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
-  const [settingsSubtab, setSettingsSubtab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>('cloud');
+  const [settingsSubtab, setSettingsSubtab] = useState<'ai' | 'storage' | 'security' | 'diagnostics'>('ai');
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
-  const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
+  const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
+  const [showAiKeyModal, setShowAiKeyModal] = useState<boolean>(false);
 
-  // Quick Top Bar Sync with Granular Progress
-  const handleQuickSync = async () => {
-    if (isSyncing) return;
-    setSyncProgress({ percent: 10, message: 'Initiating cloud backup...', phase: 'init' });
-
-    try {
-      await CloudSyncEngine.triggerSync({
-        onProgress: (p) => setSyncProgress(p),
-      });
-      refreshData();
-    } catch {
-      setSyncProgress({ percent: 100, message: 'Sync failed. Please check network connection.', phase: 'complete' });
-    } finally {
-      setTimeout(() => {
-        setSyncProgress(null);
-      }, 2500);
+  // Run schema checks and check for remote updates once per session on startup
+  useEffect(() => {
+    const migrationResult = AppUpdateManager.checkAndRunMigrations();
+    if (migrationResult.showChangelog) {
+      setShowUpdateModal(true);
     }
-  };
+
+    const checked = sessionStorage.getItem('vellumscribe_update_checked');
+    if (!checked) {
+      sessionStorage.setItem('vellumscribe_update_checked', 'true');
+      AppUpdateManager.checkForRemoteUpdates()
+        .then((res) => {
+          if (res.hasUpdate) {
+            setShowUpdateModal(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   // Event & Note CRUD Handlers
   const handleCreateEvent = (newEvent: Omit<EventRecord, 'id'>) => {
@@ -220,7 +223,7 @@ export default function App() {
                 }`}
               >
                 <Settings className="w-3.5 h-3.5" />
-                <span>Settings &amp; Cloud</span>
+                <span>Settings &amp; AI</span>
               </button>
             </div>
 
@@ -239,18 +242,30 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Sync Trigger with Tooltip & Live spinner */}
+              {/* Free Google AI Studio Key Authenticator Button */}
               <button
-                id="quick-sync-btn"
-                onClick={handleQuickSync}
-                disabled={isSyncing}
-                title={backupFrequency === 'never' ? 'Offline Mode (Local Snapshots Only)' : 'Sync Notes to Cloud'}
-                className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-xl transition-colors disabled:opacity-40 relative"
+                id="header-ai-key-btn"
+                onClick={() => setShowAiKeyModal(true)}
+                title={
+                  AiSettingsManager.hasLocalKey()
+                    ? `AI Studio Key Active (${AiSettingsManager.getMaskedKey()})`
+                    : 'Add Free Google AI Studio API Key for unlimited summaries'
+                }
+                className={`p-2 rounded-xl transition-colors relative flex items-center gap-1 ${
+                  AiSettingsManager.hasLocalKey()
+                    ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                    : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                }`}
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-zinc-900 dark:text-zinc-100' : ''}`} />
-                {backupFrequency === 'never' && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-500 rounded-full ring-2 ring-white dark:ring-zinc-900" title="Offline mode active" />
-                )}
+                <Key className="w-4 h-4" />
+                <span className="hidden xl:inline text-[11px] font-semibold">
+                  {AiSettingsManager.hasLocalKey() ? 'AI Key' : 'Add AI Key'}
+                </span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    AiSettingsManager.hasLocalKey() ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                  }`}
+                />
               </button>
 
               {/* Direct Settings Tab Button */}
@@ -260,7 +275,7 @@ export default function App() {
                   setSelectedNoteId(null);
                   setActiveView('settings');
                 }}
-                title="Settings & Cloud"
+                title="Settings & AI"
                 className={`p-2 rounded-xl transition-colors ${
                   activeView === 'settings'
                     ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
@@ -281,15 +296,6 @@ export default function App() {
               </button>
             </div>
           </header>
-        )}
-
-        {/* Global Animated Sync Progress Bar */}
-        {(isSyncing || syncProgress) && (
-          <SyncProgressBar
-            isSyncing={isSyncing}
-            progress={syncProgress}
-            onDismiss={() => setSyncProgress(null)}
-          />
         )}
 
         {/* Main Workspace Canvas */}
@@ -333,6 +339,7 @@ export default function App() {
                     onToggleFocus={() => setFocusMode((prev) => !prev)}
                     onNoteUpdated={handleNoteUpdated}
                     onNoteDeleted={handleDeleteNote}
+                    onOpenVersions={() => setActiveView('archive')}
                     onClose={() => {
                       setSelectedNoteId(null);
                       setFocusMode(false);
@@ -381,6 +388,7 @@ export default function App() {
               <SettingsView
                 initialSubtab={settingsSubtab}
                 onRefreshNotes={refreshData}
+                onOpenUpdateModal={() => setShowUpdateModal(true)}
                 onBackToNotes={selectedNote ? () => setActiveView('notes') : undefined}
                 activeEditingNoteTitle={selectedNote?.title || (selectedNote ? 'Untitled Note' : undefined)}
               />
@@ -533,6 +541,21 @@ export default function App() {
           <FirstTimeUserGuideModal
             isOpen={showOnboardingGuide}
             onClose={() => setShowOnboardingGuide(false)}
+          />
+        )}
+
+        {/* App Version & Migration Update Modal */}
+        {showUpdateModal && (
+          <AppUpdateModal onClose={() => setShowUpdateModal(false)} />
+        )}
+
+        {/* User Google AI Studio Free Key Authentication Modal */}
+        {showAiKeyModal && (
+          <AiStudioKeyModal
+            onClose={() => setShowAiKeyModal(false)}
+            onKeySaved={() => {
+              refreshData();
+            }}
           />
         )}
       </div>

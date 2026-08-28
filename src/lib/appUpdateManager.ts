@@ -31,35 +31,54 @@ const STORAGE_KEYS = {
   MIGRATION_LOGS: 'vellumscribe_migration_logs_v1',
 };
 
-export const CURRENT_APP_VERSION = '2.8.1';
-export const CURRENT_BUILD_NUMBER = 20801;
+export const CURRENT_APP_VERSION = '2.9.0';
+export const CURRENT_BUILD_NUMBER = 20900;
 export const CURRENT_SCHEMA_VERSION = 4;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '2.9.0',
+    buildNumber: 20900,
+    releaseDate: '2026-08-27',
+    isCurrent: true,
+    highlights: [
+      'Honesty & security audit pass across cloud sync, keystore, and AI fallbacks',
+      'Real cloud backup uploads for Google Drive, Dropbox, OneDrive, and Nextcloud',
+      'Native Android Keystore-backed secret storage (web build remains local-only)',
+    ],
+    features: [
+      'Manual credential connect flow: paste an access token, or a Nextcloud/WebDAV app password, and it is verified against the real provider API before the account is marked connected',
+      'Real SHA-256 checksums on local note version snapshots',
+      'AndroidKeystoreManager now writes to real platform secure storage on native builds via @aparajita/capacitor-secure-storage, and is honest about not being hardware-backed on the web build',
+    ],
+    fixes: [
+      'Removed a hardcoded placeholder email address that was used as a default account identity',
+      'Cloud sync no longer reports success when an upload actually failed or a provider is unimplemented',
+      'AI OCR and meeting-summary fallbacks no longer generate plausible-looking fabricated content when no API key is configured - they say so plainly instead',
+      'Removed several orphaned/duplicate source files that were never part of the actual build',
+      'PIN hashing and note encryption now fail loudly instead of silently downgrading to a non-cryptographic fallback when the Web Crypto API is unavailable',
+    ],
+  },
+  {
     version: '2.8.1',
     buildNumber: 20801,
     releaseDate: '2026-08-26',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
-      'Comprehensive Security & Architecture Audit Refinement',
-      'True AES-256-GCM Cryptographic Payload Encryption for PIN Protected Notes',
-      'Session-Gated Note Viewing Without Destructive Lock Stripping',
-      'Upstream OAuth Token Revocation on Cloud Account Disconnect',
+      'Security & architecture audit refinement',
+      'AES-256-GCM payload encryption for PIN protected notes',
+      'Session-gated note viewing without destructive lock stripping',
     ],
     features: [
-      'PBKDF2 (210,000 iterations) AES-256-GCM hardware/WebCrypto note content encryption',
+      'PBKDF2 (210,000 iterations) + AES-256-GCM note content encryption',
       'Session-only PIN gate modal preserving protection state across navigation',
       'PIN-verified batch unlock preventing unauthorized bulk decryption',
       'Protected note content placeholders in markdown exports and archive views',
-      'Optional shared-secret verification gate for server-side proxy routes',
     ],
     fixes: [
       'Resolved SettingsView unconditional render crash on missing database import',
       'Fixed cold-start race condition during AI Settings key initialization',
       'Corrected cascading delete on note removal targeting orphaned OCR scans',
-      'Fixed duplicate isCurrent flags and metadata version drift in changelog list',
-      'Cleaned up unused components and standardized Vite TypeScript client types',
     ],
   },
   {
@@ -68,18 +87,14 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
     releaseDate: '2026-08-25',
     isCurrent: false,
     highlights: [
-      'Live Cloud Storage Provider Integrations (Google Drive, Dropbox, OneDrive, Nextcloud, Box)',
-      'PKCE OAuth 2.0 Client Authentication with Hardware Keystore Storage',
-      'End-to-End Encrypted Snapshot Backup Verification Engine',
+      'Cloud storage provider groundwork for Google Drive, Dropbox, OneDrive, and Nextcloud',
+      'PKCE OAuth 2.0 client code paths added for future 1-click login',
     ],
     features: [
-      'Client-side OAuth 2.0 with PKCE authorization for major cloud storage services',
-      'Automated background backup upload with remote byte-length read-back verification',
-      'Bi-directional backup payload management with custom provider path configuration',
-      'Hardware Keystore integration for OAuth refresh token and encryption key storage',
+      'Client-side OAuth 2.0 + PKCE authorization code paths for major cloud storage services (not yet wired to a login UI at this version)',
+      'Backup payload export/download plumbing with custom provider path configuration',
     ],
     fixes: [
-      'Eliminated mock sync simulations in favor of authentic cloud provider APIs',
       'Hardened offline token refresh routines for interrupted mobile connections',
     ],
   },
@@ -89,14 +104,14 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
     releaseDate: '2026-08-24',
     isCurrent: false,
     highlights: [
-      'Comprehensive Multi-Format Note Sharing (Android Share, Markdown, Plain Text, QR Code)',
-      'Automated Database Schema Migration & APK Upgrade Safety Engine',
-      'Unified Settings Architecture between Editor and Main Navigation',
-      'Native Android APK Adaptive Icon and Safe-Area Enhancements',
+      'Comprehensive multi-format note sharing (Android Share, Markdown, Plain Text, QR Code)',
+      'Automated data migration & APK upgrade safety engine',
+      'Unified settings architecture between editor and main navigation',
+      'Native Android APK adaptive icon and safe-area enhancements',
     ],
     features: [
       'Instant offline device-to-device QR code sharing for notes & checklists',
-      'Native Android System Share Sheet integration via @capacitor/share',
+      'Native Android system share sheet integration via @capacitor/share',
       'In-editor quick settings access preserving active document state',
       'Automated pre-migration snapshot protection during APK updates',
       'Capacitor native clipboard, haptics, and filesystem file handlers',
@@ -105,7 +120,6 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
       'Eliminated JSON parsing syntax error on standalone mobile APK builds',
       'Fixed note editor navigation resetting selected note when viewing settings',
       'Resolved touch event latency on drawing canvas for Android hardware',
-      'Hardened air-gapped local database integrity checks',
     ],
   },
   {
@@ -114,14 +128,13 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
     releaseDate: '2026-08-10',
     isCurrent: false,
     highlights: [
-      'Gemini AI Meeting Minutes & Audio Transcriptions',
-      'OCR Document Scanning with Camera Integration',
-      'Interactive Checklists & Drawing Canvas',
+      'Gemini AI meeting minutes & audio transcription',
+      'OCR document scanning with camera integration',
+      'Interactive checklists & drawing canvas',
     ],
     features: [
       'Document scanner with hardware camera capture',
       'Voice memo audio recording with multi-codec player',
-      'Android Keystore AES-GCM local token encryption',
     ],
     fixes: [
       'Standardized dark theme contrast ratios',
@@ -134,9 +147,9 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
     releaseDate: '2026-07-15',
     isCurrent: false,
     highlights: [
-      'Initial Offline-First SQLite Architecture',
-      'Multi-Cloud Selective Sync Engine',
-      'Editorial Focus Mode',
+      'Initial offline-first local storage architecture',
+      'Multi-cloud selective sync groundwork',
+      'Editorial focus mode',
     ],
     features: [
       'Categorized event-driven note organizing hierarchy',
@@ -290,7 +303,12 @@ export class AppUpdateManager {
   }
 
   /**
-   * In-App Update Checker
+   * In-App Update Checker.
+   *
+   * If VITE_UPDATE_MANIFEST_URL is configured, this fetches that manifest
+   * (expected shape: { "version": "x.y.z", "releaseDate": "YYYY-MM-DD" })
+   * and compares it to CURRENT_APP_VERSION. If it isn't configured, this
+   * says so plainly rather than claiming to have checked and found nothing.
    */
   public static async checkForRemoteUpdates(): Promise<{
     isUpToDate: boolean;
@@ -298,24 +316,59 @@ export class AppUpdateManager {
     latestVersion: string;
     releaseDate: string;
     hasUpdate: boolean;
+    checked: boolean;
+    message: string;
     release: ReleaseInfo;
   }> {
     localStorage.setItem(STORAGE_KEYS.LAST_UPDATE_CHECK, new Date().toISOString());
-
-    // Current latest stable release
     const latestRelease = APP_CHANGELOGS[0];
+    const manifestUrl = (import.meta as any).env?.VITE_UPDATE_MANIFEST_URL as string | undefined;
 
-    // Artificial tiny network check simulation to confirm connection
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    if (!manifestUrl) {
+      return {
+        isUpToDate: true,
+        currentVersion: CURRENT_APP_VERSION,
+        latestVersion: latestRelease.version,
+        releaseDate: latestRelease.releaseDate,
+        hasUpdate: false,
+        checked: false,
+        message: 'No update manifest is configured for this build (set VITE_UPDATE_MANIFEST_URL), so this could not check online for a newer release.',
+        release: latestRelease,
+      };
+    }
 
-    return {
-      isUpToDate: true, // You have the latest production build
-      currentVersion: CURRENT_APP_VERSION,
-      latestVersion: latestRelease.version,
-      releaseDate: latestRelease.releaseDate,
-      hasUpdate: false,
-      release: latestRelease,
-    };
+    try {
+      const res = await fetch(manifestUrl, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error(`Update manifest request failed (HTTP ${res.status}).`);
+      }
+      const manifest = await res.json();
+      const latestVersion = typeof manifest.version === 'string' ? manifest.version : CURRENT_APP_VERSION;
+      const hasUpdate = latestVersion !== CURRENT_APP_VERSION;
+      return {
+        isUpToDate: !hasUpdate,
+        currentVersion: CURRENT_APP_VERSION,
+        latestVersion,
+        releaseDate: typeof manifest.releaseDate === 'string' ? manifest.releaseDate : latestRelease.releaseDate,
+        hasUpdate,
+        checked: true,
+        message: hasUpdate
+          ? `A newer version (${latestVersion}) is available.`
+          : 'You are running the latest version.',
+        release: latestRelease,
+      };
+    } catch (e: any) {
+      return {
+        isUpToDate: true,
+        currentVersion: CURRENT_APP_VERSION,
+        latestVersion: CURRENT_APP_VERSION,
+        releaseDate: latestRelease.releaseDate,
+        hasUpdate: false,
+        checked: false,
+        message: e?.message || 'Could not reach the update manifest.',
+        release: latestRelease,
+      };
+    }
   }
 
   public static getLastUpdateCheck(): string | null {
