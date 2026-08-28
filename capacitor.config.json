@@ -5,10 +5,10 @@
   "backgroundColor": "#121215",
   "server": {
     "androidScheme": "https",
-    "cleartext": true
+    "cleartext": false
   },
   "android": {
-    "allowMixedContent": true,
+    "allowMixedContent": false,
     "captureInput": true,
     "webContentsDebuggingEnabled": false
   },
