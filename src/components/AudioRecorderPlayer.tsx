@@ -202,30 +202,35 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     const fileName = recordedAudio.originalFileName || `rec_${Date.now()}.m4a`;
     const filePath = `/storage/notes/audio/${fileName}`;
 
-    const savedRec = SQLiteDatabase.addRecording({
-      note_id: noteId,
-      file_path: filePath,
-      file_size: recordedAudio.fileSizeBytes,
-      duration_seconds: recordedAudio.durationSeconds,
-      audio_url: recordedAudio.url,
-      sample_rate: 44100,
-      bitrate_kbps: 64,
-      created_at: timestamp,
-    });
-
-    let savedTranscript: TranscriptRecord | undefined;
-    if (transcriptionText) {
-      savedTranscript = SQLiteDatabase.addTranscript({
-        recording_id: savedRec.id,
-        transcript_text: transcriptionText,
+    try {
+      const savedRec = SQLiteDatabase.addRecording({
+        note_id: noteId,
+        file_path: filePath,
+        file_size: recordedAudio.fileSizeBytes,
+        duration_seconds: recordedAudio.durationSeconds,
+        audio_url: recordedAudio.url,
+        sample_rate: 44100,
+        bitrate_kbps: 64,
         created_at: timestamp,
-        confidence: 0.98,
-        speaker_count: 2,
       });
-    }
 
-    onRecordingSaved(savedRec, savedTranscript);
-    if (onClose) onClose();
+      let savedTranscript: TranscriptRecord | undefined;
+      if (transcriptionText) {
+        savedTranscript = SQLiteDatabase.addTranscript({
+          recording_id: savedRec.id,
+          transcript_text: transcriptionText,
+          created_at: timestamp,
+          confidence: 0.98,
+          speaker_count: 2,
+        });
+      }
+
+      onRecordingSaved(savedRec, savedTranscript);
+      if (onClose) onClose();
+    } catch (e: any) {
+      console.error('Failed to save recording to database:', e);
+      alert(`Storage Error: ${e.message}`);
+    }
   };
 
   const formatTime = (secs: number) => {

@@ -178,17 +178,22 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
 
   const handleApply = (mode: 'append' | 'replace') => {
     if (!ocrText) return;
-    const scanRecord = SQLiteDatabase.addOcrScan({
-      note_id: noteId,
-      image_path: `/storage/notes/scans/ocr_${Date.now()}.jpg`,
-      ocr_text: ocrText,
-      created_at: new Date().toISOString(),
-      image_preview: selectedImage || undefined,
-      confidence: 0.98,
-    });
+    try {
+      const scanRecord = SQLiteDatabase.addOcrScan({
+        note_id: noteId,
+        image_path: `/storage/notes/scans/ocr_${Date.now()}.jpg`,
+        ocr_text: ocrText,
+        created_at: new Date().toISOString(),
+        image_preview: selectedImage || undefined,
+        confidence: 0.98,
+      });
 
-    onOcrExtracted(ocrText, scanRecord, mode);
-    onClose();
+      onOcrExtracted(ocrText, scanRecord, mode);
+      onClose();
+    } catch (e: any) {
+      console.error('Failed to save OCR scan to database:', e);
+      alert(`Storage Error: ${e.message}`);
+    }
   };
 
   const handleCopy = () => {

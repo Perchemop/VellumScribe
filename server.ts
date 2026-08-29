@@ -536,51 +536,25 @@ ${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
 });
 
 // --- CLOUD BACKUP ROUTES ---
-const connectedAccounts: any[] = []; // In-memory storage for prototype
 
 app.get("/api/cloud/config", (req, res) => {
-  res.json({ accounts: connectedAccounts });
+  res.status(501).json({ error: "Cloud backup is not implemented on this server." });
 });
 
 app.get("/api/cloud/:provider/connect", (req, res) => {
-  const provider = req.params.provider;
-  // Redirect to callback immediately to simulate OAuth flow
-  res.redirect(`/api/cloud/${provider}/callback`);
+  res.status(501).send("Cloud authentication is not implemented.");
 });
 
 app.get("/api/cloud/:provider/callback", (req, res) => {
-  const provider = req.params.provider;
-  // Simulate successful connection
-  const account = {
-    provider,
-    accountId: `user-${Date.now()}`,
-    email: `user@${provider}.com`,
-    displayName: `Test User`,
-    connectedAt: new Date().toISOString(),
-  };
-  connectedAccounts.push(account);
-  res.redirect(`/?cloud=connected&provider=${provider}`);
+  res.status(501).send("Cloud authentication is not implemented.");
 });
 
 app.post("/api/cloud/:provider/disconnect", (req, res) => {
-  const provider = req.params.provider;
-  const index = connectedAccounts.findIndex(a => a.provider === provider);
-  if (index !== -1) {
-    connectedAccounts.splice(index, 1);
-  }
-  res.json({ success: true });
+  res.status(501).json({ error: "Not implemented" });
 });
 
 app.post("/api/cloud/:provider/backup", (req, res) => {
-  const provider = req.params.provider;
-  const backup = req.body.backup;
-  if (!backup) {
-    return res.status(400).json({ error: "No backup data provided" });
-  }
-  if (backup.length > 3.5 * 1024 * 1024) {
-    return res.status(400).json({ error: "Backup too large (limit ~3.5MB)" });
-  }
-  res.json({ success: true, bytesTransferred: backup.length });
+  res.status(501).json({ error: "Not implemented" });
 });
 
 // Explicit 404 handler for unmatched /api/* routes (prevents falling through to SPA HTML)

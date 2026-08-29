@@ -118,9 +118,12 @@ export class StorageManager {
     return this.eventsCache || [];
   }
 
-  public static saveEvents(events: EventRecord[]) {
-    this.eventsCache = events;
-    safeSetItem(STORAGE_KEYS.EVENTS, JSON.stringify(events));
+  public static saveEvents(events: EventRecord[]): boolean {
+    if (safeSetItem(STORAGE_KEYS.EVENTS, JSON.stringify(events))) {
+      this.eventsCache = events;
+      return true;
+    }
+    return false;
   }
 
   public static addEvent(event: Omit<EventRecord, 'id'>): EventRecord {
@@ -128,7 +131,9 @@ export class StorageManager {
     const newId = events.length > 0 ? Math.max(...events.map((e) => e.id)) + 1 : 1;
     const newEvent: EventRecord = { ...event, id: newId };
     events.unshift(newEvent);
-    this.saveEvents(events);
+    if (!this.saveEvents(events)) {
+      throw new Error("Failed to persist new event to storage.");
+    }
     return newEvent;
   }
 
@@ -137,13 +142,17 @@ export class StorageManager {
     const idx = events.findIndex((e) => e.id === id);
     if (idx === -1) return null;
     events[idx] = { ...events[idx], ...updates };
-    this.saveEvents(events);
+    if (!this.saveEvents(events)) {
+      throw new Error("Failed to persist event updates to storage.");
+    }
     return events[idx];
   }
 
   public static deleteEvent(id: number): boolean {
     const events = this.getEvents().filter((e) => e.id !== id);
-    this.saveEvents(events);
+    if (!this.saveEvents(events)) {
+      return false;
+    }
 
     // Cascading delete notes associated with this event
     const notes = this.getNotes();
@@ -180,9 +189,12 @@ export class StorageManager {
     return this.getNotes().filter((n) => n.status === 'trash');
   }
 
-  public static saveNotes(notes: NoteRecord[]) {
-    this.notesCache = notes;
-    safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+  public static saveNotes(notes: NoteRecord[]): boolean {
+    if (safeSetItem(STORAGE_KEYS.NOTES, JSON.stringify(notes))) {
+      this.notesCache = notes;
+      return true;
+    }
+    return false;
   }
 
   public static getNotesForEvent(eventId: number): NoteRecord[] {
@@ -207,7 +219,9 @@ export class StorageManager {
       version: 1,
     };
     notes.unshift(newNote);
-    this.saveNotes(notes);
+    if (!this.saveNotes(notes)) {
+      throw new Error("Failed to persist new note to storage.");
+    }
     return newNote;
   }
 
@@ -295,7 +309,9 @@ export class StorageManager {
       updated_at: new Date().toISOString(),
       version: currentVer + 1,
     };
-    this.saveNotes(notes);
+    if (!this.saveNotes(notes)) {
+      throw new Error("Failed to persist note updates to storage.");
+    }
     return notes[idx];
   }
 
@@ -446,7 +462,9 @@ export class StorageManager {
 
   public static deleteNote(id: number): boolean {
     const notes = this.getNotes().filter((n) => n.id !== id);
-    this.saveNotes(notes);
+    if (!this.saveNotes(notes)) {
+      return false;
+    }
 
     // Cascading delete recordings and OCR scans
     const recordings = this.getRecordings();
@@ -772,9 +790,12 @@ export class StorageManager {
     return this.recordingsCache || [];
   }
 
-  public static saveRecordings(recordings: RecordingRecord[]) {
-    this.recordingsCache = recordings;
-    safeSetItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(recordings));
+  public static saveRecordings(recordings: RecordingRecord[]): boolean {
+    if (safeSetItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(recordings))) {
+      this.recordingsCache = recordings;
+      return true;
+    }
+    return false;
   }
 
   public static getRecordingsForNote(noteId: number): RecordingRecord[] {
@@ -790,13 +811,17 @@ export class StorageManager {
       created_at: rec.created_at || new Date().toISOString(),
     };
     recordings.unshift(newRec);
-    this.saveRecordings(recordings);
+    if (!this.saveRecordings(recordings)) {
+      throw new Error("Failed to persist new recording to storage.");
+    }
     return newRec;
   }
 
   public static deleteRecording(id: number): boolean {
     const recordings = this.getRecordings().filter((r) => r.id !== id);
-    this.saveRecordings(recordings);
+    if (!this.saveRecordings(recordings)) {
+      return false;
+    }
 
     // Cascading delete transcripts
     const transcripts = this.getTranscripts().filter((t) => t.recording_id !== id);
@@ -818,9 +843,12 @@ export class StorageManager {
     return this.transcriptsCache || [];
   }
 
-  public static saveTranscripts(transcripts: TranscriptRecord[]) {
-    this.transcriptsCache = transcripts;
-    safeSetItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(transcripts));
+  public static saveTranscripts(transcripts: TranscriptRecord[]): boolean {
+    if (safeSetItem(STORAGE_KEYS.TRANSCRIPTS, JSON.stringify(transcripts))) {
+      this.transcriptsCache = transcripts;
+      return true;
+    }
+    return false;
   }
 
   public static getTranscriptForRecording(recordingId: number): TranscriptRecord | undefined {
@@ -836,7 +864,9 @@ export class StorageManager {
       created_at: t.created_at || new Date().toISOString(),
     };
     transcripts.unshift(newTranscript);
-    this.saveTranscripts(transcripts);
+    if (!this.saveTranscripts(transcripts)) {
+      throw new Error("Failed to persist new transcript to storage.");
+    }
     return newTranscript;
   }
 
@@ -854,9 +884,12 @@ export class StorageManager {
     return this.ocrScansCache || [];
   }
 
-  public static saveOcrScans(scans: OcrScanRecord[]) {
-    this.ocrScansCache = scans;
-    safeSetItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(scans));
+  public static saveOcrScans(scans: OcrScanRecord[]): boolean {
+    if (safeSetItem(STORAGE_KEYS.OCR_SCANS, JSON.stringify(scans))) {
+      this.ocrScansCache = scans;
+      return true;
+    }
+    return false;
   }
 
   public static getOcrScansForNote(noteId: number): OcrScanRecord[] {
@@ -872,13 +905,17 @@ export class StorageManager {
       created_at: scan.created_at || new Date().toISOString(),
     };
     scans.unshift(newScan);
-    this.saveOcrScans(scans);
+    if (!this.saveOcrScans(scans)) {
+      throw new Error("Failed to persist new OCR scan to storage.");
+    }
     return newScan;
   }
 
   public static deleteOcrScan(id: number): boolean {
     const scans = this.getOcrScans().filter((s) => s.id !== id);
-    this.saveOcrScans(scans);
+    if (!this.saveOcrScans(scans)) {
+      return false;
+    }
     return true;
   }
 
@@ -973,21 +1010,59 @@ export class StorageManager {
     return JSON.stringify(bundle, null, 2);
   }
 
+  public static clearCache() {
+    this.eventsCache = null;
+    this.notesCache = null;
+    this.recordingsCache = null;
+    this.transcriptsCache = null;
+    this.ocrScansCache = null;
+  }
+
   public static importFullDump(jsonStr: string): boolean {
     try {
       const parsed = JSON.parse(jsonStr);
-      if (parsed.schema) {
-        if (parsed.schema.events) this.saveEvents(parsed.schema.events);
-        if (parsed.schema.notes) this.saveNotes(parsed.schema.notes);
-        if (parsed.schema.recordings) this.saveRecordings(parsed.schema.recordings);
-        if (parsed.schema.transcripts) this.saveTranscripts(parsed.schema.transcripts);
-        if (parsed.schema.ocr_scans) this.saveOcrScans(parsed.schema.ocr_scans);
-        return true;
+      if (!parsed || typeof parsed !== 'object' || !parsed.schema) {
+        return false;
       }
+      
+      const s = parsed.schema;
+      if (
+        (s.events && !Array.isArray(s.events)) ||
+        (s.notes && !Array.isArray(s.notes)) ||
+        (s.recordings && !Array.isArray(s.recordings)) ||
+        (s.transcripts && !Array.isArray(s.transcripts)) ||
+        (s.ocr_scans && !Array.isArray(s.ocr_scans))
+      ) {
+        return false;
+      }
+
+      const prevEvents = this.getEvents();
+      const prevNotes = this.getNotes();
+      const prevRecordings = this.getRecordings();
+      const prevTranscripts = this.getTranscripts();
+      const prevOcrScans = this.getOcrScans();
+
+      let ok = true;
+      if (s.events) ok = ok && this.saveEvents(s.events);
+      if (s.notes) ok = ok && this.saveNotes(s.notes);
+      if (s.recordings) ok = ok && this.saveRecordings(s.recordings);
+      if (s.transcripts) ok = ok && this.saveTranscripts(s.transcripts);
+      if (s.ocr_scans) ok = ok && this.saveOcrScans(s.ocr_scans);
+
+      if (!ok) {
+        // Rollback on failure
+        this.saveEvents(prevEvents);
+        this.saveNotes(prevNotes);
+        this.saveRecordings(prevRecordings);
+        this.saveTranscripts(prevTranscripts);
+        this.saveOcrScans(prevOcrScans);
+        return false;
+      }
+      return true;
     } catch (e) {
       console.error('Failed to import database dump', e);
+      return false;
     }
-    return false;
   }
 
   public static exportFullBackup(): string {
