@@ -22,6 +22,7 @@ export interface NoteRecord {
   note_type?: 'text' | 'checklist' | 'sketch';
   checklist_items?: ChecklistItem[];
   sketch_data?: string; // Data URL for sketch drawing canvas
+  sketch_media_key?: string; // Reference to binary sketch payload
   status?: 'active' | 'archived' | 'trash'; // Omni-Notes lifecycle
   archived_at?: string;
   trashed_at?: string;
@@ -69,6 +70,7 @@ export interface RecordingRecord {
   file_size: number; // in bytes
   duration_seconds: number;
   audio_url?: string;
+  media_key?: string;
   sample_rate?: number;
   bitrate_kbps?: number;
   created_at: string;
@@ -90,6 +92,7 @@ export interface OcrScanRecord {
   ocr_text: string;
   created_at: string;
   image_preview?: string;
+  media_key?: string;
   confidence?: number;
 }
 

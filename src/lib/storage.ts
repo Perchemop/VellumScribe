@@ -55,6 +55,36 @@ function safeSetItem(key: string, value: string): boolean {
  * quota protection, and transactional record management.
  */
 export class StorageManager {
+  public static async initialize(): Promise<void> {
+    const notes = this.getNotes();
+    let changed = false;
+
+    // Migrate legacy data URLs to binary media storage
+    for (const note of notes) {
+      if (note.sketch_data && !note.sketch_media_key && !note.is_locked) {
+        try {
+          const mediaKey = `sketch_${note.id}_${Date.now()}.png`;
+          const response = await fetch(note.sketch_data);
+          const blob = await response.blob();
+          
+          // Import MediaRepository dynamically to avoid circular dependency
+          const { MediaRepository } = await import('./MediaRepository');
+          await MediaRepository.putBinary(mediaKey, blob);
+          
+          note.sketch_media_key = mediaKey;
+          note.sketch_data = undefined;
+          changed = true;
+        } catch (e) {
+          console.warn(`Failed to migrate sketch for note ${note.id}`, e);
+        }
+      }
+    }
+    
+    if (changed) {
+      this.saveNotes(notes);
+    }
+  }
+
   // Safe KV Accessors
   public static getItem<T = string>(key: string, fallback: T | null = null): T | null {
     try {
@@ -367,9 +397,37 @@ export class StorageManager {
       return { success: false };
     }
 
-    // If encrypted_payload exists, decrypt it with the entered PIN
+    // Initialize session automatically
+    const { UnlockSessionManager } = await import('./UnlockSessionManager');
+    if (note.pin_salt) {
+      await UnlockSessionManager.createSession(note.id, enteredPin, note.pin_salt);
+    }
+
+    // If encrypted_payload exists, decrypt it
     if (note.encrypted_payload && note.pin_salt) {
-      const decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+      const { decryptNotePayload, decryptNotePayloadV2 } = await import('./cryptoUtils');
+      const sessionKey = UnlockSessionManager.getSessionKey(note.id);
+      
+      let decrypted: NotePayloadData | null = null;
+      
+      try {
+        const parsed = JSON.parse(note.encrypted_payload);
+        if (parsed.v === 2 && sessionKey) {
+          decrypted = await decryptNotePayloadV2(note.encrypted_payload, sessionKey);
+        } else {
+          decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+          // Transparent upgrade to V2 on next save
+          if (decrypted) {
+             // We do this by triggering an automatic resave with V2 later or directly if we want
+             // But the instructions say "transparently upgraded to v2 after successful PIN verification"
+             this.saveUnlockedNote(note.id, decrypted, enteredPin).catch(console.warn);
+          }
+        }
+      } catch (e) {
+        // Fallback if not JSON or parsing fails for v2 logic
+        decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+      }
+
       if (decrypted) {
         return { success: true, payload: decrypted };
       }
@@ -421,14 +479,29 @@ export class StorageManager {
     const note = this.getNoteById(id);
     if (!note) return null;
 
-    if (note.is_locked && pinHeld && note.pin_salt) {
+    if (note.is_locked) {
+      // Must use UnlockSessionManager
+      // Import it dynamically to avoid circular dependencies if any
+      const { UnlockSessionManager } = await import('./UnlockSessionManager');
+      const sessionKey = UnlockSessionManager.getSessionKey(id);
+      const { encryptNotePayloadV2, encryptNotePayload } = await import('./cryptoUtils');
+      
+      let encryptedPayload: string | null = null;
+      
       const payload: NotePayloadData = {
         body: updates.body !== undefined ? updates.body : (note.body || ''),
         checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : (note.checklist_items || []),
         sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : (note.sketch_data || undefined),
       };
 
-      const encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt);
+      if (sessionKey) {
+        encryptedPayload = await encryptNotePayloadV2(payload, sessionKey);
+      } else if (pinHeld && note.pin_salt) {
+        // Fallback for compatibility/legacy routes that didn't set up a session key
+        encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt);
+      } else {
+        throw new Error("Cannot save locked note without an active session key or compatibility pin.");
+      }
 
       const sanitizedUpdates = { ...updates };
       delete sanitizedUpdates.body;
@@ -1062,6 +1135,131 @@ export class StorageManager {
     } catch (e) {
       console.error('Failed to import database dump', e);
       return false;
+    }
+  }
+
+  public static async exportPortableBackupAsync(): Promise<string> {
+    const bundle: any = {
+      version: '2.5',
+      export_timestamp: new Date().toISOString(),
+      schema: {
+        events: this.getEvents(),
+        notes: this.getNotes(),
+        recordings: this.getRecordings(),
+        transcripts: this.getTranscripts(),
+        ocr_scans: this.getOcrScans(),
+      },
+      media: {}
+    };
+
+    const { MediaRepository } = await import('./MediaRepository');
+    
+    // Collect all media keys
+    const mediaKeys = new Set<string>();
+    for (const note of bundle.schema.notes) {
+      if (note.sketch_media_key) mediaKeys.add(note.sketch_media_key);
+    }
+    for (const rec of bundle.schema.recordings) {
+      if (rec.media_key) mediaKeys.add(rec.media_key);
+    }
+    for (const scan of bundle.schema.ocr_scans) {
+      if (scan.media_key) mediaKeys.add(scan.media_key);
+    }
+
+    const blobToBase64 = (blob: Blob): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    };
+
+    for (const key of mediaKeys) {
+      // Just fetch raw binary, no crypto logic required here since we just want to back up whatever bytes exist
+      const blob = await MediaRepository.getBinary(key, 'application/octet-stream');
+      if (blob) {
+        bundle.media[key] = {
+          mimeType: blob.type,
+          data: await blobToBase64(blob)
+        };
+      }
+    }
+
+    return JSON.stringify(bundle, null, 2);
+  }
+
+  public static async importPortableBackupAsync(jsonStr: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed || typeof parsed !== 'object' || !parsed.schema) {
+        return { success: false, message: 'Invalid backup file format.' };
+      }
+      
+      const s = parsed.schema;
+      if (
+        (s.events && !Array.isArray(s.events)) ||
+        (s.notes && !Array.isArray(s.notes)) ||
+        (s.recordings && !Array.isArray(s.recordings)) ||
+        (s.transcripts && !Array.isArray(s.transcripts)) ||
+        (s.ocr_scans && !Array.isArray(s.ocr_scans))
+      ) {
+        return { success: false, message: 'Invalid backup schema format.' };
+      }
+
+      const prevEvents = this.getEvents();
+      const prevNotes = this.getNotes();
+      const prevRecordings = this.getRecordings();
+      const prevTranscripts = this.getTranscripts();
+      const prevOcrScans = this.getOcrScans();
+
+      let ok = true;
+      if (s.events) ok = ok && this.saveEvents(s.events);
+      if (s.notes) ok = ok && this.saveNotes(s.notes);
+      if (s.recordings) ok = ok && this.saveRecordings(s.recordings);
+      if (s.transcripts) ok = ok && this.saveTranscripts(s.transcripts);
+      if (s.ocr_scans) ok = ok && this.saveOcrScans(s.ocr_scans);
+
+      if (!ok) {
+        // Rollback on failure
+        this.saveEvents(prevEvents);
+        this.saveNotes(prevNotes);
+        this.saveRecordings(prevRecordings);
+        this.saveTranscripts(prevTranscripts);
+        this.saveOcrScans(prevOcrScans);
+        return { success: false, message: 'Failed to write collections. Rolled back.' };
+      }
+
+      if (parsed.media) {
+        const { MediaRepository } = await import('./MediaRepository');
+        
+        const base64ToBlob = (base64: string, mimeType: string): Blob => {
+          const byteCharacters = atob(base64);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          return new Blob([byteArray], { type: mimeType });
+        };
+
+        for (const key in parsed.media) {
+          try {
+            const mediaObj = parsed.media[key];
+            const blob = base64ToBlob(mediaObj.data, mediaObj.mimeType);
+            await MediaRepository.putBinary(key, blob);
+          } catch (e) {
+            console.warn(`Failed to restore media blob ${key}`, e);
+          }
+        }
+      }
+      return { success: true, message: 'Backup successfully imported into local store.' };
+    } catch (e) {
+      console.error('Failed to import database dump', e);
+      return { success: false, message: 'Failed to parse backup.' };
     }
   }
 

@@ -13,6 +13,8 @@ interface NoteSecurityModalProps {
   onClose: () => void;
 }
 
+import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+
 export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
   note,
   mode: initialMode,
@@ -53,6 +55,10 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
           setError('Incorrect PIN. Please try again.');
           setIsProcessing(false);
           return;
+        }
+
+        if (note.pin_salt) {
+          await UnlockSessionManager.createSession(note.id, pin, note.pin_salt);
         }
 
         if (onUnlockSession) {

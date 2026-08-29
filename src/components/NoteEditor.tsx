@@ -38,6 +38,8 @@ import { SettingsModal } from './SettingsModal';
 import { AiSummaryModal } from './AiSummaryModal';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { AiSettingsManager } from '../lib/aiSettings';
+import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -108,7 +110,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setBody(note.body || '');
     setChecklistItems(note.checklist_items || []);
     setShowChecklistSection(Boolean(note.checklist_items && note.checklist_items.length > 0));
-    setSketchData(note.sketch_data);
     setEventId(note.event_id);
     setTags(note.tags || []);
     setReminderAt(note.reminder_at || '');
@@ -119,7 +120,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
     setRecordings(StorageManager.getRecordingsForNote(note.id));
     setOcrScans(StorageManager.getOcrScansForNote(note.id));
-  }, [note.id]);
+
+    // Resolve sketch media key if present
+    let objectUrl: string | undefined;
+    if (note.sketch_media_key) {
+      const sessionKey = UnlockSessionManager.getSessionKey(note.id);
+      const resolveSketch = async () => {
+        let blob: Blob | null = null;
+        if (sessionKey) {
+          blob = await SecureMediaRepository.getEncryptedWithKey(note.sketch_media_key!, sessionKey);
+        } else {
+          blob = await MediaRepository.getBinary(note.sketch_media_key!);
+        }
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          setSketchData(objectUrl);
+        } else {
+          setSketchData(note.sketch_data);
+        }
+      };
+      resolveSketch();
+    } else {
+      setSketchData(note.sketch_data);
+    }
+
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [note.id, note.sketch_media_key, note.sketch_data, note.is_locked]);
 
   // Word count & reading stats
   const stats = useMemo(() => {
@@ -197,36 +225,57 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
-  const handleSketchSaved = (dataUrl: string) => {
+  const handleSketchSaved = async (dataUrl: string) => {
     setSketchData(dataUrl);
-    if (note.is_locked && activePin) {
-      StorageManager.saveUnlockedNote(note.id, { sketch_data: dataUrl }, activePin).then((updated) => {
+    const mediaKey = `sketch_${note.id}_${Date.now()}.png`;
+
+    try {
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      
+      const sessionKey = UnlockSessionManager.getSessionKey(note.id);
+      if (sessionKey) {
+        await SecureMediaRepository.putEncryptedWithKey(mediaKey, blob, sessionKey);
+      } else {
+        await MediaRepository.putBinary(mediaKey, blob);
+      }
+
+      if (note.is_locked && activePin) {
+        StorageManager.saveUnlockedNote(note.id, { sketch_media_key: mediaKey, sketch_data: undefined }, activePin).then((updated) => {
+          if (updated) {
+            onNoteUpdated(updated);
+            VersionControlManager.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
+          }
+        });
+      } else {
+        const updated = StorageManager.updateNote(note.id, {
+          sketch_media_key: mediaKey,
+          sketch_data: undefined,
+        });
         if (updated) {
           onNoteUpdated(updated);
           VersionControlManager.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
         }
-      });
-    } else {
-      const updated = StorageManager.updateNote(note.id, {
-        sketch_data: dataUrl,
-      });
-      if (updated) {
-        onNoteUpdated(updated);
-        VersionControlManager.saveVersionSnapshot(updated, 'Sketch Editor', 'Updated handwritten sketch canvas');
       }
+    } catch (e) {
+      console.warn('Failed to save sketch binary', e);
     }
     setShowSketchModal(false);
   };
 
   const handleRemoveSketch = () => {
     setSketchData(undefined);
+    if (note.sketch_media_key) {
+      MediaRepository.deleteBinary(note.sketch_media_key).catch(e => console.warn(e));
+    }
     if (note.is_locked && activePin) {
-      StorageManager.saveUnlockedNote(note.id, { sketch_data: undefined }, activePin).then((updated) => {
+      StorageManager.saveUnlockedNote(note.id, { sketch_data: undefined, sketch_media_key: undefined }, activePin).then((updated) => {
         if (updated) onNoteUpdated(updated);
       });
     } else {
       const updated = StorageManager.updateNote(note.id, {
         sketch_data: undefined,
+        sketch_media_key: undefined,
       });
       if (updated) onNoteUpdated(updated);
     }

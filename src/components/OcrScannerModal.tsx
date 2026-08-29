@@ -15,6 +15,8 @@ import { Capacitor } from '@capacitor/core';
 import { GeminiApiService } from '../lib/geminiService';
 import { SQLiteDatabase } from '../lib/storage';
 import { OcrScanRecord } from '../types';
+import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
+import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -176,15 +178,29 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
     }
   };
 
-  const handleApply = (mode: 'append' | 'replace') => {
+  const handleApply = async (mode: 'append' | 'replace') => {
     if (!ocrText) return;
     try {
+      let mediaKey: string | undefined = undefined;
+      if (selectedImage) {
+        mediaKey = `ocr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`;
+        const response = await fetch(selectedImage);
+        const blob = await response.blob();
+
+        const sessionKey = UnlockSessionManager.getSessionKey(noteId);
+        if (sessionKey) {
+          await SecureMediaRepository.putEncryptedWithKey(mediaKey, blob, sessionKey);
+        } else {
+          await MediaRepository.putBinary(mediaKey, blob);
+        }
+      }
+
       const scanRecord = SQLiteDatabase.addOcrScan({
         note_id: noteId,
         image_path: `/storage/notes/scans/ocr_${Date.now()}.jpg`,
         ocr_text: ocrText,
         created_at: new Date().toISOString(),
-        image_preview: selectedImage || undefined,
+        media_key: mediaKey,
         confidence: 0.98,
       });
 
