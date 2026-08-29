@@ -161,6 +161,52 @@ export interface NotePayloadData {
  * Encrypt note content (body, checklist items, sketch) using AES-256-GCM.
  * Returns a serialized string containing { iv, ciphertext, tag }.
  */
+export async function encryptNotePayloadV2(
+  payload: NotePayloadData,
+  key: CryptoKey
+): Promise<string> {
+  const jsonStr = JSON.stringify(payload);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(jsonStr);
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encoded
+  );
+
+  return JSON.stringify({
+    v: 2,
+    iv: toHex(iv),
+    data: toHex(ciphertext),
+  });
+}
+
+export async function decryptNotePayloadV2(
+  encryptedPayload: string,
+  key: CryptoKey
+): Promise<NotePayloadData | null> {
+  try {
+    const parsed = JSON.parse(encryptedPayload);
+    if (parsed.v === 2 && parsed.iv && parsed.data) {
+      const iv = fromHex(parsed.iv);
+      const ciphertext = fromHex(parsed.data);
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as BufferSource },
+        key,
+        ciphertext as BufferSource
+      );
+      const decoder = new TextDecoder();
+      const decoded = decoder.decode(decryptedBuffer);
+      return JSON.parse(decoded);
+    }
+  } catch (e) {
+    console.error('Failed to decrypt v2 note payload', e);
+  }
+  return null;
+}
+
 export async function encryptNotePayload(
   payload: NotePayloadData,
   pin: string,
@@ -247,4 +293,32 @@ export async function decryptNotePayload(
     console.error('Failed to decrypt note payload', e);
   }
   return null;
+}
+
+export async function encryptBinaryPayloadWithKey(payload: Uint8Array, key: CryptoKey): Promise<{ iv: string; data: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    payload
+  );
+  return {
+    iv: toHex(iv),
+    data: toHex(ciphertext)
+  };
+}
+
+export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHex: string, key: CryptoKey): Promise<Uint8Array | null> {
+  try {
+    const iv = fromHex(ivHex);
+    const ciphertext = fromHex(encryptedDataHex);
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      ciphertext as BufferSource
+    );
+    return new Uint8Array(decryptedBuffer);
+  } catch (e) {
+    return null;
+  }
 }

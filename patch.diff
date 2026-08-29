@@ -1,0 +1,10 @@
+--- src/components/AudioRecorderPlayer.tsx
++++ src/components/AudioRecorderPlayer.tsx
+@@ -2,6 +2,8 @@
+ import { Mic, Square, Play, Pause, RotateCcw, Sparkles, FileAudio, Check, X, Loader2 } from 'lucide-react';
+ import { SQLiteDatabase } from '../lib/storage';
+ import { RecordingRecord, TranscriptRecord } from '../types';
++import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
++import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+ import { generateAudioTranscript, generateMeetingMinutes } from '../lib/geminiService';
+ 

@@ -17,6 +17,8 @@ import { AudioRecorderManager } from '../lib/audioRecorder';
 import { GeminiApiService } from '../lib/geminiService';
 import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';
+import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
+import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 
 interface AudioRecorderPlayerProps {
   noteId: number;
@@ -196,19 +198,32 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     }
   };
 
-  const handleSaveToDatabase = () => {
+  const handleSaveToDatabase = async () => {
     if (!recordedAudio) return;
     const timestamp = new Date().toISOString();
     const fileName = recordedAudio.originalFileName || `rec_${Date.now()}.m4a`;
     const filePath = `/storage/notes/audio/${fileName}`;
+    const mediaKey = `media_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.m4a`;
 
     try {
+      // Fetch blob from temporary URL
+      const response = await fetch(recordedAudio.url);
+      const blob = await response.blob();
+
+      // Check if note is locked (has a session key)
+      const sessionKey = UnlockSessionManager.getSessionKey(noteId);
+      if (sessionKey) {
+        await SecureMediaRepository.putEncryptedWithKey(mediaKey, blob, sessionKey);
+      } else {
+        await MediaRepository.putBinary(mediaKey, blob);
+      }
+
       const savedRec = SQLiteDatabase.addRecording({
         note_id: noteId,
         file_path: filePath,
         file_size: recordedAudio.fileSizeBytes,
         duration_seconds: recordedAudio.durationSeconds,
-        audio_url: recordedAudio.url,
+        media_key: mediaKey,
         sample_rate: 44100,
         bitrate_kbps: 64,
         created_at: timestamp,

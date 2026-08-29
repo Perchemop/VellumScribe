@@ -76,7 +76,7 @@ export class GeminiApiService {
         return {
           ocrText: data.ocrText,
           confidence: data.confidence || 0.98,
-          source: data.source || 'gemini-3.7-flash',
+          source: data.source || 'gemini-3.6-flash',
         };
       }
 
@@ -161,7 +161,7 @@ export class GeminiApiService {
         return {
           summary: data.summary,
           format: data.format || options.format || 'executive',
-          source: data.source || 'gemini-3.7-flash',
+          source: data.source || 'gemini-3.6-flash',
           keyUsed: data.keyUsed,
         };
       }
@@ -202,7 +202,7 @@ export class GeminiApiService {
       if (res.ok && data.meetingMinutes !== undefined) {
         return {
           meetingMinutes: data.meetingMinutes,
-          source: data.source || 'gemini-3.7-flash',
+          source: data.source || 'gemini-3.6-flash',
           keyUsed: data.keyUsed,
         };
       }

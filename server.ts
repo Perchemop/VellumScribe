@@ -8,7 +8,7 @@ dotenv.config();
 
 const app = express();
 // Respect Cloud Run's injected $PORT while defaulting to 3000
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 // Trust proxy headers behind Cloud Run / reverse proxies so req.ip reflects actual client IP
 app.set("trust proxy", 1);
@@ -37,7 +37,7 @@ setInterval(() => {
   }
 }, 2 * 60 * 1000);
 
-function geminiRateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
+function geminiRateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) { 
   const clientIp = req.ip || req.socket.remoteAddress || "anonymous";
   const now = Date.now();
 
@@ -70,12 +70,7 @@ app.use("/api/gemini", geminiRateLimiter);
 // Lazy initialize Gemini client
 function createGeminiInstance(apiKey: string): GoogleGenAI {
   return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
+    apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } }
   });
 }
 
@@ -194,7 +189,7 @@ async function executeGeminiWithFallback(
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = ["gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
+  preferredModels: string[] = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
 ): Promise<{ text: string; modelUsed: string; keyUsed: "custom" | "server_env" }> {
   const customKey = resolveApiKey(req);
   const serverKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : undefined;
@@ -368,7 +363,7 @@ app.post("/api/gemini/transcribe", async (req, res) => {
 });
 
 // 3. AI Summary Studio & Synthesis Endpoint
-app.post("/api/gemini/summary", async (req, res) => {
+app.post("/api/gemini/summary", async (req, res) => { 
   try {
     const {
       format = "executive",
@@ -476,7 +471,7 @@ CRITICAL RULES:
 - Avoid emojis.
 - Maintain high information density and professional tone.`;
 
-    const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
+     const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
       contents: fullPrompt,
     });
 
@@ -514,7 +509,7 @@ ${rawTranscript ? `Transcript Content:\n"""\n${rawTranscript}\n"""\n` : ""}
 ${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
       : `Create a structured, professional meeting agenda and minutes outline for a meeting titled "${rawTitle}". Include formatted markdown sections for ### Executive Summary, ### Discussion Topics, ### Key Decisions, and ### Action Items (with empty checkboxes [ ]). Keep it concise, practical, and clean without emojis.`;
 
-    const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
+     const { text, modelUsed, keyUsed } = await executeGeminiWithFallback(req, {
       contents: prompt,
     });
 

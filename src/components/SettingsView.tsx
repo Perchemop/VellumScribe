@@ -742,8 +742,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
-                  onClick={() => {
-                    const json = StorageManager.exportFullBackup();
+                  onClick={async () => {
+                    const json = await StorageManager.exportPortableBackupAsync();
                     const blob = new Blob([json], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -769,8 +769,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          const res = StorageManager.importFullBackup(ev.target?.result as string);
+                        reader.onload = async (ev) => {
+                          const res = await StorageManager.importPortableBackupAsync(ev.target?.result as string);
                           if (res.success) {
                             onRefreshNotes();
                             setSyncFeedback(res.message);
