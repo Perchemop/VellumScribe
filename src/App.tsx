@@ -110,20 +110,25 @@ export default function App() {
       }
     }
 
-    const newNote = StorageManager.addNote({
-      event_id: targetEventId,
-      title: type === 'checklist' ? 'New To-Do List' : type === 'sketch' ? 'New Sketch Note' : 'Untitled Note',
-      body: type === 'checklist' ? 'Notes & subtasks' : type === 'sketch' ? 'Visual annotations' : '## Thoughts\n\nBegin typing here...',
-      note_type: type,
-      checklist_items: type === 'checklist' ? [{ id: '1', text: 'First task', completed: false }] : undefined,
-      created_at: new Date().toISOString(),
-      tags: [type === 'checklist' ? 'Tasks' : type === 'sketch' ? 'Drawings' : 'General'],
-      is_pinned: false,
-    });
-    refreshData();
-    setSelectedNoteId(newNote.id);
-    setActiveView('notes');
-    setShowFabSpeedDial(false);
+    try {
+      const newNote = StorageManager.addNote({
+        event_id: targetEventId,
+        title: type === 'checklist' ? 'New To-Do List' : type === 'sketch' ? 'New Sketch Note' : 'Untitled Note',
+        body: type === 'checklist' ? 'Notes & subtasks' : type === 'sketch' ? 'Visual annotations' : '## Thoughts\n\nBegin typing here...',
+        note_type: type,
+        checklist_items: type === 'checklist' ? [{ id: '1', text: 'First task', completed: false }] : undefined,
+        created_at: new Date().toISOString(),
+        tags: [type === 'checklist' ? 'Tasks' : type === 'sketch' ? 'Drawings' : 'General'],
+        is_pinned: false,
+      });
+      refreshData();
+      setSelectedNoteId(newNote.id);
+      setActiveView('notes');
+      setShowFabSpeedDial(false);
+    } catch (e: any) {
+      console.error('Failed to create new note:', e);
+      alert(`Storage Error: ${e.message}`);
+    }
   };
 
   const handleDeleteEvent = (eventId: number) => {

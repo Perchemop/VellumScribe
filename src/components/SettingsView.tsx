@@ -125,13 +125,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setSyncProgress({ percent: 10, message: 'Starting cloud backup...', phase: 'init' });
 
     try {
-      await CloudSyncEngine.triggerSync({
+      const success = await CloudSyncEngine.triggerSync({
         onProgress: (p) => setSyncProgress(p),
       });
       setTelemetryList(CloudSyncEngine.getTelemetry());
       setAccounts(CloudSyncEngine.getAccounts());
       setNotes(StorageManager.getNotes());
-      setSyncFeedback('Sync complete');
+      setSyncFeedback(success ? 'Sync complete' : 'Sync failed');
       onRefreshNotes();
     } catch {
       setSyncFeedback('Sync failed. Please check network connectivity.');

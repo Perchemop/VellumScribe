@@ -51,11 +51,11 @@ export class CloudSyncEngine {
     localStorage.setItem('vs_backup_freq', freq);
   }
 
-  static async triggerSync(options?: { onProgress: (p: SyncProgressUpdate) => void }) {
+  static async triggerSync(options?: { onProgress: (p: SyncProgressUpdate) => void }): Promise<boolean> {
     const accounts = this.getAccounts();
     if (accounts.length === 0) {
       options?.onProgress({ percent: 100, message: 'No accounts connected', phase: 'error' });
-      return;
+      return false;
     }
 
     options?.onProgress({ percent: 10, message: 'Generating backup snapshot...', phase: 'init' });
@@ -63,7 +63,7 @@ export class CloudSyncEngine {
 
     if (backupData.length > 3.5 * 1024 * 1024) {
        options?.onProgress({ percent: 100, message: 'Backup too large (limit ~3.5MB)', phase: 'error' });
-       return;
+       return false;
     }
 
     options?.onProgress({ percent: 30, message: 'Uploading to cloud...', phase: 'uploading' });
@@ -81,10 +81,11 @@ export class CloudSyncEngine {
         }
       } catch (e: any) {
         options?.onProgress({ percent: 100, message: `Upload failed: ${e.message}`, phase: 'error' });
-        return;
+        return false;
       }
     }
 
     options?.onProgress({ percent: 100, message: 'Backup complete', phase: 'complete' });
+    return true;
   }
 }

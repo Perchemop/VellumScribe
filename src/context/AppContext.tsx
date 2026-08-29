@@ -144,19 +144,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createNote = useCallback((params?: Partial<NoteRecord>): NoteRecord => {
     const targetEventId = params?.event_id ?? selectedEventId ?? (events[0]?.id || 1);
-    const newNote = StorageManager.addNote({
-      event_id: targetEventId,
-      title: params?.title || '',
-      body: params?.body || '',
-      note_type: params?.note_type || 'text',
-      checklist_items: params?.checklist_items || [],
-      tags: params?.tags || [],
-      created_at: new Date().toISOString(),
-    });
-    setNotes(StorageManager.getNotes());
-    setSelectedNoteId(newNote.id);
-    showToast('New note created.');
-    return newNote;
+    try {
+      const newNote = StorageManager.addNote({
+        event_id: targetEventId,
+        title: params?.title || '',
+        body: params?.body || '',
+        note_type: params?.note_type || 'text',
+        checklist_items: params?.checklist_items || [],
+        tags: params?.tags || [],
+        created_at: new Date().toISOString(),
+      });
+      setNotes(StorageManager.getNotes());
+      setSelectedNoteId(newNote.id);
+      showToast('New note created.');
+      return newNote;
+    } catch (e: any) {
+      console.error('Failed to create note:', e);
+      alert(`Storage Error: ${e.message}`);
+      throw e;
+    }
   }, [events, selectedEventId, showToast]);
 
   const updateNote = useCallback((id: number, updates: Partial<NoteRecord>): NoteRecord | null => {
