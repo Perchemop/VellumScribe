@@ -59,21 +59,19 @@ export class CloudSyncEngine {
     }
 
     options?.onProgress({ percent: 10, message: 'Generating backup snapshot...', phase: 'init' });
-    const backupData = StorageManager.exportCloudBackup();
-
-    if (backupData.length > 3.5 * 1024 * 1024) {
-       options?.onProgress({ percent: 100, message: 'Backup too large (limit ~3.5MB)', phase: 'error' });
-       return false;
-    }
-
+    
+    // Use the new binary-aware archive method
+    const backupData = await StorageManager.exportCloudBackupArchive();
+    
     options?.onProgress({ percent: 30, message: 'Uploading to cloud...', phase: 'uploading' });
-
+    
+    let allSuccess = true;
     for (const acc of accounts) {
       try {
         const res = await fetch(`/api/cloud/${acc.provider}/backup`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ backup: backupData })
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: backupData
         });
         if (!res.ok) {
            const err = await res.json();
@@ -81,11 +79,15 @@ export class CloudSyncEngine {
         }
       } catch (e: any) {
         options?.onProgress({ percent: 100, message: `Upload failed: ${e.message}`, phase: 'error' });
+        allSuccess = false;
         return false;
       }
     }
-
-    options?.onProgress({ percent: 100, message: 'Backup complete', phase: 'complete' });
-    return true;
+    
+    if (allSuccess) {
+      options?.onProgress({ percent: 100, message: 'Backup complete', phase: 'complete' });
+      return true;
+    }
+    return false;
   }
 }

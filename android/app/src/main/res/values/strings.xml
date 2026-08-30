@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VellumScribe</string>
+    <string name="title_activity_main">VellumScribe</string>
+    <string name="package_name">com.vellumscribe.app</string>
+    <string name="custom_url_scheme">com.vellumscribe.app</string>
+</resources>

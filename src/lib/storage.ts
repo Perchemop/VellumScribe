@@ -488,26 +488,25 @@ export class StorageManager {
       
       let encryptedPayload: string | null = null;
       
-      const payload: NotePayloadData = {
-        body: updates.body !== undefined ? updates.body : (note.body || ''),
-        checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : (note.checklist_items || []),
-        sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : (note.sketch_data || undefined),
+
+      const payload = {
+        body: updates.body !== undefined ? updates.body : note.body,
+        checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : note.checklist_items,
+        sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : note.sketch_data,
       };
 
       if (sessionKey) {
         encryptedPayload = await encryptNotePayloadV2(payload, sessionKey);
-      } else if (pinHeld && note.pin_salt) {
-        // Fallback for compatibility/legacy routes that didn't set up a session key
-        encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt);
+      } else if (pinHeld) {
+        encryptedPayload = await encryptNotePayload(payload, pinHeld, note.pin_salt!);
       } else {
-        throw new Error("Cannot save locked note without an active session key or compatibility pin.");
+        throw new Error('No active unlock session and no legacy PIN provided for locked note save.');
       }
 
       const sanitizedUpdates = { ...updates };
       delete sanitizedUpdates.body;
       delete sanitizedUpdates.checklist_items;
       delete sanitizedUpdates.sketch_data;
-
       return this.updateNote(id, {
         ...sanitizedUpdates,
         encrypted_payload: encryptedPayload,
@@ -1281,6 +1280,21 @@ export class StorageManager {
     this.saveRecordings(INITIAL_RECORDINGS);
     this.saveTranscripts(INITIAL_TRANSCRIPTS);
     this.saveOcrScans(INITIAL_OCR_SCANS);
+  }
+
+  public static async exportCloudBackupArchive(): Promise<Blob> {
+    const backupStr = this.exportCloudBackup();
+    const encoder = new TextEncoder();
+    const data = encoder.encode(backupStr);
+    
+    // Gzip compression via browser-native CompressionStream
+    const cs = new CompressionStream('gzip');
+    const writer = cs.writable.getWriter();
+    writer.write(data);
+    writer.close();
+    
+    const res = new Response(cs.readable);
+    return await res.blob();
   }
 }
 
