@@ -179,18 +179,37 @@ export class StorageManager {
   }
 
   public static deleteEvent(id: number): boolean {
-    const events = this.getEvents().filter((e) => e.id !== id);
-    if (!this.saveEvents(events)) {
-      return false;
+    const events = this.getEvents();
+    const eventIndex = events.findIndex((e) => e.id === id);
+    if (eventIndex === -1) return false;
+
+    // Safety Requirement: Deleting an event/category must NEVER cascade-delete notes.
+    // Instead, move any notes associated with this event to "General"
+    const notes = this.getNotes();
+    const notesToMove = notes.filter((n) => n.event_id === id);
+    
+    if (notesToMove.length > 0) {
+      let generalEvent = events.find((e) => e.title.toLowerCase() === 'general' && e.id !== id);
+      if (!generalEvent) {
+        // Create "General" category
+        const newGeneral = this.addEvent({
+          title: 'General',
+          event_date: new Date().toISOString().slice(0, 10),
+          category: 'personal',
+          color: '#6b7280',
+        });
+        generalEvent = newGeneral;
+      }
+      
+      if (generalEvent) {
+        for (const note of notesToMove) {
+          this.updateNote(note.id, { event_id: generalEvent.id });
+        }
+      }
     }
 
-    // Cascading delete notes associated with this event
-    const notes = this.getNotes();
-    const notesToDelete = notes.filter((n) => n.event_id === id);
-    for (const note of notesToDelete) {
-      this.deleteNote(note.id);
-    }
-    return true;
+    const updatedEvents = this.getEvents().filter((e) => e.id !== id);
+    return this.saveEvents(updatedEvents);
   }
 
   // --- NOTES ---

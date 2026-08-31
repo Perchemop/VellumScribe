@@ -267,9 +267,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       {/* Secondary Subtab Navigation */}
-      <div className="px-6 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-[#0e0e12] flex items-center gap-1 overflow-x-auto custom-minimal-scrollbar text-xs">
+      <div
+        role="tablist"
+        aria-label="Settings categories"
+        className="px-6 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-[#0e0e12] flex items-center gap-1 overflow-x-auto custom-minimal-scrollbar text-xs"
+      >
         <button
           id="subtab-cloud-sync-btn"
+          role="tab"
+          aria-selected={activeTab === 'cloud'}
+          aria-controls="panel-cloud-sync"
           onClick={() => setActiveTab('cloud')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === 'cloud'
@@ -288,6 +295,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <button
           id="subtab-ai-key-btn"
+          role="tab"
+          aria-selected={activeTab === 'ai'}
+          aria-controls="panel-ai-studio"
           onClick={() => setActiveTab('ai')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === 'ai'
@@ -306,6 +316,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <button
           id="subtab-storage-btn"
+          role="tab"
+          aria-selected={activeTab === 'storage'}
+          aria-controls="panel-storage"
           onClick={() => setActiveTab('storage')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === 'storage'
@@ -319,6 +332,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <button
           id="subtab-security-btn"
+          role="tab"
+          aria-selected={activeTab === 'security'}
+          aria-controls="panel-security"
           onClick={() => setActiveTab('security')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === 'security'
@@ -332,6 +348,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         <button
           id="subtab-diagnostics-btn"
+          role="tab"
+          aria-selected={activeTab === 'diagnostics'}
+          aria-controls="panel-diagnostics"
           onClick={() => setActiveTab('diagnostics')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
             activeTab === 'diagnostics'
@@ -348,7 +367,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
         {/* TAB 1: CLOUD SYNC & PROVIDERS */}
         {activeTab === 'cloud' && (
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div id="panel-cloud-sync" role="tabpanel" aria-labelledby="subtab-cloud-sync-btn" className="max-w-5xl mx-auto space-y-6">
             {/* Sync Progress Alert */}
             {(isSyncing || syncProgress) && (
               <SyncProgressBar
@@ -376,7 +395,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      Cloud Backuphronization Engine
+                      Cloud Backup Engine
                     </h3>
                     {isAirGapped ? (
                       <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
@@ -581,7 +600,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 2: AI STUDIO & GEMINI */}
         {activeTab === 'ai' && (
-          <div className="max-w-2xl mx-auto space-y-5">
+          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-2xl mx-auto space-y-5">
             {/* Privacy notice */}
             <div className="p-4 rounded-3xl border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-start gap-3 text-emerald-900 dark:text-emerald-300">
               <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
@@ -704,7 +723,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 3: STORAGE & BACKUPS */}
         {activeTab === 'storage' && (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div id="panel-storage" role="tabpanel" aria-labelledby="subtab-storage-btn" className="max-w-4xl mx-auto space-y-6">
             {/* Storage breakdown card */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
@@ -813,7 +832,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 4: SECURITY & KEYSTORE */}
         {activeTab === 'security' && (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div id="panel-security" role="tabpanel" aria-labelledby="subtab-security-btn" className="max-w-4xl mx-auto space-y-6">
             <div className="p-6 bg-zinc-950 rounded-3xl text-white border border-zinc-850 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -866,7 +885,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 5: ARCHITECTURE & DIAGNOSTICS */}
         {activeTab === 'diagnostics' && (
-          <div className="max-w-4xl mx-auto space-y-5">
+          <div id="panel-diagnostics" role="tabpanel" aria-labelledby="subtab-diagnostics-btn" className="max-w-4xl mx-auto space-y-5">
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Offline-First Architectural Engine

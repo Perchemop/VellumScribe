@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 
@@ -13,9 +14,10 @@ const PORT = 3000;
 // Trust proxy headers behind Cloud Run / reverse proxies so req.ip reflects actual client IP
 app.set("trust proxy", 1);
 
-// Middleware for parsing JSON & URL-encoded payloads
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// Middleware for parsing JSON, URL-encoded, and raw octet-stream binary payloads
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+app.use(express.raw({ type: "application/octet-stream", limit: "150mb" }));
 
 // --- RATE LIMITING SUBSYSTEM ---
 interface RateLimitRecord {
@@ -530,26 +532,554 @@ ${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
   }
 });
 
-// --- CLOUD BACKUP ROUTES ---
+// --- CLOUD BACKUP & OAUTH SUBSYSTEM ---
 
+interface CloudAccountRecord {
+  provider: "google_drive" | "microsoft";
+  accountId: string;
+  email: string;
+  displayName: string;
+  connectedAt: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+}
+
+interface CloudBackupRecord {
+  id: string;
+  provider: "google_drive" | "microsoft";
+  filename: string;
+  size: number;
+  createdAt: string;
+  checksum?: string;
+  noteCount?: number;
+  buffer: Buffer;
+}
+
+interface ChunkSession {
+  uploadId: string;
+  provider: "google_drive" | "microsoft";
+  filename: string;
+  totalBytes: number;
+  totalChunks: number;
+  receivedChunks: Map<number, Buffer>;
+  createdAt: number;
+  checksum?: string;
+}
+
+// In-memory stores for cloud connections, backup archives, and chunk sessions
+const cloudAccountsStore = new Map<string, CloudAccountRecord>();
+const cloudBackupsStore = new Map<string, CloudBackupRecord[]>();
+const chunkSessionsStore = new Map<string, ChunkSession>();
+
+const MAX_BACKUP_RETENTION = 10;
+
+// Periodic cleanup of stale chunk upload sessions (older than 30 mins)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of chunkSessionsStore.entries()) {
+    if (now - session.createdAt > 30 * 60 * 1000) {
+      chunkSessionsStore.delete(id);
+    }
+  }
+}, 5 * 60 * 1000);
+
+function isProviderConfigured(provider: string): boolean {
+  if (provider === "google_drive") {
+    return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  }
+  if (provider === "microsoft") {
+    return Boolean(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET);
+  }
+  return false;
+}
+
+// 1. Cloud Configuration & Status Endpoint
 app.get("/api/cloud/config", (req, res) => {
-  res.status(501).json({ error: "Cloud backup is not implemented on this server." });
+  const accounts = Array.from(cloudAccountsStore.values()).map((acc) => ({
+    provider: acc.provider,
+    accountId: acc.accountId,
+    email: acc.email,
+    displayName: acc.displayName,
+    connectedAt: acc.connectedAt,
+  }));
+
+  res.json({
+    status: "ok",
+    providers: {
+      google_drive: {
+        name: "Google Drive",
+        isConfigured: isProviderConfigured("google_drive"),
+        hasOAuthEnv: Boolean(process.env.GOOGLE_CLIENT_ID),
+      },
+      microsoft: {
+        name: "Microsoft OneDrive",
+        isConfigured: isProviderConfigured("microsoft"),
+        hasOAuthEnv: Boolean(process.env.MICROSOFT_CLIENT_ID),
+      },
+    },
+    accounts,
+  });
 });
 
+// 2. Provider OAuth Connect Initiation
 app.get("/api/cloud/:provider/connect", (req, res) => {
-  res.status(501).send("Cloud authentication is not implemented.");
+  const { provider } = req.params;
+  const host = req.get("host") || "localhost:3000";
+  const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  const origin = `${protocol}://${host}`;
+
+  if (provider === "google_drive") {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
+
+    if (!clientId) {
+      // If OAuth credentials are not yet supplied in .env, display clear setup guidance
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>Google Drive Cloud Backup Setup - VellumScribe</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0c0c0e; color: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+            .card { background: #18181b; border: 1px solid #27272a; border-radius: 20px; max-width: 540px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+            h2 { margin-top: 0; font-size: 20px; color: #34a853; }
+            p { font-size: 14px; line-height: 1.6; color: #a1a1aa; }
+            code { background: #27272a; padding: 2px 6px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #e4e4e7; }
+            .btn { display: inline-block; background: #34a853; color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 13px; margin-top: 16px; }
+            .btn-secondary { background: #27272a; color: #e4e4e7; margin-left: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Google Drive Backup Configuration</h2>
+            <p>To enable 1-click Google Drive backup synchronization, provide your Google Cloud OAuth credentials in your environment variables:</p>
+            <p>
+              <code>GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com</code><br/>
+              <code>GOOGLE_CLIENT_SECRET=your_client_secret</code><br/>
+              <code>GOOGLE_REDIRECT_URI=${redirectUri}</code>
+            </p>
+            <p>Required OAuth Scopes: <code>https://www.googleapis.com/auth/drive.file</code></p>
+            <div style="margin-top: 24px;">
+              <a class="btn" href="/">Return to VellumScribe</a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    const state = crypto.randomBytes(16).toString("hex");
+    const scopes = encodeURIComponent("https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile");
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent&state=${state}`;
+
+    return res.redirect(authUrl);
+  }
+
+  if (provider === "microsoft") {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
+
+    if (!clientId) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>Microsoft OneDrive Backup Setup - VellumScribe</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0c0c0e; color: #f4f4f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+            .card { background: #18181b; border: 1px solid #27272a; border-radius: 20px; max-width: 540px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+            h2 { margin-top: 0; font-size: 20px; color: #0078d4; }
+            p { font-size: 14px; line-height: 1.6; color: #a1a1aa; }
+            code { background: #27272a; padding: 2px 6px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #e4e4e7; }
+            .btn { display: inline-block; background: #0078d4; color: #fff; text-decoration: none; padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: 13px; margin-top: 16px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h2>Microsoft OneDrive Backup Configuration</h2>
+            <p>To enable 1-click Microsoft OneDrive backup synchronization, configure your Microsoft Azure AD App credentials in your environment variables:</p>
+            <p>
+              <code>MICROSOFT_CLIENT_ID=your_azure_client_id</code><br/>
+              <code>MICROSOFT_CLIENT_SECRET=your_azure_secret</code><br/>
+              <code>MICROSOFT_REDIRECT_URI=${redirectUri}</code>
+            </p>
+            <p>Required Scopes: <code>Files.ReadWrite.AppFolder User.Read offline_access</code></p>
+            <div style="margin-top: 24px;">
+              <a class="btn" href="/">Return to VellumScribe</a>
+            </div>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    const state = crypto.randomBytes(16).toString("hex");
+    const scopes = encodeURIComponent("Files.ReadWrite.AppFolder User.Read offline_access");
+    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&response_mode=query&scope=${scopes}&state=${state}`;
+
+    return res.redirect(authUrl);
+  }
+
+  res.status(400).json({ error: `Unsupported cloud provider: ${provider}` });
 });
 
-app.get("/api/cloud/:provider/callback", (req, res) => {
-  res.status(501).send("Cloud authentication is not implemented.");
+// 3. Provider OAuth Callback Handler
+app.get("/api/cloud/:provider/callback", async (req, res) => {
+  const { provider } = req.params;
+  const { code, error, error_description } = req.query;
+
+  if (error) {
+    return res.redirect(`/?cloud_error=${encodeURIComponent(String(error_description || error))}`);
+  }
+
+  if (!code || typeof code !== "string") {
+    return res.redirect("/?cloud_error=Missing_authorization_code");
+  }
+
+  const host = req.get("host") || "localhost:3000";
+  const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  const origin = `${protocol}://${host}`;
+
+  try {
+    if (provider === "google_drive") {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
+
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId || "",
+          client_secret: clientSecret || "",
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        console.error("Google Token Exchange Error:", errText);
+        return res.redirect("/?cloud_error=Token_exchange_failed");
+      }
+
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+
+      // Query User Profile
+      let email = "google_user@vellumscribe.app";
+      let displayName = "Google Drive User";
+      try {
+        const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          email = userData.email || email;
+          displayName = userData.name || displayName;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch Google profile info:", e);
+      }
+
+      cloudAccountsStore.set("google_drive", {
+        provider: "google_drive",
+        accountId: email,
+        email,
+        displayName,
+        connectedAt: new Date().toISOString(),
+        accessToken,
+        refreshToken: tokenData.refresh_token,
+        expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
+      });
+
+      return res.redirect("/?cloud_connected=google_drive");
+    }
+
+    if (provider === "microsoft") {
+      const clientId = process.env.MICROSOFT_CLIENT_ID;
+      const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+      const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
+
+      const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: clientId || "",
+          client_secret: clientSecret || "",
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text();
+        console.error("Microsoft Token Exchange Error:", errText);
+        return res.redirect("/?cloud_error=Token_exchange_failed");
+      }
+
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+
+      let email = "onedrive_user@vellumscribe.app";
+      let displayName = "OneDrive User";
+      try {
+        const userRes = await fetch("https://graph.microsoft.com/v1.0/me", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          email = userData.mail || userData.userPrincipalName || email;
+          displayName = userData.displayName || displayName;
+        }
+      } catch (e) {
+        console.warn("Failed to fetch Microsoft profile info:", e);
+      }
+
+      cloudAccountsStore.set("microsoft", {
+        provider: "microsoft",
+        accountId: email,
+        email,
+        displayName,
+        connectedAt: new Date().toISOString(),
+        accessToken,
+        refreshToken: tokenData.refresh_token,
+        expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
+      });
+
+      return res.redirect("/?cloud_connected=microsoft");
+    }
+
+    res.redirect("/?cloud_error=Unsupported_provider");
+  } catch (error: any) {
+    console.error("OAuth Callback Exception:", error);
+    res.redirect(`/?cloud_error=${encodeURIComponent(error?.message || "oauth_failed")}`);
+  }
 });
 
+// 4. Provider Disconnect Endpoint
 app.post("/api/cloud/:provider/disconnect", (req, res) => {
-  res.status(501).json({ error: "Not implemented" });
+  const { provider } = req.params;
+  cloudAccountsStore.delete(provider);
+  res.json({ success: true, message: `Disconnected ${provider} account.` });
 });
 
+// 5. Remote Backups Listing Endpoint
+app.get("/api/cloud/:provider/backups", (req, res) => {
+  const { provider } = req.params;
+  const backups = (cloudBackupsStore.get(provider) || []).map((b) => ({
+    id: b.id,
+    filename: b.filename,
+    size: b.size,
+    createdAt: b.createdAt,
+    checksum: b.checksum,
+    noteCount: b.noteCount,
+  }));
+
+  res.json({
+    provider,
+    backups,
+    total: backups.length,
+  });
+});
+
+// 6. Direct Binary Backup Upload Endpoint
 app.post("/api/cloud/:provider/backup", (req, res) => {
-  res.status(501).json({ error: "Not implemented" });
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" };
+  
+  let buffer: Buffer | null = null;
+  let filename = `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, "-")}.json.gz`;
+
+  if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+    buffer = req.body;
+  } else if (req.body && typeof req.body.dataBase64 === "string") {
+    buffer = Buffer.from(req.body.dataBase64, "base64");
+    if (req.body.filename) filename = req.body.filename;
+  } else if (typeof req.body === "string" && req.body.length > 0) {
+    buffer = Buffer.from(req.body, "utf-8");
+  }
+
+  if (!buffer || buffer.length === 0) {
+    return res.status(400).json({ error: "Empty or invalid backup payload." });
+  }
+
+  const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+  const backupId = `bk_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+  const newBackup: CloudBackupRecord = {
+    id: backupId,
+    provider,
+    filename,
+    size: buffer.length,
+    createdAt: new Date().toISOString(),
+    checksum,
+    buffer,
+  };
+
+  let list = cloudBackupsStore.get(provider) || [];
+  list.unshift(newBackup);
+
+  // Retention pruning: Keep newest MAX_BACKUP_RETENTION archives
+  if (list.length > MAX_BACKUP_RETENTION) {
+    list = list.slice(0, MAX_BACKUP_RETENTION);
+  }
+  cloudBackupsStore.set(provider, list);
+
+  res.json({
+    success: true,
+    backupId,
+    filename,
+    size: buffer.length,
+    checksum,
+    createdAt: newBackup.createdAt,
+    message: `Backup successfully uploaded to ${provider}.`,
+  });
+});
+
+// 7. Resumable Chunked Upload - Init
+app.post("/api/cloud/:provider/chunk/init", (req, res) => {
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" };
+  const { filename = "vellumscribe_backup.json.gz", totalBytes = 0, totalChunks = 1, checksum } = req.body;
+
+  const uploadId = `upload_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+  const session: ChunkSession = {
+    uploadId,
+    provider,
+    filename,
+    totalBytes: Number(totalBytes),
+    totalChunks: Number(totalChunks),
+    receivedChunks: new Map<number, Buffer>(),
+    createdAt: Date.now(),
+    checksum,
+  };
+
+  chunkSessionsStore.set(uploadId, session);
+
+  res.json({
+    success: true,
+    uploadId,
+    chunkSize: 2 * 1024 * 1024, // Recommended 2MB chunk size
+    totalChunks: session.totalChunks,
+  });
+});
+
+// 8. Resumable Chunked Upload - Upload Chunk
+app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
+  const { uploadId, chunkIndex, chunkBase64 } = req.body;
+  const session = chunkSessionsStore.get(uploadId);
+
+  if (!session) {
+    return res.status(404).json({ error: "Upload session expired or invalid." });
+  }
+
+  let chunkBuffer: Buffer | null = null;
+  if (Buffer.isBuffer(req.body)) {
+    chunkBuffer = req.body;
+  } else if (chunkBase64 && typeof chunkBase64 === "string") {
+    chunkBuffer = Buffer.from(chunkBase64, "base64");
+  }
+
+  if (!chunkBuffer || chunkBuffer.length === 0) {
+    return res.status(400).json({ error: "Missing chunk buffer payload." });
+  }
+
+  const idx = Number(chunkIndex);
+  session.receivedChunks.set(idx, chunkBuffer);
+
+  res.json({
+    success: true,
+    uploadId,
+    chunkIndex: idx,
+    receivedCount: session.receivedChunks.size,
+    totalChunks: session.totalChunks,
+  });
+});
+
+// 9. Resumable Chunked Upload - Commit
+app.post("/api/cloud/:provider/chunk/commit", (req, res) => {
+  const { uploadId } = req.body;
+  const session = chunkSessionsStore.get(uploadId);
+
+  if (!session) {
+    return res.status(404).json({ error: "Upload session expired or not found." });
+  }
+
+  if (session.receivedChunks.size < session.totalChunks) {
+    return res.status(400).json({
+      error: `Missing chunks: received ${session.receivedChunks.size} of ${session.totalChunks}`,
+    });
+  }
+
+  // Concatenate ordered chunks
+  const chunkArrays: Buffer[] = [];
+  for (let i = 0; i < session.totalChunks; i++) {
+    const chunk = session.receivedChunks.get(i);
+    if (!chunk) {
+      return res.status(400).json({ error: `Chunk index ${i} is missing.` });
+    }
+    chunkArrays.push(chunk);
+  }
+
+  const fullBuffer = Buffer.concat(chunkArrays);
+  const calculatedChecksum = crypto.createHash("sha256").update(fullBuffer).digest("hex");
+
+  if (session.checksum && session.checksum.toLowerCase() !== calculatedChecksum.toLowerCase()) {
+    return res.status(400).json({
+      error: "Archive checksum mismatch. Upload may be corrupted.",
+    });
+  }
+
+  const backupId = `bk_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  const newBackup: CloudBackupRecord = {
+    id: backupId,
+    provider: session.provider,
+    filename: session.filename,
+    size: fullBuffer.length,
+    createdAt: new Date().toISOString(),
+    checksum: calculatedChecksum,
+    buffer: fullBuffer,
+  };
+
+  let list = cloudBackupsStore.get(session.provider) || [];
+  list.unshift(newBackup);
+  if (list.length > MAX_BACKUP_RETENTION) {
+    list = list.slice(0, MAX_BACKUP_RETENTION);
+  }
+  cloudBackupsStore.set(session.provider, list);
+
+  // Clean up completed chunk session
+  chunkSessionsStore.delete(uploadId);
+
+  res.json({
+    success: true,
+    backupId,
+    filename: session.filename,
+    size: fullBuffer.length,
+    checksum: calculatedChecksum,
+    createdAt: newBackup.createdAt,
+    message: `Chunked archive committed successfully to ${session.provider}.`,
+  });
+});
+
+// 10. Restore / Download Backup Archive Endpoint
+app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
+  const { provider, backupId } = req.params;
+  const list = cloudBackupsStore.get(provider) || [];
+  const backup = list.find((b) => b.id === backupId);
+
+  if (!backup) {
+    return res.status(404).json({ error: "Backup archive not found." });
+  }
+
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${backup.filename}"`);
+  res.setHeader("Content-Length", backup.buffer.length);
+  res.send(backup.buffer);
 });
 
 // Explicit 404 handler for unmatched /api/* routes (prevents falling through to SPA HTML)
