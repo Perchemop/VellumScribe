@@ -49,12 +49,23 @@ describe('StorageManager events', () => {
     expect(StorageManager.getEvents().find((e) => e.id === event.id)?.title).toBe('Renamed');
   });
 
-  it('cascades deleting an event to its notes', () => {
-    const event = StorageManager.addEvent(makeEvent());
-    const note = StorageManager.addNote(makeNote(event.id));
+  it('preserves notes by moving them to General when an event is deleted', () => {
+    const event = StorageManager.addEvent(makeEvent({ title: 'Work Projects' }));
+    const note = StorageManager.addNote(makeNote(event.id, { body: 'Important project note' }));
+    
     StorageManager.deleteEvent(event.id);
-    expect(StorageManager.getEvents()).toHaveLength(0);
-    expect(StorageManager.getNoteById(note.id)).toBeUndefined();
+    
+    // The original event should be deleted
+    expect(StorageManager.getEvents().find((e) => e.id === event.id)).toBeUndefined();
+    
+    // The note MUST be preserved, not deleted, and remapped to General
+    const preservedNote = StorageManager.getNoteById(note.id);
+    expect(preservedNote).toBeDefined();
+    expect(preservedNote?.body).toBe('Important project note');
+    
+    const generalEvent = StorageManager.getEvents().find((e) => e.title.toLowerCase() === 'general');
+    expect(generalEvent).toBeDefined();
+    expect(preservedNote?.event_id).toBe(generalEvent?.id);
   });
 });
 

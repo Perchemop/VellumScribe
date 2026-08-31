@@ -514,6 +514,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Add / Toggle Independent Checklist */}
           <button
             id="toggle-checklist-btn"
+            aria-label={showChecklistSection ? 'Checklist Active' : 'Add Checklist to Note'}
             onClick={() => {
               if (!showChecklistSection) {
                 handleAddChecklistItem();
@@ -522,7 +523,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               }
             }}
             title={showChecklistSection ? 'Checklist Active' : 'Add Checklist to Note'}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               showChecklistSection
                 ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
                 : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
@@ -535,9 +536,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Add / Edit Independent Sketch Drawing */}
           <button
             id="toggle-sketch-btn"
+            aria-label={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
             onClick={() => setShowSketchModal(true)}
             title={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               sketchData
                 ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
                 : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
@@ -550,9 +552,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* AI Summarization & Synthesis */}
           <button
             id="open-ai-summary-btn"
+            aria-label="Generate AI Summary with Google Gemini"
             onClick={() => setShowAiSummaryModal(true)}
             title="Generate AI Summary with Google Gemini (Executive, Action Items, Outline)"
-            className="flex items-center gap-1.5 px-2.5 py-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
+            className="flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>AI Summary</span>
@@ -561,9 +564,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Quick AI Studio Key Authenticator */}
           <button
             id="ai-studio-key-btn"
+            aria-label={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
             onClick={() => setShowAiKeyModal(true)}
             title={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               AiSettingsManager.hasLocalKey()
                 ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
                 : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40'
@@ -576,9 +580,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Voice Memo Recording */}
           <button
             id="open-audio-recorder-btn"
+            aria-label="Record Voice Memo"
             onClick={() => setShowAudioRecorder((prev) => !prev)}
             title="Record Voice Memo"
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
               showAudioRecorder
                 ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
                 : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
@@ -591,18 +596,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* OCR Document Scan */}
           <button
             id="open-ocr-scanner-btn"
+            aria-label="OCR Scan Document"
             onClick={() => setShowOcrScanner(true)}
             title="OCR Scan Document"
-            className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
           >
             <Camera className="w-3.5 h-3.5" />
           </button>
 
           {/* Reminder button */}
           <button
+            aria-label={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
             onClick={() => setShowReminderPicker((p) => !p)}
             title={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
               reminderAt
                 ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
                 : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
@@ -613,9 +620,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           {/* Geotag Location */}
           <button
+            aria-label={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
             onClick={() => setShowLocationPicker((p) => !p)}
             title={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
               locationName
                 ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
                 : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
@@ -626,9 +634,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           {/* PIN Security Lock */}
           <button
+            aria-label={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
             onClick={() => setShowSecurityModal(true)}
             title={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
               note.is_locked
                 ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
                 : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
@@ -639,9 +648,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
           {/* Markdown View / Edit Toggle */}
           <button
+            aria-label={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
             onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
             title={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
-            className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
           >
             {viewMode === 'preview' ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
@@ -649,9 +659,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* Share & Export */}
           <button
             id="note-editor-share-btn"
+            aria-label="Share & Export Note"
             onClick={() => setShowShareModal(true)}
             title="Share & Export Note"
-            className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
           >
             <Share2 className="w-3.5 h-3.5" />
           </button>
@@ -659,9 +670,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {/* App & AI Settings */}
           <button
             id="note-editor-settings-btn"
+            aria-label="Settings & Google AI Studio API Key"
             onClick={() => setShowSettingsModal(true)}
             title="Settings & Google AI Studio API Key"
-            className="p-1.5 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
