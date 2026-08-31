@@ -80,10 +80,8 @@ export class AudioRecorderManager {
       this.startTime = Date.now();
       return true;
     } catch (err) {
-      console.warn('Microphone stream access unavailable; using software audio container.', err);
-      this.isRecording = true;
-      this.startTime = Date.now();
-      return true;
+      console.error('Microphone stream access unavailable.', err);
+      return false;
     }
   }
 
@@ -124,25 +122,23 @@ export class AudioRecorderManager {
           this.mediaRecorder.stop();
         } catch {
           this.cleanup();
-          const syntheticBlob = new Blob(['RIFF....WAVEfmt....data....'], { type: 'audio/mp4' });
           resolve({
-            blob: syntheticBlob,
-            base64: 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
-            durationSeconds,
-            fileSizeBytes: estimatedAacSize,
+            blob: new Blob([]),
+            base64: '',
+            durationSeconds: 0,
+            fileSizeBytes: 0,
             mimeType: 'audio/mp4',
           });
         }
       } else {
         this.cleanup();
-        const syntheticBlob = new Blob(['RIFF....WAVEfmt....data....'], { type: 'audio/mp4' });
         resolve({
-          blob: syntheticBlob,
-          base64: 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
-          durationSeconds,
-          fileSizeBytes: estimatedAacSize,
-          mimeType: 'audio/mp4',
-        });
+            blob: new Blob([]),
+            base64: '',
+            durationSeconds: 0,
+            fileSizeBytes: 0,
+            mimeType: 'audio/mp4',
+          });
       }
     });
   }

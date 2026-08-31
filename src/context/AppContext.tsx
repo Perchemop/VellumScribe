@@ -18,6 +18,8 @@ interface AppContextValue {
   darkMode: boolean;
   isOnline: boolean;
   toastMessage: string | null;
+  toastAction?: { label: string; onClick: () => void } | null;
+  showToast: (msg: string, action?: { label: string; onClick: () => void }) => void;
 
   // Setters
   setSelectedEventId: (id: number | null) => void;
@@ -27,7 +29,6 @@ interface AppContextValue {
   setSearchQuery: (q: string) => void;
   setFilterType: (f: 'all' | 'text' | 'checklist' | 'sketch') => void;
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
-  showToast: (msg: string) => void;
 
   // Data Actions
   refreshData: () => void;
@@ -54,7 +55,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'checklist' | 'sketch'>('all');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
+
+  const showToast = (msg: string, action?: { label: string; onClick: () => void }) => {
+    setToastMessage(msg);
+    setToastAction(action || null);
+    setTimeout(() => {
+      setToastMessage(prev => prev === msg ? null : prev);
+      setToastAction(prev => prev === action ? null : prev);
+    }, 6000);
+  };
+
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
   const [darkMode, setDarkModeState] = useState<boolean>(() => {
@@ -79,12 +91,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
-  const showToast = useCallback((msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current));
-    }, 2800);
-  }, []);
 
   const refreshData = useCallback(() => {
     setEvents(StorageManager.getEvents());
@@ -219,6 +225,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       darkMode,
       isOnline,
       toastMessage,
+      toastAction,
+      showToast,
       setSelectedEventId,
       setSelectedNoteId,
       setActiveView,
@@ -226,7 +234,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSearchQuery,
       setFilterType,
       setDarkMode,
-      showToast,
       refreshData,
       createEvent,
       updateEvent,
@@ -251,8 +258,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       darkMode,
       isOnline,
       toastMessage,
-      setDarkMode,
+      toastAction,
       showToast,
+      setDarkMode,
       refreshData,
       createEvent,
       updateEvent,
