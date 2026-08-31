@@ -202,7 +202,7 @@ export default function App() {
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>Timeline</span>
+                <span>Recent</span>
               </button>
 
               <button
@@ -291,7 +291,7 @@ export default function App() {
                   setSelectedNoteId(null);
                   setActiveView('settings');
                 }}
-                title="Settings & AI"
+                title="Settings"
                 className={`p-2 rounded-xl transition-colors ${
                   activeView === 'settings'
                     ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
@@ -372,7 +372,7 @@ export default function App() {
               </div>
             </div>
           ) : activeView === 'recents' ? (
-            /* Dedicated Timeline / Recents View */
+            /* Dedicated Recent View */
             <div className="h-full overflow-y-auto custom-minimal-scrollbar bg-white dark:bg-[#0c0c0e]">
               <RecentNotesSection
                 notes={notes}
@@ -438,7 +438,7 @@ export default function App() {
                     onClick={() => handleCreateNote(undefined, 'sketch')}
                     className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold"
                   >
-                    <span>Sketch Canvas</span>
+                    <span>Sketch</span>
                     <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
                       <PenTool className="w-3.5 h-3.5" />
                     </div>
@@ -503,7 +503,7 @@ export default function App() {
               >
                 <Clock className="w-4 h-4" />
               </div>
-              <span className="text-[10px] tracking-tight">Timeline</span>
+              <span className="text-[10px] tracking-tight">Recent</span>
             </button>
 
             <button

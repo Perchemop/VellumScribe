@@ -206,9 +206,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     const mediaKey = `media_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.m4a`;
 
     try {
-      // Fetch blob from temporary URL
-      const response = await fetch(recordedAudio.url);
-      const blob = await response.blob();
+      const blob = recordedAudio.blob;
 
       // Check if note is locked (has a session key)
       const sessionKey = UnlockSessionManager.getSessionKey(noteId);
