@@ -49,22 +49,39 @@ export class AudioRecorderManager {
           }
         }
 
-        // Pick supported mime type
-        let mimeType = 'audio/webm';
-        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported) {
-          if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) {
-            mimeType = 'audio/mp4;codecs=mp4a.40.2';
-          } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-            mimeType = 'audio/webm;codecs=opus';
+        // Pick supported mime type with robust Android WebView fallback
+        let selectedMimeType: string | undefined = undefined;
+        if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+          const candidates = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4;codecs=mp4a.40.2',
+            'audio/mp4',
+            'audio/aac',
+            'audio/ogg;codecs=opus',
+          ];
+          for (const cand of candidates) {
+            if (MediaRecorder.isTypeSupported(cand)) {
+              selectedMimeType = cand;
+              break;
+            }
           }
         }
 
         this.audioChunks = [];
         if (typeof MediaRecorder !== 'undefined') {
-          this.mediaRecorder = new MediaRecorder(this.microphoneStream, {
-            mimeType: mimeType.split(';')[0] ? mimeType : undefined,
-            audioBitsPerSecond: 64000,
-          });
+          const recorderOptions: MediaRecorderOptions = {};
+          if (selectedMimeType) {
+            recorderOptions.mimeType = selectedMimeType;
+          }
+          recorderOptions.audioBitsPerSecond = 64000;
+
+          try {
+            this.mediaRecorder = new MediaRecorder(this.microphoneStream, recorderOptions);
+          } catch {
+            // Fallback without mimeType option if WebView threw error
+            this.mediaRecorder = new MediaRecorder(this.microphoneStream);
+          }
 
           this.mediaRecorder.ondataavailable = (event) => {
             if (event.data && event.data.size > 0) {

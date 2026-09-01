@@ -324,9 +324,28 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
 
             {/* Error Message */}
             {error && (
-              <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
-                <span className="leading-relaxed">{error}</span>
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-900 dark:text-amber-200 space-y-2 text-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-xs text-amber-900 dark:text-amber-200">
+                      {error.includes('Permission') || error.includes('caller') || error.includes('403')
+                        ? 'Google AI Studio Permission Issue'
+                        : 'AI Service Notice'}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-amber-800 dark:text-amber-300/90">{error}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-200/60 dark:border-amber-900/40">
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    <span>Configure / Replace API Key</span>
+                  </button>
+                </div>
               </div>
             )}
 
