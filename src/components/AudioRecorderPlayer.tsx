@@ -12,6 +12,8 @@ import {
   X,
   Upload,
   Radio,
+  Key,
+  AlertCircle,
 } from 'lucide-react';
 import { AudioRecorderManager } from '../lib/audioRecorder';
 import { GeminiApiService } from '../lib/geminiService';
@@ -19,6 +21,8 @@ import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import { AiStudioKeyModal } from './AiStudioKeyModal';
+import { AiSettingsManager } from '../lib/aiSettings';
 
 interface AudioRecorderPlayerProps {
   noteId: number;
@@ -51,6 +55,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionText, setTranscriptionText] = useState<string | null>(null);
+  const [transcribeError, setTranscribeError] = useState<string | null>(null);
+  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const recorderRef = useRef<AudioRecorderManager | null>(null);
@@ -182,6 +188,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const handleTranscribeWithGemini = async () => {
     if (!recordedAudio) return;
     setIsTranscribing(true);
+    setTranscribeError(null);
     try {
       const res = await GeminiApiService.transcribeAudio(
         recordedAudio.base64,
@@ -189,10 +196,11 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
         recordedAudio.durationSeconds
       );
       setTranscriptionText(res.transcript);
+      setTranscribeError(null);
     } catch (err: any) {
       console.error('Audio transcription failed:', err);
-      const errMsg = err?.message || 'Could not transcribe audio. Please verify your AI configuration.';
-      setTranscriptionText(`Transcription unavailable: ${errMsg}`);
+      const errMsg = err?.message || 'Could not transcribe audio. Please verify your Google AI Studio configuration.';
+      setTranscribeError(errMsg);
     } finally {
       setIsTranscribing(false);
     }
@@ -541,9 +549,30 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                   )}
-                  {isTranscribing ? 'Transcribing...' : 'Transcribe to Text'}
+                  {isTranscribing ? 'Transcribing with Gemini...' : 'Transcribe to Text'}
                 </button>
               </div>
+
+              {transcribeError && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-lg text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium">Transcription Error</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">{transcribeError}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
+                    <button
+                      onClick={() => setShowAiKeyModal(true)}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-medium transition-colors"
+                    >
+                      <Key className="w-3 h-3" />
+                      Configure AI Studio Key
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {transcriptionText && (
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-1">
@@ -569,6 +598,18 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           </div>
         )}
       </div>
+
+      {showAiKeyModal && (
+        <AiStudioKeyModal
+          isOpen={showAiKeyModal}
+          onClose={() => setShowAiKeyModal(false)}
+          onSuccess={() => {
+            setShowAiKeyModal(false);
+            setTranscribeError(null);
+            handleTranscribeWithGemini();
+          }}
+        />
+      )}
     </div>
   );
 };

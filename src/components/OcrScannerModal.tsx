@@ -9,6 +9,7 @@ import {
   Copy,
   RotateCcw,
   AlertCircle,
+  Key,
 } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -17,6 +18,7 @@ import { SQLiteDatabase } from '../lib/storage';
 import { OcrScanRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import { AiStudioKeyModal } from './AiStudioKeyModal';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -37,6 +39,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
+  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
+  const [hasKeyError, setHasKeyError] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -165,14 +169,20 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
   const handleRunOcr = async () => {
     if (!selectedImage) return;
     setIsProcessing(true);
+    setHasKeyError(false);
     setOcrStatus('Extracting handwritten text with Gemini AI...');
     try {
       const res = await GeminiApiService.scanHandwrittenNote(selectedImage, 'image/jpeg');
       setOcrText(res.ocrText);
       setOcrStatus(`Extracted via ${res.source || 'Gemini AI'}`);
+      setHasKeyError(false);
     } catch (err: any) {
       console.error('OCR scan failed', err);
-      setOcrStatus(`Extraction error: ${err.message || 'Failed to connect'}`);
+      const msg = err.message || 'Failed to connect';
+      setOcrStatus(`Extraction error: ${msg}`);
+      if (msg.includes('key') || msg.includes('quota') || msg.includes('permission')) {
+        setHasKeyError(true);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -407,19 +417,30 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                   </span>
                 )}
               </div>
-              <button
-                id="run-ocr-extract-btn"
-                onClick={handleRunOcr}
-                disabled={isProcessing || !selectedImage}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs disabled:opacity-40 transition-all"
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <div className="flex items-center gap-2">
+                {hasKeyError && (
+                  <button
+                    onClick={() => setShowAiKeyModal(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs"
+                  >
+                    <Key className="w-3 h-3" />
+                    <span>Set Key</span>
+                  </button>
                 )}
-                <span>{isProcessing ? 'Extracting with Gemini AI...' : 'Extract Text with AI'}</span>
-              </button>
+                <button
+                  id="run-ocr-extract-btn"
+                  onClick={handleRunOcr}
+                  disabled={isProcessing || !selectedImage}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs disabled:opacity-40 transition-all"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  )}
+                  <span>{isProcessing ? 'Extracting with Gemini AI...' : 'Extract Text with AI'}</span>
+                </button>
+              </div>
             </div>
 
             <textarea
@@ -461,6 +482,18 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
           </div>
         </div>
       </div>
+
+      {showAiKeyModal && (
+        <AiStudioKeyModal
+          isOpen={showAiKeyModal}
+          onClose={() => setShowAiKeyModal(false)}
+          onSuccess={() => {
+            setShowAiKeyModal(false);
+            setHasKeyError(false);
+            handleRunOcr();
+          }}
+        />
+      )}
     </div>
   );
 };

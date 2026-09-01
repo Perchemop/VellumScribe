@@ -116,17 +116,29 @@ app.post("/api/gemini/verify", async (req, res) => {
     }
 
     const ai = createGeminiInstance(keyToTest);
-    const response = await ai.models.generateContent({
-      model: "gemini-3.7-flash",
-      contents: "Respond with the word OK",
-    });
+    let verifiedModel = "gemini-3.6-flash";
+    let text = "";
 
-    const text = (typeof response.text === "string" ? response.text : "").trim();
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: "Respond with OK",
+      });
+      text = (typeof response.text === "string" ? response.text : "").trim();
+    } catch (primaryErr: any) {
+      // Fallback verification model
+      const fallbackResponse = await ai.models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: "Respond with OK",
+      });
+      verifiedModel = "gemini-3.1-flash-lite";
+      text = (typeof fallbackResponse.text === "string" ? fallbackResponse.text : "").trim();
+    }
 
     return res.json({
       success: true,
       message: "Successfully authenticated with Google AI Studio!",
-      model: "gemini-3.7-flash",
+      model: verifiedModel,
       sampleResponse: text || "OK",
     });
   } catch (error: any) {
@@ -191,7 +203,7 @@ async function executeGeminiWithFallback(
     contents: any;
     config?: any;
   },
-  preferredModels: string[] = ["gemini-3.6-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
+  preferredModels: string[] = ["gemini-3.6-flash", "gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
 ): Promise<{ text: string; modelUsed: string; keyUsed: "custom" | "server_env" }> {
   const customKey = resolveApiKey(req);
   const serverKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : undefined;
@@ -275,6 +287,23 @@ async function executeGeminiWithFallback(
     throw friendlyError;
   }
 
+  const isPermissionDenied =
+    errStr.includes("The caller does not have permission") ||
+    errStr.includes("PERMISSION_DENIED") ||
+    errStr.includes("403") ||
+    errStr.includes("permission denied") ||
+    errStr.includes("API key not valid") ||
+    errStr.includes("API_KEY_INVALID");
+
+  if (isPermissionDenied) {
+    const friendlyError: any = new Error(
+      "Google AI Studio Permission Denied (403): The caller does not have permission. Please verify your Google AI Studio API key at https://aistudio.google.com/app/apikey and ensure 'Generative Language API' is enabled with no restrictive API/IP/referrer blocks."
+    );
+    friendlyError.isPermissionDenied = true;
+    friendlyError.requiresKey = true;
+    throw friendlyError;
+  }
+
   throw lastError || new Error("Failed to communicate with Google AI Studio.");
 }
 
@@ -349,7 +378,7 @@ app.post("/api/gemini/transcribe", async (req, res) => {
           ],
         },
       },
-      ["gemini-3.5-transcribe", "gemini-3.7-flash", "gemini-flash-latest"]
+      ["gemini-3.5-transcribe", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest"]
     );
 
     return res.json({
@@ -531,6 +560,349 @@ ${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
     });
   }
 });
+
+// --- MULTI-PROVIDER BYOK & LOCAL OFFLINE SUBSYSTEM ---
+
+// Helper to extract Groq key from request
+function resolveGroqKey(req: express.Request): string | undefined {
+  const auth = req.headers.authorization;
+  if (typeof auth === "string" && auth.startsWith("Bearer ") && auth.slice(7).trim().startsWith("gsk_")) {
+    return auth.slice(7).trim();
+  }
+  const groqHeader = req.headers["x-groq-api-key"];
+  if (typeof groqHeader === "string" && groqHeader.trim()) {
+    return groqHeader.trim();
+  }
+  if (req.body && typeof req.body.apiKey === "string" && req.body.apiKey.trim().startsWith("gsk_")) {
+    return req.body.apiKey.trim();
+  }
+  return process.env.GROQ_API_KEY ? process.env.GROQ_API_KEY.trim() : undefined;
+}
+
+// 1. Groq Verify Endpoint
+app.post("/api/groq/verify", async (req, res) => {
+  try {
+    const key = resolveGroqKey(req);
+    if (!key) {
+      return res.status(400).json({ success: false, error: "Please provide a Groq API key (starts with gsk_)." });
+    }
+    const response = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data: any = await response.json().catch(() => null);
+    if (response.ok && data?.data) {
+      const models = (data.data as Array<any>).map((m) => m.id);
+      return res.json({
+        success: true,
+        message: `Connected to Groq Cloud! Found ${models.length} available models.`,
+        models,
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: data?.error?.message || "Groq key verification failed.",
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || "Failed to contact Groq." });
+  }
+});
+
+// 2. Groq Chat / Synthesis Endpoint
+app.post("/api/groq/chat", async (req, res) => {
+  try {
+    const key = resolveGroqKey(req);
+    if (!key) {
+      return res.status(400).json({ error: "Groq API key required. Paste your free key from console.groq.com." });
+    }
+    const { prompt, model = "llama-3.3-70b-versatile", systemPrompt } = req.body;
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: prompt || "Synthesize these notes." });
+
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.2,
+      }),
+    });
+
+    const data: any = await response.json().catch(() => null);
+    if (!response.ok || !data?.choices?.[0]?.message?.content) {
+      return res.status(response.status || 500).json({
+        error: data?.error?.message || "Groq generation failed.",
+      });
+    }
+
+    return res.json({
+      text: data.choices[0].message.content,
+      modelUsed: model,
+      source: `groq/${model}`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Failed to execute Groq synthesis." });
+  }
+});
+
+// 3. Groq Audio Transcription Endpoint (Whisper Large v3)
+app.post("/api/groq/transcribe", async (req, res) => {
+  try {
+    const key = resolveGroqKey(req);
+    if (!key) {
+      return res.status(400).json({ error: "Groq API key required for fast Whisper transcription." });
+    }
+    const { audioBase64, mimeType = "audio/webm", model = "whisper-large-v3-turbo" } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ error: "Audio base64 data required." });
+    }
+
+    const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+    const buffer = Buffer.from(cleanBase64, "base64");
+    const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : mimeType.includes("wav") ? "wav" : "webm";
+
+    const formData = new FormData();
+    const fileBlob = new Blob([buffer], { type: mimeType });
+    formData.append("file", fileBlob, `recording.${ext}`);
+    formData.append("model", model);
+    formData.append("response_format", "json");
+
+    const response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+      },
+      body: formData,
+    });
+
+    const data: any = await response.json().catch(() => null);
+    if (!response.ok || !data?.text) {
+      return res.status(response.status || 500).json({
+        error: data?.error?.message || "Groq Whisper transcription failed.",
+      });
+    }
+
+    return res.json({
+      transcript: data.text,
+      source: `groq/${model}`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Groq Whisper transcription request failed." });
+  }
+});
+
+// 4. Deepgram Verify Endpoint
+app.post("/api/deepgram/verify", async (req, res) => {
+  try {
+    const key = (req.body?.apiKey || req.headers["x-deepgram-api-key"] || process.env.DEEPGRAM_API_KEY || "").toString().trim();
+    if (!key) {
+      return res.status(400).json({ success: false, error: "Please provide a Deepgram API key." });
+    }
+    const response = await fetch("https://api.deepgram.com/v1/projects", {
+      headers: { Authorization: `Token ${key}` },
+    });
+    const data: any = await response.json().catch(() => null);
+    if (response.ok && data?.projects) {
+      return res.json({
+        success: true,
+        message: "Connected to Deepgram Speech Platform!",
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: data?.err_msg || "Deepgram key verification rejected.",
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || "Failed to contact Deepgram." });
+  }
+});
+
+// 5. Deepgram Audio Transcription Endpoint
+app.post("/api/deepgram/transcribe", async (req, res) => {
+  try {
+    const key = (req.body?.apiKey || req.headers["x-deepgram-api-key"] || process.env.DEEPGRAM_API_KEY || "").toString().trim();
+    if (!key) {
+      return res.status(400).json({ error: "Deepgram API key required." });
+    }
+    const { audioBase64, mimeType = "audio/webm", model = "nova-3" } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ error: "Audio base64 data required." });
+    }
+
+    const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+    const buffer = Buffer.from(cleanBase64, "base64");
+
+    const response = await fetch(`https://api.deepgram.com/v1/listen?model=${encodeURIComponent(model)}&smart_format=true&punctuate=true`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${key}`,
+        "Content-Type": mimeType,
+      },
+      body: buffer,
+    });
+
+    const data: any = await response.json().catch(() => null);
+    const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+
+    if (!response.ok || transcript === undefined) {
+      return res.status(response.status || 500).json({
+        error: data?.err_msg || "Deepgram speech-to-text failed.",
+      });
+    }
+
+    return res.json({
+      transcript,
+      source: `deepgram/${model}`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Deepgram transcription error." });
+  }
+});
+
+// 6. Local Ollama Tags & Probe Proxy
+app.post("/api/ollama/tags", async (req, res) => {
+  try {
+    const endpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const response = await fetch(`${endpoint}/api/tags`, {
+      method: "GET",
+      signal: AbortSignal.timeout(4000),
+    });
+    const data: any = await response.json().catch(() => null);
+    if (response.ok && data?.models) {
+      const models = (data.models as Array<{ name: string }>).map((m) => m.name);
+      return res.json({
+        success: true,
+        endpoint,
+        models,
+      });
+    }
+    return res.status(502).json({
+      success: false,
+      error: `Could not retrieve models from Ollama at ${endpoint}.`,
+    });
+  } catch (err: any) {
+    return res.status(502).json({
+      success: false,
+      error: `Ollama daemon not reachable: ${err.message}. Ensure "ollama serve" is active.`,
+    });
+  }
+});
+
+// 7. Local Ollama Generation Proxy
+app.post("/api/ollama/generate", async (req, res) => {
+  try {
+    const endpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const { prompt, model = "llama3.2", system } = req.body;
+
+    const response = await fetch(`${endpoint}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        prompt,
+        system,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(120000),
+    });
+
+    const data: any = await response.json().catch(() => null);
+    if (response.ok && data?.response) {
+      return res.json({
+        text: data.response,
+        modelUsed: `ollama/${model}`,
+        source: `local_ollama/${model}`,
+      });
+    }
+    return res.status(500).json({
+      error: data?.error || "Ollama generation failed.",
+    });
+  } catch (err: any) {
+    return res.status(502).json({
+      error: `Failed to contact local Ollama daemon at ${req.body?.endpoint || "http://localhost:11434"}: ${err.message}`,
+    });
+  }
+});
+
+// 8. Local Whisper Server Proxy
+app.post("/api/local-whisper/verify", async (req, res) => {
+  try {
+    const endpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").replace(/\/+$/, "");
+    const testUrl = endpoint.replace(/\/transcriptions$/, "/models");
+    const response = await fetch(testUrl, {
+      method: "GET",
+      signal: AbortSignal.timeout(3000),
+    }).catch(() => null);
+
+    if (response && response.ok) {
+      return res.json({ success: true, message: `Local Whisper server reachable at ${endpoint}` });
+    }
+
+    // Try a HEAD or OPTIONS request to endpoint
+    const optRes = await fetch(endpoint, { method: "OPTIONS", signal: AbortSignal.timeout(3000) }).catch(() => null);
+    if (optRes) {
+      return res.json({ success: true, message: `Local Whisper server acknowledged connection.` });
+    }
+
+    return res.json({
+      success: true,
+      message: `Configured local Whisper at ${endpoint}. Will send audio payloads directly when recording.`,
+    });
+  } catch (err: any) {
+    return res.status(502).json({ success: false, error: `Local Whisper unreachable: ${err.message}` });
+  }
+});
+
+app.post("/api/local-whisper/transcribe", async (req, res) => {
+  try {
+    const endpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").trim();
+    const { audioBase64, mimeType = "audio/webm" } = req.body;
+
+    if (!audioBase64) {
+      return res.status(400).json({ error: "Audio base64 data required." });
+    }
+
+    const cleanBase64 = audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64;
+    const buffer = Buffer.from(cleanBase64, "base64");
+    const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : mimeType.includes("wav") ? "wav" : "webm";
+
+    const formData = new FormData();
+    const fileBlob = new Blob([buffer], { type: mimeType });
+    formData.append("file", fileBlob, `speech.${ext}`);
+    formData.append("model", "whisper-1");
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      body: formData,
+      signal: AbortSignal.timeout(120000),
+    });
+
+    const data: any = await response.json().catch(() => null);
+    const transcript = data?.text || data?.transcript;
+
+    if (response.ok && transcript) {
+      return res.json({
+        transcript,
+        source: "local_whisper",
+      });
+    }
+
+    return res.status(response.status || 500).json({
+      error: data?.error || "Local Whisper failed to return transcript.",
+    });
+  } catch (err: any) {
+    return res.status(502).json({
+      error: `Failed to contact Local Whisper at ${req.body?.endpoint}: ${err.message}`,
+    });
+  }
+});
+
 
 // --- CLOUD BACKUP & OAUTH SUBSYSTEM ---
 

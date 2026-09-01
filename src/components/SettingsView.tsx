@@ -21,6 +21,10 @@ import {
   ChevronRight,
   WifiOff,
   Clock,
+  Copy,
+  Terminal,
+  Zap,
+  Mic,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
@@ -97,13 +101,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [selectedProviderForConnect, setSelectedProviderForConnect] = useState<CloudStorageProvider | null>(null);
 
-  // AI State
+// AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
-  const [apiKeyInput, setApiKeyInput] = useState<string>(() => AiSettingsManager.getApiKey());
-  const [showKey, setShowKey] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [googleKeyInput, setGoogleKeyInput] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
+  const [groqKeyInput, setGroqKeyInput] = useState<string>(() => AiSettingsManager.getGroqApiKey());
+  const [deepgramKeyInput, setDeepgramKeyInput] = useState<string>(() => AiSettingsManager.getDeepgramApiKey());
+  const [ollamaEndpointInput, setOllamaEndpointInput] = useState<string>(() => aiSettings.ollamaEndpoint || 'http://localhost:11434');
+  const [localWhisperEndpointInput, setLocalWhisperEndpointInput] = useState<string>(() => aiSettings.localWhisperEndpoint || 'http://localhost:8080/v1/audio/transcriptions');
+  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+  const [showGoogleKey, setShowGoogleKey] = useState(false);
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showDeepgramKey, setShowDeepgramKey] = useState(false);
+  const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
+  const [isVerifyingGroq, setIsVerifyingGroq] = useState(false);
+  const [isVerifyingDeepgram, setIsVerifyingDeepgram] = useState(false);
+  const [isProbingOllama, setIsProbingOllama] = useState(false);
+  const [isProbingWhisper, setIsProbingWhisper] = useState(false);
+  const [googleVerifyResult, setGoogleVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [groqVerifyResult, setGroqVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [ollamaVerifyResult, setOllamaVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+
+  const handleCopyCmd = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCmd(id);
+    setTimeout(() => setCopiedCmd(null), 2500);
+  };
 
   // Storage stats & Keystore
   const [stats, setStats] = useState(() => StorageManager.getStorageStats());
@@ -164,35 +190,104 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  // AI Key actions
-  const handleSaveApiKey = () => {
-    AiSettingsManager.setApiKey(apiKeyInput);
-    setVerifyResult(null);
-    setFileUploadFeedback('API key saved locally.');
+  // AI Key & Provider actions
+  const handleUpdateAiSettings = (updates: Partial<AiIntegrationSettings>) => {
+    const updated = AiSettingsManager.updateSettings(updates);
+    setAiSettings(updated);
+  };
+
+  const handleSaveGoogleKey = () => {
+    AiSettingsManager.setGoogleApiKey(googleKeyInput.trim());
+    setGoogleVerifyResult(null);
+    setFileUploadFeedback('Google AI Studio key saved locally.');
     setTimeout(() => setFileUploadFeedback(null), 3000);
   };
 
-  const handleClearApiKey = () => {
-    AiSettingsManager.clearApiKey();
-    setApiKeyInput('');
-    setVerifyResult(null);
-    setFileUploadFeedback('API key cleared from local storage.');
+  const handleSaveGroqKey = () => {
+    AiSettingsManager.setGroqApiKey(groqKeyInput.trim());
+    setGroqVerifyResult(null);
+    setFileUploadFeedback('Groq API key saved locally.');
     setTimeout(() => setFileUploadFeedback(null), 3000);
   };
 
-  const handleTestApiKey = async () => {
-    setIsVerifying(true);
-    setVerifyResult(null);
+  const handleSaveDeepgramKey = () => {
+    AiSettingsManager.setDeepgramApiKey(deepgramKeyInput.trim());
+    setDeepgramVerifyResult(null);
+    setFileUploadFeedback('Deepgram API key saved locally.');
+    setTimeout(() => setFileUploadFeedback(null), 3000);
+  };
+
+  const handleTestGoogleKey = async () => {
+    setIsVerifyingGoogle(true);
+    setGoogleVerifyResult(null);
     try {
-      const res = await AiSettingsManager.testApiKey(apiKeyInput.trim());
-      setVerifyResult(res);
+      const res = await AiSettingsManager.testApiKey(googleKeyInput.trim());
+      setGoogleVerifyResult(res);
     } catch (err: any) {
-      setVerifyResult({
-        success: false,
-        message: err?.message || 'Verification request failed.',
-      });
+      setGoogleVerifyResult({ success: false, message: err?.message || 'Verification failed.' });
     } finally {
-      setIsVerifying(false);
+      setIsVerifyingGoogle(false);
+    }
+  };
+
+  const handleTestGroqKey = async () => {
+    setIsVerifyingGroq(true);
+    setGroqVerifyResult(null);
+    try {
+      const res = await AiSettingsManager.testGroqKey(groqKeyInput.trim());
+      setGroqVerifyResult(res);
+    } catch (err: any) {
+      setGroqVerifyResult({ success: false, message: err?.message || 'Groq verification failed.' });
+    } finally {
+      setIsVerifyingGroq(false);
+    }
+  };
+
+  const handleTestDeepgramKey = async () => {
+    setIsVerifyingDeepgram(true);
+    setDeepgramVerifyResult(null);
+    try {
+      const res = await AiSettingsManager.testDeepgramKey(deepgramKeyInput.trim());
+      setDeepgramVerifyResult(res);
+    } catch (err: any) {
+      setDeepgramVerifyResult({ success: false, message: err?.message || 'Deepgram verification failed.' });
+    } finally {
+      setIsVerifyingDeepgram(false);
+    }
+  };
+
+  const handleProbeOllama = async () => {
+    setIsProbingOllama(true);
+    setOllamaVerifyResult(null);
+    try {
+      const res = await AiSettingsManager.probeOllamaEndpoint(ollamaEndpointInput.trim());
+      setOllamaVerifyResult({ success: res.success, message: res.message || (res.success ? 'Ollama daemon ready' : 'Not reachable') });
+      if (res.models) setOllamaModels(res.models);
+      if (res.success) {
+        AiSettingsManager.setOllamaEndpoint(ollamaEndpointInput.trim());
+        setAiSettings(AiSettingsManager.getSettings());
+      }
+    } catch (err: any) {
+      setOllamaVerifyResult({ success: false, message: err?.message || 'Ollama connection failed.' });
+    } finally {
+      setIsProbingOllama(false);
+    }
+  };
+
+  const handleProbeLocalWhisper = async () => {
+    setIsProbingWhisper(true);
+    setWhisperVerifyResult(null);
+    try {
+      const res = await AiSettingsManager.probeLocalWhisperEndpoint(localWhisperEndpointInput.trim());
+      setWhisperVerifyResult({ success: res.success, message: res.message || (res.success ? 'Local Whisper server reachable' : 'Not reachable') });
+      if (res.success) {
+        AiSettingsManager.setLocalWhisperEndpoint(localWhisperEndpointInput.trim());
+        setAiSettings(AiSettingsManager.getSettings());
+      }
+    } catch (err: any) {
+      setWhisperVerifyResult({ success: false, message: err?.message || 'Local Whisper connection failed.' });
+    } finally {
+      setIsProbingWhisper(false);
     }
   };
 
@@ -205,16 +300,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const content = event.target?.result as string;
       const extracted = AiSettingsManager.extractApiKeyFromFile(content);
       if (extracted.key) {
-        setApiKeyInput(extracted.key);
-        AiSettingsManager.setApiKey(extracted.key);
-        setFileUploadFeedback(`Successfully loaded API key from ${file.name}!`);
-        setVerifyResult(null);
+        if (extracted.key.startsWith('gsk_')) {
+          setGroqKeyInput(extracted.key);
+          AiSettingsManager.setGroqApiKey(extracted.key);
+          setFileUploadFeedback(`Successfully loaded Groq key from ${file.name}!`);
+        } else {
+          setGoogleKeyInput(extracted.key);
+          AiSettingsManager.setGoogleApiKey(extracted.key);
+          setFileUploadFeedback(`Successfully loaded Google AI key from ${file.name}!`);
+        }
       } else {
         setFileUploadFeedback(extracted.error || 'Failed to find a valid API key in file.');
       }
     };
     reader.readAsText(file);
   };
+
 
   return (
     <div id="dedicated-settings-view" className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden">
@@ -306,11 +407,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>AI Studio &amp; Vision</span>
-          {apiKeyInput ? (
-            <span className="w-2 h-2 rounded-full bg-emerald-500" title="Key Configured" />
+          <span>AI Intelligence &amp; Fallbacks</span>
+          {googleKeyInput || groqKeyInput || aiSettings.primaryLlmProvider === 'ollama' || aiSettings.primaryLlmProvider === 'offline_rules' ? (
+            <span className="w-2 h-2 rounded-full bg-emerald-500" title="Engine Active" />
           ) : (
-            <span className="w-2 h-2 rounded-full bg-amber-500" title="No Key" />
+            <span className="w-2 h-2 rounded-full bg-amber-500" title="Configure Engine" />
           )}
         </button>
 
@@ -598,26 +699,103 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {/* TAB 2: AI STUDIO & GEMINI */}
+        {/* TAB 2: AI PROVIDERS, BYOK & LOCAL OFFLINE */}
         {activeTab === 'ai' && (
-          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-2xl mx-auto space-y-5">
+          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
             {/* Privacy notice */}
             <div className="p-4 rounded-3xl border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-start gap-3 text-emerald-900 dark:text-emerald-300">
               <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <p className="font-bold text-xs">Zero Server-Side Key Logging</p>
+                <p className="font-bold text-xs">Zero Server-Side Key Logging &amp; Offline Sovereignty</p>
                 <p className="text-xs text-emerald-800 dark:text-emerald-400/90 leading-relaxed">
-                  Your Gemini API key is stored <strong>exclusively in local browser storage</strong> on this device. Key transmission is routed directly via encrypted headers for note summaries, OCR vision extraction, and smart categorization.
+                  All BYOK keys (Google AI Studio, Groq, Deepgram) remain strictly on your local device in encrypted browser storage. Switch to <strong>Local Ollama</strong>, <strong>Local Whisper</strong>, or <strong>Offline Rule Engine</strong> for 100% air-gapped processing without accounts or internet.
                 </p>
               </div>
             </div>
 
-            {/* API Key Configuration Card */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
+            {/* Provider Selection Grid */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Primary Intelligence Engines
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Primary LLM Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-500" />
+                    <span>Primary LLM (Summary / Minutes / Notes)</span>
+                  </label>
+                  <select
+                    value={aiSettings.primaryLlmProvider || 'google'}
+                    onChange={(e) => handleUpdateAiSettings({ primaryLlmProvider: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="google">Google AI Studio (Gemini 3.7 / 3.6 / OCR)</option>
+                    <option value="groq">Groq Cloud (Llama 3.3 70B Versatile - Ultra Fast)</option>
+                    <option value="ollama">Local Ollama Daemon (Llama 3.2, Mistral, Qwen)</option>
+                    <option value="offline_rules">100% Offline Rule Engine (Zero Account / No Network)</option>
+                  </select>
+                  <p className="text-[10px] text-zinc-400">
+                    Powers executive summaries, meeting minutes synthesis, and automated checklists.
+                  </p>
+                </div>
+
+                {/* Primary Transcription Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-indigo-500" />
+                    <span>Primary Speech Transcription</span>
+                  </label>
+                  <select
+                    value={aiSettings.primaryTranscriptionProvider || 'google'}
+                    onChange={(e) => handleUpdateAiSettings({ primaryTranscriptionProvider: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="google">Google AI Studio (Gemini 3.5 Transcribe)</option>
+                    <option value="groq_whisper">Groq Cloud (Whisper Large v3 Turbo - Real-Time)</option>
+                    <option value="deepgram">Deepgram Speech Platform (Nova-3 High Accuracy)</option>
+                    <option value="local_whisper">Local Whisper Server (Offline on Device)</option>
+                    <option value="browser_speech">Browser Speech Recognition (Native Web API)</option>
+                  </select>
+                  <p className="text-[10px] text-zinc-400">
+                    Converts meeting voice recordings into verbatim speaker-attributed transcripts.
+                  </p>
+                </div>
+              </div>
+
+              {/* Fallback toggle */}
+              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                    Automatic Local / Offline Fallback
+                  </p>
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    If cloud quota is exceeded or device is offline, automatically switch to Local Ollama or built-in offline engine.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleUpdateAiSettings({ autoFallbackToLocal: !aiSettings.autoFallbackToLocal })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    aiSettings.autoFallbackToLocal ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      aiSettings.autoFallbackToLocal ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Provider 1: Google AI Studio Key */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                   <Key className="w-4 h-4 text-indigo-500" />
-                  <span>Google AI Studio API Key</span>
+                  <span>Google AI Studio API Key (Gemini &amp; OCR)</span>
                 </label>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -625,101 +803,336 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   rel="noreferrer"
                   className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
                 >
-                  <span>Get Gemini API Key</span>
+                  <span>Get Free Key</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
 
               <div className="relative">
                 <input
-                  id="settings-view-api-key-input"
-                  type={showKey ? 'text' : 'password'}
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  id="settings-google-key-input"
+                  type={showGoogleKey ? 'text' : 'password'}
+                  value={googleKeyInput}
+                  onChange={(e) => setGoogleKeyInput(e.target.value)}
                   placeholder="AIzaSy..."
-                  className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
+                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setShowKey(!showKey)}
+                    onClick={() => setShowGoogleKey(!showGoogleKey)}
                     className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
                   >
-                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showGoogleKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
-                  {apiKeyInput && (
-                    <button
-                      type="button"
-                      onClick={handleClearApiKey}
-                      title="Clear Key"
-                      className="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
                 </div>
               </div>
 
-              {/* Verify status */}
-              {verifyResult && (
+              {googleVerifyResult && (
                 <div
-                  className={`p-3.5 rounded-2xl flex items-center gap-2.5 text-xs ${
-                    verifyResult.success
+                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
+                    googleVerifyResult.success
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
                       : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
                   }`}
                 >
-                  {verifyResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-                  )}
-                  <span>{verifyResult.message}</span>
+                  {googleVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{googleVerifyResult.message}</span>
                 </div>
               )}
 
-              {fileUploadFeedback && (
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{fileUploadFeedback}</p>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-3.5 py-2 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-colors"
+                  onClick={handleTestGoogleKey}
+                  disabled={!googleKeyInput.trim() || isVerifyingGoogle}
+                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
                 >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Import from .env or JSON file</span>
+                  {isVerifyingGoogle ? 'Testing...' : 'Test Connection'}
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".env,.json,.txt"
-                  onChange={handleKeyFileUpload}
-                  className="hidden"
-                />
+                <button
+                  type="button"
+                  onClick={handleSaveGoogleKey}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                >
+                  Save Google Key
+                </button>
+              </div>
+            </div>
 
-                <div className="flex items-center gap-2">
+            {/* Provider 2: Groq Cloud Key */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Key className="w-4 h-4 text-orange-500" />
+                  <span>Groq API Key (Llama 3.3 70B &amp; Whisper Large v3)</span>
+                </label>
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <span>Get Free Groq Key</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div className="relative">
+                <input
+                  id="settings-groq-key-input"
+                  type={showGroqKey ? 'text' : 'password'}
+                  value={groqKeyInput}
+                  onChange={(e) => setGroqKeyInput(e.target.value)}
+                  placeholder="gsk_..."
+                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={handleTestApiKey}
-                    disabled={!apiKeyInput.trim() || isVerifying}
-                    className="px-3.5 py-2 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                    onClick={() => setShowGroqKey(!showGroqKey)}
+                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
                   >
-                    {isVerifying ? 'Verifying...' : 'Test Connection'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveApiKey}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                  >
-                    Save API Key
+                    {showGroqKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               </div>
+
+              {groqVerifyResult && (
+                <div
+                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
+                    groqVerifyResult.success
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  {groqVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{groqVerifyResult.message}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestGroqKey}
+                  disabled={!groqKeyInput.trim() || isVerifyingGroq}
+                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                >
+                  {isVerifyingGroq ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveGroqKey}
+                  className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                >
+                  Save Groq Key
+                </button>
+              </div>
             </div>
+
+            {/* Provider 3: Deepgram Key */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Key className="w-4 h-4 text-cyan-500" />
+                  <span>Deepgram API Key (Nova-3 Speech Intelligence)</span>
+                </label>
+                <a
+                  href="https://console.deepgram.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <span>Get Deepgram Key</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              <div className="relative">
+                <input
+                  id="settings-deepgram-key-input"
+                  type={showDeepgramKey ? 'text' : 'password'}
+                  value={deepgramKeyInput}
+                  onChange={(e) => setDeepgramKeyInput(e.target.value)}
+                  placeholder="Paste Deepgram key..."
+                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeepgramKey(!showDeepgramKey)}
+                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    {showDeepgramKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              {deepgramVerifyResult && (
+                <div
+                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
+                    deepgramVerifyResult.success
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  {deepgramVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{deepgramVerifyResult.message}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestDeepgramKey}
+                  disabled={!deepgramKeyInput.trim() || isVerifyingDeepgram}
+                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                >
+                  {isVerifyingDeepgram ? 'Testing...' : 'Test Connection'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveDeepgramKey}
+                  className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                >
+                  Save Deepgram Key
+                </button>
+              </div>
+            </div>
+
+            {/* Provider 4: Local Ollama Daemon Settings */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
+              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-emerald-500" />
+                <span>Local Ollama Daemon Configuration</span>
+              </label>
+
+              <input
+                type="text"
+                value={ollamaEndpointInput}
+                onChange={(e) => setOllamaEndpointInput(e.target.value)}
+                placeholder="http://localhost:11434"
+                className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+
+              {ollamaVerifyResult && (
+                <div
+                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
+                    ollamaVerifyResult.success
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  {ollamaVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{ollamaVerifyResult.message}</span>
+                </div>
+              )}
+
+              {ollamaModels.length > 0 && (
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl">
+                  <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
+                    Detected Local Models:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {ollamaModels.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => handleUpdateAiSettings({ ollamaModel: m })}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors ${
+                          aiSettings.ollamaModel === m
+                            ? 'bg-emerald-600 text-white font-bold'
+                            : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleProbeOllama}
+                  disabled={isProbingOllama}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
+                >
+                  {isProbingOllama ? 'Probing Ollama...' : 'Probe & Test Ollama'}
+                </button>
+              </div>
+            </div>
+
+            {/* Provider 5: Local Whisper Daemon Settings */}
+            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
+              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-purple-500" />
+                <span>Local Whisper Speech Server</span>
+              </label>
+
+              <input
+                type="text"
+                value={localWhisperEndpointInput}
+                onChange={(e) => setLocalWhisperEndpointInput(e.target.value)}
+                placeholder="http://localhost:8080/v1/audio/transcriptions"
+                className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+
+              {whisperVerifyResult && (
+                <div
+                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
+                    whisperVerifyResult.success
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}
+                >
+                  {whisperVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  <span>{whisperVerifyResult.message}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleProbeLocalWhisper}
+                  disabled={isProbingWhisper}
+                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                >
+                  {isProbingWhisper ? 'Testing Whisper...' : 'Probe Local Whisper'}
+                </button>
+              </div>
+            </div>
+
+            {/* Import from .env / JSON */}
+            <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Bulk Key Import</span>
+                <p className="text-[10px] text-zinc-400">Import keys from .env or JSON files directly.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import File</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".env,.json,.txt"
+                onChange={handleKeyFileUpload}
+                className="hidden"
+              />
+            </div>
+
+            {fileUploadFeedback && (
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium text-center">{fileUploadFeedback}</p>
+            )}
           </div>
         )}
+
 
         {/* TAB 3: STORAGE & BACKUPS */}
         {activeTab === 'storage' && (
