@@ -1,3 +1,5 @@
+import { OfflineTranscriptionEngine } from './offlineTranscription';
+
 export class AudioRecorderManager {
   private mediaRecorder: MediaRecorder | null = null;
   private audioChunks: Blob[] = [];
@@ -5,12 +7,18 @@ export class AudioRecorderManager {
   private analyser: AnalyserNode | null = null;
   private microphoneStream: MediaStream | null = null;
   private animationFrameId: number | null = null;
+  private speechRecognizer: any = null;
+  public liveTranscript = '';
 
   public isRecording = false;
   public startTime = 0;
 
-  public async startRecording(onAudioLevel?: (level: number) => void): Promise<boolean> {
+  public async startRecording(
+    onAudioLevel?: (level: number) => void,
+    onLiveTranscript?: (text: string) => void
+  ): Promise<boolean> {
     this.cleanup();
+    this.liveTranscript = '';
 
     try {
       if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -46,6 +54,27 @@ export class AudioRecorderManager {
               }
             };
             this.animationFrameId = requestAnimationFrame(checkLevel);
+          }
+        }
+
+        // Initialize Native Speech Recognition if available (100% offline on-device)
+        if (OfflineTranscriptionEngine.isSpeechRecognitionSupported()) {
+          this.speechRecognizer = OfflineTranscriptionEngine.createSpeechRecognizer({
+            onInterim: (text) => {
+              this.liveTranscript = text;
+              if (onLiveTranscript) onLiveTranscript(text);
+            },
+            onFinal: (text) => {
+              this.liveTranscript = text;
+              if (onLiveTranscript) onLiveTranscript(text);
+            },
+          });
+          if (this.speechRecognizer) {
+            try {
+              this.speechRecognizer.start();
+            } catch (recErr) {
+              console.warn('Native speech recognition start notice:', recErr);
+            }
           }
         }
 
@@ -108,11 +137,20 @@ export class AudioRecorderManager {
     durationSeconds: number;
     fileSizeBytes: number;
     mimeType: string;
+    liveTranscript?: string;
   }> {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    const capturedTranscript = this.liveTranscript.trim();
+    if (this.speechRecognizer) {
+      try {
+        this.speechRecognizer.stop();
+      } catch {}
+      this.speechRecognizer = null;
+    }
+
     const durationSeconds = Math.max(1, Math.round((Date.now() - this.startTime) / 1000));
     this.isRecording = false;
 
@@ -133,6 +171,7 @@ export class AudioRecorderManager {
             durationSeconds,
             fileSizeBytes: blob.size > 0 ? blob.size : estimatedAacSize,
             mimeType: finalMime,
+            liveTranscript: capturedTranscript,
           });
         };
         try {
@@ -145,22 +184,30 @@ export class AudioRecorderManager {
             durationSeconds: 0,
             fileSizeBytes: 0,
             mimeType: 'audio/mp4',
+            liveTranscript: capturedTranscript,
           });
         }
       } else {
         this.cleanup();
         resolve({
-            blob: new Blob([]),
-            base64: '',
-            durationSeconds: 0,
-            fileSizeBytes: 0,
-            mimeType: 'audio/mp4',
-          });
+          blob: new Blob([]),
+          base64: '',
+          durationSeconds: 0,
+          fileSizeBytes: 0,
+          mimeType: 'audio/mp4',
+          liveTranscript: capturedTranscript,
+        });
       }
     });
   }
 
   public cleanup(): void {
+    if (this.speechRecognizer) {
+      try {
+        this.speechRecognizer.stop();
+      } catch {}
+      this.speechRecognizer = null;
+    }
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;

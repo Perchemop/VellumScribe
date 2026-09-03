@@ -56,6 +56,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   onSelectNote,
   onCreateEvent,
   onCreateNote,
+  onDeleteEvent,
+  onDeleteNote,
   onRefresh,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,7 +209,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   };
 
   const executeEmptyTrash = () => {
+    const trashNotes = notes.filter((n) => n.status === 'trash');
+    const wasSelectedInTrash = selectedNoteId && trashNotes.some((n) => n.id === selectedNoteId);
     StorageManager.emptyTrash();
+    if (wasSelectedInTrash) {
+      onSelectNote(0);
+    }
     setConfirmEmptyTrashModal(false);
     onRefresh();
   };
@@ -225,7 +232,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
   const executePermanentDeleteNote = () => {
     if (confirmDeleteNoteId !== null) {
-      StorageManager.deleteNote(confirmDeleteNoteId);
+      onDeleteNote(confirmDeleteNoteId);
       setConfirmDeleteNoteId(null);
       onRefresh();
     }
@@ -315,7 +322,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('all')}
             title="All Notes"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="All Notes"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'all'
                 ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -327,7 +335,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('checklist')}
             title="Checklists & To-Dos"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="Checklists"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'checklist'
                 ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -339,7 +348,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('sketch')}
             title="Sketches & Drawings"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="Sketches"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'sketch'
                 ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -351,7 +361,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('reminders')}
             title="Reminders & Alarms"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="Reminders"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'reminders'
                 ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -363,7 +374,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('archived')}
             title="Archive"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="Archive"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'archived'
                 ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -375,7 +387,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <button
             onClick={() => setActiveTab('trash')}
             title="Trash / Recycle Bin"
-            className={`py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="Trash"
+            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
               activeTab === 'trash'
                 ? 'bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 font-semibold shadow-2xs'
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -559,9 +572,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                       ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
                       : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
                   }`}
-                  style={{
-                    borderLeft: note.color ? `4px solid ${note.color}` : undefined,
-                  }}
                 >
                   {/* Selection Checkbox (always visible when in selection mode, or on card hover) */}
                   {(isSelectionMode || selectedNoteIds.length > 0) && (
@@ -580,6 +590,13 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   {/* Title & Status Icons */}
                   <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
                     <div className="flex items-center gap-1.5 min-w-0">
+                      {note.color && (
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: note.color }}
+                          title="Color Tag"
+                        />
+                      )}
                       {isChecklist && <CheckSquare className="w-3.5 h-3.5 text-zinc-500 shrink-0" />}
                       {isSketch && <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                       {note.is_locked && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
@@ -648,6 +665,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                           {ocrScans.length}
                         </span>
                       )}
+
+                      {(note.sketch_data || note.sketch_media_key) && (
+                        <span className="flex items-center gap-0.5 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
+                          <PenTool className="w-2.5 h-2.5" />
+                        </span>
+                      )}
                     </div>
 
                     {/* Right side actions for Trash / Archive / Date */}
@@ -698,6 +721,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                             onClick={(e) => {
                               e.stopPropagation();
                               StorageManager.archiveNote(note.id);
+                              if (selectedNoteId === note.id) {
+                                onSelectNote(0);
+                              }
                               onRefresh();
                             }}
                             title="Archive Note (Hide from active notes)"
@@ -742,7 +768,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
       {/* New Category Modal */}
       {showNewEventModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/40 backdrop-blur-xs">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNewEventModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/40 backdrop-blur-xs"
+        >
           <div className="w-full sm:max-w-sm bg-white dark:bg-[#16161a] border border-zinc-200 dark:border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 animate-fade-in">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-800 dark:text-zinc-200">
@@ -812,7 +843,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
       {/* Confirm Empty Trash Modal */}
       {confirmEmptyTrashModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmEmptyTrashModal(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+        >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
@@ -848,7 +884,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
       {/* Confirm Delete Note Modal */}
       {confirmDeleteNoteId !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmDeleteNoteId(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+        >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
               <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">

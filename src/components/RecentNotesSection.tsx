@@ -202,7 +202,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                           <span>{note.checklist_items.filter((c) => c.completed).length}/{note.checklist_items.length}</span>
                         </span>
                       )}
-                      {note.sketch_data && <PenTool className="w-3 h-3 text-indigo-500" />}
+                      {(note.sketch_data || note.sketch_media_key) && <PenTool className="w-3 h-3 text-indigo-500" />}
                     </div>
 
                     <span>{formatRelativeTime(note.updated_at || note.created_at)}</span>

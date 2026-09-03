@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Smartphone,
+  Zap,
+  Download,
+  Share2,
   Sparkles,
   CheckCircle2,
   FileText,
   Mic,
   Shield,
   Cloud,
-  Layers,
   ArrowRight,
   X,
   CheckSquare,
@@ -14,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AppLogo } from './AppLogo';
 import { StorageManager } from '../lib/storage';
+import { AndroidPwaManager } from '../lib/androidPwaManager';
 
 interface FirstTimeUserGuideModalProps {
   isOpen: boolean;
@@ -21,13 +25,56 @@ interface FirstTimeUserGuideModalProps {
 }
 
 const STORAGE_KEY = 'vellumscribe_onboarding_completed_v1';
+const SPLASH_SEEN_KEY = 'vellumscribe_splash_seen_v1';
 
 export function hasCompletedOnboarding(): boolean {
-  return StorageManager.getItem<string>(STORAGE_KEY, 'false') === 'true';
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const direct = localStorage.getItem(STORAGE_KEY);
+      if (direct === 'true' || direct === '1') return true;
+
+      const secondary = localStorage.getItem(SPLASH_SEEN_KEY);
+      if (secondary === 'true' || secondary === '1') return true;
+    }
+
+    if (typeof sessionStorage !== 'undefined') {
+      const sess = sessionStorage.getItem(STORAGE_KEY);
+      if (sess === 'true' || sess === '1') return true;
+    }
+
+    const item = StorageManager.getItem<any>(STORAGE_KEY, null);
+    if (item === true || item === 'true' || item === 1 || item === '1') return true;
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export function markOnboardingCompleted(): void {
-  StorageManager.setItem(STORAGE_KEY, 'true');
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.setItem(SPLASH_SEEN_KEY, 'true');
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(STORAGE_KEY, 'true');
+      sessionStorage.setItem(SPLASH_SEEN_KEY, 'true');
+    }
+    StorageManager.setItem(STORAGE_KEY, 'true');
+  } catch (err) {
+    console.warn('Failed to write onboarding completion state:', err);
+  }
+}
+
+export function resetOnboardingState(): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(SPLASH_SEEN_KEY);
+    }
+    StorageManager.removeItem(STORAGE_KEY);
+  } catch {}
 }
 
 export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = ({
@@ -35,61 +82,99 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
   onClose,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
+  const [canInstall, setCanInstall] = useState(() => AndroidPwaManager.canPromptInstall());
+  const [installSuccess, setInstallSuccess] = useState(false);
+
+  useEffect(() => {
+    return AndroidPwaManager.subscribe((can) => {
+      setCanInstall(can);
+    });
+  }, []);
+
+  // Keyboard Escape listener to dismiss and mark as completed
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleDismiss();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const handleDismiss = () => {
+    markOnboardingCompleted();
+    onClose();
+  };
+
+  const handleInstallClick = async () => {
+    const res = await AndroidPwaManager.promptInstall();
+    if (res.outcome === 'accepted') {
+      setInstallSuccess(true);
+    }
+  };
+
+  const isAndroid = AndroidPwaManager.isAndroid();
+  const isStandalone = AndroidPwaManager.isStandalone();
+
   const steps = [
     {
-      badge: 'Welcome to VellumScribe',
-      title: 'Distraction-Free, Private & Fast Note Taking',
+      badge: 'Android Phone First',
+      title: 'Crafted Primarily for Your Android Phone',
       description:
-        'VellumScribe is designed from the ground up to give you full ownership of your notes, voice memos, and sketches with offline-first local storage.',
+        'VellumScribe is tailored specifically as a responsive, high-performance Android mobile workstation for notes, checklists, voice memos, and sketches.',
       highlights: [
         {
-          icon: FileText,
-          title: 'Markdown & Checklists',
-          desc: 'Rich Markdown editing, interactive to-do lists, and touch sketch canvas.',
+          icon: Smartphone,
+          title: 'Single-Thumb Navigation',
+          desc: 'Bottom navigation bar, Android Material FAB with quick speed-dial, and edge-to-edge safe area support.',
         },
         {
-          icon: Shield,
-          title: 'Private & Local by Default',
-          desc: 'Your data stays on your device with optional PIN protection and hardware Keystore encryption.',
+          icon: Zap,
+          title: 'Sub-Millisecond Speed',
+          desc: 'On-device relational SQLite database with instant search, zero latency, and battery-friendly operation.',
         },
       ],
     },
     {
-      badge: 'Key Capabilities',
-      title: 'Voice Notes, OCR & Cloud Integration',
+      badge: 'Android Home Screen',
+      title: 'Add to Your Android Home Screen',
       description:
-        'Everything you create is saved locally and can optionally sync to your favorite cloud storage provider with conflict-free version tracking.',
+        'Install VellumScribe to your Android phone for a full-screen native experience without browser URL bars, instant offline launch, and home screen icon.',
+      highlights: [
+        {
+          icon: Download,
+          title: 'Full-Screen Standalone App',
+          desc: isStandalone
+            ? 'Currently running in Standalone Android App mode!'
+            : 'Runs edge-to-edge like a native APK with Android system navigation & dark theme styling.',
+        },
+        {
+          icon: Share2,
+          title: 'Android Native Share Sheet',
+          desc: 'Share notes, Markdown text, or audio directly to WhatsApp, Gmail, Messages, Drive, and Slack.',
+        },
+      ],
+      showInstallAction: true,
+    },
+    {
+      badge: '100% Offline & Private',
+      title: 'On-Device Storage & Local Voice Transcription',
+      description:
+        'Your notes, voice recordings, and sketches never leave your phone without your permission. Fast offline speech transcription and local backups are ready immediately.',
       highlights: [
         {
           icon: Mic,
-          title: 'Voice Memos & Transcripts',
-          desc: 'Capture crystal-clear AAC voice recordings with automatic AI transcription when enabled.',
+          title: 'Live Voice Memos & Transcription',
+          desc: 'Capture audio recordings with on-device speech-to-text and live waveforms with zero cloud requirement.',
         },
         {
-          icon: Cloud,
-          title: 'Multi-Cloud Backup Support',
-          desc: 'Sync to Google Drive, Dropbox, Microsoft OneDrive, iCloud, Nextcloud, or AWS S3.',
-        },
-      ],
-    },
-    {
-      badge: 'You Are All Set',
-      title: 'Start Writing Immediately',
-      description:
-        'You are currently in a fresh, clean workspace. Click the "+" button anytime to create your first note, event folder, or checklist.',
-      highlights: [
-        {
-          icon: CheckSquare,
-          title: 'Organize Your Way',
-          desc: 'Group notes by events/categories, archive finished tasks, and search in milliseconds.',
-        },
-        {
-          icon: Lock,
-          title: '100% Privacy',
-          desc: 'No tracking, no telemetry trackers, and full local backup/export to JSON or Markdown.',
+          icon: Shield,
+          title: 'Local Privacy & Keystore',
+          desc: 'No account needed. Optional PIN lock, AES encryption, and multi-cloud sync whenever you choose.',
         },
       ],
     },
@@ -101,19 +186,18 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
     if (currentStep < steps.length - 1) {
       setCurrentStep((s) => s + 1);
     } else {
-      markOnboardingCompleted();
-      onClose();
+      handleDismiss();
     }
-  };
-
-  const handleSkip = () => {
-    markOnboardingCompleted();
-    onClose();
   };
 
   return (
     <div
       id="first-time-user-guide-modal"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleDismiss();
+        }
+      }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-xs select-none animate-fade-in"
     >
       <div className="w-full max-w-lg bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
@@ -126,24 +210,25 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                 {step.badge}
               </span>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                Getting Started Guide
+                Android Quick Start
               </h2>
             </div>
           </div>
 
           <button
-            onClick={handleSkip}
-            title="Skip Guide"
-            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl"
+            id="onboarding-close-x-btn"
+            onClick={handleDismiss}
+            title="Close Guide"
+            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50 font-serif-editorial">
+        <div className="p-6 space-y-5">
+          <div className="space-y-1.5">
+            <h3 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50 font-serif-editorial">
               {step.title}
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
@@ -151,6 +236,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
             </p>
           </div>
 
+          {/* Highlights Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {step.highlights.map((h, i) => {
               const Icon = h.icon;
@@ -173,8 +259,50 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
             })}
           </div>
 
+          {/* Step 1 Install Callout */}
+          {step.showInstallAction && !isStandalone && (
+            <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-800/60 rounded-2xl flex items-center justify-between gap-3 text-xs">
+              <div className="min-w-0">
+                <p className="font-semibold text-indigo-950 dark:text-indigo-200 text-xs">
+                  {canInstall ? 'Ready for One-Tap Install' : 'Install via Android Browser'}
+                </p>
+                <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 truncate">
+                  {canInstall
+                    ? 'Add directly to your Android launcher now'
+                    : 'Tap browser menu (⋮) -> "Add to Home screen"'}
+                </p>
+              </div>
+
+              {canInstall ? (
+                <button
+                  type="button"
+                  id="onboarding-install-pwa-btn"
+                  onClick={handleInstallClick}
+                  disabled={installSuccess}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[11px] rounded-xl shrink-0 transition-colors shadow-2xs flex items-center gap-1.5"
+                >
+                  {installSuccess ? (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Installed</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Install App</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <span className="text-[10px] font-mono font-semibold px-2 py-1 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 rounded-lg shrink-0">
+                  Android Chrome
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Stepper Dots */}
-          <div className="flex items-center justify-center gap-1.5 pt-2">
+          <div className="flex items-center justify-center gap-1.5 pt-1">
             {steps.map((_, idx) => (
               <div
                 key={idx}
@@ -191,8 +319,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
         {/* Footer Actions */}
         <div className="px-6 py-4 bg-zinc-50/50 dark:bg-[#0f0f12] border-t border-zinc-100 dark:border-zinc-850 flex items-center justify-between">
           <button
-            onClick={handleSkip}
-            className="text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+            id="onboarding-skip-intro-btn"
+            onClick={handleDismiss}
+            className="text-xs font-medium text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors cursor-pointer"
           >
             Skip Intro
           </button>
@@ -200,7 +329,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
           <button
             id="onboarding-next-btn"
             onClick={handleNext}
-            className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-xl shadow-2xs transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-xl shadow-2xs transition-colors cursor-pointer"
           >
             <span>{currentStep === steps.length - 1 ? 'Get Started' : 'Next'}</span>
             {currentStep === steps.length - 1 ? (

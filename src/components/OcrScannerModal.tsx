@@ -218,7 +218,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       onClose();
     } catch (e: any) {
       console.error('Failed to save OCR scan to database:', e);
-      alert(`Storage Error: ${e.message}`);
+      setOcrStatus(`Storage Error: ${e.message}`);
     }
   };
 

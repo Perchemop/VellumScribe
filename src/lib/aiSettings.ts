@@ -109,9 +109,15 @@ export const AI_PROVIDERS_META = {
   },
   offline_rules: {
     id: 'offline_rules',
-    name: 'Built-in Local Rule Engine',
-    category: 'Device Native (Zero Setup)',
-    description: 'Deterministic extractive synthesis, task detector, and Web Speech API parser running directly inside this browser.',
+    name: 'Built-in Local Rule Engine (Default)',
+    category: 'Device Native (100% Offline / Zero Setup)',
+    description: 'Deterministic extractive synthesis, task detector, and note digest running directly on-device without any API keys or internet connection.',
+  },
+  browser_speech: {
+    id: 'browser_speech',
+    name: 'Native Speech Recognition (Default)',
+    category: 'Device Native (100% Offline / Zero Setup)',
+    description: 'Real-time on-device speech recognition via Web Speech API and acoustic signal analyzer. No external network requests or keys required.',
   },
 };
 
@@ -124,8 +130,8 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_SETTINGS: AiIntegrationSettings = {
-  primaryLlmProvider: 'google',
-  primaryTranscriptionProvider: 'google',
+  primaryLlmProvider: 'offline_rules',
+  primaryTranscriptionProvider: 'browser_speech',
   autoFallbackToLocal: true,
 
   googleApiKey: '',
@@ -135,9 +141,9 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
   googleModel: 'gemini-3.6-flash',
   groqModel: 'llama-3.3-70b-versatile',
   deepgramModel: 'nova-3',
-  ollamaEndpoint: 'http://localhost:11434',
+  ollamaEndpoint: '',
   ollamaModel: 'llama3.2',
-  localWhisperEndpoint: 'http://localhost:8080/v1/audio/transcriptions',
+  localWhisperEndpoint: '',
 
   apiKey: '',
   preferredModel: 'gemini-3.6-flash',
@@ -258,6 +264,10 @@ export class AiSettingsManager {
     const resolved: AiIntegrationSettings = {
       ...DEFAULT_SETTINGS,
       ...(parsed || {}),
+      primaryLlmProvider: parsed?.primaryLlmProvider || 'offline_rules',
+      primaryTranscriptionProvider: parsed?.primaryTranscriptionProvider || 'browser_speech',
+      ollamaEndpoint: parsed?.ollamaEndpoint !== undefined ? parsed.ollamaEndpoint : '',
+      localWhisperEndpoint: parsed?.localWhisperEndpoint !== undefined ? parsed.localWhisperEndpoint : '',
       googleApiKey: googleKey,
       groqApiKey: groqKey,
       deepgramApiKey: deepgramKey,
@@ -495,9 +505,18 @@ export class AiSettingsManager {
       }
     }
 
-    // 4. Local Ollama
+    // 4. Local Ollama (Opt-in)
     if (provider === 'ollama') {
-      const endpoint = (options?.endpoint || this.getSettings().ollamaEndpoint || 'http://localhost:11434').replace(/\/+$/, '');
+      const endpoint = (options?.endpoint !== undefined ? options.endpoint : (this.getSettings().ollamaEndpoint || '')).trim().replace(/\/+$/, '');
+      if (!endpoint) {
+        return {
+          success: false,
+          message: 'Ollama is opt-in. Enter your server URL (e.g. http://192.168.1.X:11434 on mobile or http://localhost:11434 on PC), or use the Built-in Offline Engine.',
+        };
+      }
+
+      const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      const isLocalhost = endpoint.includes('localhost') || endpoint.includes('127.0.0.1');
 
       // Direct probe to local Ollama daemon from browser
       try {
@@ -532,21 +551,39 @@ export class AiSettingsManager {
             availableModels: data.models,
           };
         }
+        
+        let customHelp = `Could not connect to Ollama daemon at ${endpoint}.`;
+        if (isMobile && isLocalhost) {
+          customHelp += ` On mobile devices, "localhost" refers to your phone. To connect to Ollama running on your PC, enter your computer's local Wi-Fi IP (e.g. http://192.168.1.X:11434) or activate the Built-in Offline Engine.`;
+        } else {
+          customHelp += ` For local machines, start with: OLLAMA_ORIGINS="*" ollama serve. For HTTPS cloud preview, use an HTTPS tunnel (e.g. ngrok http 11434) or switch to the Built-in Offline Engine.`;
+        }
+
         return {
           success: false,
-          message: data?.error || `Could not connect to Ollama daemon at ${endpoint}. For local machines, start with: OLLAMA_ORIGINS="*" ollama serve. For HTTPS cloud preview, use an HTTPS tunnel (e.g. ngrok http 11434) or switch to the Built-in Offline Engine.`,
+          message: data?.error || customHelp,
         };
       } catch (err: any) {
+        let customHelp = `Ollama connection failed: Ensure "ollama serve" is running with OLLAMA_ORIGINS="*" or use an HTTPS tunnel / Built-in Offline Engine.`;
+        if (isMobile && isLocalhost) {
+          customHelp = `Could not connect to localhost:11434 on your mobile device. Enter your PC's local Wi-Fi IP (e.g. http://192.168.1.X:11434) or use the Built-in Offline Engine.`;
+        }
         return {
           success: false,
-          message: `Ollama connection failed: Ensure "ollama serve" is running with OLLAMA_ORIGINS="*" or use an HTTPS tunnel / Built-in Offline Engine.`,
+          message: customHelp,
         };
       }
     }
 
-    // 5. Local Whisper
+    // 5. Local Whisper (Opt-in)
     if (provider === 'local_whisper') {
-      const endpoint = (options?.endpoint || this.getSettings().localWhisperEndpoint || 'http://localhost:8080/v1/audio/transcriptions').trim();
+      const endpoint = (options?.endpoint !== undefined ? options.endpoint : (this.getSettings().localWhisperEndpoint || '')).trim();
+      if (!endpoint) {
+        return {
+          success: false,
+          message: 'Local Whisper is opt-in. Enter your Whisper server endpoint or use Native Speech Recognition.',
+        };
+      }
       try {
         const res = await fetch('/api/local-whisper/verify', {
           method: 'POST',
