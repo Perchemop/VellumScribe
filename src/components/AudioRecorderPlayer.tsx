@@ -12,7 +12,7 @@ import {
   X,
   Upload,
   Radio,
-  Key,
+  CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
 import { AudioRecorderManager } from '../lib/audioRecorder';
@@ -21,7 +21,6 @@ import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
-import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { AiSettingsManager } from '../lib/aiSettings';
 
 interface AudioRecorderPlayerProps {
@@ -39,6 +38,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0.1);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const [recordedAudio, setRecordedAudio] = useState<{
     blob: Blob;
     base64: string;
@@ -47,6 +47,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     mimeType: string;
     url: string;
     originalFileName?: string;
+    liveTranscript?: string;
   } | null>(null);
 
   // Playback states
@@ -55,8 +56,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionText, setTranscriptionText] = useState<string | null>(null);
+  const [transcriptionSource, setTranscriptionSource] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
-  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const recorderRef = useRef<AudioRecorderManager | null>(null);
@@ -75,12 +76,19 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     if (!recorderRef.current) return;
     setRecordedAudio(null);
     setTranscriptionText(null);
+    setTranscriptionSource(null);
+    setLiveTranscript('');
     setRecordingSeconds(0);
     setCurrentTime(0);
 
-    const ok = await recorderRef.current.startRecording((level) => {
-      setAudioLevel(Math.max(0.1, level));
-    });
+    const ok = await recorderRef.current.startRecording(
+      (level) => {
+        setAudioLevel(Math.max(0.1, level));
+      },
+      (chunk) => {
+        setLiveTranscript(chunk);
+      }
+    );
 
     if (ok) {
       setIsRecording(true);
@@ -101,6 +109,11 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
       ...result,
       url,
     });
+
+    if (result.liveTranscript && result.liveTranscript.trim().length > 0) {
+      setTranscriptionText(result.liveTranscript);
+      setTranscriptionSource('Offline Native Speech');
+    }
   };
 
   // Handle file upload
@@ -185,7 +198,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     }
   };
 
-  const handleTranscribeWithGemini = async () => {
+  const handleTranscribeAudio = async () => {
     if (!recordedAudio) return;
     setIsTranscribing(true);
     setTranscribeError(null);
@@ -193,13 +206,15 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
       const res = await GeminiApiService.transcribeAudio(
         recordedAudio.base64,
         recordedAudio.mimeType,
-        recordedAudio.durationSeconds
+        recordedAudio.durationSeconds,
+        liveTranscript || recordedAudio.liveTranscript
       );
       setTranscriptionText(res.transcript);
+      setTranscriptionSource(res.source || 'Offline Native');
       setTranscribeError(null);
     } catch (err: any) {
-      console.error('Audio transcription failed:', err);
-      const errMsg = err?.message || 'Could not transcribe audio. Please verify your Google AI Studio configuration.';
+      console.error('Audio transcription notice:', err);
+      const errMsg = err?.message || 'Could not complete audio transcription.';
       setTranscribeError(errMsg);
     } finally {
       setIsTranscribing(false);
@@ -250,7 +265,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
       if (onClose) onClose();
     } catch (e: any) {
       console.error('Failed to save recording to database:', e);
-      alert(`Storage Error: ${e.message}`);
+      setTranscribeError(`Storage Error: ${e.message}`);
     }
   };
 
@@ -389,6 +404,16 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                   );
                 })}
               </div>
+
+              {/* Live Speech Recognition text preview */}
+              {liveTranscript && (
+                <div className="w-full px-3 py-2 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 text-xs text-zinc-700 dark:text-zinc-300">
+                  <span className="text-[10px] font-semibold text-indigo-500 block mb-0.5">
+                    Live Speech (Offline):
+                  </span>
+                  <p className="line-clamp-2 italic">{liveTranscript}</p>
+                </div>
+              )}
             </div>
           ) : recordedAudio ? (
             <div className="w-full flex flex-col items-center gap-3">
@@ -539,8 +564,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
             <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
               <div className="flex items-center justify-between">
                 <button
-                  id="gemini-transcribe-btn"
-                  onClick={handleTranscribeWithGemini}
+                  id="transcribe-audio-btn"
+                  onClick={handleTranscribeAudio}
                   disabled={isTranscribing}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
                 >
@@ -549,37 +574,35 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                   )}
-                  {isTranscribing ? 'Transcribing with Gemini...' : 'Transcribe to Text'}
+                  {isTranscribing ? 'Transcribing Audio...' : transcriptionText ? 'Re-transcribe Audio' : 'Transcribe to Text'}
                 </button>
+
+                <span className="text-[10px] text-zinc-400">
+                  {AiSettingsManager.getSettings().primaryTranscriptionProvider === 'browser_speech' ? 'Offline Native Engine' : 'Speech Engine Active'}
+                </span>
               </div>
 
               {transcribeError && (
-                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-lg text-xs text-amber-900 dark:text-amber-200 space-y-2">
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-lg text-xs text-amber-900 dark:text-amber-200 space-y-1">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="font-medium">Transcription Error</p>
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">{transcribeError}</p>
+                      <p className="font-medium">Transcription Notice</p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">{transcribeError}</p>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-200/60 dark:border-amber-900/40">
-                    <button
-                      onClick={() => setShowAiKeyModal(true)}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-medium transition-colors"
-                    >
-                      <Key className="w-3 h-3" />
-                      Configure AI Studio Key
-                    </button>
                   </div>
                 </div>
               )}
 
               {transcriptionText && (
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 block">
-                    Transcription
-                  </span>
-                  <p className="leading-relaxed">{transcriptionText}</p>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      Transcript ({transcriptionSource || 'Offline Engine'})
+                    </span>
+                  </div>
+                  <p className="leading-relaxed whitespace-pre-line">{transcriptionText}</p>
                 </div>
               )}
             </div>
@@ -598,18 +621,6 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           </div>
         )}
       </div>
-
-      {showAiKeyModal && (
-        <AiStudioKeyModal
-          isOpen={showAiKeyModal}
-          onClose={() => setShowAiKeyModal(false)}
-          onSuccess={() => {
-            setShowAiKeyModal(false);
-            setTranscribeError(null);
-            handleTranscribeWithGemini();
-          }}
-        />
-      )}
     </div>
   );
 };

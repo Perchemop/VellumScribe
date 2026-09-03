@@ -10,7 +10,10 @@ let StorageManager: typeof import('./storage').StorageManager;
 beforeEach(async () => {
   localStorage.clear();
   vi.resetModules();
+  const { SqliteEngine } = await import('./sqlite/sqliteEngine');
+  await SqliteEngine.resetForTesting();
   ({ StorageManager } = await import('./storage'));
+  await StorageManager.initialize();
 });
 
 function makeEvent(overrides: Partial<Omit<EventRecord, 'id'>> = {}): Omit<EventRecord, 'id'> {
@@ -107,8 +110,12 @@ describe('StorageManager notes', () => {
     const event = StorageManager.addEvent(makeEvent());
     StorageManager.addNote(makeNote(event.id, { body: 'Survives reload' }));
 
+    const { SqliteEngine } = await import('./sqlite/sqliteEngine');
+    await SqliteEngine.flushToStorage();
+
     vi.resetModules();
     const reloaded = (await import('./storage')).StorageManager;
+    await reloaded.initialize();
     expect(reloaded.getNotes()).toHaveLength(1);
     expect(reloaded.getNotes()[0].body).toBe('Survives reload');
   });

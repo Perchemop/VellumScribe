@@ -20,6 +20,7 @@ interface AppContextValue {
   toastMessage: string | null;
   toastAction?: { label: string; onClick: () => void } | null;
   showToast: (msg: string, action?: { label: string; onClick: () => void }) => void;
+  dismissToast: () => void;
 
   // Setters
   setSelectedEventId: (id: number | null) => void;
@@ -55,17 +56,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'checklist' | 'sketch'>('all');
-    const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
+  const toastTimeoutRef = React.useRef<number | null>(null);
 
-  const showToast = (msg: string, action?: { label: string; onClick: () => void }) => {
+  const dismissToast = useCallback(() => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
+    setToastMessage(null);
+    setToastAction(null);
+  }, []);
+
+  const showToast = useCallback((msg: string, action?: { label: string; onClick: () => void }) => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(msg);
     setToastAction(action || null);
-    setTimeout(() => {
-      setToastMessage(prev => prev === msg ? null : prev);
-      setToastAction(prev => prev === action ? null : prev);
-    }, 6000);
-  };
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+      setToastAction(null);
+      toastTimeoutRef.current = null;
+    }, 4500);
+  }, []);
 
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
 
@@ -166,7 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return newNote;
     } catch (e: any) {
       console.error('Failed to create note:', e);
-      alert(`Storage Error: ${e.message}`);
+      showToast(`Storage Error: ${e.message}`);
       throw e;
     }
   }, [events, selectedEventId, showToast]);
@@ -227,6 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toastMessage,
       toastAction,
       showToast,
+      dismissToast,
       setSelectedEventId,
       setSelectedNoteId,
       setActiveView,
@@ -260,6 +276,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toastMessage,
       toastAction,
       showToast,
+      dismissToast,
       setDarkMode,
       refreshData,
       createEvent,

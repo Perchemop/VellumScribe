@@ -11,6 +11,8 @@ import {
   Archive,
   Key,
   Sparkles,
+  X,
+  Info,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from './types';
 import { StorageManager } from './lib/storage';
@@ -24,11 +26,10 @@ import { ArchiveSection } from './components/ArchiveSection';
 import { SettingsView } from './components/SettingsView';
 import { AppUpdateModal } from './components/AppUpdateModal';
 import { AppUpdateManager } from './lib/appUpdateManager';
-import { AiStudioKeyModal } from './components/AiStudioKeyModal';
-import { AiSettingsManager } from './lib/aiSettings';
 import {
   FirstTimeUserGuideModal,
   hasCompletedOnboarding,
+  markOnboardingCompleted,
 } from './components/FirstTimeUserGuideModal';
 import { AppLogo } from './components/AppLogo';
 
@@ -45,6 +46,10 @@ export default function App() {
     refreshData,
     deleteEvent,
     deleteNote,
+    showToast,
+    toastMessage,
+    toastAction,
+    dismissToast,
   } = useApp();
 
   // Local UI Navigation & modal states
@@ -54,7 +59,6 @@ export default function App() {
   const [focusMode, setFocusMode] = useState<boolean>(false);
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
-  const [showAiKeyModal, setShowAiKeyModal] = useState<boolean>(false);
 
   // Run schema checks and check for remote updates once per session on startup
   useEffect(() => {
@@ -86,6 +90,49 @@ export default function App() {
         .catch(() => {});
     }
   }, []);
+
+  // Android System Back Navigation Handler (Hardware Back Button & Swipe Edge Gestures)
+  useEffect(() => {
+    // Maintain a history state baseline for Android phone navigation trapping
+    if (!window.history.state || window.history.state.vellumscribe !== 'active') {
+      window.history.pushState({ vellumscribe: 'active' }, '');
+    }
+
+    const handlePopState = () => {
+      // User triggered Android hardware back button or edge swipe gesture
+      if (showFabSpeedDial) {
+        setShowFabSpeedDial(false);
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
+      if (showOnboardingGuide) {
+        markOnboardingCompleted();
+        setShowOnboardingGuide(false);
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
+      if (showUpdateModal) {
+        setShowUpdateModal(false);
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
+      if (selectedNoteId) {
+        setSelectedNoteId(null);
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
+      if (activeView !== 'notes') {
+        setActiveView('notes');
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [showFabSpeedDial, showOnboardingGuide, showUpdateModal, selectedNoteId, activeView]);
 
   // Event & Note CRUD Handlers
   const handleCreateEvent = (newEvent: Omit<EventRecord, 'id'>) => {
@@ -127,7 +174,7 @@ export default function App() {
       setShowFabSpeedDial(false);
     } catch (e: any) {
       console.error('Failed to create new note:', e);
-      alert(`Storage Error: ${e.message}`);
+      showToast(`Storage Error: ${e.message}`);
     }
   };
 
@@ -258,32 +305,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Free Google AI Studio Key Authenticator Button */}
-              <button
-                id="header-ai-key-btn"
-                onClick={() => setShowAiKeyModal(true)}
-                title={
-                  AiSettingsManager.hasLocalKey()
-                    ? `AI Studio Key Active (${AiSettingsManager.getMaskedKey()})`
-                    : 'Add Free Google AI Studio API Key for unlimited summaries'
-                }
-                className={`p-2 rounded-xl transition-colors relative flex items-center gap-1 ${
-                  AiSettingsManager.hasLocalKey()
-                    ? 'text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                    : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
-                }`}
-              >
-                <Key className="w-4 h-4" />
-                <span className="hidden xl:inline text-[11px] font-semibold">
-                  {AiSettingsManager.hasLocalKey() ? 'AI Key' : 'Add AI Key'}
-                </span>
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    AiSettingsManager.hasLocalKey() ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-                  }`}
-                />
-              </button>
-
               {/* Direct Settings Tab Button */}
               <button
                 id="open-app-settings-btn"
@@ -405,6 +426,7 @@ export default function App() {
                 initialSubtab={settingsSubtab}
                 onRefreshNotes={refreshData}
                 onOpenUpdateModal={() => setShowUpdateModal(true)}
+                onOpenOnboardingGuide={() => setShowOnboardingGuide(true)}
                 onBackToNotes={selectedNote ? () => setActiveView('notes') : undefined}
                 activeEditingNoteTitle={selectedNote?.title || (selectedNote ? 'Untitled Note' : undefined)}
               />
@@ -413,49 +435,67 @@ export default function App() {
 
           {/* Android Mobile Floating Action Button (FAB) */}
           {!selectedNote && activeView === 'notes' && (
-            <div className="md:hidden fixed bottom-18 right-4 z-30">
+            <>
               {showFabSpeedDial && (
-                <div className="flex flex-col items-end gap-2.5 mb-3 animate-fade-in">
-                  <button
-                    onClick={() => handleCreateNote(undefined, 'text')}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold"
-                  >
-                    <span>Text Note</span>
-                    <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
-                      <FileText className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleCreateNote(undefined, 'checklist')}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold"
-                  >
-                    <span>To-Do List</span>
-                    <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
-                      <CheckSquare className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleCreateNote(undefined, 'sketch')}
-                    className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold"
-                  >
-                    <span>Sketch</span>
-                    <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
-                      <PenTool className="w-3.5 h-3.5" />
-                    </div>
-                  </button>
-                </div>
+                <div
+                  className="md:hidden fixed inset-0 z-25 bg-black/20 backdrop-blur-2xs"
+                  onClick={() => setShowFabSpeedDial(false)}
+                />
               )}
+              <div className="md:hidden fixed bottom-20 right-4 z-30">
+                {showFabSpeedDial && (
+                  <div className="flex flex-col items-end gap-2.5 mb-3 animate-fade-in">
+                    <button
+                      onClick={() => {
+                        setShowFabSpeedDial(false);
+                        handleCreateNote(undefined, 'text');
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold active:scale-95 transition-transform"
+                    >
+                      <span>Text Note</span>
+                      <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowFabSpeedDial(false);
+                        handleCreateNote(undefined, 'checklist');
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold active:scale-95 transition-transform"
+                    >
+                      <span>To-Do List</span>
+                      <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
+                        <CheckSquare className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowFabSpeedDial(false);
+                        handleCreateNote(undefined, 'sketch');
+                      }}
+                      className="flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-full shadow-lg border border-zinc-200/80 dark:border-zinc-700 text-xs font-semibold active:scale-95 transition-transform"
+                    >
+                      <span>Sketch</span>
+                      <div className="w-7 h-7 rounded-full bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
+                        <PenTool className="w-3.5 h-3.5" />
+                      </div>
+                    </button>
+                  </div>
+                )}
 
-              <button
-                id="mobile-fab-create-btn"
-                onClick={() => setShowFabSpeedDial((p) => !p)}
-                className={`w-13 h-13 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xl flex items-center justify-center transition-transform active:scale-95 ${
-                  showFabSpeedDial ? 'rotate-45' : ''
-                }`}
-              >
-                <Plus className="w-6 h-6" />
-              </button>
-            </div>
+                <button
+                  id="mobile-fab-create-btn"
+                  onClick={() => setShowFabSpeedDial((p) => !p)}
+                  aria-label={showFabSpeedDial ? "Close create menu" : "Create note"}
+                  className={`w-13 h-13 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-xl flex items-center justify-center transition-transform active:scale-95 ${
+                    showFabSpeedDial ? 'rotate-45' : ''
+                  }`}
+                >
+                  <Plus className="w-6 h-6" />
+                </button>
+              </div>
+            </>
           )}
         </main>
 
@@ -556,7 +596,10 @@ export default function App() {
         {showOnboardingGuide && (
           <FirstTimeUserGuideModal
             isOpen={showOnboardingGuide}
-            onClose={() => setShowOnboardingGuide(false)}
+            onClose={() => {
+              markOnboardingCompleted();
+              setShowOnboardingGuide(false);
+            }}
           />
         )}
 
@@ -565,15 +608,38 @@ export default function App() {
           <AppUpdateModal onClose={() => setShowUpdateModal(false)} />
         )}
 
-        {/* User Google AI Studio Free Key Authentication Modal */}
-        {showAiKeyModal && (
-          <AiStudioKeyModal
-            isOpen={showAiKeyModal}
-            onClose={() => setShowAiKeyModal(false)}
-            onSuccess={() => {
-              refreshData();
-            }}
-          />
+        {/* Global Accessible Toast Notification Banner */}
+        {toastMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-md w-[calc(100%-2rem)] sm:w-auto min-w-[280px] bg-zinc-900/95 dark:bg-zinc-100/95 text-zinc-100 dark:text-zinc-900 border border-zinc-800 dark:border-zinc-200/80 rounded-xl px-3.5 py-2.5 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 text-xs animate-fade-in"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Info className="w-4 h-4 text-indigo-400 dark:text-indigo-600 shrink-0" />
+              <span className="font-medium truncate leading-tight">{toastMessage}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {toastAction && (
+                <button
+                  onClick={() => {
+                    toastAction.onClick();
+                    dismissToast();
+                  }}
+                  className="px-2 py-0.5 bg-zinc-800 dark:bg-zinc-200 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded font-semibold text-[11px] transition-colors"
+                >
+                  {toastAction.label}
+                </button>
+              )}
+              <button
+                onClick={dismissToast}
+                aria-label="Close notification"
+                className="p-1 text-zinc-400 hover:text-zinc-200 dark:hover:text-zinc-700 rounded-md transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -61,6 +61,48 @@ export class CloudSyncEngine {
     localStorage.setItem('vs_cloud_accounts', JSON.stringify(accs));
   }
 
+  /**
+   * 1-Click Zero-Credential Connection
+   * Connects to cloud destination without entering any API keys, client secrets, or session IDs.
+   */
+  static async connectInstant(
+    provider: CloudStorageProvider,
+    metadata?: { email?: string; displayName?: string }
+  ): Promise<CloudAccount> {
+    const res = await fetch(`/api/cloud/${provider}/connect-instant`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metadata || {}),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Connection failed' }));
+      throw new Error(err.error || 'Failed to connect cloud destination');
+    }
+
+    const data = await res.json();
+    const account: CloudAccount = data.account;
+
+    // Update local accounts
+    const current = this.getAccounts().filter((a) => a.provider !== provider);
+    current.push(account);
+    localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
+
+    return account;
+  }
+
+  /**
+   * Disconnect a cloud account cleanly from both local cache and server
+   */
+  static async disconnectAccount(provider: CloudStorageProvider): Promise<void> {
+    try {
+      await fetch(`/api/cloud/${provider}/disconnect`, { method: 'POST' });
+    } catch (e) {
+      console.warn(`Failed to notify server of disconnect for ${provider}:`, e);
+    }
+    this.removeAccount(provider);
+  }
+
   static getTelemetry(): SyncTelemetry[] {
     return this.telemetry;
   }

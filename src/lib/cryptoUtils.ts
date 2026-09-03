@@ -123,7 +123,7 @@ export async function verifyPin(
 /**
  * Derive an AES-256-GCM CryptoKey from the user's PIN and salt.
  */
-async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey | null> {
+export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey | null> {
   if (typeof crypto === 'undefined' || !crypto.subtle || !crypto.subtle.importKey || !crypto.subtle.deriveKey) {
     return null;
   }
@@ -322,3 +322,5 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
     return null;
   }
 }
+
+export { deriveAesKey as deriveEncryptionKey };

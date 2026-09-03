@@ -44,7 +44,7 @@ export interface NoteRecord {
   cloud_save_enabled?: boolean;
 }
 
-export type CloudStorageProvider = 'google_drive' | 'microsoft';
+export type CloudStorageProvider = 'instant_vault' | 'google_drive' | 'microsoft';
 
 export interface CloudAccount {
   provider: CloudStorageProvider;

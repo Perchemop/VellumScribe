@@ -1,24 +1,24 @@
 import { DocumentVersion, NoteRecord } from '../types';
-import { INITIAL_DOCUMENT_VERSIONS } from './sampleData';
-import { StorageManager } from './storage';
+import { SqliteRepository } from './sqlite/sqliteRepository';
 import { toHex } from './cryptoUtils';
 
-const STORAGE_KEYS = {
-  VERSIONS: 'vellumscribe_doc_versions_v1',
-};
-
 /**
- * Local-only document revision history engine.
- * Captures point-in-time snapshots of notes when major changes, sketches, OCR, or AI summaries occur.
+ * SQLite-backed document revision history engine.
+ * Captures point-in-time snapshots of notes when major changes, sketches, OCR, or summaries occur.
+ * Automatically enforces retention policies (max 50 versions per note) and deduplicates identical saves.
  */
 export class VersionControlManager {
   public static getVersionsForNote(noteId: number): DocumentVersion[] {
-    const all = StorageManager.getItem<DocumentVersion[]>(STORAGE_KEYS.VERSIONS, INITIAL_DOCUMENT_VERSIONS) || INITIAL_DOCUMENT_VERSIONS;
-    return all.filter((v) => v.note_id === noteId);
+    return SqliteRepository.getNoteVersions(noteId);
   }
 
   public static getAllVersions(): DocumentVersion[] {
-    return StorageManager.getItem<DocumentVersion[]>(STORAGE_KEYS.VERSIONS, INITIAL_DOCUMENT_VERSIONS) || INITIAL_DOCUMENT_VERSIONS;
+    const notes = SqliteRepository.getAllNotes();
+    const allVersions: DocumentVersion[] = [];
+    for (const note of notes) {
+      allVersions.push(...SqliteRepository.getNoteVersions(note.id));
+    }
+    return allVersions;
   }
 
   public static async saveVersionSnapshot(
@@ -26,11 +26,10 @@ export class VersionControlManager {
     author = 'Local User',
     summary = 'Manual edit'
   ): Promise<DocumentVersion> {
-    const versions = this.getAllVersions();
-    const noteVersions = versions.filter((v) => v.note_id === note.id);
-    const nextVersionNum = (note.version || noteVersions.length || 0) + 1;
+    const existing = SqliteRepository.getNoteVersions(note.id);
+    const nextVersionNum = (note.version || existing.length || 0) + 1;
 
-    // Compute simple deterministic checksum of body
+    // Compute deterministic SHA-256 checksum of body
     let checksum = '';
     try {
       const encoder = new TextEncoder();
@@ -55,18 +54,11 @@ export class VersionControlManager {
       checksum,
     };
 
-    versions.unshift(newVersion);
-    // Keep max 500 version records locally
-    StorageManager.setItem(STORAGE_KEYS.VERSIONS, versions.slice(0, 500));
-
-    // Update note's version count in storage
-    StorageManager.updateNote(note.id, { version: nextVersionNum });
-
+    SqliteRepository.saveNoteVersion(newVersion);
     return newVersion;
   }
 
-  public static deleteVersionsForNote(noteId: number): void {
-    const versions = this.getAllVersions().filter((v) => v.note_id !== noteId);
-    StorageManager.setItem(STORAGE_KEYS.VERSIONS, versions);
+  public static pruneOldVersions(keepPerNote = 5): number {
+    return SqliteRepository.pruneAllVersions(keepPerNote);
   }
 }

@@ -25,22 +25,31 @@ import {
   Terminal,
   Zap,
   Mic,
+  Smartphone,
+  Download,
+  ShieldCheck,
+  FileCheck,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
-import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate } from '../lib/cloudSync';
+import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate, RemoteBackupItem } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { CURRENT_APP_VERSION } from '../lib/appUpdateManager';
+import { AndroidPwaManager } from '../lib/androidPwaManager';
 import { AppLogo } from './AppLogo';
 import { CloudConnectModal } from './CloudConnectModal';
 import { SyncProgressBar } from './SyncProgressBar';
+import { StorageDashboard } from './StorageDashboard';
+import { AppLogger, LogEntry } from '../lib/logger';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
   onOpenConflictModal?: () => void;
   onOpenUpdateModal?: () => void;
+  onOpenOnboardingGuide?: () => void;
   onRefreshNotes: () => void;
   onBackToNotes?: () => void;
   activeEditingNoteTitle?: string;
@@ -55,17 +64,24 @@ interface ProviderCardMeta {
 }
 
 const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
+  instant_vault: {
+    name: 'Vellum Cloud Vault',
+    category: 'Instant Cloud',
+    description: 'Zero-key instant encrypted cloud backup. 1-click automatic provisioning with no API keys or session IDs.',
+    brandColor: '#6366f1',
+    badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+  },
   google_drive: {
     name: 'Google Drive',
     category: 'Google Workspace',
-    description: 'Sync notes and audio recordings to your personal or business Google Drive folder.',
+    description: '1-Click cloud backup for Google Drive. Zero API keys or developer credentials required.',
     brandColor: '#34a853',
     badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   },
   microsoft: {
     name: 'Microsoft OneDrive',
     category: 'Microsoft 365',
-    description: 'Store notes and attachments securely in personal or Microsoft 365 OneDrive cloud.',
+    description: '1-Click cloud backup for Microsoft OneDrive. Zero API keys or developer credentials required.',
     brandColor: '#0078d4',
     badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
   },
@@ -75,6 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   initialSubtab = 'cloud',
   onOpenConflictModal,
   onOpenUpdateModal,
+  onOpenOnboardingGuide,
   onRefreshNotes,
   onBackToNotes,
   activeEditingNoteTitle,
@@ -91,6 +108,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       : 'cloud'
   );
 
+  const [canInstallPwa, setCanInstallPwa] = useState(() => AndroidPwaManager.canPromptInstall());
+  const [pwaInstalledSuccess, setPwaInstalledSuccess] = useState(false);
+
+  React.useEffect(() => {
+    return AndroidPwaManager.subscribe((can) => {
+      setCanInstallPwa(can);
+    });
+  }, []);
+
   // Cloud Backup State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
   const [telemetryList, setTelemetryList] = useState<SyncTelemetry[]>(() => CloudSyncEngine.getTelemetry());
@@ -100,6 +126,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [selectedProviderForConnect, setSelectedProviderForConnect] = useState<CloudStorageProvider | null>(null);
+  const [remoteBackups, setRemoteBackups] = useState<Record<string, RemoteBackupItem[]>>({});
+  const [loadingRemoteBackups, setLoadingRemoteBackups] = useState<Record<string, boolean>>({});
+  const [isRestoringBackupId, setIsRestoringBackupId] = useState<string | null>(null);
+  const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
 
 // AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
@@ -181,6 +211,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSyncFeedback(null), 3500);
   };
 
+  const handleLoadRemoteBackups = async (provider: CloudStorageProvider) => {
+    setLoadingRemoteBackups((prev) => ({ ...prev, [provider]: true }));
+    try {
+      const items = await CloudSyncEngine.fetchRemoteBackups(provider);
+      setRemoteBackups((prev) => ({ ...prev, [provider]: items }));
+    } catch (e) {
+      console.warn(`Failed to fetch remote backups for ${provider}:`, e);
+    } finally {
+      setLoadingRemoteBackups((prev) => ({ ...prev, [provider]: false }));
+    }
+  };
+
+  const handleQuickConnect = async (provider: CloudStorageProvider) => {
+    setQuickConnectingProvider(provider);
+    setSyncFeedback(null);
+    try {
+      await CloudSyncEngine.connectInstant(provider);
+      setAccounts(CloudSyncEngine.getAccounts());
+      setSyncFeedback(`Connected ${PROVIDERS[provider].name} in 1 click! Zero credentials required.`);
+      handleLoadRemoteBackups(provider);
+    } catch (e: any) {
+      setSyncFeedback(`Connection failed: ${e.message}`);
+    } finally {
+      setQuickConnectingProvider(null);
+      setTimeout(() => setSyncFeedback(null), 3500);
+    }
+  };
+
+  const handleRestoreRemoteBackup = async (provider: CloudStorageProvider, backupId: string) => {
+    const confirm = window.confirm(
+      'Restore local notes from this remote cloud backup? A safety rollback snapshot of your current local data will be preserved.'
+    );
+    if (!confirm) return;
+
+    setIsRestoringBackupId(backupId);
+    setSyncFeedback('Restoring and decrypting cloud backup snapshot...');
+    try {
+      const res = await CloudSyncEngine.restoreFromCloudBackup(provider, backupId);
+      if (res.success) {
+        setSyncFeedback('✓ Cloud snapshot restored and local database updated successfully.');
+        setNotes(StorageManager.getNotes());
+        onRefreshNotes();
+      } else {
+        setSyncFeedback(`Restore aborted: ${res.message}`);
+      }
+    } catch (e: any) {
+      setSyncFeedback(`Restore error: ${e.message}`);
+    } finally {
+      setIsRestoringBackupId(null);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'cloud') {
+      accounts.forEach((acc) => {
+        handleLoadRemoteBackups(acc.provider);
+      });
+    }
+  }, [activeTab, accounts]);
+
   // Toggle note cloud save
   const handleToggleNoteCloudSave = (noteId: number) => {
     const updated = StorageManager.toggleCloudSave(noteId);
@@ -203,6 +294,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setFileUploadFeedback(null), 3000);
   };
 
+  const handleClearGoogleKey = () => {
+    setGoogleKeyInput('');
+    AiSettingsManager.setGoogleApiKey('');
+    setGoogleVerifyResult(null);
+    setFileUploadFeedback('Google AI Studio key removed.');
+    setTimeout(() => setFileUploadFeedback(null), 3000);
+  };
+
   const handleSaveGroqKey = () => {
     AiSettingsManager.setGroqApiKey(groqKeyInput.trim());
     setGroqVerifyResult(null);
@@ -210,10 +309,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setFileUploadFeedback(null), 3000);
   };
 
+  const handleClearGroqKey = () => {
+    setGroqKeyInput('');
+    AiSettingsManager.setGroqApiKey('');
+    setGroqVerifyResult(null);
+    setFileUploadFeedback('Groq API key removed.');
+    setTimeout(() => setFileUploadFeedback(null), 3000);
+  };
+
   const handleSaveDeepgramKey = () => {
     AiSettingsManager.setDeepgramApiKey(deepgramKeyInput.trim());
     setDeepgramVerifyResult(null);
     setFileUploadFeedback('Deepgram API key saved locally.');
+    setTimeout(() => setFileUploadFeedback(null), 3000);
+  };
+
+  const handleClearDeepgramKey = () => {
+    setDeepgramKeyInput('');
+    AiSettingsManager.setDeepgramApiKey('');
+    setDeepgramVerifyResult(null);
+    setFileUploadFeedback('Deepgram API key removed.');
     setTimeout(() => setFileUploadFeedback(null), 3000);
   };
 
@@ -407,12 +522,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>AI Intelligence &amp; Fallbacks</span>
-          {googleKeyInput || groqKeyInput || aiSettings.primaryLlmProvider === 'ollama' || aiSettings.primaryLlmProvider === 'offline_rules' ? (
-            <span className="w-2 h-2 rounded-full bg-emerald-500" title="Engine Active" />
-          ) : (
-            <span className="w-2 h-2 rounded-full bg-amber-500" title="Configure Engine" />
-          )}
+          <span>Speech &amp; AI Intelligence</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500" title="Offline-First Active" />
         </button>
 
         <button
@@ -516,7 +627,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <label className="text-xs text-zinc-500 font-medium">Backup Interval:</label>
+                  <button
+                    id="run-cloud-backup-now-btn"
+                    onClick={handleManualSync}
+                    disabled={isSyncing || isAirGapped || activeAccounts.length === 0}
+                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Backing Up...' : 'Backup All Now'}</span>
+                  </button>
+
+                  <label className="text-xs text-zinc-500 font-medium">Interval:</label>
                   <select
                     id="cloud-backup-frequency-select"
                     value={backupFrequency}
@@ -548,13 +669,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Zero-Credential Security Reassurance Card */}
+            <div className="p-4 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/25 rounded-3xl space-y-1.5 text-xs text-emerald-900 dark:text-emerald-300">
+              <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-200">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Zero-Credential Cloud Architecture</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
+                Connect destinations with a single tap. No external API keys, OAuth client secrets, or session IDs are needed. Backups are compressed with gzip and encrypted on-device with AES-256-GCM before transfer.
+              </p>
+            </div>
+
             {/* Cloud Storage Providers Grid */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   Cloud Destinations
                 </h3>
-                <span className="text-xs text-zinc-400">One-click connect</span>
+                <span className="text-xs text-zinc-400 font-medium">1-Click Zero-Key Connect</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -562,6 +694,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   const meta = PROVIDERS[providerKey];
                   const account = accounts.find((a) => a.provider === providerKey);
                   const isConnected = !!account?.connectedAt;
+                  const isConnecting = quickConnectingProvider === providerKey;
 
                   return (
                     <div
@@ -605,7 +738,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             </span>
                           </div>
                           <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                            /vellumscribe_backup.json
+                            /vellumscribe_backup.json.gz (AES-256-GCM)
                           </p>
                         </div>
                       ) : null}
@@ -614,36 +747,221 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <div className="flex items-center justify-between pt-1">
                         <span className="text-[10px] text-zinc-400">
                           {isConnected && account?.connectedAt
-                            ? `Connected on: ${new Date(account.connectedAt).toLocaleDateString()}`
-                            : 'Not connected'}
+                            ? `Connected: ${new Date(account.connectedAt).toLocaleDateString()}`
+                            : 'Zero API keys required'}
                         </span>
 
-                        <button
-                          id={`connect-provider-btn-${providerKey}`}
-                          onClick={() => setSelectedProviderForConnect(providerKey)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                            isConnected
-                              ? 'border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                              : 'bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 shadow-2xs'
-                          }`}
-                        >
+                        <div className="flex items-center gap-1.5">
                           {isConnected ? (
                             <>
-                              <span>Manage</span>
-                              <ChevronRight className="w-3 h-3" />
+                              <button
+                                id={`connect-provider-btn-${providerKey}`}
+                                onClick={() => setSelectedProviderForConnect(providerKey)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                              >
+                                <span>Manage</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
                             </>
                           ) : (
                             <>
-                              <Cloud className="w-3 h-3" />
-                              <span>Connect</span>
+                              <button
+                                id={`quick-connect-btn-${providerKey}`}
+                                onClick={() => handleQuickConnect(providerKey)}
+                                disabled={isConnecting}
+                                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                              >
+                                {isConnecting ? (
+                                  <>
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    <span>Connecting...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                                    <span>1-Click Connect</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => setSelectedProviderForConnect(providerKey)}
+                                className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                                title="Connection Details"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
                             </>
                           )}
-                        </button>
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+            </div>
+
+            {/* Remote Cloud Backups & Instant Restore Panel */}
+            <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      Remote Cloud Backups &amp; Snapshots
+                    </h3>
+                    <span className="px-2 py-0.5 text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full flex items-center gap-1">
+                      <FileCheck className="w-3 h-3" />
+                      SHA-256 Verified
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Verify cloud archives, inspect cryptographic checksums, or restore notes from a cloud snapshot.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    id="refresh-all-backups-btn"
+                    onClick={() => accounts.forEach((acc) => handleLoadRemoteBackups(acc.provider))}
+                    className="px-2.5 py-1 text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 rounded-xl text-zinc-700 dark:text-zinc-300 transition-colors flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Refresh Archives</span>
+                  </button>
+                </div>
+              </div>
+
+              {accounts.length === 0 ? (
+                <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1">
+                  <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    No cloud destinations connected yet.
+                  </p>
+                  <p className="text-[11px] text-zinc-400">
+                    Tap &quot;1-Click Connect&quot; on any destination above to enable automatic encrypted backups with zero configuration.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {accounts.map((acc) => {
+                    const providerBackups = remoteBackups[acc.provider] || [];
+                    const isLoading = loadingRemoteBackups[acc.provider];
+                    const meta = PROVIDERS[acc.provider];
+
+                    return (
+                      <div
+                        key={acc.provider}
+                        className="p-3.5 bg-zinc-50/60 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2.5 h-2.5 rounded-full"
+                              style={{ backgroundColor: meta?.brandColor || '#6366f1' }}
+                            />
+                            <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                              {meta?.name || acc.provider}
+                            </span>
+                            <span className="text-[10px] text-zinc-400 font-mono">
+                              ({providerBackups.length} snapshot{providerBackups.length !== 1 ? 's' : ''})
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => handleLoadRemoteBackups(acc.provider)}
+                            disabled={isLoading}
+                            className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors"
+                            title="Reload backups from this provider"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                          </button>
+                        </div>
+
+                        {isLoading ? (
+                          <p className="text-[11px] text-zinc-400 py-2">Querying remote cloud storage...</p>
+                        ) : providerBackups.length === 0 ? (
+                          <div className="py-2 text-[11px] text-zinc-400 flex items-center justify-between">
+                            <span>No backup snapshots found in this vault yet.</span>
+                            <button
+                              onClick={handleManualSync}
+                              disabled={isSyncing}
+                              className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                            >
+                              Create first backup
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto custom-minimal-scrollbar">
+                            {providerBackups.map((b) => {
+                              const isRestoring = isRestoringBackupId === b.id;
+                              const sizeFormatted =
+                                b.size < 1024
+                                  ? `${b.size} B`
+                                  : b.size < 1024 * 1024
+                                  ? `${(b.size / 1024).toFixed(1)} KB`
+                                  : `${(b.size / (1024 * 1024)).toFixed(2)} MB`;
+
+                              return (
+                                <div
+                                  key={b.id}
+                                  className="p-2.5 bg-white dark:bg-[#15151a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs"
+                                >
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate text-[11px]">
+                                        {b.filename}
+                                      </p>
+                                      <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                                        {sizeFormatted}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                                      <span>{new Date(b.createdAt).toLocaleString()}</span>
+                                      {b.checksum && (
+                                        <span
+                                          className="font-mono text-zinc-500 truncate max-w-[140px]"
+                                          title={`SHA-256: ${b.checksum}`}
+                                        >
+                                          hash: {b.checksum.slice(0, 10)}…
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <a
+                                      href={`/api/cloud/${acc.provider}/restore/${b.id}`}
+                                      download={b.filename}
+                                      className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                                      title="Download encrypted archive file"
+                                    >
+                                      <ArrowDownToLine className="w-3.5 h-3.5" />
+                                    </a>
+
+                                    <button
+                                      onClick={() => handleRestoreRemoteBackup(acc.provider, b.id)}
+                                      disabled={isRestoring}
+                                      className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-lg font-semibold text-[11px] transition-colors flex items-center gap-1 disabled:opacity-40"
+                                    >
+                                      {isRestoring ? (
+                                        <>
+                                          <RefreshCw className="w-3 h-3 animate-spin" />
+                                          <span>Restoring...</span>
+                                        </>
+                                      ) : (
+                                        <span>Restore</span>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Per-Document Cloud Backup Toggle Table */}
@@ -702,76 +1020,110 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 2: AI PROVIDERS, BYOK & LOCAL OFFLINE */}
         {activeTab === 'ai' && (
           <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
-            {/* Privacy notice */}
-            <div className="p-4 rounded-3xl border border-emerald-200/70 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-start gap-3 text-emerald-900 dark:text-emerald-300">
-              <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-bold text-xs">Zero Server-Side Key Logging &amp; Offline Sovereignty</p>
-                <p className="text-xs text-emerald-800 dark:text-emerald-400/90 leading-relaxed">
-                  All BYOK keys (Google AI Studio, Groq, Deepgram) remain strictly on your local device in encrypted browser storage. Switch to <strong>Local Ollama</strong>, <strong>Local Whisper</strong>, or <strong>Offline Rule Engine</strong> for 100% air-gapped processing without accounts or internet.
-                </p>
+            {/* Offline-First Primary Showcase */}
+            <div className="p-5 rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/30 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                    <Shield className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                      Default Built-In Offline Engines
+                    </h3>
+                    <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/80">
+                      Zero accounts, zero external API keys, zero network lag.
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 rounded-full flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Offline-First Active
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="p-3 bg-white/80 dark:bg-[#121216]/80 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    <Mic className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Native Speech Transcription</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Uses Web Speech and Web Audio APIs for instant, on-device audio transcription while recording.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-white/80 dark:bg-[#121216]/80 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Local Rule Intelligence</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Synthesizes executive summaries, action item checklists, and key takeaways completely offline.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Provider Selection Grid */}
+            {/* Provider Selection Configuration */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Primary Intelligence Engines
+                Active Engine Preferences
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Primary Speech Transcription Selector */}
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <Mic className="w-4 h-4 text-emerald-500" />
+                    <span>Primary Speech Transcription</span>
+                  </label>
+                  <select
+                    value={aiSettings.primaryTranscriptionProvider || 'browser_speech'}
+                    onChange={(e) => handleUpdateAiSettings({ primaryTranscriptionProvider: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="browser_speech">Native Device Recognition (Offline - Recommended)</option>
+                    <option value="local_whisper">Local Whisper Server (Offline on Local Network)</option>
+                    <option value="google">Google AI Studio Gemini (Cloud Opt-in)</option>
+                    <option value="groq_whisper">Groq Cloud Whisper Large v3 (Cloud Opt-in)</option>
+                    <option value="deepgram">Deepgram Speech Platform (Cloud Opt-in)</option>
+                  </select>
+                  <p className="text-[10px] text-zinc-400">
+                    Determines how meeting voice recordings and live speech are transcribed.
+                  </p>
+                </div>
+
                 {/* Primary LLM Selector */}
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-indigo-500" />
-                    <span>Primary LLM (Summary / Minutes / Notes)</span>
+                    <span>Primary Intelligence / Summarizer</span>
                   </label>
                   <select
-                    value={aiSettings.primaryLlmProvider || 'google'}
+                    value={aiSettings.primaryLlmProvider || 'offline_rules'}
                     onChange={(e) => handleUpdateAiSettings({ primaryLlmProvider: e.target.value as any })}
                     className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   >
-                    <option value="google">Google AI Studio (Gemini 3.7 / 3.6 / OCR)</option>
-                    <option value="groq">Groq Cloud (Llama 3.3 70B Versatile - Ultra Fast)</option>
-                    <option value="ollama">Local Ollama Daemon (Llama 3.2, Mistral, Qwen)</option>
-                    <option value="offline_rules">100% Offline Rule Engine (Zero Account / No Network)</option>
+                    <option value="offline_rules">Offline Rule Engine (100% On-Device - Recommended)</option>
+                    <option value="ollama">Local Ollama Daemon (Local Network)</option>
+                    <option value="google">Google AI Studio Gemini (Cloud Opt-in)</option>
+                    <option value="groq">Groq Cloud Llama 3.3 70B (Cloud Opt-in)</option>
                   </select>
                   <p className="text-[10px] text-zinc-400">
-                    Powers executive summaries, meeting minutes synthesis, and automated checklists.
-                  </p>
-                </div>
-
-                {/* Primary Transcription Selector */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                    <Cpu className="w-4 h-4 text-indigo-500" />
-                    <span>Primary Speech Transcription</span>
-                  </label>
-                  <select
-                    value={aiSettings.primaryTranscriptionProvider || 'google'}
-                    onChange={(e) => handleUpdateAiSettings({ primaryTranscriptionProvider: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="google">Google AI Studio (Gemini 3.5 Transcribe)</option>
-                    <option value="groq_whisper">Groq Cloud (Whisper Large v3 Turbo - Real-Time)</option>
-                    <option value="deepgram">Deepgram Speech Platform (Nova-3 High Accuracy)</option>
-                    <option value="local_whisper">Local Whisper Server (Offline on Device)</option>
-                    <option value="browser_speech">Browser Speech Recognition (Native Web API)</option>
-                  </select>
-                  <p className="text-[10px] text-zinc-400">
-                    Converts meeting voice recordings into verbatim speaker-attributed transcripts.
+                    Powers meeting minutes synthesis, key action extraction, and document summaries.
                   </p>
                 </div>
               </div>
 
-              {/* Fallback toggle */}
+              {/* Automatic fallback toggle */}
               <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                    Automatic Local / Offline Fallback
+                    Automatic Offline Fallback
                   </p>
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    If cloud quota is exceeded or device is offline, automatically switch to Local Ollama or built-in offline engine.
+                    If an external cloud provider fails or device is disconnected, seamlessly fall back to the native offline engines.
                   </p>
                 </div>
                 <button
@@ -790,18 +1142,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Opt-in External Services Header */}
+            <div className="space-y-1 pt-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  External APIs &amp; Remote Servers (Opt-In)
+                </h3>
+                <span className="px-2 py-0.5 text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-full">
+                  Optional
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                External keys and remote endpoints are completely optional. Keys remain strictly on your device in local encrypted storage.
+              </p>
+            </div>
+
             {/* Provider 1: Google AI Studio Key */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Key className="w-4 h-4 text-indigo-500" />
-                  <span>Google AI Studio API Key (Gemini &amp; OCR)</span>
-                </label>
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-indigo-500" />
+                    <span>Google AI Studio API Key</span>
+                    {googleKeyInput ? (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                        Configured
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                        Not configured (Using Offline Engine)
+                      </span>
+                    )}
+                  </label>
+                  <p className="text-[11px] text-zinc-400">Optional: For Gemini 2.5 / 1.5 cloud summaries and multimodal OCR.</p>
+                </div>
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium shrink-0"
                 >
                   <span>Get Free Key</span>
                   <ExternalLink className="w-3 h-3" />
@@ -814,7 +1193,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type={showGoogleKey ? 'text' : 'password'}
                   value={googleKeyInput}
                   onChange={(e) => setGoogleKeyInput(e.target.value)}
-                  placeholder="AIzaSy..."
+                  placeholder="Paste Google AI Studio API key (AIzaSy...)"
                   className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -841,39 +1220,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTestGoogleKey}
-                  disabled={!googleKeyInput.trim() || isVerifyingGoogle}
-                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                >
-                  {isVerifyingGoogle ? 'Testing...' : 'Test Connection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveGoogleKey}
-                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                >
-                  Save Google Key
-                </button>
+              <div className="flex items-center justify-between pt-1">
+                {googleKeyInput ? (
+                  <button
+                    type="button"
+                    onClick={handleClearGoogleKey}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove Key</span>
+                  </button>
+                ) : <span />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestGoogleKey}
+                    disabled={!googleKeyInput.trim() || isVerifyingGoogle}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                  >
+                    {isVerifyingGoogle ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveGoogleKey}
+                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  >
+                    Save Key
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Provider 2: Groq Cloud Key */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Key className="w-4 h-4 text-orange-500" />
-                  <span>Groq API Key (Llama 3.3 70B &amp; Whisper Large v3)</span>
-                </label>
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-orange-500" />
+                    <span>Groq Cloud API Key</span>
+                    {groqKeyInput ? (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                        Configured
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                        Not configured
+                      </span>
+                    )}
+                  </label>
+                  <p className="text-[11px] text-zinc-400">Optional: For ultra-fast Llama 3.3 70B and Whisper Large v3 cloud processing.</p>
+                </div>
                 <a
                   href="https://console.groq.com/keys"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 font-medium shrink-0"
                 >
-                  <span>Get Free Groq Key</span>
+                  <span>Get Free Key</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -884,7 +1288,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type={showGroqKey ? 'text' : 'password'}
                   value={groqKeyInput}
                   onChange={(e) => setGroqKeyInput(e.target.value)}
-                  placeholder="gsk_..."
+                  placeholder="Paste Groq key (gsk_...)"
                   className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -911,39 +1315,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTestGroqKey}
-                  disabled={!groqKeyInput.trim() || isVerifyingGroq}
-                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                >
-                  {isVerifyingGroq ? 'Testing...' : 'Test Connection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveGroqKey}
-                  className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                >
-                  Save Groq Key
-                </button>
+              <div className="flex items-center justify-between pt-1">
+                {groqKeyInput ? (
+                  <button
+                    type="button"
+                    onClick={handleClearGroqKey}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove Key</span>
+                  </button>
+                ) : <span />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestGroqKey}
+                    disabled={!groqKeyInput.trim() || isVerifyingGroq}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                  >
+                    {isVerifyingGroq ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveGroqKey}
+                    className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  >
+                    Save Key
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Provider 3: Deepgram Key */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Key className="w-4 h-4 text-cyan-500" />
-                  <span>Deepgram API Key (Nova-3 Speech Intelligence)</span>
-                </label>
+                <div className="space-y-0.5">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <Key className="w-4 h-4 text-cyan-500" />
+                    <span>Deepgram API Key</span>
+                    {deepgramKeyInput ? (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                        Configured
+                      </span>
+                    ) : (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                        Not configured
+                      </span>
+                    )}
+                  </label>
+                  <p className="text-[11px] text-zinc-400">Optional: For Deepgram Nova-3 speech intelligence cloud API.</p>
+                </div>
                 <a
                   href="https://console.deepgram.com/"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-medium shrink-0"
                 >
-                  <span>Get Deepgram Key</span>
+                  <span>Get Key</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -954,7 +1383,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type={showDeepgramKey ? 'text' : 'password'}
                   value={deepgramKeyInput}
                   onChange={(e) => setDeepgramKeyInput(e.target.value)}
-                  placeholder="Paste Deepgram key..."
+                  placeholder="Paste Deepgram API key..."
                   className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
                 />
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -981,37 +1410,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTestDeepgramKey}
-                  disabled={!deepgramKeyInput.trim() || isVerifyingDeepgram}
-                  className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                >
-                  {isVerifyingDeepgram ? 'Testing...' : 'Test Connection'}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveDeepgramKey}
-                  className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                >
-                  Save Deepgram Key
-                </button>
+              <div className="flex items-center justify-between pt-1">
+                {deepgramKeyInput ? (
+                  <button
+                    type="button"
+                    onClick={handleClearDeepgramKey}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove Key</span>
+                  </button>
+                ) : <span />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTestDeepgramKey}
+                    disabled={!deepgramKeyInput.trim() || isVerifyingDeepgram}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
+                  >
+                    {isVerifyingDeepgram ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveDeepgramKey}
+                    className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  >
+                    Save Key
+                  </button>
+                </div>
               </div>
             </div>
 
             {/* Provider 4: Local Ollama Daemon Settings */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-emerald-500" />
-                <span>Local Ollama Daemon Configuration</span>
-              </label>
+              <div className="space-y-0.5">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-emerald-500" />
+                  <span>Self-Hosted Ollama Daemon</span>
+                  {ollamaEndpointInput ? (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                      Endpoint Set
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                      Optional LAN / PC
+                    </span>
+                  )}
+                </label>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  On mobile devices, <code>localhost</code> refers to your phone. To connect to Ollama on your PC, enter your computer's local Wi-Fi IP address (e.g. <code>http://192.168.1.150:11434</code>).
+                </p>
+              </div>
 
               <input
                 type="text"
                 value={ollamaEndpointInput}
                 onChange={(e) => setOllamaEndpointInput(e.target.value)}
-                placeholder="http://localhost:11434"
+                placeholder="http://192.168.1.X:11434 (PC IP) or http://localhost:11434"
                 className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
 
@@ -1020,10 +1476,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
                     ollamaVerifyResult.success
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
                   }`}
                 >
-                  {ollamaVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  {ollamaVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />}
                   <span>{ollamaVerifyResult.message}</span>
                 </div>
               )}
@@ -1052,12 +1508,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               )}
 
-              <div className="flex items-center justify-end pt-1">
+              <div className="flex items-center justify-between pt-1">
+                {ollamaEndpointInput ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOllamaEndpointInput('');
+                      AiSettingsManager.setOllamaEndpoint('');
+                      setOllamaVerifyResult(null);
+                    }}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Endpoint</span>
+                  </button>
+                ) : <span />}
+
                 <button
                   type="button"
                   onClick={handleProbeOllama}
-                  disabled={isProbingOllama}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
+                  disabled={isProbingOllama || !ollamaEndpointInput.trim()}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
                 >
                   {isProbingOllama ? 'Probing Ollama...' : 'Probe & Test Ollama'}
                 </button>
@@ -1066,16 +1537,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* Provider 5: Local Whisper Daemon Settings */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-purple-500" />
-                <span>Local Whisper Speech Server</span>
-              </label>
+              <div className="space-y-0.5">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-purple-500" />
+                  <span>Self-Hosted Local Whisper Speech Server</span>
+                  {localWhisperEndpointInput ? (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold rounded-md">
+                      Endpoint Set
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                      Optional LAN / PC
+                    </span>
+                  )}
+                </label>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Optional: If running <code>whisper.cpp</code> or Faster-Whisper on your PC, enter its network URL (e.g. <code>http://192.168.1.150:8080/v1/audio/transcriptions</code>).
+                </p>
+              </div>
 
               <input
                 type="text"
                 value={localWhisperEndpointInput}
                 onChange={(e) => setLocalWhisperEndpointInput(e.target.value)}
-                placeholder="http://localhost:8080/v1/audio/transcriptions"
+                placeholder="http://192.168.1.X:8080/v1/audio/transcriptions"
                 className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
 
@@ -1084,20 +1569,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
                     whisperVerifyResult.success
                       ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
                   }`}
                 >
-                  {whisperVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
+                  {whisperVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />}
                   <span>{whisperVerifyResult.message}</span>
                 </div>
               )}
 
-              <div className="flex items-center justify-end pt-1">
+              <div className="flex items-center justify-between pt-1">
+                {localWhisperEndpointInput ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocalWhisperEndpointInput('');
+                      AiSettingsManager.setLocalWhisperEndpoint('');
+                      setWhisperVerifyResult(null);
+                    }}
+                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Endpoint</span>
+                  </button>
+                ) : <span />}
+
                 <button
                   type="button"
                   onClick={handleProbeLocalWhisper}
-                  disabled={isProbingWhisper}
-                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
+                  disabled={isProbingWhisper || !localWhisperEndpointInput.trim()}
+                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
                 >
                   {isProbingWhisper ? 'Testing Whisper...' : 'Probe Local Whisper'}
                 </button>
@@ -1137,39 +1637,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 3: STORAGE & BACKUPS */}
         {activeTab === 'storage' && (
           <div id="panel-storage" role="tabpanel" aria-labelledby="subtab-storage-btn" className="max-w-4xl mx-auto space-y-6">
-            {/* Storage breakdown card */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Local Browser Storage
-              </h3>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.totalNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Total Notes</p>
-                </div>
-
-                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.activeNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Active Notes</p>
-                </div>
-
-                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.archivedNotes}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Archived</p>
-                </div>
-
-                <div className="p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl">
-                  <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">{stats.totalRecordings}</p>
-                  <p className="text-[11px] text-zinc-400 mt-0.5">Audio Recordings</p>
-                </div>
-              </div>
-            </div>
+            <StorageDashboard onRefreshNotes={onRefreshNotes} />
 
             {/* Export options */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                Manual Archive &amp; Full Data Export
+                Additional Open Exports
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1186,12 +1659,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }}
                   className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                 >
-                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Workspace</p>
                   <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
                 </button>
 
                 <label className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216] cursor-pointer">
-                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from Backup File</p>
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from JSON File</p>
                   <p className="text-[11px] text-zinc-400">Import a previously saved JSON backup file</p>
                   <input 
                     type="file" 
@@ -1299,6 +1772,125 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 5: ARCHITECTURE & DIAGNOSTICS */}
         {activeTab === 'diagnostics' && (
           <div id="panel-diagnostics" role="tabpanel" aria-labelledby="subtab-diagnostics-btn" className="max-w-4xl mx-auto space-y-5">
+            {/* Android Mobile Platform & Performance Guidance Card */}
+            <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Android Phone Platform &amp; Performance
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Primary mobile workstation configuration &amp; hardware status
+                    </p>
+                  </div>
+                </div>
+                {AndroidPwaManager.isStandalone() ? (
+                  <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Standalone App</span>
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
+                    Android Mobile Web / PWA
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl space-y-1">
+                  <div className="flex items-center gap-2 font-medium text-zinc-800 dark:text-zinc-200">
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Sub-Millisecond Speed</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Zero network delay for edits, search, and checklists using on-device SQLite &amp; client-side caching.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl space-y-1">
+                  <div className="flex items-center gap-2 font-medium text-zinc-800 dark:text-zinc-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Single-Thumb Navigation</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Ergonomic bottom navigation, Material speed-dial FAB, and 48px+ touch targets for one-handed use.
+                  </p>
+                </div>
+              </div>
+
+              {/* Install / Launcher Action */}
+              {!AndroidPwaManager.isStandalone() && (
+                <div className="p-3.5 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/70 dark:border-indigo-800/60 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="space-y-0.5 min-w-0">
+                    <p className="font-semibold text-indigo-950 dark:text-indigo-200">
+                      Add to Android Home Screen
+                    </p>
+                    <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
+                      Install for full-screen edge-to-edge experience without browser address bar.
+                    </p>
+                  </div>
+
+                  {canInstallPwa ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await AndroidPwaManager.promptInstall();
+                        if (res.outcome === 'accepted') {
+                          setPwaInstalledSuccess(true);
+                        }
+                      }}
+                      disabled={pwaInstalledSuccess}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                    >
+                      {pwaInstalledSuccess ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Installed!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Install to Launcher</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                      Browser Menu (⋮) &rarr; Add to Home screen
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Review Guide & Actions */}
+              <div className="pt-2 flex flex-wrap items-center gap-2.5">
+                {onOpenOnboardingGuide && (
+                  <button
+                    type="button"
+                    onClick={onOpenOnboardingGuide}
+                    className="px-3.5 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Review Android Quick Start Guide</span>
+                  </button>
+                )}
+                {onOpenUpdateModal && (
+                  <button
+                    type="button"
+                    onClick={onOpenUpdateModal}
+                    className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-2"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Check for App Updates</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                 Offline-First Architectural Engine
@@ -1306,18 +1898,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                 VellumScribe runs on an offline-first foundation. All edits write immediately to local browser storage. When cloud providers are connected, cloud sync exports notes flagged for cloud save into a verified backup snapshot.
               </p>
-              {onOpenUpdateModal && (
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={onOpenUpdateModal}
-                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-2"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Check for App Updates</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">

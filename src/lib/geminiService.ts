@@ -1,5 +1,6 @@
 import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
+import { OfflineTranscriptionEngine } from './offlineTranscription';
 
 export interface OcrResult {
   ocrText: string;
@@ -394,20 +395,35 @@ export class GeminiApiService {
   }
 
   /**
-   * Multi-provider Audio Transcription (Google, Groq Whisper, Deepgram, Local Whisper)
+   * Multi-provider Audio Transcription (Offline-first Native Engine, Google, Groq Whisper, Deepgram, Local Whisper)
    */
   public static async transcribeAudio(
     audioBase64: string,
     mimeType = 'audio/webm',
-    _sampleDuration = 0
+    sampleDuration = 0,
+    liveCapturedText = ''
   ): Promise<TranscribeResult> {
     const cleanBase64 = stripBase64Prefix(audioBase64);
     const sanitizedMime = cleanMimeType(mimeType, 'audio/webm');
     const settings = AiSettingsManager.getSettings();
-    const provider = settings.primaryTranscriptionProvider || 'google';
+    const provider = settings.primaryTranscriptionProvider || 'browser_speech';
 
-    // 1. Groq Whisper
-    if (provider === 'groq_whisper') {
+    // 1. Primary Offline-First Native Engine (Default)
+    if (provider === 'browser_speech' || provider === ('offline_rules' as any)) {
+      const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
+        cleanBase64,
+        sanitizedMime,
+        sampleDuration,
+        liveCapturedText
+      );
+      return {
+        transcript: offlineRes.transcript,
+        source: offlineRes.source,
+      };
+    }
+
+    // 2. Groq Whisper (Opt-in External)
+    if (provider === 'groq_whisper' && settings.groqApiKey) {
       try {
         const res = await fetch('/api/groq/transcribe', {
           method: 'POST',
@@ -420,13 +436,12 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Groq transcription failed');
       } catch (groqErr: any) {
-        if (!settings.autoFallbackToLocal) throw groqErr;
-        console.warn('Groq Whisper failed, trying Google fallback:', groqErr);
+        console.warn('Groq Whisper failed, falling back to on-device transcription:', groqErr);
       }
     }
 
-    // 2. Deepgram
-    if (provider === 'deepgram') {
+    // 3. Deepgram (Opt-in External)
+    if (provider === 'deepgram' && settings.deepgramApiKey) {
       try {
         const res = await fetch('/api/deepgram/transcribe', {
           method: 'POST',
@@ -444,13 +459,12 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
       } catch (dgErr: any) {
-        if (!settings.autoFallbackToLocal) throw dgErr;
-        console.warn('Deepgram failed, trying fallback:', dgErr);
+        console.warn('Deepgram failed, falling back to on-device transcription:', dgErr);
       }
     }
 
-    // 3. Local Whisper
-    if (provider === 'local_whisper') {
+    // 4. Local Whisper (Opt-in Self-Hosted)
+    if (provider === 'local_whisper' && settings.localWhisperEndpoint) {
       try {
         const res = await fetch('/api/local-whisper/transcribe', {
           method: 'POST',
@@ -467,16 +481,14 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Local Whisper server failed');
       } catch (lwErr: any) {
-        if (!settings.autoFallbackToLocal) throw lwErr;
-        console.warn('Local Whisper failed, trying Google fallback:', lwErr);
+        console.warn('Local Whisper failed, falling back to on-device transcription:', lwErr);
       }
     }
 
-    // 4. Google AI Studio (Default)
+    // 5. Google AI Studio (Opt-in External)
     const localKey = (settings.googleApiKey || settings.apiKey || '').trim();
-    const prompt = 'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
-
-    if (NativeBridge.isNative() || localKey) {
+    if (provider === 'google' && (NativeBridge.isNative() || localKey)) {
+      const prompt = 'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
       try {
         const directResult = await this.executeDirectGoogleAi(
           [
@@ -495,30 +507,40 @@ export class GeminiApiService {
           source: directResult.model,
         };
       } catch (directErr: any) {
-        if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
-          throw directErr;
-        }
+        console.warn('Direct Google AI transcription failed, checking server or on-device fallback:', directErr);
       }
     }
 
-    // Server proxy fallback for Google
-    try {
-      const res = await fetch('/api/gemini/transcribe', {
-        method: 'POST',
-        headers: await this.getHeaders(),
-        body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.transcript !== undefined) {
-        return {
-          transcript: data.transcript,
-          source: data.source || 'gemini-3.6-flash',
-        };
+    if (provider === 'google') {
+      try {
+        const res = await fetch('/api/gemini/transcribe', {
+          method: 'POST',
+          headers: await this.getHeaders(),
+          body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.transcript !== undefined) {
+          return {
+            transcript: data.transcript,
+            source: data.source || 'gemini-3.6-flash',
+          };
+        }
+      } catch (proxyErr) {
+        console.warn('Server Google transcription failed, activating on-device engine:', proxyErr);
       }
-      throw new Error(data?.error || 'Transcription service failed');
-    } catch (err: any) {
-      throw new Error(err.message || 'Failed to transcribe audio.');
     }
+
+    // 6. Universal Seamless Fallback to Built-in Offline Engine
+    const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
+      cleanBase64,
+      sanitizedMime,
+      sampleDuration,
+      liveCapturedText
+    );
+    return {
+      transcript: offlineRes.transcript,
+      source: offlineRes.source,
+    };
   }
 
   /**

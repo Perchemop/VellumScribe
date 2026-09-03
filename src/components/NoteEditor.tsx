@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Sparkles,
   Mic,
@@ -158,6 +158,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     return { words, chars, readTimeMinutes };
   }, [body]);
 
+  const debounceTimerRef = useRef<number | null>(null);
+
+  const notifyUpdatedDebounced = (updatedNote: NoteRecord) => {
+    if (debounceTimerRef.current) {
+      window.clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = window.setTimeout(() => {
+      onNoteUpdated(updatedNote);
+    }, 400);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleBodyChange = (newBody: string) => {
     setBody(newBody);
     if (note.is_locked && activePin) {
@@ -165,6 +184,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         if (updated) {
           setSaveIndicator(true);
           setTimeout(() => setSaveIndicator(false), 1200);
+          notifyUpdatedDebounced(updated);
         }
       });
     } else {
@@ -172,13 +192,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       if (updated) {
         setSaveIndicator(true);
         setTimeout(() => setSaveIndicator(false), 1200);
+        notifyUpdatedDebounced(updated);
       }
     }
   };
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
-    StorageManager.updateNote(note.id, { title: newTitle });
+    const updated = StorageManager.updateNote(note.id, { title: newTitle });
+    if (updated) notifyUpdatedDebounced(updated);
   };
 
   const handleChecklistChange = (items: ChecklistItem[]) => {
@@ -393,7 +415,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (transcript) {
       const newBody = `${body}\n\n> **Voice Transcript (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}):**\n> "${transcript.transcript_text}"`;
       setBody(newBody);
-      StorageManager.updateNote(note.id, { body: newBody });
+      const updated = StorageManager.updateNote(note.id, { body: newBody });
+      if (updated) onNoteUpdated(updated);
     }
     setShowAudioRecorder(false);
   };
@@ -407,7 +430,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       newBody = `${body}\n\n### Handwritten OCR Scan (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}):\n${extractedText}`;
     }
     setBody(newBody);
-    StorageManager.updateNote(note.id, { body: newBody });
+    const updated = StorageManager.updateNote(note.id, { body: newBody });
+    if (updated) onNoteUpdated(updated);
     setShowOcrScanner(false);
   };
 
@@ -417,14 +441,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const updated = [...tags, newTagInput.trim()];
       setTags(updated);
       setNewTagInput('');
-      StorageManager.updateNote(note.id, { tags: updated });
+      const updatedNote = StorageManager.updateNote(note.id, { tags: updated });
+      if (updatedNote) onNoteUpdated(updatedNote);
     }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
     const updated = tags.filter((t) => t !== tagToRemove);
     setTags(updated);
-    StorageManager.updateNote(note.id, { tags: updated });
+    const updatedNote = StorageManager.updateNote(note.id, { tags: updated });
+    if (updatedNote) onNoteUpdated(updatedNote);
   };
 
   // If note is locked and user hasn't entered PIN in this session
@@ -497,7 +523,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onChange={(e) => {
               const eid = Number(e.target.value);
               setEventId(eid);
-              StorageManager.updateNote(note.id, { event_id: eid });
+              const updated = StorageManager.updateNote(note.id, { event_id: eid });
+              if (updated) onNoteUpdated(updated);
             }}
             className="bg-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-xs font-medium focus:outline-hidden cursor-pointer max-w-[140px] truncate"
           >
@@ -918,6 +945,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <img
                   src={sketchData}
                   alt="Handwritten sketch"
+                  referrerPolicy="no-referrer"
                   className="max-h-[300px] object-contain rounded-lg"
                 />
               </div>
