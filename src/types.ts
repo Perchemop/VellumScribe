@@ -32,10 +32,12 @@ export interface NoteRecord {
   latitude?: number;
   longitude?: number;
   is_locked?: boolean; // Password/PIN protected
-  pin_hash?: string; // Salted PBKDF2 hash of security PIN
-  pin_salt?: string; // Cryptographic salt for PIN hashing
+  lock_mode?: 'standard' | 'private'; // 'standard': body/attachments encrypted; 'private': title/tags/metadata masked and encrypted
+  security_type?: 'pin' | 'passphrase'; // 'pin': 4-8 digits; 'passphrase': 12+ characters
+  pin_hash?: string; // Salted PBKDF2 hash of security PIN or passphrase
+  pin_salt?: string; // Cryptographic salt for PIN/passphrase hashing
   lock_pin?: string; // Legacy plaintext PIN (automatically upgraded on verification)
-  encrypted_payload?: string; // AES-256-GCM encrypted payload { body, checklist_items, sketch_data }
+  encrypted_payload?: string; // AES-256-GCM encrypted payload { title?, body, checklist_items, sketch_data, tags? }
   created_at: string; // ISO string
   updated_at?: string;
   tags?: string[];
@@ -44,7 +46,21 @@ export interface NoteRecord {
   cloud_save_enabled?: boolean;
 }
 
-export type CloudStorageProvider = 'instant_vault' | 'google_drive' | 'microsoft';
+export type CloudStorageProvider = 'instant_vault' | 'google_drive' | 'microsoft' | 'nextcloud' | 'webdav';
+
+export type SyncState = 'idle' | 'queued' | 'preparing' | 'uploading' | 'verifying' | 'completed' | 'partial_failure' | 'failed';
+
+export interface SyncHistoryRecord {
+  id: string;
+  provider: CloudStorageProvider;
+  startTime: string; // ISO string
+  endTime: string; // ISO string
+  backupSize: number; // in bytes
+  dbVersion: number;
+  checksum: string;
+  status: 'completed' | 'failed' | 'partial_failure';
+  errorMessage?: string;
+}
 
 export interface CloudAccount {
   provider: CloudStorageProvider;
@@ -52,6 +68,7 @@ export interface CloudAccount {
   email: string;
   displayName: string;
   connectedAt: string; // ISO timestamp
+  serverUrl?: string; // WebDAV / Nextcloud instance URL
 }
 
 export interface SyncTelemetry {
@@ -112,7 +129,7 @@ export interface DocumentVersion {
 
 export interface KeystoreSecret {
   alias: string;
-  key_type: 'api_key' | 'sqlite_cipher_key';
+  key_type: 'api_key' | 'sqlite_cipher_key' | 'cloud_credential';
   masked_value: string;
   created_at: string;
   hardware_backed: boolean;

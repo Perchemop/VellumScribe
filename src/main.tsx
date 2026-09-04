@@ -4,9 +4,13 @@ import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AppProvider } from './context/AppContext';
 import { StorageManager } from './lib/storage';
+import { AndroidKeystoreManager } from './lib/keystore';
 import './index.css';
 
-StorageManager.initialize().then(() => {
+Promise.all([
+  StorageManager.initialize(),
+  AndroidKeystoreManager.migrateLegacyCredentials(),
+]).then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <ErrorBoundary>

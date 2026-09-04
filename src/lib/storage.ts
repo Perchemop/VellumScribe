@@ -19,6 +19,7 @@ import { SqliteEngine } from './sqlite/sqliteEngine';
 import { SqliteRepository, SqliteStats, SearchOptions } from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
 import { AppLogger } from './logger';
+import { ImportSafetyPipeline } from './importSafety';
 
 /**
  * StorageManager: Authoritative SQLite Storage Gateway
@@ -414,6 +415,50 @@ export class StorageManager {
     };
   }
 
+  public static async setNotePinLock(
+    id: number,
+    pin: string,
+    currentPayload?: NotePayloadData,
+    lockMode: 'standard' | 'private' = 'standard',
+    securityType: 'pin' | 'passphrase' = 'pin'
+  ): Promise<NoteRecord | null> {
+    const note = this.getNoteById(id);
+    if (!note) return null;
+
+    const { hashPin, deriveEncryptionKey, encryptNotePayloadV2, generateSalt } = await import('./cryptoUtils');
+    const salt = generateSalt();
+    const { hash } = await hashPin(pin, salt);
+    const key = await deriveEncryptionKey(pin, salt);
+    if (!key) {
+      throw new Error('Failed to derive encryption key from credentials.');
+    }
+
+    const payload: NotePayloadData = {
+      title: lockMode === 'private' ? (currentPayload?.title || note.title) : undefined,
+      body: currentPayload?.body !== undefined ? currentPayload.body : note.body,
+      checklist_items: currentPayload?.checklist_items !== undefined ? currentPayload.checklist_items : note.checklist_items,
+      sketch_data: currentPayload?.sketch_data !== undefined ? currentPayload.sketch_data : note.sketch_data,
+      tags: lockMode === 'private' ? (currentPayload?.tags || note.tags) : undefined,
+      lock_mode: lockMode,
+    };
+
+    const encryptedPayload = await encryptNotePayloadV2(payload, key);
+
+    return this.updateNote(id, {
+      is_locked: true,
+      lock_mode: lockMode,
+      security_type: securityType,
+      pin_hash: hash,
+      pin_salt: salt,
+      encrypted_payload: encryptedPayload,
+      title: lockMode === 'private' ? '🔒 Locked Note' : note.title,
+      body: '',
+      checklist_items: [],
+      sketch_data: undefined,
+      tags: lockMode === 'private' ? [] : note.tags,
+    });
+  }
+
   public static async removeNotePinLock(id: number, enteredPin: string): Promise<NoteRecord | null> {
     const note = this.getNoteById(id);
     if (!note) return null;
@@ -425,13 +470,17 @@ export class StorageManager {
 
     return this.updateNote(id, {
       is_locked: false,
+      lock_mode: undefined,
+      security_type: undefined,
       pin_hash: undefined,
       pin_salt: undefined,
       encrypted_payload: undefined,
       lock_pin: undefined,
+      title: verifyResult.payload.title || (note.title === '🔒 Locked Note' ? 'Untitled Note' : note.title),
       body: verifyResult.payload.body,
       checklist_items: verifyResult.payload.checklist_items || [],
       sketch_data: verifyResult.payload.sketch_data || undefined,
+      tags: verifyResult.payload.tags || note.tags,
     });
   }
 
@@ -840,6 +889,22 @@ export class StorageManager {
     SqliteEngine.vacuum();
   }
 
+  public static scheduleSave(): void {
+    SqliteEngine.scheduleSave();
+  }
+
+  public static async flush(): Promise<void> {
+    await SqliteEngine.flush();
+  }
+
+  public static isDirty(): boolean {
+    return SqliteEngine.isDirtyState();
+  }
+
+  public static cancelPendingSave(): void {
+    SqliteEngine.cancelPendingSave();
+  }
+
   public static exportSqliteBinary(): Uint8Array {
     return SqliteEngine.exportDatabaseBinary();
   }
@@ -956,12 +1021,12 @@ export class StorageManager {
     return this.exportFullDump();
   }
 
-  public static async importPortableBackupAsync(json: string): Promise<{ success: boolean; message: string }> {
-    const res = this.importFullDump(json);
-    if (res.success) {
-      return { success: true, message: `Successfully restored ${res.restoredCount || 0} notes.` };
-    }
-    return { success: false, message: res.error || 'Failed to import backup.' };
+  public static async importPortableBackupAsync(json: string): Promise<{ success: boolean; message: string; preview?: any }> {
+    const res = await ImportSafetyPipeline.executeImport(json);
+    return {
+      success: res.success,
+      message: res.message,
+    };
   }
 
   public static emptyTrash(): void {
@@ -970,42 +1035,6 @@ export class StorageManager {
       this.deleteNote(note.id);
     }
     this.refreshCaches();
-  }
-
-  public static async setNotePinLock(
-    noteId: number,
-    pin: string,
-    payload?: { body: string; checklist_items?: any[]; sketch_data?: string }
-  ): Promise<NoteRecord | null> {
-    const note = this.getNotes().find((n) => n.id === noteId);
-    if (!note) return null;
-
-    const { hashPin, deriveEncryptionKey, encryptNotePayloadV2 } = await import('./cryptoUtils');
-    const { hash, salt } = await hashPin(pin);
-    let encryptedPayload: string | undefined;
-
-    const payloadToEncrypt = payload || {
-      body: note.body || '',
-      checklist_items: note.checklist_items,
-      sketch_data: note.sketch_data,
-    };
-
-    const key = await deriveEncryptionKey(pin, salt);
-    if (key) {
-      encryptedPayload = await encryptNotePayloadV2(payloadToEncrypt, key);
-    }
-
-    const updated = this.updateNote(noteId, {
-      body: '🔒 This note is locked. Enter your PIN to view contents.',
-      checklist_items: [],
-      sketch_data: undefined,
-      is_locked: true,
-      pin_hash: hash,
-      pin_salt: salt,
-      encrypted_payload: encryptedPayload,
-    });
-
-    return updated;
   }
 
   public static exportFullBackup(): string {

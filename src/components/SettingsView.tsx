@@ -44,6 +44,7 @@ import { CloudConnectModal } from './CloudConnectModal';
 import { SyncProgressBar } from './SyncProgressBar';
 import { StorageDashboard } from './StorageDashboard';
 import { AppLogger, LogEntry } from '../lib/logger';
+import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
@@ -65,25 +66,39 @@ interface ProviderCardMeta {
 
 const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
   instant_vault: {
-    name: 'Vellum Cloud Vault',
-    category: 'Instant Cloud',
-    description: 'Zero-key instant encrypted cloud backup. 1-click automatic provisioning with no API keys or session IDs.',
+    name: 'Vellum Encrypted Vault',
+    category: 'Encrypted Vault',
+    description: 'Direct encrypted snapshot vault with client-side AES-256-GCM encryption.',
     brandColor: '#6366f1',
     badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
   },
   google_drive: {
     name: 'Google Drive',
-    category: 'Google Workspace',
-    description: '1-Click cloud backup for Google Drive. Zero API keys or developer credentials required.',
+    category: 'Google Drive',
+    description: 'Sync encrypted snapshots directly to Google Drive via OAuth authentication.',
     brandColor: '#34a853',
     badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   },
   microsoft: {
     name: 'Microsoft OneDrive',
-    category: 'Microsoft 365',
-    description: '1-Click cloud backup for Microsoft OneDrive. Zero API keys or developer credentials required.',
+    category: 'OneDrive',
+    description: 'Store encrypted backup snapshots safely in Microsoft OneDrive via OAuth.',
     brandColor: '#0078d4',
     badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+  },
+  nextcloud: {
+    name: 'Nextcloud',
+    category: 'Nextcloud',
+    description: 'Store backups on private or self-hosted Nextcloud instances via WebDAV.',
+    brandColor: '#0082c9',
+    badgeBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  },
+  webdav: {
+    name: 'Custom WebDAV',
+    category: 'WebDAV',
+    description: 'Universal standard WebDAV endpoint with encrypted snapshot support.',
+    brandColor: '#f59e0b',
+    badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
   },
 };
 
@@ -165,6 +180,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [stats, setStats] = useState(() => StorageManager.getStorageStats());
   const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
+  // Import pipeline state
+  const [importPreviewData, setImportPreviewData] = useState<ImportPreviewResult | null>(null);
+  const [importRawPayload, setImportRawPayload] = useState<string | null>(null);
+  const [isExecutingImport, setIsExecutingImport] = useState<boolean>(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAirGapped = backupFrequency === 'off';
@@ -229,7 +249,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       await CloudSyncEngine.connectInstant(provider);
       setAccounts(CloudSyncEngine.getAccounts());
-      setSyncFeedback(`Connected ${PROVIDERS[provider].name} in 1 click! Zero credentials required.`);
+      setSyncFeedback(`Connected ${PROVIDERS[provider].name} destination with end-to-end encryption.`);
       handleLoadRemoteBackups(provider);
     } catch (e: any) {
       setSyncFeedback(`Connection failed: ${e.message}`);
@@ -669,14 +689,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Zero-Credential Security Reassurance Card */}
+            {/* End-to-End Encrypted Cloud Architecture Reassurance Card */}
             <div className="p-4 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/25 rounded-3xl space-y-1.5 text-xs text-emerald-900 dark:text-emerald-300">
               <div className="flex items-center gap-2 font-bold text-emerald-800 dark:text-emerald-200">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <span>Zero-Credential Cloud Architecture</span>
+                <span>End-to-End Encrypted Cloud Architecture</span>
               </div>
               <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
-                Connect destinations with a single tap. No external API keys, OAuth client secrets, or session IDs are needed. Backups are compressed with gzip and encrypted on-device with AES-256-GCM before transfer.
+                Connect backup destinations securely. Notes and attachments are encrypted locally using AES-256-GCM before transport. Cloud destinations never receive plaintext note contents.
               </p>
             </div>
 
@@ -686,7 +706,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                   Cloud Destinations
                 </h3>
-                <span className="text-xs text-zinc-400 font-medium">1-Click Zero-Key Connect</span>
+                <span className="text-xs text-zinc-400 font-medium">Encrypted Remote Storage</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -748,7 +768,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <span className="text-[10px] text-zinc-400">
                           {isConnected && account?.connectedAt
                             ? `Connected: ${new Date(account.connectedAt).toLocaleDateString()}`
-                            : 'Zero API keys required'}
+                            : 'Client-side encrypted'}
                         </span>
 
                         <div className="flex items-center gap-1.5">
@@ -779,7 +799,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 ) : (
                                   <>
                                     <Zap className="w-3 h-3 text-amber-400 fill-current" />
-                                    <span>1-Click Connect</span>
+                                    <span>Connect Destination</span>
                                   </>
                                 )}
                               </button>
@@ -1665,7 +1685,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                 <label className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216] cursor-pointer">
                   <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from JSON File</p>
-                  <p className="text-[11px] text-zinc-400">Import a previously saved JSON backup file</p>
+                  <p className="text-[11px] text-zinc-400">Validate format, preview contents, and safely restore</p>
                   <input 
                     type="file" 
                     accept=".json" 
@@ -1674,16 +1694,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       const file = e.target.files?.[0];
                       if (file) {
                         const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                          const res = await StorageManager.importPortableBackupAsync(ev.target?.result as string);
-                          if (res.success) {
-                            onRefreshNotes();
-                            setSyncFeedback(res.message);
-                            setStats(StorageManager.getStorageStats());
-                          } else {
-                            setSyncFeedback(res.message);
+                        reader.onload = (ev) => {
+                          const raw = ev.target?.result as string;
+                          if (raw) {
+                            const preview = ImportSafetyPipeline.validateAndPreview(raw);
+                            setImportRawPayload(raw);
+                            setImportPreviewData(preview);
                           }
-                          setTimeout(() => setSyncFeedback(null), 3000);
                         };
                         reader.readAsText(file);
                       }
@@ -1737,7 +1754,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
                 <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
-                  {Capacitor.isNativePlatform() ? 'AES-256-GCM' : 'Local Storage'}
+                  {Capacitor.isNativePlatform() ? 'Hardware Keystore (AES-256-GCM)' : 'Volatile Session Memory'}
                 </span>
               </div>
             </div>
@@ -1949,6 +1966,146 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             setTimeout(() => setSyncFeedback(null), 3000);
           }}
         />
+      )}
+
+      {/* Safe Import Validation & Preview Modal */}
+      {importPreviewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-2xl ${importPreviewData.valid ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
+                  {importPreviewData.valid ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+                    Safe Workspace Restore
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Validate format, preview entities, and review safety snapshot
+                  </p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 text-[11px] font-mono font-semibold rounded-full ${
+                importPreviewData.valid 
+                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800' 
+                  : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800'
+              }`}>
+                {importPreviewData.valid ? `v${importPreviewData.version} Valid` : 'Invalid File'}
+              </span>
+            </div>
+
+            {importPreviewData.error && (
+              <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-2xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{importPreviewData.error}</span>
+              </div>
+            )}
+
+            {importPreviewData.valid && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  Detected Workspace Content:
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.notes}</p>
+                    <p className="text-[10px] text-zinc-400 font-medium">Notes</p>
+                  </div>
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.events}</p>
+                    <p className="text-[10px] text-zinc-400 font-medium">Categories</p>
+                  </div>
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.recordings}</p>
+                    <p className="text-[10px] text-zinc-400 font-medium">Voice Memos</p>
+                  </div>
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.ocrScans}</p>
+                    <p className="text-[10px] text-zinc-400 font-medium">OCR Scans</p>
+                  </div>
+                </div>
+
+                {importPreviewData.warnings.length > 0 && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Compatibility Warnings:
+                    </p>
+                    <ul className="list-disc list-inside space-y-0.5 pl-1">
+                      {importPreviewData.warnings.map((w, idx) => (
+                        <li key={idx}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+                  <p>
+                    A safety snapshot of your current local workspace will be generated automatically before importing. The import executes within an atomic SQLite transaction and verifies database integrity before saving.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setImportPreviewData(null);
+                  setImportRawPayload(null);
+                }}
+                disabled={isExecutingImport}
+                className="px-4 py-2 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+
+              {importPreviewData.valid && (
+                <button
+                  type="button"
+                  disabled={isExecutingImport}
+                  onClick={async () => {
+                    if (!importRawPayload) return;
+                    setIsExecutingImport(true);
+                    try {
+                      const res = await ImportSafetyPipeline.executeImport(importRawPayload);
+                      if (res.success) {
+                        onRefreshNotes();
+                        setNotes(StorageManager.getNotes());
+                        setStats(StorageManager.getStorageStats());
+                        setSyncFeedback(res.message);
+                        setImportPreviewData(null);
+                        setImportRawPayload(null);
+                      } else {
+                        setSyncFeedback(res.message);
+                      }
+                    } catch (err: any) {
+                      setSyncFeedback(err?.message || 'Restore failed.');
+                    } finally {
+                      setIsExecutingImport(false);
+                      setTimeout(() => setSyncFeedback(null), 4000);
+                    }
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
+                >
+                  {isExecutingImport ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying &amp; Restoring...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Confirm &amp; Restore Workspace</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -64,11 +64,34 @@ export class AndroidKeystoreManager {
     return [...this.getStored()];
   }
 
+  // In-memory runtime cache for session-only secret retention on web
+  private static runtimeSessionSecrets: Map<string, string> = new Map();
+
+  /**
+   * Retrieve a secret. On native platforms, reads from platform SecureStorage (Android Keystore / iOS Keychain).
+   * On web, retrieves from volatile in-memory session store.
+   */
+  public static async getSecret(alias: string): Promise<string | null> {
+    if (!alias) return null;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
+        const res = await SecureStorage.get(`vellumscribe.secret.${alias}`) as any;
+        if (typeof res === 'string') return res;
+        if (res && typeof res.value === 'string') return res.value;
+      } catch (e) {
+        console.warn(`[Keystore] Native secret retrieval failed for ${alias}:`, e);
+      }
+    }
+
+    return this.runtimeSessionSecrets.get(alias) || null;
+  }
+
   /**
    * Store a secret. On native platforms the raw value is written to the
-   * platform secure storage; on web it is intentionally NOT persisted by
-   * this method (see class docstring) - only the masked metadata is kept so
-   * the Settings UI can still show that a value was configured.
+   * platform secure storage; on web it is kept in volatile in-memory session
+   * storage, while masked metadata is persisted for UI display.
    */
   public static async saveSecret(
     alias: string,
@@ -90,9 +113,7 @@ export class AndroidKeystoreManager {
         throw new Error('Could not save this secret to the device secure storage.');
       }
     } else {
-      console.warn(
-        `[Keystore] Native secure storage is unavailable in a web build; "${alias}" is not being persisted by AndroidKeystoreManager.`
-      );
+      this.runtimeSessionSecrets.set(alias, rawValue);
     }
 
     const secrets = [...this.getStored()];
@@ -147,6 +168,56 @@ export class AndroidKeystoreManager {
     const rotated: KeystoreSecret = { ...current, created_at: new Date().toISOString() };
     this.save(this.getStored().map((s) => (s.alias === alias ? rotated : s)));
     return rotated;
+  }
+
+  /**
+   * Scans localStorage for legacy unencrypted credentials and migrates them
+   * into the Keystore (native secure storage on Android, volatile session memory on Web).
+   * Strips plaintext secrets from localStorage after migration.
+   */
+  public static async migrateLegacyCredentials(): Promise<number> {
+    let migratedCount = 0;
+    try {
+      // 1. Check legacy Gemini API key
+      const legacyGeminiKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key');
+      if (legacyGeminiKey && legacyGeminiKey.trim()) {
+        await this.saveSecret('gemini_api_key', legacyGeminiKey.trim(), 'api_key');
+        localStorage.removeItem('gemini_api_key');
+        localStorage.removeItem('vs_gemini_api_key');
+        migratedCount++;
+      }
+
+      // 2. Check legacy cloud credentials in vs_cloud_accounts
+      const rawAccounts = localStorage.getItem('vs_cloud_accounts');
+      if (rawAccounts) {
+        try {
+          const accounts = JSON.parse(rawAccounts);
+          if (Array.isArray(accounts)) {
+            let sanitized = false;
+            for (const acc of accounts) {
+              if (acc.token || acc.password || acc.accessToken) {
+                const secretVal = acc.token || acc.password || acc.accessToken;
+                const alias = `cloud_${acc.provider}_token`;
+                await this.saveSecret(alias, secretVal, 'cloud_credential');
+                delete acc.token;
+                delete acc.password;
+                delete acc.accessToken;
+                sanitized = true;
+                migratedCount++;
+              }
+            }
+            if (sanitized) {
+              localStorage.setItem('vs_cloud_accounts', JSON.stringify(accounts));
+            }
+          }
+        } catch {
+          // ignore parse failure
+        }
+      }
+    } catch (e) {
+      console.warn('[Keystore] Legacy credential migration notice:', e);
+    }
+    return migratedCount;
   }
 }
 

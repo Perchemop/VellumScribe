@@ -462,17 +462,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
         <div className="space-y-1 max-w-sm">
           <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Confidential Protected Note
+            {note.lock_mode === 'private' ? '🔒 Private Encrypted Note' : (note.title || 'Protected Note')}
           </h3>
           <p className="text-xs text-zinc-400">
-            This note is protected with a PIN lock. Unlock to view and edit.
+            This note is encrypted at rest. Enter your {note.security_type === 'passphrase' ? 'passphrase' : 'PIN'} to unlock this active session.
           </p>
         </div>
         <button
           onClick={() => setShowSecurityModal(true)}
           className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-semibold rounded-xl shadow-2xs transition-opacity"
         >
-          Enter PIN to Unlock
+          {note.security_type === 'passphrase' ? 'Enter Passphrase to Unlock' : 'Enter PIN to Unlock'}
         </button>
 
         {showSecurityModal && (
@@ -481,6 +481,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             mode="gate"
             onUnlockSession={(payload, pin) => {
               setActivePin(pin);
+              if (payload.title) setTitle(payload.title);
+              if (payload.tags) setTags(payload.tags);
               setBody(payload.body || '');
               setChecklistItems(payload.checklist_items || []);
               setShowChecklistSection(Boolean(payload.checklist_items && payload.checklist_items.length > 0));
