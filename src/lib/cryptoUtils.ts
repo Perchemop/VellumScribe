@@ -9,12 +9,12 @@ const ENCRYPTION_SALT_PREFIX = 'v1:encrypt:';
 const PBKDF2_ITERATIONS = 210000;
 
 export function generateSalt(): string {
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     return Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  throw new Error('Web Crypto API (crypto.getRandomValues) is required for cryptographically secure salt generation.');
 }
 
 export function toHex(buffer: ArrayBuffer | Uint8Array): string {

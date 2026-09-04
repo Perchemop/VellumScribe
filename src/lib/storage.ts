@@ -21,6 +21,7 @@ import { MigrationManager } from './sqlite/migrationManager';
 import { AppLogger } from './logger';
 import { ImportSafetyPipeline } from './importSafety';
 import { MediaRepository } from './MediaRepository';
+import { CloudBackupCrypto } from './cloudBackupCrypto';
 
 /**
  * StorageManager: Authoritative SQLite Storage Gateway
@@ -1124,9 +1125,18 @@ export class StorageManager {
     return this.exportFullDump();
   }
 
-  public static async exportCloudBackupArchive(): Promise<Blob> {
+  public static async exportCloudBackupArchive(customPassphrase?: string): Promise<Blob> {
     const json = this.exportCloudBackup();
-    return new Blob([json], { type: 'application/json' });
+    return CloudBackupCrypto.encryptArchive(json, customPassphrase);
+  }
+
+  public static async importCloudBackupArchive(blobOrBuffer: Blob | ArrayBuffer | string, customPassphrase?: string): Promise<{ success: boolean; restoredCount?: number; error?: string }> {
+    try {
+      const decryptedJson = await CloudBackupCrypto.decryptArchive(blobOrBuffer, customPassphrase);
+      return this.importFullDump(decryptedJson);
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to decrypt and restore cloud backup archive.' };
+    }
   }
 
   public static importFullDump(jsonString: string): { success: boolean; error?: string; restoredCount?: number } {
