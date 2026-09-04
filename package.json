@@ -38,7 +38,7 @@
     "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "lucide-react": "^1.38.0",
     "motion": "^12.23.24",
     "qrcode.react": "^4.2.0",
@@ -48,7 +48,7 @@
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
