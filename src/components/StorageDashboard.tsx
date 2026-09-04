@@ -28,6 +28,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
   const [stats, setStats] = useState<SqliteStats>(() => StorageManager.getSqliteStats());
   const [integrityResult, setIntegrityResult] = useState<{ status: 'ok' | 'corrupted'; details: string } | null>(null);
   const [isCheckingIntegrity, setIsCheckingIntegrity] = useState(false);
+  const [isVacuuming, setIsVacuuming] = useState(false);
   const [orphanKeys, setOrphanKeys] = useState<string[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [privacy, setPrivacy] = useState<PrivacySettings>(() => PrivacyManager.getSettings());
@@ -52,11 +53,28 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
     }, 250);
   };
 
-  const handleVacuum = () => {
-    StorageManager.vacuumDatabase();
-    refreshDashboard();
-    setFeedbackMessage('SQLite VACUUM complete: Unused database pages reclaimed.');
-    setTimeout(() => setFeedbackMessage(null), 3500);
+  const handleVacuum = async () => {
+    setIsVacuuming(true);
+    try {
+      const res = await StorageManager.vacuumDatabase();
+      refreshDashboard();
+      if (res.bytesReclaimed > 0) {
+        setFeedbackMessage(
+          `SQLite VACUUM complete: Compacted from ${formatBytes(res.originalSizeBytes)} to ${formatBytes(
+            res.compactedSizeBytes
+          )}, reclaimed ${formatBytes(res.bytesReclaimed)}.`
+        );
+      } else {
+        setFeedbackMessage(
+          `SQLite VACUUM complete: Database is already fully optimized (${formatBytes(res.compactedSizeBytes)}).`
+        );
+      }
+    } catch (e: any) {
+      setFeedbackMessage(`Vacuum failed: ${e?.message || 'Unknown error'}`);
+    } finally {
+      setIsVacuuming(false);
+      setTimeout(() => setFeedbackMessage(null), 5000);
+    }
   };
 
   const handlePruneVersions = () => {
@@ -214,10 +232,11 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
           <button
             onClick={handleVacuum}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            disabled={isVacuuming}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
           >
-            <Layers className="w-3.5 h-3.5 text-slate-600" />
-            <span>Vacuum SQLite</span>
+            <Layers className={`w-3.5 h-3.5 text-slate-600 ${isVacuuming ? 'animate-spin' : ''}`} />
+            <span>{isVacuuming ? 'Compacting SQLite...' : 'Vacuum & Defrag SQLite'}</span>
           </button>
           <button
             onClick={handlePruneVersions}

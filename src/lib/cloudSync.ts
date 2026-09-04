@@ -19,9 +19,101 @@ export interface RemoteBackupItem {
   noteCount?: number;
 }
 
+export interface QueuedSyncItem {
+  id: string;
+  queuedAt: string;
+  attempts: number;
+  lastError?: string;
+  providers: CloudStorageProvider[];
+}
+
 export class CloudSyncEngine {
   private static telemetry: SyncTelemetry[] = [];
+  private static isProcessingQueue = false;
+  private static readonly QUEUE_STORAGE_KEY = 'vs_offline_sync_queue';
   private static readonly CHUNK_SIZE = 1024 * 1024; // 1MB chunk slices for network resilience
+
+  public static getSyncQueue(): QueuedSyncItem[] {
+    try {
+      const raw = localStorage.getItem(this.QUEUE_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static enqueueSync(providers?: CloudStorageProvider[], reason?: string): QueuedSyncItem {
+    const queue = this.getSyncQueue();
+    const activeProviders = providers && providers.length > 0
+      ? providers
+      : this.getAccounts().map((a) => a.provider);
+
+    const item: QueuedSyncItem = {
+      id: 'queue_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: reason || 'Queued for retry',
+      providers: activeProviders,
+    };
+
+    queue.push(item);
+    localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    return item;
+  }
+
+  public static clearSyncQueue(): void {
+    localStorage.removeItem(this.QUEUE_STORAGE_KEY);
+  }
+
+  public static removeFromSyncQueue(id: string): void {
+    const queue = this.getSyncQueue().filter((item) => item.id !== id);
+    localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+  }
+
+  public static isQueueActive(): boolean {
+    return this.isProcessingQueue;
+  }
+
+  /**
+   * Automatically flushes offline sync items when network is active
+   */
+  public static async processSyncQueue(): Promise<{ processed: number; success: number; failed: number }> {
+    if (this.isProcessingQueue) return { processed: 0, success: 0, failed: 0 };
+    const queue = this.getSyncQueue();
+    if (queue.length === 0) return { processed: 0, success: 0, failed: 0 };
+
+    this.isProcessingQueue = true;
+    let successCount = 0;
+    let failedCount = 0;
+
+    try {
+      // Process one by one
+      for (const item of [...queue]) {
+        try {
+          const success = await this.triggerSync({ enqueueOnFailure: false });
+          if (success) {
+            successCount++;
+            this.removeFromSyncQueue(item.id);
+          } else {
+            failedCount++;
+            item.attempts++;
+            item.lastError = 'Sync failed during queue execution';
+            localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.getSyncQueue()));
+          }
+        } catch (e: any) {
+          failedCount++;
+          item.attempts++;
+          item.lastError = e?.message || 'Network exception';
+          localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.getSyncQueue()));
+          break; // Stop further queue attempts if network error occurs
+        }
+      }
+    } finally {
+      this.isProcessingQueue = false;
+    }
+
+    return { processed: successCount + failedCount, success: successCount, failed: failedCount };
+  }
 
   private static getSessionId(): string {
     let id = localStorage.getItem('vs_cloud_session_id');
@@ -284,16 +376,21 @@ export class CloudSyncEngine {
   /**
    * Main sync trigger: handles archive generation, compression, direct or chunked upload, and telemetry
    */
-  static async triggerSync(options?: { onProgress: (p: SyncProgressUpdate) => void }): Promise<boolean> {
+  static async triggerSync(options?: {
+    onProgress?: (p: SyncProgressUpdate) => void;
+    enqueueOnFailure?: boolean;
+  }): Promise<boolean> {
     PrivacyManager.assertNetworkAllowed('Cloud Backup Upload');
     const startTime = Date.now();
     const accounts = this.getAccounts();
+    const shouldEnqueue = options?.enqueueOnFailure !== false;
+
     if (accounts.length === 0) {
-      options?.onProgress({ percent: 100, message: 'No cloud accounts connected', phase: 'error' });
+      options?.onProgress?.({ percent: 100, message: 'No cloud accounts connected', phase: 'error' });
       return false;
     }
 
-    options?.onProgress({ percent: 10, message: 'Generating and compressing backup snapshot...', phase: 'compressing' });
+    options?.onProgress?.({ percent: 10, message: 'Generating and compressing backup snapshot...', phase: 'compressing' });
 
     try {
       const backupBlob = await StorageManager.exportCloudBackupArchive();
@@ -301,7 +398,7 @@ export class CloudSyncEngine {
       const checksum = await this.computeChecksum(arrayBuffer);
       const filename = `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
 
-      options?.onProgress({ percent: 25, message: 'Starting cloud backup upload...', phase: 'uploading' });
+      options?.onProgress?.({ percent: 25, message: 'Starting cloud backup upload...', phase: 'uploading' });
 
       let allSuccess = true;
       for (const acc of accounts) {
@@ -340,20 +437,26 @@ export class CloudSyncEngine {
             lastTransferBytes: backupBlob.size,
             lastTransferDurationMs: Date.now() - startTime,
           });
-          options?.onProgress({ percent: 100, message: `Upload failed: ${e.message}`, phase: 'error' });
+          options?.onProgress?.({ percent: 100, message: `Upload failed: ${e.message}`, phase: 'error' });
           allSuccess = false;
+          if (shouldEnqueue) {
+            this.enqueueSync([acc.provider], `Upload failed for ${acc.provider}: ${e.message}`);
+          }
           return false;
         }
       }
 
       if (allSuccess) {
-        options?.onProgress({ percent: 100, message: 'Backup complete and verified', phase: 'complete' });
+        options?.onProgress?.({ percent: 100, message: 'Backup complete and verified', phase: 'complete' });
         return true;
       }
       return false;
     } catch (err: any) {
       console.error('Fatal sync error:', err);
-      options?.onProgress({ percent: 100, message: `Backup generation failed: ${err.message}`, phase: 'error' });
+      options?.onProgress?.({ percent: 100, message: `Backup generation failed: ${err.message}`, phase: 'error' });
+      if (shouldEnqueue) {
+        this.enqueueSync(accounts.map((a) => a.provider), `Backup creation failed: ${err.message}`);
+      }
       return false;
     }
   }
@@ -394,4 +497,15 @@ export class CloudSyncEngine {
       return { success: false, message: `Restore failed: ${e.message || 'Corrupted archive'}` };
     }
   }
+}
+
+// Auto-flush offline queued syncs when network connectivity is restored
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    setTimeout(() => {
+      CloudSyncEngine.processSyncQueue().catch((err) => {
+        console.warn('Background sync queue processing failed:', err);
+      });
+    }, 1500);
+  });
 }

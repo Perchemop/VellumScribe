@@ -969,8 +969,8 @@ export class StorageManager {
     return SqliteEngine.checkIntegrity();
   }
 
-  public static vacuumDatabase(): void {
-    SqliteEngine.vacuum();
+  public static async vacuumDatabase(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
+    return await SqliteEngine.vacuum();
   }
 
   public static scheduleSave(): void {

@@ -663,13 +663,28 @@ export class SqliteEngine {
   }
 
   /**
-   * Reclaims unused space via VACUUM
+   * Reclaims unused space and defragments B-trees via VACUUM & PRAGMA optimize
    */
-  public static vacuum(): void {
+  public static async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
     const db = this.getDb();
+    const originalBinary = db.export();
+    const originalSizeBytes = originalBinary.length;
+
     db.run('VACUUM;');
+    db.run('PRAGMA optimize;');
     this.markDirty();
-    AppLogger.info('SqliteEngine', 'Executed SQLite VACUUM.');
+    await this.flush();
+
+    const compactedBinary = db.export();
+    const compactedSizeBytes = compactedBinary.length;
+    const bytesReclaimed = Math.max(0, originalSizeBytes - compactedSizeBytes);
+
+    AppLogger.info(
+      'SqliteEngine',
+      `Executed SQLite VACUUM & compaction. Size: ${originalSizeBytes} -> ${compactedSizeBytes} bytes (${bytesReclaimed} bytes reclaimed).`
+    );
+
+    return { originalSizeBytes, compactedSizeBytes, bytesReclaimed };
   }
 
   /**
