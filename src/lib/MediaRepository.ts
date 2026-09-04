@@ -57,6 +57,17 @@ class IndexedDBStore {
       req.onerror = () => reject(req.error);
     });
   }
+
+  async getAllKeys(): Promise<string[]> {
+    await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve((req.result as string[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 const idb = new IndexedDBStore();
@@ -125,6 +136,22 @@ export class MediaRepository {
       } catch (e) {}
     } else {
       await idb.delete(key);
+    }
+  }
+
+  static async listAllKeys(): Promise<string[]> {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const res = await Filesystem.readdir({
+          path: 'media',
+          directory: Directory.Data,
+        });
+        return res.files.map((f) => (typeof f === 'string' ? f : f.name));
+      } catch {
+        return [];
+      }
+    } else {
+      return idb.getAllKeys();
     }
   }
 }

@@ -139,3 +139,60 @@ describe('StorageManager PIN lock', () => {
     expect(rightAttempt.payload?.body).toBe('Top secret plans');
   });
 });
+
+describe('StorageManager note operations & batch processing', () => {
+  it('duplicates an existing note with Copy title and resets pinned status', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const original = StorageManager.addNote(
+      makeNote(event.id, { title: 'Project Roadmap', body: 'Milestones 1 to 4', is_pinned: true })
+    );
+
+    const duplicated = StorageManager.duplicateNote(original.id);
+    expect(duplicated).toBeDefined();
+    expect(duplicated?.id).not.toBe(original.id);
+    expect(duplicated?.title).toBe('Project Roadmap (Copy)');
+    expect(duplicated?.body).toBe('Milestones 1 to 4');
+    expect(duplicated?.is_pinned).toBe(false);
+    expect(StorageManager.getActiveNotes()).toHaveLength(2);
+  });
+
+  it('toggles pinned status of a note', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note = StorageManager.addNote(makeNote(event.id, { is_pinned: false }));
+
+    const pinned = StorageManager.togglePinNote(note.id);
+    expect(pinned?.is_pinned).toBe(true);
+
+    const unpinned = StorageManager.togglePinNote(note.id);
+    expect(unpinned?.is_pinned).toBe(false);
+  });
+
+  it('performs bulk archiving across selected notes', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note1 = StorageManager.addNote(makeNote(event.id, { title: 'Note 1' }));
+    const note2 = StorageManager.addNote(makeNote(event.id, { title: 'Note 2' }));
+    const note3 = StorageManager.addNote(makeNote(event.id, { title: 'Note 3' }));
+
+    const count = StorageManager.bulkArchiveNotes([note1.id, note2.id]);
+    expect(count).toBe(2);
+
+    expect(StorageManager.getActiveNotes()).toHaveLength(1);
+    expect(StorageManager.getArchivedNotes()).toHaveLength(2);
+    expect(StorageManager.getNoteById(note1.id)?.status).toBe('archived');
+    expect(StorageManager.getNoteById(note3.id)?.status).toBe('active');
+  });
+
+  it('performs bulk deletion atomically across selected notes', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note1 = StorageManager.addNote(makeNote(event.id, { title: 'Note A' }));
+    const note2 = StorageManager.addNote(makeNote(event.id, { title: 'Note B' }));
+    const note3 = StorageManager.addNote(makeNote(event.id, { title: 'Note C' }));
+
+    const count = StorageManager.bulkDeleteNotes([note1.id, note3.id]);
+    expect(count).toBe(2);
+
+    expect(StorageManager.getNoteById(note1.id)).toBeUndefined();
+    expect(StorageManager.getNoteById(note2.id)).toBeDefined();
+    expect(StorageManager.getNoteById(note3.id)).toBeUndefined();
+  });
+});

@@ -76,8 +76,12 @@ function geminiRateLimiter(req: express.Request, res: express.Response, next: ex
   next();
 }
 
-// Apply rate limiter to all /api/gemini routes
+// Apply rate limiter to all AI and transcription routes
 app.use("/api/gemini", geminiRateLimiter);
+app.use("/api/ollama", geminiRateLimiter);
+app.use("/api/local-whisper", geminiRateLimiter);
+app.use("/api/groq", geminiRateLimiter);
+app.use("/api/deepgram", geminiRateLimiter);
 
 // Lazy initialize Gemini client
 function createGeminiInstance(apiKey: string): GoogleGenAI {

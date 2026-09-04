@@ -16,9 +16,9 @@ const logListeners: Set<(entry: LogEntry) => void> = new Set();
 /**
  * Redaction utility to ensure credentials, tokens, PINs, and keys never appear in logs
  */
-const SENSITIVE_KEY_REGEX = /(pin|password|secret|token|apikey|api_key|auth|credential|access_token|refresh_token|bearer)/i;
+const SENSITIVE_KEY_REGEX = /(pin|password|secret|token|apikey|api_key|auth|credential|access_token|refresh_token|bearer|private_key)/i;
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9_\-\.+=/]+/gi;
-const APIKEY_PATTERN_REGEX = /AIza[0-9A-Za-z-_]{35}/g;
+const APIKEY_PATTERN_REGEX = /(?:AIza[0-9A-Za-z-_]{35}|gsk_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,})/g;
 
 function sanitizeValue(value: any, depth = 0): any {
   if (depth > 5 || value === null || value === undefined) return value;
