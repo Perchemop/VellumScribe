@@ -1,5 +1,6 @@
 import { StorageManager } from './storage';
 import { NoteRecord, EventRecord } from '../types';
+import { PrivacyManager } from './privacyManager';
 
 export interface ReleaseInfo {
   version: string;
@@ -31,16 +32,41 @@ const STORAGE_KEYS = {
   MIGRATION_LOGS: 'vellumscribe_migration_logs_v1',
 };
 
-export const CURRENT_APP_VERSION = '2.9.0';
-export const CURRENT_BUILD_NUMBER = 20900;
+export const CURRENT_APP_VERSION = '3.0.0';
+export const CURRENT_BUILD_NUMBER = 30000;
 export const CURRENT_SCHEMA_VERSION = 4;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '3.0.0',
+    buildNumber: 30000,
+    releaseDate: '2026-09-04',
+    isCurrent: true,
+    highlights: [
+      'Encrypted Cloud Vault with client-side AES-256-GCM + GZIP envelope',
+      'True WebDAV and Nextcloud server verification and chunked backup synchronization',
+      'Multi-tenant session-scoped storage isolation preventing multi-user state leakage',
+      'Enforced Private Offline Mode gating across all network services',
+    ],
+    features: [
+      'Client-side AES-256-GCM + GZIP portable cloud backup envelope (CloudBackupCrypto) ensuring zero-knowledge cloud synchronization',
+      'Genuine WebDAV/Nextcloud connection with automated PROPFIND credential and directory validation',
+      'Full PrivacyManager assertion gating across AI synthesis, transcription, cloud storage, and update checker',
+      'Session-scoped cloud credentials and chunked upload pipelines preventing multi-tenant data collisions',
+      'In-browser due date reminder notifications when note alarms mature',
+    ],
+    fixes: [
+      'Eliminated fabricated 1-click cloud sync accounts for Google Drive and OneDrive; OAuth is only offered when server credentials exist',
+      'Replaced global in-memory cloud stores with isolated per-session data records in server.ts',
+      'Fixed asynchronous race condition in batch note locking within BatchActionBar',
+      'Aligned app versioning between package.json, changelogs, and update manager to v3.0.0',
+    ],
+  },
+  {
     version: '2.9.0',
     buildNumber: 20900,
     releaseDate: '2026-08-27',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Honesty & security audit pass across cloud sync, keystore, and AI fallbacks',
       'Real cloud backup uploads for Google Drive, Dropbox, OneDrive, and Nextcloud',
@@ -338,6 +364,7 @@ export class AppUpdateManager {
     }
 
     try {
+      PrivacyManager.assertNetworkAllowed('App Update Check');
       const res = await fetch(manifestUrl, { cache: 'no-store' });
       if (!res.ok) {
         throw new Error(`Update manifest request failed (HTTP ${res.status}).`);

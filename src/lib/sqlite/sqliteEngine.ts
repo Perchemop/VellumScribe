@@ -680,6 +680,8 @@ export class SqliteEngine {
       this.db.close();
       this.db = null;
     }
+    globalMemoryFallback.binary = null;
+    globalMemoryFallback.previousBinary = null;
     this.isInitialized = false;
     this.initPromise = null;
     await this.initialize();

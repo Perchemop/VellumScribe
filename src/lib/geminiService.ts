@@ -1,6 +1,7 @@
 import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
+import { PrivacyManager } from './privacyManager';
 
 export interface OcrResult {
   ocrText: string;
@@ -188,6 +189,7 @@ export class GeminiApiService {
     parts: Array<any>,
     preferredModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
   ): Promise<{ text: string; model: string }> {
+    PrivacyManager.assertNetworkAllowed('Google AI Studio');
     const apiKey = (AiSettingsManager.getGoogleApiKey() || (await AiSettingsManager.getApiKeyAsync())).trim();
     if (!apiKey) {
       throw new Error('Google AI Studio API key not configured.');
@@ -263,6 +265,7 @@ export class GeminiApiService {
    * Direct Groq LLM synthesis
    */
   private static async executeGroqChat(prompt: string, model = 'llama-3.3-70b-versatile'): Promise<string> {
+    PrivacyManager.assertNetworkAllowed('Groq AI');
     const key = AiSettingsManager.getGroqApiKey().trim();
     if (!key) throw new Error('Groq API key not configured.');
 
@@ -305,6 +308,7 @@ export class GeminiApiService {
    * Direct Local Ollama synthesis
    */
   private static async executeOllama(prompt: string, endpoint: string, model: string): Promise<string> {
+    PrivacyManager.assertNetworkAllowed('Ollama Endpoint');
     const cleanEndpoint = (endpoint || 'http://localhost:11434').replace(/\/+$/, '');
 
     // 1. Direct browser fetch
@@ -375,6 +379,7 @@ export class GeminiApiService {
 
     // Server proxy fallback
     try {
+      PrivacyManager.assertNetworkAllowed('Gemini OCR');
       const res = await fetch('/api/gemini/ocr', {
         method: 'POST',
         headers: await this.getHeaders(),
@@ -425,6 +430,7 @@ export class GeminiApiService {
     // 2. Groq Whisper (Opt-in External)
     if (provider === 'groq_whisper' && settings.groqApiKey) {
       try {
+        PrivacyManager.assertNetworkAllowed('Groq Whisper');
         const res = await fetch('/api/groq/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.groqApiKey}` },
@@ -443,6 +449,7 @@ export class GeminiApiService {
     // 3. Deepgram (Opt-in External)
     if (provider === 'deepgram' && settings.deepgramApiKey) {
       try {
+        PrivacyManager.assertNetworkAllowed('Deepgram');
         const res = await fetch('/api/deepgram/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -466,6 +473,7 @@ export class GeminiApiService {
     // 4. Local Whisper (Opt-in Self-Hosted)
     if (provider === 'local_whisper' && settings.localWhisperEndpoint) {
       try {
+        PrivacyManager.assertNetworkAllowed('Local Whisper');
         const res = await fetch('/api/local-whisper/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -513,6 +521,7 @@ export class GeminiApiService {
 
     if (provider === 'google') {
       try {
+        PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
         const res = await fetch('/api/gemini/transcribe', {
           method: 'POST',
           headers: await this.getHeaders(),
@@ -691,6 +700,7 @@ Formatting Directives:
 
     // Server proxy fallback for Google AI Studio
     try {
+      PrivacyManager.assertNetworkAllowed('Google AI Studio Summary');
       const res = await fetch('/api/gemini/summary', {
         method: 'POST',
         headers: await this.getHeaders(),

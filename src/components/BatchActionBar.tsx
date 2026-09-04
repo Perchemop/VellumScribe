@@ -64,6 +64,8 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [lockPinInput, setLockPinInput] = useState('');
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [isLocking, setIsLocking] = useState(false);
   const [unlockPinInput, setUnlockPinInput] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
 
@@ -156,14 +158,33 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     onRefresh();
   };
 
-  const handleBatchLock = (e: React.FormEvent) => {
+  const handleBatchLock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!lockPinInput.trim()) return;
-    StorageManager.batchLockNotes(selectedNoteIds, lockPinInput.trim());
-    setLockPinInput('');
-    setShowLockSheet(false);
-    onClearSelection();
-    onRefresh();
+    const pin = lockPinInput.trim();
+    if (!pin) return;
+    if (pin.length < 4) {
+      setLockError('PIN must be at least 4 digits.');
+      return;
+    }
+    setIsLocking(true);
+    setLockError(null);
+    try {
+      const lockedCount = await StorageManager.batchLockNotes(selectedNoteIds, pin);
+      if (lockedCount === 0) {
+        setLockError('No eligible notes were locked.');
+        return;
+      }
+      setLockPinInput('');
+      setLockError(null);
+      setShowLockSheet(false);
+      setShowMoreMenu(false);
+      onClearSelection();
+      onRefresh();
+    } catch (err: any) {
+      setLockError(err?.message || 'Failed to lock selected notes with PIN.');
+    } finally {
+      setIsLocking(false);
+    }
   };
 
   const handleBatchUnlock = async (e: React.FormEvent) => {
@@ -580,12 +601,22 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 Lock {count} note{count > 1 ? 's' : ''} with PIN
               </h3>
               <button
-                onClick={() => setShowLockSheet(false)}
+                onClick={() => {
+                  setShowLockSheet(false);
+                  setLockError(null);
+                  setLockPinInput('');
+                }}
                 className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {lockError && (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 rounded-xl text-xs">
+                {lockError}
+              </div>
+            )}
 
             <form onSubmit={handleBatchLock} className="space-y-3">
               <input
@@ -600,16 +631,21 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowLockSheet(false)}
+                  onClick={() => {
+                    setShowLockSheet(false);
+                    setLockError(null);
+                    setLockPinInput('');
+                  }}
                   className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs bg-amber-600 text-white font-semibold rounded-lg"
+                  disabled={isLocking}
+                  className="px-4 py-1.5 text-xs bg-amber-600 text-white font-semibold rounded-lg disabled:opacity-50"
                 >
-                  Set Lock
+                  {isLocking ? 'Locking...' : 'Set Lock'}
                 </button>
               </div>
             </form>

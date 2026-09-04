@@ -8,6 +8,37 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `AUDIT.md` for the full story of how that happened.
 
+## [3.0.0] - 2026-09-04
+
+Comprehensive security hardening, cloud sync integrity, and offline privacy enforcement.
+
+### Added
+
+- **Encrypted Cloud Vault (`CloudBackupCrypto`):** All cloud-destined backups are
+  packaged inside a client-side AES-256-GCM encrypted envelope (`VELLUM_ENC_V1`)
+  with PBKDF2 key derivation and raw GZIP compression streams before transport.
+- **Genuine WebDAV & Nextcloud Integration:** Verified connection flow via HTTP
+  `PROPFIND` validation to ensure user credentials and server directories are
+  authentic prior to storing account configuration.
+- **Enforced Private Offline Mode:** All outbound network calls across Gemini AI,
+  Groq, Deepgram, Ollama, cloud synchronization, and the update checker are
+  strictly gated behind `PrivacyManager.assertNetworkAllowed()`. In offline mode,
+  unauthorized network requests are immediately rejected.
+- **Multi-Tenant Session Isolation:** Cloud backup endpoints and accounts in
+  `server.ts` are strictly scoped by session identifiers (`x-session-id`), preventing
+  any cross-user or multi-tenant backup collision.
+
+### Fixed
+
+- **Eliminated Fabricated 1-Click Cloud Connections:** Removed fraudulent 1-click
+  connect claims for Google Drive and OneDrive. Provider connection now requires
+  valid OAuth or server-side credentials.
+- **Batch Lock Async Race:** Converted `handleBatchLock` in `BatchActionBar.tsx`
+  to an asynchronous sequence with proper error handling to prevent silent lock
+  failures.
+- **Reconciled Version Discrepancies:** Unified application version to `3.0.0`
+  across `package.json`, `appUpdateManager.ts`, and project documentation.
+
 ## [2.9.0] - 2026-08-27
 
 An audit-and-honesty pass. Nothing in this release adds a new user-facing

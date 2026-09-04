@@ -1,5 +1,6 @@
 import { CloudAccount, CloudStorageProvider, SyncTelemetry } from '../types';
 import { StorageManager } from './storage';
+import { PrivacyManager } from './privacyManager';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -22,6 +23,22 @@ export class CloudSyncEngine {
   private static telemetry: SyncTelemetry[] = [];
   private static readonly CHUNK_SIZE = 1024 * 1024; // 1MB chunk slices for network resilience
 
+  private static getSessionId(): string {
+    let id = localStorage.getItem('vs_cloud_session_id');
+    if (!id) {
+      id = 'vs_sess_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+      localStorage.setItem('vs_cloud_session_id', id);
+    }
+    return id;
+  }
+
+  private static getHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    return {
+      'x-session-id': this.getSessionId(),
+      ...extra,
+    };
+  }
+
   private static async computeChecksum(buffer: ArrayBuffer): Promise<string> {
     try {
       const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
@@ -34,7 +51,10 @@ export class CloudSyncEngine {
 
   static async fetchConfig() {
     try {
-      const res = await fetch('/api/cloud/config');
+      PrivacyManager.assertNetworkAllowed('Cloud Storage Configuration');
+      const res = await fetch('/api/cloud/config', {
+        headers: this.getHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.accounts)) {
@@ -62,16 +82,21 @@ export class CloudSyncEngine {
   }
 
   /**
-   * 1-Click Zero-Credential Connection
-   * Connects to cloud destination without entering any API keys, client secrets, or session IDs.
+   * 1-Click Zero-Credential Connection for Vellum Encrypted Vault
+   * Encrypts snapshots locally with AES-256-GCM before transport.
    */
   static async connectInstant(
     provider: CloudStorageProvider,
     metadata?: { email?: string; displayName?: string }
   ): Promise<CloudAccount> {
+    PrivacyManager.assertNetworkAllowed('Cloud Vault');
+    if (provider !== 'instant_vault') {
+      throw new Error(`Instant connect is only supported for Vellum Encrypted Vault. ${provider} requires authentication credentials.`);
+    }
+
     const res = await fetch(`/api/cloud/${provider}/connect-instant`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(metadata || {}),
     });
 
@@ -92,11 +117,44 @@ export class CloudSyncEngine {
   }
 
   /**
+   * Connect to Nextcloud or generic WebDAV server with verified credentials
+   */
+  static async connectCredentials(
+    provider: 'nextcloud' | 'webdav',
+    credentials: { serverUrl: string; username: string; password: string; remotePath?: string }
+  ): Promise<CloudAccount> {
+    PrivacyManager.assertNetworkAllowed(`Cloud Storage (${provider})`);
+    const res = await fetch(`/api/cloud/${provider}/connect-credentials`, {
+      method: 'POST',
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(credentials),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Authentication failed' }));
+      throw new Error(err.error || `Failed to connect ${provider} server`);
+    }
+
+    const data = await res.json();
+    const account: CloudAccount = data.account;
+
+    const current = this.getAccounts().filter((a) => a.provider !== provider);
+    current.push(account);
+    localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
+
+    return account;
+  }
+
+  /**
    * Disconnect a cloud account cleanly from both local cache and server
    */
   static async disconnectAccount(provider: CloudStorageProvider): Promise<void> {
     try {
-      await fetch(`/api/cloud/${provider}/disconnect`, { method: 'POST' });
+      PrivacyManager.assertNetworkAllowed('Cloud Storage Disconnect');
+      await fetch(`/api/cloud/${provider}/disconnect`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
     } catch (e) {
       console.warn(`Failed to notify server of disconnect for ${provider}:`, e);
     }
@@ -120,7 +178,10 @@ export class CloudSyncEngine {
    */
   static async fetchRemoteBackups(provider: CloudStorageProvider): Promise<RemoteBackupItem[]> {
     try {
-      const res = await fetch(`/api/cloud/${provider}/backups`);
+      PrivacyManager.assertNetworkAllowed('Remote Backups List');
+      const res = await fetch(`/api/cloud/${provider}/backups`, {
+        headers: this.getHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         return Array.isArray(data.backups) ? data.backups : [];
@@ -148,7 +209,7 @@ export class CloudSyncEngine {
     // 1. Init chunked session
     const initRes = await fetch(`/api/cloud/${provider}/chunk/init`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         filename,
         totalBytes,
@@ -181,7 +242,7 @@ export class CloudSyncEngine {
 
       const chunkRes = await fetch(`/api/cloud/${provider}/chunk/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           uploadId,
           chunkIndex,
@@ -208,7 +269,7 @@ export class CloudSyncEngine {
 
     const commitRes = await fetch(`/api/cloud/${provider}/chunk/commit`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ uploadId }),
     });
 
@@ -224,6 +285,7 @@ export class CloudSyncEngine {
    * Main sync trigger: handles archive generation, compression, direct or chunked upload, and telemetry
    */
   static async triggerSync(options?: { onProgress: (p: SyncProgressUpdate) => void }): Promise<boolean> {
+    PrivacyManager.assertNetworkAllowed('Cloud Backup Upload');
     const startTime = Date.now();
     const accounts = this.getAccounts();
     if (accounts.length === 0) {
@@ -251,7 +313,7 @@ export class CloudSyncEngine {
             // Small/medium archive: direct octet-stream upload
             const res = await fetch(`/api/cloud/${acc.provider}/backup`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/octet-stream' },
+              headers: this.getHeaders({ 'Content-Type': 'application/octet-stream' }),
               body: backupBlob,
             });
             if (!res.ok) {
@@ -303,34 +365,26 @@ export class CloudSyncEngine {
     provider: CloudStorageProvider,
     backupId: string
   ): Promise<{ success: boolean; message: string }> {
+    PrivacyManager.assertNetworkAllowed('Cloud Backup Restore');
     // 1. Safety snapshot of current local store
     const safetySnapshot = StorageManager.exportFullDump();
     sessionStorage.setItem('vs_pre_restore_snapshot', safetySnapshot);
 
     try {
-      const res = await fetch(`/api/cloud/${provider}/restore/${backupId}`);
+      const res = await fetch(`/api/cloud/${provider}/restore/${backupId}`, {
+        headers: this.getHeaders(),
+      });
       if (!res.ok) {
         throw new Error(`Failed to download backup archive from ${provider}`);
       }
 
       const blob = await res.blob();
+      const importResult = await StorageManager.importCloudBackupArchive(blob);
 
-      // Decompress gzip stream
-      let decompressedJson: string;
-      if (typeof DecompressionStream !== 'undefined') {
-        const ds = new DecompressionStream('gzip');
-        const decompressedStream = blob.stream().pipeThrough(ds);
-        const response = new Response(decompressedStream);
-        decompressedJson = await response.text();
-      } else {
-        decompressedJson = await blob.text();
-      }
-
-      const importResult = await StorageManager.importPortableBackupAsync(decompressedJson);
       if (!importResult.success) {
         // Rollback from safety snapshot on validation failure
         StorageManager.importFullDump(safetySnapshot);
-        return { success: false, message: `Restore aborted: ${importResult.message}` };
+        return { success: false, message: `Restore aborted: ${importResult.error || 'Validation error'}` };
       }
 
       return { success: true, message: 'Cloud backup successfully restored into local database.' };

@@ -921,11 +921,14 @@ app.post("/api/local-whisper/transcribe", async (req, res) => {
 // --- CLOUD BACKUP & OAUTH SUBSYSTEM ---
 
 interface CloudAccountRecord {
-  provider: "google_drive" | "microsoft" | "instant_vault";
+  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
   accountId: string;
   email: string;
   displayName: string;
   connectedAt: string;
+  serverUrl?: string;
+  webdavAuth?: string;
+  remotePath?: string;
   accessToken?: string;
   refreshToken?: string;
   expiresAt?: number;
@@ -933,7 +936,7 @@ interface CloudAccountRecord {
 
 interface CloudBackupRecord {
   id: string;
-  provider: "google_drive" | "microsoft" | "instant_vault";
+  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
   filename: string;
   size: number;
   createdAt: string;
@@ -944,7 +947,8 @@ interface CloudBackupRecord {
 
 interface ChunkSession {
   uploadId: string;
-  provider: "google_drive" | "microsoft" | "instant_vault";
+  sessionId: string;
+  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
   filename: string;
   totalBytes: number;
   totalChunks: number;
@@ -953,12 +957,43 @@ interface ChunkSession {
   checksum?: string;
 }
 
-// In-memory stores for cloud connections, backup archives, and chunk sessions
-const cloudAccountsStore = new Map<string, CloudAccountRecord>();
-const cloudBackupsStore = new Map<string, CloudBackupRecord[]>();
+interface SessionCloudData {
+  accounts: Map<string, CloudAccountRecord>;
+  backups: Map<string, CloudBackupRecord[]>;
+  lastActive: number;
+}
+
+// Session-scoped stores for cloud accounts and backups (multi-tenant isolation)
+const sessionStores = new Map<string, SessionCloudData>();
 const chunkSessionsStore = new Map<string, ChunkSession>();
 
 const MAX_BACKUP_RETENTION = 10;
+
+function getSessionId(req: express.Request): string {
+  const header = req.headers["x-session-id"];
+  if (typeof header === "string" && header.trim()) {
+    return header.trim();
+  }
+  const query = req.query.sessionId;
+  if (typeof query === "string" && query.trim()) {
+    return query.trim();
+  }
+  return "default_session";
+}
+
+function getSessionStore(sessionId: string): SessionCloudData {
+  let store = sessionStores.get(sessionId);
+  if (!store) {
+    store = {
+      accounts: new Map(),
+      backups: new Map(),
+      lastActive: Date.now(),
+    };
+    sessionStores.set(sessionId, store);
+  }
+  store.lastActive = Date.now();
+  return store;
+}
 
 // Periodic cleanup of stale chunk upload sessions (older than 30 mins)
 setInterval(() => {
@@ -968,10 +1003,16 @@ setInterval(() => {
       chunkSessionsStore.delete(id);
     }
   }
+  for (const [id, store] of sessionStores.entries()) {
+    if (now - store.lastActive > 24 * 60 * 60 * 1000) {
+      sessionStores.delete(id);
+    }
+  }
 }, 5 * 60 * 1000);
 
 function isProviderConfigured(provider: string): boolean {
   if (provider === "instant_vault") return true;
+  if (provider === "nextcloud" || provider === "webdav") return true;
   if (provider === "google_drive") {
     return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   }
@@ -983,87 +1024,100 @@ function isProviderConfigured(provider: string): boolean {
 
 // 1. Cloud Configuration & Status Endpoint
 app.get("/api/cloud/config", (req, res) => {
-  const accounts = Array.from(cloudAccountsStore.values()).map((acc) => ({
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+  const accounts = Array.from(session.accounts.values()).map((acc) => ({
     provider: acc.provider,
     accountId: acc.accountId,
     email: acc.email,
     displayName: acc.displayName,
     connectedAt: acc.connectedAt,
+    serverUrl: acc.serverUrl,
   }));
 
   res.json({
     status: "ok",
     providers: {
       instant_vault: {
-        name: "Vellum Cloud Vault",
+        name: "Vellum Encrypted Vault",
         isConfigured: true,
         hasOAuthEnv: true,
         zeroKeyReady: true,
-        description: "Zero-credential instant encrypted cloud vault. No API keys or session IDs required.",
+        description: "Zero-credential private backup snapshot vault with client-side AES-256-GCM encryption.",
       },
       google_drive: {
         name: "Google Drive",
         isConfigured: isProviderConfigured("google_drive"),
         hasOAuthEnv: Boolean(process.env.GOOGLE_CLIENT_ID),
-        zeroKeyReady: true,
-        description: "1-Click cloud backup for Google Drive.",
+        zeroKeyReady: false,
+        description: "Sync encrypted backup snapshots directly to Google Drive via OAuth.",
       },
       microsoft: {
         name: "Microsoft OneDrive",
         isConfigured: isProviderConfigured("microsoft"),
         hasOAuthEnv: Boolean(process.env.MICROSOFT_CLIENT_ID),
-        zeroKeyReady: true,
-        description: "1-Click cloud backup for Microsoft OneDrive.",
+        zeroKeyReady: false,
+        description: "Store encrypted backup snapshots in Microsoft OneDrive via OAuth.",
+      },
+      nextcloud: {
+        name: "Nextcloud",
+        isConfigured: true,
+        hasOAuthEnv: false,
+        zeroKeyReady: false,
+        description: "Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.",
+      },
+      webdav: {
+        name: "Custom WebDAV",
+        isConfigured: true,
+        hasOAuthEnv: false,
+        zeroKeyReady: false,
+        description: "Universal WebDAV cloud destination with authenticated endpoint.",
       },
     },
     accounts,
   });
 });
 
-// 1.5 Instant 1-Click Zero-Credential Connection Endpoint (No API keys or session IDs)
+// 1.5 Instant 1-Click Connection Endpoint (Strictly for Vellum Encrypted Vault)
 app.post("/api/cloud/:provider/connect-instant", (req, res) => {
-  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" };
+  const { provider } = req.params;
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
 
-  if (provider !== "google_drive" && provider !== "microsoft" && provider !== "instant_vault") {
-    return res.status(400).json({ error: `Unsupported provider: ${provider}` });
+  if (provider !== "instant_vault") {
+    return res.status(400).json({
+      error: `Instant connect is only supported for Vellum Encrypted Vault. ${
+        provider === "nextcloud" || provider === "webdav"
+          ? "Please provide server URL and app credentials."
+          : "Server administrator must configure OAuth credentials for " + provider + "."
+      }`,
+    });
   }
 
   const userEmail =
     typeof req.body?.email === "string" && req.body.email.includes("@")
       ? req.body.email.trim()
-      : provider === "instant_vault"
-      ? "vault@vellumscribe.app"
-      : provider === "google_drive"
-      ? "google_backup@vellumscribe.app"
-      : "onedrive_backup@vellumscribe.app";
+      : "vault@vellumscribe.app";
 
-  const displayName =
-    typeof req.body?.displayName === "string" && req.body.displayName.trim()
-      ? req.body.displayName.trim()
-      : provider === "instant_vault"
-      ? "Encrypted Cloud Vault"
-      : provider === "google_drive"
-      ? "Google Drive Cloud Vault"
-      : "OneDrive Cloud Vault";
-
-  const accountId = `acc_${provider}_${crypto.randomBytes(4).toString("hex")}`;
+  const displayName = "Vellum Encrypted Vault";
+  const accountId = `acc_vault_${sessionId.slice(0, 8)}_${crypto.randomBytes(3).toString("hex")}`;
   const connectedAt = new Date().toISOString();
 
   const record: CloudAccountRecord = {
-    provider,
+    provider: "instant_vault",
     accountId,
     email: userEmail,
     displayName,
     connectedAt,
   };
 
-  cloudAccountsStore.set(provider, record);
+  session.accounts.set("instant_vault", record);
 
   res.json({
     success: true,
-    message: `Connected ${displayName} without requiring any external keys or credentials.`,
+    message: "Connected Vellum Encrypted Vault with client-side AES-256-GCM encryption.",
     account: {
-      provider,
+      provider: "instant_vault",
       accountId,
       email: userEmail,
       displayName,
@@ -1072,20 +1126,111 @@ app.post("/api/cloud/:provider/connect-instant", (req, res) => {
   });
 });
 
+// 1.6 WebDAV / Nextcloud Credential Connection Endpoint
+app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
+  const { provider } = req.params;
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+
+  if (provider !== "webdav" && provider !== "nextcloud") {
+    return res.status(400).json({ error: `Provider ${provider} does not support credential connection.` });
+  }
+
+  const { serverUrl, username, password, remotePath } = req.body || {};
+  if (!serverUrl || !username || !password) {
+    return res.status(400).json({ error: "Server URL, username, and password / app token are required." });
+  }
+
+  try {
+    let cleanUrl = String(serverUrl).trim();
+    if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+      cleanUrl = "https://" + cleanUrl;
+    }
+    const parsed = new URL(cleanUrl);
+    let targetPath = (remotePath && typeof remotePath === "string" ? remotePath.trim() : "").replace(/^\/+/, "");
+    if (!targetPath) {
+      targetPath = provider === "nextcloud" ? `remote.php/dav/files/${encodeURIComponent(username.trim())}/VellumScribe/` : "VellumScribe/";
+    }
+    if (!targetPath.endsWith("/")) targetPath += "/";
+
+    const fullUrl = new URL(targetPath, parsed.origin + (parsed.pathname.endsWith("/") ? parsed.pathname : parsed.pathname + "/")).toString();
+    const authHeader = "Basic " + Buffer.from(`${username.trim()}:${password.trim()}`).toString("base64");
+
+    // Perform PROPFIND to verify credentials against the remote server
+    const testRes = await fetch(fullUrl, {
+      method: "PROPFIND",
+      headers: {
+        Authorization: authHeader,
+        Depth: "0",
+      },
+    }).catch(async () => {
+      return fetch(cleanUrl, {
+        method: "PROPFIND",
+        headers: {
+          Authorization: authHeader,
+          Depth: "0",
+        },
+      });
+    });
+
+    if (!testRes.ok && testRes.status !== 207 && testRes.status !== 404) {
+      return res.status(400).json({
+        error: `Could not authenticate with ${provider} server (HTTP ${testRes.status}). Please check URL and app password.`,
+      });
+    }
+
+    const accountId = `acc_${provider}_${crypto.randomBytes(4).toString("hex")}`;
+    const connectedAt = new Date().toISOString();
+    const displayName = `${username.trim()} (${parsed.hostname})`;
+
+    const record: CloudAccountRecord = {
+      provider: provider as "nextcloud" | "webdav",
+      accountId,
+      email: `${username.trim()}@${parsed.hostname}`,
+      displayName,
+      connectedAt,
+      serverUrl: fullUrl,
+      webdavAuth: authHeader,
+      remotePath: targetPath,
+    };
+
+    session.accounts.set(provider, record);
+
+    res.json({
+      success: true,
+      message: `Successfully connected to ${provider} at ${parsed.hostname}.`,
+      account: {
+        provider,
+        accountId,
+        email: record.email,
+        displayName,
+        connectedAt,
+        serverUrl: fullUrl,
+      },
+    });
+  } catch (err: any) {
+    res.status(400).json({
+      error: `Failed to connect to ${provider} server: ${err.message || "Network error"}`,
+    });
+  }
+});
+
 // 2. Provider OAuth Connect Initiation
 app.get("/api/cloud/:provider/connect", (req, res) => {
   const { provider } = req.params;
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
   const host = req.get("host") || "localhost:3000";
   const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const origin = `${protocol}://${host}`;
 
   if (provider === "instant_vault") {
-    const accountId = `acc_vault_${crypto.randomBytes(4).toString("hex")}`;
-    cloudAccountsStore.set("instant_vault", {
+    const accountId = `acc_vault_${sessionId.slice(0, 8)}_${crypto.randomBytes(3).toString("hex")}`;
+    session.accounts.set("instant_vault", {
       provider: "instant_vault",
       accountId,
       email: "vault@vellumscribe.app",
-      displayName: "Encrypted Cloud Vault",
+      displayName: "Vellum Encrypted Vault",
       connectedAt: new Date().toISOString(),
     });
     return res.redirect("/?cloud_connected=instant_vault");
@@ -1096,19 +1241,10 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
 
     if (!clientId) {
-      // Friction-free Zero-Credential Fallback: auto-connect without demanding manual API keys or secrets
-      const accountId = `acc_gdrive_${crypto.randomBytes(4).toString("hex")}`;
-      cloudAccountsStore.set("google_drive", {
-        provider: "google_drive",
-        accountId,
-        email: "google_backup@vellumscribe.app",
-        displayName: "Google Drive Cloud Vault",
-        connectedAt: new Date().toISOString(),
-      });
-      return res.redirect("/?cloud_connected=google_drive");
+      return res.redirect("/?cloud_error=" + encodeURIComponent("Google Drive OAuth is not configured on the server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."));
     }
 
-    const state = crypto.randomBytes(16).toString("hex");
+    const state = `${sessionId}:${crypto.randomBytes(12).toString("hex")}`;
     const scopes = encodeURIComponent(
       "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
     );
@@ -1124,19 +1260,10 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
     const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
 
     if (!clientId) {
-      // Friction-free Zero-Credential Fallback: auto-connect without demanding manual API keys or secrets
-      const accountId = `acc_ms_${crypto.randomBytes(4).toString("hex")}`;
-      cloudAccountsStore.set("microsoft", {
-        provider: "microsoft",
-        accountId,
-        email: "onedrive_backup@vellumscribe.app",
-        displayName: "OneDrive Cloud Vault",
-        connectedAt: new Date().toISOString(),
-      });
-      return res.redirect("/?cloud_connected=microsoft");
+      return res.redirect("/?cloud_error=" + encodeURIComponent("Microsoft OneDrive OAuth is not configured on the server. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET."));
     }
 
-    const state = crypto.randomBytes(16).toString("hex");
+    const state = `${sessionId}:${crypto.randomBytes(12).toString("hex")}`;
     const scopes = encodeURIComponent("Files.ReadWrite.AppFolder User.Read offline_access");
     const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
       redirectUri
@@ -1151,7 +1278,7 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
 // 3. Provider OAuth Callback Handler
 app.get("/api/cloud/:provider/callback", async (req, res) => {
   const { provider } = req.params;
-  const { code, error, error_description } = req.query;
+  const { code, error, error_description, state } = req.query;
 
   if (error) {
     return res.redirect(`/?cloud_error=${encodeURIComponent(String(error_description || error))}`);
@@ -1160,6 +1287,9 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
   if (!code || typeof code !== "string") {
     return res.redirect("/?cloud_error=Missing_authorization_code");
   }
+
+  const sessionId = typeof state === "string" && state.includes(":") ? state.split(":")[0] : getSessionId(req);
+  const session = getSessionStore(sessionId);
 
   const host = req.get("host") || "localhost:3000";
   const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
@@ -1208,7 +1338,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         console.warn("Failed to fetch Google profile info:", e);
       }
 
-      cloudAccountsStore.set("google_drive", {
+      session.accounts.set("google_drive", {
         provider: "google_drive",
         accountId: email,
         email,
@@ -1263,7 +1393,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         console.warn("Failed to fetch Microsoft profile info:", e);
       }
 
-      cloudAccountsStore.set("microsoft", {
+      session.accounts.set("microsoft", {
         provider: "microsoft",
         accountId: email,
         email,
@@ -1287,14 +1417,18 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
 // 4. Provider Disconnect Endpoint
 app.post("/api/cloud/:provider/disconnect", (req, res) => {
   const { provider } = req.params;
-  cloudAccountsStore.delete(provider);
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+  session.accounts.delete(provider);
   res.json({ success: true, message: `Disconnected ${provider} account.` });
 });
 
-// 5. Remote Backups Listing Endpoint
+// 5. Remote Backups Listing Endpoint (Session-scoped)
 app.get("/api/cloud/:provider/backups", (req, res) => {
   const { provider } = req.params;
-  const backups = (cloudBackupsStore.get(provider) || []).map((b) => ({
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+  const backups = (session.backups.get(provider) || []).map((b) => ({
     id: b.id,
     filename: b.filename,
     size: b.size,
@@ -1311,8 +1445,10 @@ app.get("/api/cloud/:provider/backups", (req, res) => {
 });
 
 // 6. Direct Binary Backup Upload Endpoint
-app.post("/api/cloud/:provider/backup", (req, res) => {
-  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" };
+app.post("/api/cloud/:provider/backup", async (req, res) => {
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav" };
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
   
   let buffer: Buffer | null = null;
   let filename = `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, "-")}.json.gz`;
@@ -1330,6 +1466,32 @@ app.post("/api/cloud/:provider/backup", (req, res) => {
     return res.status(400).json({ error: "Empty or invalid backup payload." });
   }
 
+  const account = session.accounts.get(provider);
+
+  // If uploading to real Nextcloud or WebDAV server
+  if (account && (provider === "nextcloud" || provider === "webdav") && account.serverUrl && account.webdavAuth) {
+    try {
+      const uploadUrl = new URL(filename, account.serverUrl).toString();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: account.webdavAuth,
+          "Content-Type": "application/octet-stream",
+        },
+        body: buffer,
+      });
+      if (!putRes.ok && putRes.status !== 201 && putRes.status !== 204) {
+        return res.status(502).json({
+          error: `Remote ${provider} server rejected upload (HTTP ${putRes.status}).`,
+        });
+      }
+    } catch (putErr: any) {
+      return res.status(502).json({
+        error: `Failed to upload to remote WebDAV server: ${putErr.message}`,
+      });
+    }
+  }
+
   const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
   const backupId = `bk_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
 
@@ -1343,14 +1505,14 @@ app.post("/api/cloud/:provider/backup", (req, res) => {
     buffer,
   };
 
-  let list = cloudBackupsStore.get(provider) || [];
+  let list = session.backups.get(provider) || [];
   list.unshift(newBackup);
 
-  // Retention pruning: Keep newest MAX_BACKUP_RETENTION archives
+  // Retention pruning
   if (list.length > MAX_BACKUP_RETENTION) {
     list = list.slice(0, MAX_BACKUP_RETENTION);
   }
-  cloudBackupsStore.set(provider, list);
+  session.backups.set(provider, list);
 
   res.json({
     success: true,
@@ -1365,12 +1527,14 @@ app.post("/api/cloud/:provider/backup", (req, res) => {
 
 // 7. Resumable Chunked Upload - Init
 app.post("/api/cloud/:provider/chunk/init", (req, res) => {
-  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" };
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav" };
+  const sessionId = getSessionId(req);
   const { filename = "vellumscribe_backup.json.gz", totalBytes = 0, totalChunks = 1, checksum } = req.body;
 
   const uploadId = `upload_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
-  const session: ChunkSession = {
+  const chunkSession: ChunkSession = {
     uploadId,
+    sessionId,
     provider,
     filename,
     totalBytes: Number(totalBytes),
@@ -1380,22 +1544,23 @@ app.post("/api/cloud/:provider/chunk/init", (req, res) => {
     checksum,
   };
 
-  chunkSessionsStore.set(uploadId, session);
+  chunkSessionsStore.set(uploadId, chunkSession);
 
   res.json({
     success: true,
     uploadId,
-    chunkSize: 2 * 1024 * 1024, // Recommended 2MB chunk size
-    totalChunks: session.totalChunks,
+    chunkSize: 2 * 1024 * 1024,
+    totalChunks: chunkSession.totalChunks,
   });
 });
 
 // 8. Resumable Chunked Upload - Upload Chunk
 app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
   const { uploadId, chunkIndex, chunkBase64 } = req.body;
-  const session = chunkSessionsStore.get(uploadId);
+  const sessionId = getSessionId(req);
+  const chunkSession = chunkSessionsStore.get(uploadId);
 
-  if (!session) {
+  if (!chunkSession || chunkSession.sessionId !== sessionId) {
     return res.status(404).json({ error: "Upload session expired or invalid." });
   }
 
@@ -1411,36 +1576,37 @@ app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
   }
 
   const idx = Number(chunkIndex);
-  session.receivedChunks.set(idx, chunkBuffer);
+  chunkSession.receivedChunks.set(idx, chunkBuffer);
 
   res.json({
     success: true,
     uploadId,
     chunkIndex: idx,
-    receivedCount: session.receivedChunks.size,
-    totalChunks: session.totalChunks,
+    receivedCount: chunkSession.receivedChunks.size,
+    totalChunks: chunkSession.totalChunks,
   });
 });
 
 // 9. Resumable Chunked Upload - Commit
-app.post("/api/cloud/:provider/chunk/commit", (req, res) => {
+app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
   const { uploadId } = req.body;
-  const session = chunkSessionsStore.get(uploadId);
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+  const chunkSession = chunkSessionsStore.get(uploadId);
 
-  if (!session) {
+  if (!chunkSession || chunkSession.sessionId !== sessionId) {
     return res.status(404).json({ error: "Upload session expired or not found." });
   }
 
-  if (session.receivedChunks.size < session.totalChunks) {
+  if (chunkSession.receivedChunks.size < chunkSession.totalChunks) {
     return res.status(400).json({
-      error: `Missing chunks: received ${session.receivedChunks.size} of ${session.totalChunks}`,
+      error: `Missing chunks: received ${chunkSession.receivedChunks.size} of ${chunkSession.totalChunks}`,
     });
   }
 
-  // Concatenate ordered chunks
   const chunkArrays: Buffer[] = [];
-  for (let i = 0; i < session.totalChunks; i++) {
-    const chunk = session.receivedChunks.get(i);
+  for (let i = 0; i < chunkSession.totalChunks; i++) {
+    const chunk = chunkSession.receivedChunks.get(i);
     if (!chunk) {
       return res.status(400).json({ error: `Chunk index ${i} is missing.` });
     }
@@ -1450,52 +1616,77 @@ app.post("/api/cloud/:provider/chunk/commit", (req, res) => {
   const fullBuffer = Buffer.concat(chunkArrays);
   const calculatedChecksum = crypto.createHash("sha256").update(fullBuffer).digest("hex");
 
-  if (session.checksum && session.checksum.toLowerCase() !== calculatedChecksum.toLowerCase()) {
+  if (chunkSession.checksum && chunkSession.checksum.toLowerCase() !== calculatedChecksum.toLowerCase()) {
     return res.status(400).json({
       error: "Archive checksum mismatch. Upload may be corrupted.",
     });
   }
 
+  const account = session.accounts.get(chunkSession.provider);
+  if (account && (chunkSession.provider === "nextcloud" || chunkSession.provider === "webdav") && account.serverUrl && account.webdavAuth) {
+    try {
+      const uploadUrl = new URL(chunkSession.filename, account.serverUrl).toString();
+      const putRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: account.webdavAuth,
+          "Content-Type": "application/octet-stream",
+        },
+        body: fullBuffer,
+      });
+      if (!putRes.ok && putRes.status !== 201 && putRes.status !== 204) {
+        return res.status(502).json({
+          error: `Remote ${chunkSession.provider} server rejected upload (HTTP ${putRes.status}).`,
+        });
+      }
+    } catch (putErr: any) {
+      return res.status(502).json({
+        error: `Failed to upload to remote WebDAV server: ${putErr.message}`,
+      });
+    }
+  }
+
   const backupId = `bk_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
   const newBackup: CloudBackupRecord = {
     id: backupId,
-    provider: session.provider,
-    filename: session.filename,
+    provider: chunkSession.provider,
+    filename: chunkSession.filename,
     size: fullBuffer.length,
     createdAt: new Date().toISOString(),
     checksum: calculatedChecksum,
     buffer: fullBuffer,
   };
 
-  let list = cloudBackupsStore.get(session.provider) || [];
+  let list = session.backups.get(chunkSession.provider) || [];
   list.unshift(newBackup);
   if (list.length > MAX_BACKUP_RETENTION) {
     list = list.slice(0, MAX_BACKUP_RETENTION);
   }
-  cloudBackupsStore.set(session.provider, list);
+  session.backups.set(chunkSession.provider, list);
 
-  // Clean up completed chunk session
   chunkSessionsStore.delete(uploadId);
 
   res.json({
     success: true,
     backupId,
-    filename: session.filename,
+    filename: chunkSession.filename,
     size: fullBuffer.length,
     checksum: calculatedChecksum,
     createdAt: newBackup.createdAt,
-    message: `Chunked archive committed successfully to ${session.provider}.`,
+    message: `Chunked archive committed successfully to ${chunkSession.provider}.`,
   });
 });
 
-// 10. Restore / Download Backup Archive Endpoint
+// 10. Restore / Download Backup Archive Endpoint (Session-scoped)
 app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
   const { provider, backupId } = req.params;
-  const list = cloudBackupsStore.get(provider) || [];
+  const sessionId = getSessionId(req);
+  const session = getSessionStore(sessionId);
+  const list = session.backups.get(provider) || [];
   const backup = list.find((b) => b.id === backupId);
 
   if (!backup) {
-    return res.status(404).json({ error: "Backup archive not found." });
+    return res.status(404).json({ error: "Backup archive not found in your session." });
   }
 
   res.setHeader("Content-Type", "application/octet-stream");

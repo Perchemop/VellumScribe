@@ -322,6 +322,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleSetReminder = (datetime: string) => {
     setReminderAt(datetime);
+    if (datetime && typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    }
     const updated = StorageManager.updateNote(note.id, { reminder_at: datetime || undefined });
     if (updated) onNoteUpdated(updated);
     setShowReminderPicker(false);
@@ -774,15 +779,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {/* Reminder Picker Popover */}
       {showReminderPicker && (
         <div className="px-6 py-3 bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-200/60 dark:border-amber-900/40 flex items-center justify-between gap-3 text-xs animate-fade-in shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-            <span className="font-semibold text-zinc-900 dark:text-zinc-100">Set Note Reminder:</span>
+            <span className="font-semibold text-zinc-900 dark:text-zinc-100">Due Date & Reminder:</span>
             <input
               type="datetime-local"
               value={reminderAt ? reminderAt.slice(0, 16) : ''}
               onChange={(e) => handleSetReminder(e.target.value ? new Date(e.target.value).toISOString() : '')}
               className="px-2 py-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs"
             />
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">(notifies in-app and via browser alert when due)</span>
           </div>
           <div className="flex items-center gap-2">
             {reminderAt && (

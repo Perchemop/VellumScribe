@@ -91,6 +91,45 @@ export default function App() {
     }
   }, []);
 
+  // Active Note Reminder Notification Watcher (In-app alerts + Web Notification API)
+  useEffect(() => {
+    const notifiedKey = 'vellumscribe_notified_reminders';
+    const checkReminders = () => {
+      try {
+        const notified: string[] = JSON.parse(sessionStorage.getItem(notifiedKey) || '[]');
+        const now = Date.now();
+        const dueNotes = notes.filter(
+          (n) => n.reminder_at && n.status !== 'archived' && n.status !== 'trash' && new Date(n.reminder_at).getTime() <= now && !notified.includes(String(n.id))
+        );
+
+        for (const note of dueNotes) {
+          notified.push(String(note.id));
+          sessionStorage.setItem(notifiedKey, JSON.stringify(notified));
+
+          // 1. In-app toast notification with quick jump
+          showToast(`Reminder: ${note.title || 'Untitled Note'}`, {
+            label: 'View',
+            onClick: () => setSelectedNoteId(note.id),
+          });
+
+          // 2. Web browser notification if granted
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification(`Reminder: ${note.title || 'Untitled Note'}`, {
+                body: note.body ? note.body.slice(0, 100) : 'Note reminder due',
+                icon: '/favicon.ico',
+              });
+            } catch {}
+          }
+        }
+      } catch {}
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 15000);
+    return () => clearInterval(interval);
+  }, [notes, showToast, setSelectedNoteId]);
+
   // Android System Back Navigation Handler (Hardware Back Button & Swipe Edge Gestures)
   useEffect(() => {
     // Maintain a history state baseline for Android phone navigation trapping
