@@ -24,6 +24,7 @@ import {
   MoreHorizontal,
   FolderPlus,
   Share2,
+  Copy,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
@@ -713,6 +714,37 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
                       {activeTab !== 'trash' && activeTab !== 'archived' && (
                         <>
+                          <button
+                            id={`quick-pin-btn-${note.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              StorageManager.togglePinNote(note.id);
+                              onRefresh();
+                            }}
+                            title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+                            className={`p-0.5 transition-colors ${
+                              note.is_pinned
+                                ? 'text-zinc-900 dark:text-zinc-100'
+                                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            <Pin className={`w-3 h-3 ${note.is_pinned ? 'fill-current' : ''}`} />
+                          </button>
+                          <button
+                            id={`quick-duplicate-btn-${note.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const dup = StorageManager.duplicateNote(note.id);
+                              if (dup) {
+                                onSelectNote(dup.id);
+                                onRefresh();
+                              }
+                            }}
+                            title="Duplicate Note"
+                            className="text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
                           <button
                             id={`quick-share-btn-${note.id}`}
                             onClick={(e) => {

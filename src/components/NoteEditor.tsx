@@ -21,6 +21,8 @@ import {
   Trash2,
   Key,
   HardDrive,
+  Pin,
+  Copy,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
@@ -91,7 +93,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [saveIndicator, setSaveIndicator] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
 
   // Unlocking protected note in current session
   const [isUnlockedLocally, setIsUnlockedLocally] = useState(!note.is_locked);
@@ -179,19 +181,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleBodyChange = (newBody: string) => {
     setBody(newBody);
+    setSaveStatus('saving');
     if (note.is_locked && activePin) {
       StorageManager.saveUnlockedNote(note.id, { body: newBody }, activePin).then((updated) => {
         if (updated) {
-          setSaveIndicator(true);
-          setTimeout(() => setSaveIndicator(false), 1200);
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('stored'), 1800);
           notifyUpdatedDebounced(updated);
         }
       });
     } else {
       const updated = StorageManager.updateNote(note.id, { body: newBody });
       if (updated) {
-        setSaveIndicator(true);
-        setTimeout(() => setSaveIndicator(false), 1200);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('stored'), 1800);
         notifyUpdatedDebounced(updated);
       }
     }
@@ -199,19 +202,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
+    setSaveStatus('saving');
     const updated = StorageManager.updateNote(note.id, { title: newTitle });
-    if (updated) notifyUpdatedDebounced(updated);
+    if (updated) {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('stored'), 1800);
+      notifyUpdatedDebounced(updated);
+    }
   };
 
   const handleChecklistChange = (items: ChecklistItem[]) => {
     setChecklistItems(items);
+    setSaveStatus('saving');
     if (note.is_locked && activePin) {
       StorageManager.saveUnlockedNote(note.id, { checklist_items: items }, activePin).then((updated) => {
-        if (updated) onNoteUpdated(updated);
+        if (updated) {
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('stored'), 1800);
+          onNoteUpdated(updated);
+        }
       });
     } else {
       const updated = StorageManager.updateNote(note.id, { checklist_items: items });
-      if (updated) onNoteUpdated(updated);
+      if (updated) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('stored'), 1800);
+        onNoteUpdated(updated);
+      }
     }
   };
 
@@ -685,6 +702,38 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {viewMode === 'preview' ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Toggle Pin */}
+          <button
+            id="note-editor-pin-btn"
+            aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note'}
+            onClick={() => {
+              const updated = StorageManager.togglePinNote(note.id);
+              if (updated) onNoteUpdated(updated);
+            }}
+            title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
+              note.is_pinned
+                ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800 font-semibold'
+                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
+            }`}
+          >
+            <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
+          </button>
+
+          {/* Duplicate Note */}
+          <button
+            id="note-editor-duplicate-btn"
+            aria-label="Duplicate Note"
+            onClick={() => {
+              const dup = StorageManager.duplicateNote(note.id);
+              if (dup) onNoteUpdated(dup);
+            }}
+            title="Duplicate Note"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+
           {/* Share & Export */}
           <button
             id="note-editor-share-btn"
@@ -1034,17 +1083,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <span>{stats.words} words</span>
           <span>·</span>
           <span>{stats.readTimeMinutes} min read</span>
-          {saveIndicator && <span className="text-zinc-700 dark:text-zinc-300">Saved</span>}
+          {saveStatus === 'saving' && (
+            <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-sans">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Saving...
+            </span>
+          )}
+          {saveStatus === 'saved' && (
+            <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-sans">
+              <CheckSquare className="w-3 h-3" />
+              Saved
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
           <div
             id="storage-status-indicator"
             className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 font-sans"
-            title="All notes and attached media are stored locally in browser offline storage"
+            title="All notes and attached media are stored locally in browser offline storage (SQLite)"
           >
             <HardDrive className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            <span>Stored locally</span>
+            <span>Offline — stored locally in SQLite</span>
           </div>
 
           <button

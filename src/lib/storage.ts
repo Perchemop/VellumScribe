@@ -20,6 +20,7 @@ import { SqliteRepository, SqliteStats, SearchOptions } from './sqlite/sqliteRep
 import { MigrationManager } from './sqlite/migrationManager';
 import { AppLogger } from './logger';
 import { ImportSafetyPipeline } from './importSafety';
+import { MediaRepository } from './MediaRepository';
 
 /**
  * StorageManager: Authoritative SQLite Storage Gateway
@@ -356,6 +357,88 @@ export class StorageManager {
     } catch (e) {
       AppLogger.error('StorageManager', `Failed to delete note ${id}`, e);
       return false;
+    }
+  }
+
+  public static duplicateNote(id: number): NoteRecord | null {
+    const existing = this.getNoteById(id);
+    if (!existing) return null;
+    const duplicated = this.addNote({
+      ...existing,
+      title: existing.title ? `${existing.title} (Copy)` : 'Untitled Note (Copy)',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_pinned: false,
+      status: 'active',
+    });
+    return duplicated;
+  }
+
+  public static togglePinNote(id: number): NoteRecord | null {
+    const existing = this.getNoteById(id);
+    if (!existing) return null;
+    return this.updateNote(id, { is_pinned: !existing.is_pinned });
+  }
+
+  public static bulkArchiveNotes(ids: number[]): number {
+    let count = 0;
+    SqliteEngine.transaction(() => {
+      for (const id of ids) {
+        const note = this.getNoteById(id);
+        if (note) {
+          SqliteRepository.saveNote({ ...note, status: 'archived', archived_at: new Date().toISOString() });
+          count++;
+        }
+      }
+    });
+    this.refreshCaches();
+    return count;
+  }
+
+  public static bulkDeleteNotes(ids: number[]): number {
+    let count = 0;
+    SqliteEngine.transaction(() => {
+      for (const id of ids) {
+        SqliteRepository.deleteNote(id);
+        count++;
+      }
+    });
+    this.refreshCaches();
+    return count;
+  }
+
+  public static async cleanOrphanedMedia(): Promise<{ scannedKeys: number; cleanedCount: number }> {
+    try {
+      const allKeys = await MediaRepository.listAllKeys();
+      if (allKeys.length === 0) return { scannedKeys: 0, cleanedCount: 0 };
+
+      const notes = this.getNotes();
+      const recordings = this.getRecordings();
+      const scans = this.getOcrScans();
+
+      const activeMediaKeys = new Set<string>();
+      for (const n of notes) {
+        if (n.sketch_media_key) activeMediaKeys.add(n.sketch_media_key);
+      }
+      for (const r of recordings) {
+        if (r.media_key) activeMediaKeys.add(r.media_key);
+      }
+      for (const s of scans) {
+        if (s.media_key) activeMediaKeys.add(s.media_key);
+      }
+
+      let cleanedCount = 0;
+      for (const key of allKeys) {
+        if (!activeMediaKeys.has(key)) {
+          await MediaRepository.deleteBinary(key);
+          cleanedCount++;
+        }
+      }
+      AppLogger.info('StorageManager', `Cleaned ${cleanedCount} orphaned media assets out of ${allKeys.length} total keys.`);
+      return { scannedKeys: allKeys.length, cleanedCount };
+    } catch (err) {
+      AppLogger.error('StorageManager', 'Failed to clean orphaned media', err);
+      return { scannedKeys: 0, cleanedCount: 0 };
     }
   }
 

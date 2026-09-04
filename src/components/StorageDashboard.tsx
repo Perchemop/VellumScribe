@@ -67,11 +67,12 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
     setTimeout(() => setFeedbackMessage(null), 3500);
   };
 
-  const handleCleanupOrphans = () => {
+  const handleCleanupOrphans = async () => {
     const orphans = SqliteRepository.findOrphanMediaKeys();
     orphans.forEach((k) => SqliteRepository.removeOrphanMediaRecord(k));
+    const mediaCleanup = await StorageManager.cleanOrphanedMedia();
     refreshDashboard();
-    setFeedbackMessage(`Removed ${orphans.length} orphan media catalog entries.`);
+    setFeedbackMessage(`Cleaned up ${orphans.length} catalog entries & reclaimed ${mediaCleanup.cleanedCount} binary media files.`);
     setTimeout(() => setFeedbackMessage(null), 3500);
   };
 
