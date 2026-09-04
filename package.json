@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",
-    "@capacitor/android": "^8.5.0",
+    "@capacitor/android": "^8.5.1",
     "@capacitor/camera": "^8.2.3",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/clipboard": "^8.0.1",
