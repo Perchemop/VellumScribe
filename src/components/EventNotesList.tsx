@@ -549,6 +549,13 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
               const isSketch = note.note_type === 'sketch';
               const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
               const totalItems = (note.checklist_items || []).length;
+              const isPrivateLocked = note.is_locked && note.lock_mode === 'private';
+              const displayTitle = isPrivateLocked ? '🔒 Locked Note' : (note.title || 'Untitled Note');
+              const displayBody = isPrivateLocked
+                ? 'Private content'
+                : note.is_locked
+                ? '•••••••• Protected Note Content'
+                : note.body.replace(/[#*`_]/g, '').slice(0, 120);
 
               return (
                 <div
@@ -590,7 +597,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   {/* Title & Status Icons */}
                   <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
                     <div className="flex items-center gap-1.5 min-w-0">
-                      {note.color && (
+                      {note.color && !isPrivateLocked && (
                         <span
                           className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: note.color }}
@@ -607,7 +614,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                             : 'font-medium text-zinc-800 dark:text-zinc-200'
                         }`}
                       >
-                        {note.title || 'Untitled Note'}
+                        {displayTitle}
                       </h4>
                     </div>
 
@@ -619,7 +626,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   </div>
 
                   {/* Body or Checklist summary */}
-                  {isChecklist && totalItems > 0 ? (
+                  {isChecklist && totalItems > 0 && !note.is_locked ? (
                     <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-2.5">
                       <span>{completedItems} of {totalItems} items checked</span>
                       <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
@@ -631,21 +638,21 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                     </div>
                   ) : (
                     <p className={`text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
-                      {note.is_locked ? '•••••••• Protected Note Content' : note.body.replace(/[#*`_]/g, '').slice(0, 120)}
+                      {displayBody}
                     </p>
                   )}
 
                   {/* Subdued Metadata & Badges */}
                   <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-zinc-100/80 dark:border-zinc-850">
                     <div className="flex flex-wrap items-center gap-2">
-                      {note.reminder_at && (
+                      {!isPrivateLocked && note.reminder_at && (
                         <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
                           <Bell className="w-2.5 h-2.5" />
                           <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                         </span>
                       )}
 
-                      {note.location_name && (
+                      {!isPrivateLocked && note.location_name && (
                         <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
                           <MapPin className="w-2.5 h-2.5" />
                           <span className="truncate max-w-[65px]">{note.location_name}</span>

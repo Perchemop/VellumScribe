@@ -13,8 +13,52 @@ const MAX_LOGS = 250;
 const inMemoryLogs: LogEntry[] = [];
 const logListeners: Set<(entry: LogEntry) => void> = new Set();
 
+/**
+ * Redaction utility to ensure credentials, tokens, PINs, and keys never appear in logs
+ */
+const SENSITIVE_KEY_REGEX = /(pin|password|secret|token|apikey|api_key|auth|credential|access_token|refresh_token|bearer)/i;
+const BEARER_REGEX = /Bearer\s+[A-Za-z0-9_\-\.+=/]+/gi;
+const APIKEY_PATTERN_REGEX = /AIza[0-9A-Za-z-_]{35}/g;
+
+function sanitizeValue(value: any, depth = 0): any {
+  if (depth > 5 || value === null || value === undefined) return value;
+  
+  if (typeof value === 'string') {
+    return value
+      .replace(BEARER_REGEX, 'Bearer [REDACTED]')
+      .replace(APIKEY_PATTERN_REGEX, 'AIza[REDACTED]');
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeValue(item, depth + 1));
+  }
+
+  if (typeof value === 'object') {
+    const sanitizedObj: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (SENSITIVE_KEY_REGEX.test(k)) {
+        sanitizedObj[k] = '[REDACTED]';
+      } else {
+        sanitizedObj[k] = sanitizeValue(v, depth + 1);
+      }
+    }
+    return sanitizedObj;
+  }
+
+  return value;
+}
+
 export class AppLogger {
-  private static addEntry(level: LogLevel, category: string, message: string, data?: any) {
+  private static addEntry(level: LogLevel, category: string, rawMessage: string, rawData?: any) {
+    // Automatically redact sensitive information
+    const message = typeof rawMessage === 'string'
+      ? rawMessage
+          .replace(BEARER_REGEX, 'Bearer [REDACTED]')
+          .replace(APIKEY_PATTERN_REGEX, 'AIza[REDACTED]')
+      : String(rawMessage);
+    
+    const data = rawData !== undefined ? sanitizeValue(rawData) : undefined;
+
     const entry: LogEntry = {
       id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       timestamp: new Date().toISOString(),

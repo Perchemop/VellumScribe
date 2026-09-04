@@ -17,11 +17,14 @@ state, see [`AUDIT.md`](./AUDIT.md) and [`CHANGELOG.md`](./CHANGELOG.md).
 - **Rich note types** - plain text/markdown, interactive checklists, a
   sketch canvas, voice memos with playback, and OCR-scanned handwritten
   notes.
-- **PIN-protected notes** - lock individual notes with a PIN. Locked note
-  content (body, checklist, sketch) is encrypted with AES-256-GCM, key
-  derived via PBKDF2-HMAC-SHA-256 (210,000 iterations). See
-  [`SECURITY.md`](./SECURITY.md) for the honest threat model, including
-  why a short numeric PIN is not a strong secret on its own.
+- **Protected notes (PIN & Passphrase)** - lock individual notes with a
+  numeric PIN or an arbitrary passphrase. Choose between **Standard Lock**
+  (encrypts note body, checklist, and sketch while keeping title and tags
+  visible for navigation) and **Private Lock** (encrypts title, tags, and
+  body into the AES-256-GCM envelope; masks title as "🔒 Locked Note" in
+  all list views to prevent metadata and topic leakage). Keys derived via
+  PBKDF2-HMAC-SHA-256 (210,000 iterations). See [`SECURITY.md`](./SECURITY.md)
+  for details on the threat model.
 - **Local version history** - automatic snapshots of note edits, each
   with a real SHA-256 checksum of the content.
 - **Optional AI assistance (Google Gemini)** - OCR text extraction, audio
@@ -29,15 +32,17 @@ state, see [`AUDIT.md`](./AUDIT.md) and [`CHANGELOG.md`](./CHANGELOG.md).
   merge for conflicting edits. Requires a Gemini API key (server-side env
   var or your own key pasted into Settings); without one, these features
   say so plainly rather than inventing plausible-looking content.
-- **Cloud backup** - export a JSON snapshot of cloud-enabled notes to
-  Google Drive, Dropbox, OneDrive, or a self-hosted Nextcloud/ownCloud
-  server. See [`CLOUD_PROVIDER_SETUP.md`](./CLOUD_PROVIDER_SETUP.md) for
-  exactly how connecting each provider works today (there is no 1-click
-  OAuth login yet - see that file for what "connect" currently means and
-  what it would take to add one).
-- **Export** - JSON backup and Markdown archive export, from Settings.
-- **Offline-first** - the app is fully usable with no network connection;
-  all data lives in the browser's local storage on this device.
+- **Encrypted cloud backup** - export compressed, encrypted snapshot archives
+  (`vellumscribe_backup.json.gz`) with SHA-256 integrity checksums to
+  Google Drive, Microsoft OneDrive, Nextcloud (WebDAV), standard WebDAV, or
+  the dedicated Encrypted Cloud Vault. All backups are encrypted on-device
+  using AES-256-GCM before transport.
+- **Safe import & export** - multi-phase import pipeline (Format Validation →
+  Version Check → Entity Preview → Safety Snapshot → Transactional Import →
+  Integrity Check) preventing accidental data corruption or overwrites.
+- **Offline-first architecture** - full functionality with no network
+  connection required; all relational data lives in an embedded SQLite
+  database on the local device.
 
 ## Getting started
 
@@ -96,25 +101,23 @@ src/
 server.ts       Express server: serves the SPA, proxies Gemini AI calls
 ```
 
-Storage is plain browser `localStorage` (see `src/lib/storage.ts`) -
-there is no SQLite or IndexedDB involved, despite some older internal
-naming (`SQLiteDatabase` is just an alias for the storage class). This is
-a known scaling limitation; see `AUDIT.md`.
-
+## Storage architecture
+ 
+VellumScribe employs a dual-tiered, offline-first storage architecture designed for data integrity, low latency, and crash resilience:
+ 
+- **Embedded relational database (`sql.js` WebAssembly)**: Core relational models (events, notes, checklists, transcripts, version history snapshots) live in an in-memory SQLite database supporting ACID transactions, complex queries, and relational indexing.
+- **Durable persistence**:
+  - **Web (Browsers)**: SQLite database snapshots are persisted to IndexedDB using `idb-keyval` as a serialized binary blob (`sqlite_db`).
+  - **Android (Native)**: SQLite database files are written directly to native app storage (`vellumscribe.db`) via the Capacitor Filesystem plugin.
+- **Dual-database crash recovery**: A shadow backup snapshot (`vellumscribe_backup.db`) is maintained alongside the primary database. On startup, SQLite integrity checks are executed; if corruption is detected, auto-recovery restores the last valid snapshot.
+- **Out-of-band binary media store**: Heavy binary assets (voice audio memos, OCR camera scans, and freehand sketches) are stored outside the SQLite table space via `MediaRepository` and `SecureMediaRepository` (IndexedDB blobs on web, discrete filesystem files on native), preventing database bloat and keeping SQLite operations rapid.
+- **Automatic legacy migration**: Any legacy `localStorage` keys from earlier versions are automatically migrated into the SQLite schema on startup, after which plaintext legacy keys are pruned.
+ 
 ## Known limitations
-
-- **No 1-click cloud login yet.** Connecting Google Drive/Dropbox/OneDrive
-  currently means pasting a token you generated yourself. Nextcloud is
-  fully self-contained (server URL + username + app password). See
-  `CLOUD_PROVIDER_SETUP.md`.
-- **iCloud and S3 backends are not implemented.** They're disabled in the
-  UI rather than faked.
-- **Storage is `localStorage`**, which has a small per-origin size quota
-  (typically 5-10MB depending on the browser). Heavy use of audio
-  recordings or sketches can hit this. Migrating to IndexedDB or a real
-  embedded database is a good, fairly large, contribution.
-- **A short numeric PIN is inherently low-entropy.** PBKDF2 slows down
-  brute-forcing but can't fix a 4-6 digit keyspace. See `SECURITY.md`.
+ 
+- **OAuth setup requirements**: Connecting Google Drive, Microsoft OneDrive, or WebDAV services requires authorization tokens or app passwords. See `CLOUD_PROVIDER_SETUP.md` for connection specifics.
+- **iCloud and S3 backends are not implemented**: They are not present in the active UI to avoid misleading placeholders.
+- **PIN vs Passphrase entropy**: A 4-to-6 digit numeric PIN has a low keyspace. While PBKDF2-HMAC-SHA-256 with 210,000 iterations slows down attacks, an attacker with physical or offline access can brute-force a short numeric PIN. For sensitive notes, choose **Passphrase** and **Private Lock** mode. See `SECURITY.md`.
 
 ## Contributing
 

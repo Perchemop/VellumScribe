@@ -6,15 +6,23 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const DB_INDEXED_DB_NAME = 'vellumscribe_sqlite_db';
 const DB_STORE_NAME = 'sqlite_binary';
-const DB_RECORD_KEY = 'authoritative_db_v1';
-const NATIVE_DB_PATH = 'databases/vellumscribe.sqlite';
+const DB_RECORD_KEY = 'current_db_v1';
+const DB_BACKUP_KEY = 'previous_db_v1';
+const DB_LEGACY_KEY = 'authoritative_db_v1';
+
+const NATIVE_DB_PATH = 'databases/current.sqlite';
+const NATIVE_BACKUP_PATH = 'databases/previous.sqlite';
+const NATIVE_LEGACY_PATH = 'databases/vellumscribe.sqlite';
 
 // Global memory fallback for Node test environments where indexedDB is not polyfilled
-const globalMemoryFallback = (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ || { binary: null as Uint8Array | null };
+const globalMemoryFallback = (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ || {
+  binary: null as Uint8Array | null,
+  previousBinary: null as Uint8Array | null,
+};
 (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
 
 /**
- * IndexedDB storage for SQLite binary database snapshots
+ * IndexedDB storage for SQLite binary database snapshots with previous/current crash recovery
  */
 class SqliteIndexedDbStorage {
   private db: IDBDatabase | null = null;
@@ -26,7 +34,7 @@ class SqliteIndexedDbStorage {
   private async getDb(): Promise<IDBDatabase> {
     if (this.db) return this.db;
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_INDEXED_DB_NAME, 1);
+      const request = indexedDB.open(DB_INDEXED_DB_NAME, 2);
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(DB_STORE_NAME)) {
@@ -50,8 +58,25 @@ class SqliteIndexedDbStorage {
       return new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE_NAME, 'readonly');
         const store = tx.objectStore(DB_STORE_NAME);
+        
+        // Try current first
         const req = store.get(DB_RECORD_KEY);
-        req.onsuccess = () => resolve(req.result instanceof Uint8Array ? req.result : req.result ? new Uint8Array(req.result) : null);
+        req.onsuccess = () => {
+          if (req.result) {
+            resolve(req.result instanceof Uint8Array ? req.result : new Uint8Array(req.result));
+          } else {
+            // Fallback to legacy key
+            const legacyReq = store.get(DB_LEGACY_KEY);
+            legacyReq.onsuccess = () => {
+              if (legacyReq.result) {
+                resolve(legacyReq.result instanceof Uint8Array ? legacyReq.result : new Uint8Array(legacyReq.result));
+              } else {
+                resolve(null);
+              }
+            };
+            legacyReq.onerror = () => resolve(null);
+          }
+        };
         req.onerror = () => reject(req.error);
       });
     } catch (e) {
@@ -60,8 +85,38 @@ class SqliteIndexedDbStorage {
     }
   }
 
+  public async loadBackupBinary(): Promise<Uint8Array | null> {
+    if (!this.isIndexedDbAvailable()) {
+      return globalMemoryFallback.previousBinary;
+    }
+    try {
+      const db = await this.getDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE_NAME, 'readonly');
+        const store = tx.objectStore(DB_STORE_NAME);
+        const req = store.get(DB_BACKUP_KEY);
+        req.onsuccess = () => {
+          if (req.result) {
+            resolve(req.result instanceof Uint8Array ? req.result : new Uint8Array(req.result));
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) {
+      AppLogger.warn('SqliteEngine', 'Failed to load previous backup from IndexedDB', e);
+      return globalMemoryFallback.previousBinary;
+    }
+  }
+
   public async saveBinary(data: Uint8Array): Promise<void> {
+    // Retain previous copy before overwriting current
+    if (globalMemoryFallback.binary) {
+      globalMemoryFallback.previousBinary = globalMemoryFallback.binary;
+    }
     globalMemoryFallback.binary = data;
+
     if (!this.isIndexedDbAvailable()) {
       return;
     }
@@ -69,14 +124,23 @@ class SqliteIndexedDbStorage {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(DB_STORE_NAME, 'readwrite');
       const store = tx.objectStore(DB_STORE_NAME);
-      const req = store.put(data, DB_RECORD_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+
+      // Read current to back up to previous
+      const readReq = store.get(DB_RECORD_KEY);
+      readReq.onsuccess = () => {
+        if (readReq.result) {
+          store.put(readReq.result, DB_BACKUP_KEY);
+        }
+        store.put(data, DB_RECORD_KEY);
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   }
 
   public async clear(): Promise<void> {
     globalMemoryFallback.binary = null;
+    globalMemoryFallback.previousBinary = null;
     if (!this.isIndexedDbAvailable()) {
       return;
     }
@@ -84,9 +148,11 @@ class SqliteIndexedDbStorage {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(DB_STORE_NAME, 'readwrite');
       const store = tx.objectStore(DB_STORE_NAME);
-      const req = store.delete(DB_RECORD_KEY);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+      store.delete(DB_RECORD_KEY);
+      store.delete(DB_BACKUP_KEY);
+      store.delete(DB_LEGACY_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
     });
   }
 }
@@ -100,6 +166,7 @@ export class SqliteEngine {
   private static initPromise: Promise<void> | null = null;
   private static saveTimeout: any = null;
   private static isDirty = false;
+  private static transactionDepth = 0;
 
   private static async getSqlJsInstance(): Promise<SqlJsStatic> {
     if (this.SQL) return this.SQL;
@@ -170,6 +237,7 @@ export class SqliteEngine {
 
         // Try to load existing database binary from disk / IndexedDB
         let binaryData: Uint8Array | null = null;
+        let loadedFromBackup = false;
 
         if (Capacitor.isNativePlatform()) {
           try {
@@ -186,7 +254,23 @@ export class SqliteEngine {
               binaryData = bytes;
             }
           } catch {
-            // Native DB file does not exist yet
+            // Check legacy path if current doesn't exist
+            try {
+              const legacyCheck = await Filesystem.readFile({
+                path: NATIVE_LEGACY_PATH,
+                directory: Directory.Data,
+              });
+              if (legacyCheck.data && typeof legacyCheck.data === 'string') {
+                const binaryString = atob(legacyCheck.data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                binaryData = bytes;
+              }
+            } catch {
+              // Neither exists yet
+            }
           }
         }
 
@@ -195,8 +279,39 @@ export class SqliteEngine {
         }
 
         if (binaryData && binaryData.length > 0) {
-          this.db = new this.SQL.Database(binaryData);
-          AppLogger.info('SqliteEngine', `Loaded existing SQLite database (${binaryData.length} bytes)`);
+          try {
+            const testDb = new this.SQL.Database(binaryData);
+            const check = testDb.exec('PRAGMA integrity_check;');
+            if (check.length > 0 && check[0].values[0][0] === 'ok') {
+              this.db = testDb;
+              AppLogger.info('SqliteEngine', `Loaded valid SQLite database (${binaryData.length} bytes)`);
+            } else {
+              throw new Error('Integrity check failed on primary database');
+            }
+          } catch (loadErr) {
+            AppLogger.warn('SqliteEngine', 'Primary SQLite database corrupted or unreadable. Initiating recovery from previous snapshot...', loadErr);
+            // Attempt recovery from previous.sqlite
+            const backupBinary = await idbStorage.loadBackupBinary();
+            if (backupBinary && backupBinary.length > 0) {
+              try {
+                const recoveredDb = new this.SQL.Database(backupBinary);
+                const check = recoveredDb.exec('PRAGMA integrity_check;');
+                if (check.length > 0 && check[0].values[0][0] === 'ok') {
+                  this.db = recoveredDb;
+                  loadedFromBackup = true;
+                  AppLogger.info('SqliteEngine', `CRASH RECOVERY SUCCESSFUL: Restored from previous valid SQLite backup (${backupBinary.length} bytes)`);
+                } else {
+                  throw new Error('Backup database also corrupted');
+                }
+              } catch (backupErr) {
+                AppLogger.error('SqliteEngine', 'Recovery from backup failed; creating fresh database', backupErr);
+                this.db = new this.SQL.Database();
+              }
+            } else {
+              AppLogger.error('SqliteEngine', 'No backup database found; creating fresh database');
+              this.db = new this.SQL.Database();
+            }
+          }
         } else {
           this.db = new this.SQL.Database();
           AppLogger.info('SqliteEngine', 'Created new in-memory SQLite database');
@@ -204,6 +319,14 @@ export class SqliteEngine {
 
         // Apply versioned migrations
         await this.runMigrations();
+
+        // If recovered from backup, flush immediately to ensure current is repaired
+        if (loadedFromBackup) {
+          await this.flush();
+        }
+
+        // Attach lifecycle handlers for web and native to force saves before app background or close
+        this.setupLifecycleHooks();
 
         this.isInitialized = true;
         AppLogger.info('SqliteEngine', 'SQLite Engine successfully initialized and migrations applied');
@@ -302,49 +425,165 @@ export class SqliteEngine {
   }
 
   /**
-   * Run multiple operations inside an atomic transaction
+   * Run multiple operations inside an atomic transaction (supports nesting via SAVEPOINTs)
    */
   public static transaction<T>(action: () => T): T {
     const db = this.getDb();
-    db.run('BEGIN TRANSACTION;');
+    const isRoot = this.transactionDepth === 0;
+    const savepointName = `sp_${this.transactionDepth}`;
+
+    if (isRoot) {
+      db.run('BEGIN TRANSACTION;');
+    } else {
+      db.run(`SAVEPOINT ${savepointName};`);
+    }
+    this.transactionDepth++;
+
     try {
       const result = action();
-      db.run('COMMIT;');
-      this.markDirty();
+      this.transactionDepth--;
+      if (isRoot) {
+        db.run('COMMIT;');
+        this.markDirty();
+      } else {
+        db.run(`RELEASE SAVEPOINT ${savepointName};`);
+      }
       return result;
     } catch (e) {
-      db.run('ROLLBACK;');
-      AppLogger.error('SqliteEngine', 'Transaction rolled back due to error', e);
+      this.transactionDepth--;
+      if (isRoot) {
+        try {
+          db.run('ROLLBACK;');
+        } catch {
+          // ignore rollback error if already rolled back
+        }
+        AppLogger.error('SqliteEngine', 'Transaction rolled back due to error', e);
+      } else {
+        try {
+          db.run(`ROLLBACK TO SAVEPOINT ${savepointName};`);
+        } catch {
+          // ignore savepoint rollback error
+        }
+      }
       throw e;
+    }
+  }
+
+  private static lifecycleHooksAttached = false;
+
+  private static setupLifecycleHooks(): void {
+    if (this.lifecycleHooksAttached) return;
+    this.lifecycleHooksAttached = true;
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && this.isDirty) {
+          AppLogger.info('SqliteEngine', 'Document hidden; triggering immediate SQLite persistence flush');
+          this.flush().catch((e) => AppLogger.error('SqliteEngine', 'Visibility flush failed', e));
+        }
+      });
+
+      window.addEventListener('pagehide', () => {
+        if (this.isDirty) {
+          this.flush().catch(() => {});
+        }
+      });
+
+      window.addEventListener('beforeunload', () => {
+        if (this.isDirty) {
+          this.flush().catch(() => {});
+        }
+      });
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/app')
+        .then(({ App }) => {
+          App.addListener('appStateChange', ({ isActive }) => {
+            if (!isActive && this.isDirty) {
+              AppLogger.info('SqliteEngine', 'Native app backgrounded; triggering immediate SQLite persistence flush');
+              this.flush().catch((e) => AppLogger.error('SqliteEngine', 'Background flush failed', e));
+            }
+          });
+        })
+        .catch(() => {
+          // App plugin may not be linked in test/web runner
+        });
     }
   }
 
   /**
    * Schedules debounced persistence flush to disk / IndexedDB
    */
-  public static markDirty(): void {
+  public static scheduleSave(): void {
     this.isDirty = true;
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
     }
     this.saveTimeout = setTimeout(() => {
-      this.flushToStorage().catch((err) => {
+      this.flush().catch((err) => {
         AppLogger.error('SqliteEngine', 'Background flush error', err);
       });
     }, 400); // 400ms debounce
   }
 
+  public static markDirty(): void {
+    this.scheduleSave();
+  }
+
   /**
-   * Immediate synchronous/blocking flush to persistent storage
+   * Cancel any pending debounced persistence save
    */
-  public static async flushToStorage(): Promise<void> {
+  public static cancelPendingSave(): void {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
+  }
+
+  /**
+   * Check if unpersisted modifications exist in the SQLite database
+   */
+  public static isDirtyState(): boolean {
+    return this.isDirty;
+  }
+
+  public static getIsDirty(): boolean {
+    return this.isDirty;
+  }
+
+  /**
+   * Immediate blocking flush to persistent storage (IndexedDB + Native Filesystem)
+   * Automatically maintains previous.sqlite before overwriting current.sqlite
+   */
+  public static async flush(): Promise<void> {
     if (!this.db || !this.isDirty) return;
+    this.cancelPendingSave();
+
     try {
       const binary = this.db.export();
       await idbStorage.saveBinary(binary);
 
       if (Capacitor.isNativePlatform()) {
-        // Also save to native file system
+        // 1. Back up current.sqlite to previous.sqlite if current exists
+        try {
+          const currentFile = await Filesystem.readFile({
+            path: NATIVE_DB_PATH,
+            directory: Directory.Data,
+          });
+          if (currentFile.data) {
+            await Filesystem.writeFile({
+              path: NATIVE_BACKUP_PATH,
+              data: currentFile.data,
+              directory: Directory.Data,
+              recursive: true,
+            });
+          }
+        } catch {
+          // No current file to back up yet
+        }
+
+        // 2. Persist new database binary to current.sqlite
         let binaryString = '';
         for (let i = 0; i < binary.length; i++) {
           binaryString += String.fromCharCode(binary[i]);
@@ -359,9 +598,15 @@ export class SqliteEngine {
       }
 
       this.isDirty = false;
+      AppLogger.debug('SqliteEngine', 'Flushed SQLite binary to persistent storage successfully');
     } catch (e) {
       AppLogger.error('SqliteEngine', 'Failed to flush SQLite binary to storage', e);
+      throw e;
     }
+  }
+
+  public static async flushToStorage(): Promise<void> {
+    return this.flush();
   }
 
   /**

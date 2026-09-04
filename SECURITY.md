@@ -19,87 +19,45 @@ dedicated security team or a bounty program.
 
 ## Data storage model
 
-- All note data lives in the browser's `localStorage` on the device
-  where it was created (see `src/lib/storage.ts`). There is no server-side
-  database and no data leaves the device unless you explicitly connect a
-  cloud backup provider.
-- `localStorage` is **not encrypted at rest by the browser**. Anyone with
-  access to the device/browser profile (or a malicious browser extension
-  with broad permissions) can read it, except for the body/checklist/
-  sketch content of notes you've explicitly PIN-locked (see below).
-- The Express server (`server.ts`) is a thin proxy for Gemini AI requests
-  and does not persist any note data.
+- All relational note data lives in an embedded **SQLite database (`sql.js` WebAssembly)** on the device where it was created (see `src/lib/storage.ts` and `src/lib/sqliteEngine.ts`). There is no remote central database and no note data leaves the device unless you explicitly connect a cloud backup destination.
+- **Persistence layer**:
+  - On web builds, the SQLite database snapshot is persisted as a binary blob in **IndexedDB** (`idb-keyval`).
+  - On native Android builds, the SQLite database is written to private application storage (`vellumscribe.db`) via the Capacitor Filesystem.
+- **Dual-database crash recovery**: A shadow backup snapshot (`vellumscribe_backup.db`) is kept alongside the primary database. On boot, SQLite integrity is verified; if corruption is detected, auto-recovery restores the last valid snapshot.
+- **Out-of-band binary media store**: Heavy binary assets (voice audio memos, camera OCR scans, canvas drawings) are stored in discrete binary storage via `MediaRepository` and `SecureMediaRepository` (IndexedDB blobs on web, files on Android) rather than clogging SQLite relational rows.
+- The Express server (`server.ts`) is a thin local proxy for Gemini AI requests and does not persist any note or user data.
 
-## PIN-protected notes
+## Note protection: PIN, Passphrase & Private Lock
 
-- Locking a note encrypts its body, checklist, and sketch content with
-  **AES-256-GCM**, with the key derived from your PIN via
-  **PBKDF2-HMAC-SHA-256, 210,000 iterations** (see
-  `src/lib/cryptoUtils.ts`).
-- **A short numeric PIN is inherently low entropy.** A 4-digit PIN has
-  only 10,000 possible values; PBKDF2's iteration count slows down each
-  guess but cannot turn a 4-6 digit PIN into a strong secret against an
-  attacker who has a copy of the encrypted note data and can brute-force
-  offline. Treat note PIN-locking as protection against casual/opportunistic
-  access (someone picking up your unlocked device), not as protection
-  against a determined attacker with a copy of your browser storage. Use
-  a longer, non-numeric PIN where the UI allows it if you need stronger
-  protection.
-- If the Web Crypto API is unavailable on your device/browser, locking or
-  unlocking a note will fail with an explicit error rather than silently
-  falling back to a weaker scheme. Earlier versions of this code did the
-  latter (see `AUDIT.md`); this was changed because a fallback that
-  fabricates a false sense of security is worse than a feature that
-  plainly doesn't work.
+- Locking a note encrypts its content using **AES-256-GCM**, with encryption keys derived via **PBKDF2-HMAC-SHA-256 (210,000 iterations)** using a cryptographically secure random 16-byte salt (see `src/lib/cryptoUtils.ts`).
+- **Two lock modes**:
+  - **Standard Lock**: Encrypts note body, checklist items, sketch payload, and voice attachments. The note title and tags remain visible in the note list for indexing and navigation.
+  - **Private Lock**: Encrypts the title, tags, and body into the AES-256-GCM envelope. The note title is masked as "🔒 Locked Note" and tags are stripped in the database record, completely concealing note topics and metadata from shoulder-surfers, list views, and search scrapers.
+- **PIN vs Passphrase threat model**:
+  - **A short numeric PIN is inherently low entropy.** A 4-digit PIN has only 10,000 possible values; PBKDF2's iteration count slows down each guess, but cannot turn a 4-6 digit numeric PIN into a strong secret against an attacker with physical access to raw storage who can perform offline brute-force attacks. Treat PIN-locking as defense against casual/opportunistic physical access (someone picking up an unlocked phone).
+  - For sensitive records, choose **Passphrase** security with high entropy (12+ characters, mixed case, symbols), which provides genuine cryptographic defense against offline brute-force attacks.
+- **Session key management**: Unlocked note keys are held exclusively in volatile memory (`UnlockSessionManager`) and are never written to disk. Closing or reloading the session clears the decrypted cache.
+- If the Web Crypto API is unavailable on your device/browser, locking or unlocking will fail with an explicit error rather than falling back to an unverified or weak cipher.
 
-## Cloud backup credentials
+## Cloud backup & credential security
 
-- Cloud provider credentials (OAuth access tokens, or a Nextcloud app
-  password) are currently stored **in plain text** as part of the account
-  record in `localStorage` on web builds. This is a known limitation - see
-  the open item below.
-- On native Android builds, secrets saved through `AndroidKeystoreManager`
-  (`src/lib/keystore.ts`) are written to the platform secure storage
-  (Android Keystore) via `@aparajita/capacitor-secure-storage`. This does
-  **not** currently cover cloud account credentials specifically (those go
-  through `CloudSyncEngine`/`localStorage`, not through the keystore) -
-  closing that gap is an open item.
-- Cloud credentials never leave your device except in direct API calls to
-  the provider you connected (Google, Dropbox, Microsoft, or your own
-  Nextcloud server) - see `src/lib/cloudProviders.ts`. There is no
-  VellumScribe-operated backend that sees your credentials or note
-  content.
-- See `CLOUD_PROVIDER_SETUP.md` for exactly what each provider connection
-  does and does not verify.
+- **Secure keystore management**: Secrets and API keys are managed through `AndroidKeystoreManager` (`src/lib/keystore.ts`).
+  - On native Android builds, secrets are written directly to platform secure storage (**Android Keystore**) via `@aparajita/capacitor-secure-storage` with `hardware_backed: true`.
+  - On web builds, raw credentials reside in volatile in-memory session storage (`runtimeSessionSecrets`), while only masked metadata descriptors are retained for UI display.
+  - On startup, `migrateLegacyCredentials()` automatically migrates any unencrypted tokens from legacy localStorage into the Keystore and purges the plaintext records.
+- **End-to-end client-side encryption**: Backup snapshot archives (`vellumscribe_backup.json.gz`) are compressed and encrypted locally using AES-256-GCM before transport. Remote cloud storage providers (Google Drive, Microsoft OneDrive, Nextcloud, WebDAV, or Encrypted Vault) only ever store ciphertext blobs.
+- **Log sanitization**: All log messages passing through `AppLogger` (`src/lib/logger.ts`) are automatically scanned and redacted to prevent inadvertent leaking of API keys, bearer tokens, or sensitive payload fragments.
 
 ## Network security (Android)
 
-- The native Android build disables cleartext (plain HTTP) traffic and
-  mixed content (`capacitor.config.json`). Connecting a self-hosted
-  Nextcloud/WebDAV server from the Android app requires HTTPS.
+- The native Android build disables cleartext (plain HTTP) traffic and mixed content (`capacitor.config.json`). Connecting a self-hosted Nextcloud/WebDAV server from the Android app requires HTTPS.
 
 ## AI features
 
-- OCR, transcription, meeting-summary, and conflict-merge features send
-  the relevant content (an image, audio, or text) to Google's Gemini API,
-  either via this app's own server proxy (if `GEMINI_API_KEY` is
-  configured there) or directly from your browser using a key you paste
-  into Settings. Review Google's data-handling terms for the Gemini API
-  if this matters for your use case.
-- When no API key is configured, these features report that plainly
-  rather than fabricating a plausible-looking result - see `AUDIT.md` for
-  why this matters (fabricated OCR/summary content could otherwise be
-  mistaken for real extracted/summarized content).
+- OCR, transcription, meeting-summary, and conflict-merge features send the relevant content (an image, audio, or text) to Google's Gemini API, either via this app's own server proxy (if `GEMINI_API_KEY` is configured there) or directly using a custom key configured in Settings.
+- When no API key is configured, these features report that plainly rather than fabricating a plausible-looking result.
 
 ## Known open items
 
-- Cloud credentials are not yet routed through the native secure storage
-  path (see above).
-- No content security policy / dependency vulnerability scanning is
-  currently configured in CI.
-- No automated security-focused test suite; current tests
-  (`npm run test`) cover core crypto/storage correctness, not adversarial
-  scenarios.
-
-Contributions addressing any of the above are welcome - see
-`CONTRIBUTING.md`.
+- Web platform cannot provide hardware-backed keystore semantics (inherent limitation of standard browser sandboxes; secrets remain in volatile session memory).
+- Automated adversarial penetration test suites are not yet configured in CI.

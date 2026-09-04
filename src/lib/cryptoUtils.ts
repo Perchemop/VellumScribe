@@ -152,9 +152,12 @@ export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey
 }
 
 export interface NotePayloadData {
+  title?: string;
   body: string;
   checklist_items?: any[];
   sketch_data?: string;
+  tags?: string[];
+  lock_mode?: 'standard' | 'private';
 }
 
 /**

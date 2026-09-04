@@ -16,22 +16,34 @@ const PROVIDER_METADATA: Record<
   { name: string; brandColor: string; description: string; badge: string }
 > = {
   instant_vault: {
-    name: 'Vellum Cloud Vault',
+    name: 'Vellum Encrypted Vault',
     brandColor: '#6366f1',
-    description: 'Instant zero-credential cloud backup with end-to-end client-side encryption.',
-    badge: 'Zero Configuration',
+    description: 'Dedicated cloud backup snapshot vault with client-side AES-256-GCM encryption.',
+    badge: 'Encrypted Vault',
   },
   google_drive: {
     name: 'Google Drive',
     brandColor: '#34a853',
-    description: 'Sync encrypted snapshots directly to your Google Drive cloud space.',
-    badge: '1-Click Cloud Bridge',
+    description: 'Sync encrypted snapshots directly to your Google Drive folder via OAuth.',
+    badge: 'OAuth Storage',
   },
   microsoft: {
     name: 'Microsoft OneDrive',
     brandColor: '#0078d4',
-    description: 'Store encrypted backup snapshots safely in Microsoft OneDrive cloud.',
-    badge: '1-Click Cloud Bridge',
+    description: 'Store encrypted backup snapshots safely in Microsoft OneDrive via OAuth.',
+    badge: 'OAuth Storage',
+  },
+  nextcloud: {
+    name: 'Nextcloud',
+    brandColor: '#0082c9',
+    description: 'Store backups on a private or self-hosted Nextcloud server via WebDAV.',
+    badge: 'Self-Hosted WebDAV',
+  },
+  webdav: {
+    name: 'Custom WebDAV',
+    brandColor: '#f59e0b',
+    description: 'Universal standard WebDAV storage with authenticated endpoint.',
+    badge: 'Standard WebDAV',
   },
 };
 
@@ -164,14 +176,14 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
 
         {/* Body Content */}
         <div className="p-5 space-y-4">
-          {/* Zero-friction Reassurance Banner */}
+          {/* End-to-End Encryption Reassurance Banner */}
           <div className="p-3.5 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 rounded-2xl space-y-1.5 text-xs text-emerald-900 dark:text-emerald-300">
             <div className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-200">
               <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>Zero-Credential Cloud Backups</span>
+              <span>End-to-End Client Encrypted</span>
             </div>
             <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
-              No API keys, client secrets, or session IDs required. All notes and recordings are encrypted locally on this device using AES-256-GCM before upload.
+              All notes, checklists, and recordings are encrypted locally using AES-256-GCM before transport. Cloud destinations never receive plaintext note contents.
             </p>
           </div>
 
@@ -239,13 +251,13 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
             /* Unconnected State View */
             <div className="space-y-3">
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Connect {meta.name} in one click. Backups are stored as compressed, encrypted snapshot archives with integrity checksums.
+                Connect {meta.name}. Backups are stored as compressed, encrypted snapshot archives with integrity checksums.
               </p>
 
               <div className="space-y-2 pt-1">
-                {/* 1-Click Instant Connect Button */}
+                {/* Connect Encrypted Destination Button */}
                 <button
-                  id="modal-1click-connect-btn"
+                  id="modal-connect-destination-btn"
                   onClick={handleInstantConnect}
                   disabled={loading}
                   className="w-full min-h-[44px] px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
@@ -258,7 +270,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   ) : (
                     <>
                       <Zap className="w-4 h-4 text-amber-400 dark:text-amber-500 fill-current" />
-                      <span>1-Click Connect (Zero Credentials)</span>
+                      <span>Connect Encrypted Destination</span>
                     </>
                   )}
                 </button>
