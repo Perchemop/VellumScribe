@@ -34,7 +34,7 @@ import {
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
-import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate, RemoteBackupItem } from '../lib/cloudSync';
+import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate, RemoteBackupItem, QueuedSyncItem } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { CURRENT_APP_VERSION } from '../lib/appUpdateManager';
@@ -145,8 +145,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [loadingRemoteBackups, setLoadingRemoteBackups] = useState<Record<string, boolean>>({});
   const [isRestoringBackupId, setIsRestoringBackupId] = useState<string | null>(null);
   const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
+  const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() => CloudSyncEngine.getSyncQueue());
 
-// AI State
+  // AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
   const [googleKeyInput, setGoogleKeyInput] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
   const [groqKeyInput, setGroqKeyInput] = useState<string>(() => AiSettingsManager.getGroqApiKey());
@@ -206,17 +207,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       });
       setTelemetryList(CloudSyncEngine.getTelemetry());
       setAccounts(CloudSyncEngine.getAccounts());
+      setSyncQueue(CloudSyncEngine.getSyncQueue());
       setNotes(StorageManager.getNotes());
-      setSyncFeedback(success ? 'Sync complete' : 'Sync failed');
+      setSyncFeedback(success ? 'Sync complete' : 'Sync failed (queued for automatic retry)');
       onRefreshNotes();
     } catch {
-      setSyncFeedback('Sync failed. Please check network connectivity.');
+      setSyncQueue(CloudSyncEngine.getSyncQueue());
+      setSyncFeedback('Sync failed. Request queued for automatic retry when online.');
     } finally {
       setIsSyncing(false);
       setTimeout(() => {
         setSyncProgress(null);
       }, 2500);
     }
+  };
+
+  const handleFlushQueue = async () => {
+    setIsSyncing(true);
+    setSyncFeedback('Processing queued offline sync requests...');
+    try {
+      const res = await CloudSyncEngine.processSyncQueue();
+      setSyncQueue(CloudSyncEngine.getSyncQueue());
+      setTelemetryList(CloudSyncEngine.getTelemetry());
+      setAccounts(CloudSyncEngine.getAccounts());
+      setSyncFeedback(`Queue flushed: ${res.success} succeeded, ${res.failed} failed.`);
+    } catch {
+      setSyncFeedback('Queue processing failed. Please check network connectivity.');
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    }
+  };
+
+  const handleClearQueue = () => {
+    CloudSyncEngine.clearSyncQueue();
+    setSyncQueue([]);
+    setSyncFeedback('Offline sync retry queue cleared.');
+    setTimeout(() => setSyncFeedback(null), 3000);
   };
 
   // Frequency change
@@ -618,6 +645,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   Dismiss
                 </button>
+              </div>
+            )}
+
+            {/* Offline Sync Retry Queue Alert */}
+            {syncQueue.length > 0 && (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+                <div className="flex items-center gap-2.5">
+                  <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div>
+                    <span className="font-semibold">{syncQueue.length} Offline Sync Request{syncQueue.length !== 1 ? 's' : ''} Queued</span>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                      Syncs interrupted by network drops will auto-retry when connection is restored.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleFlushQueue}
+                    disabled={isSyncing}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-medium text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>Retry Queued</span>
+                  </button>
+                  <button
+                    onClick={handleClearQueue}
+                    className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-200 rounded-xl font-medium text-xs transition-colors"
+                  >
+                    Clear Queue
+                  </button>
+                </div>
               </div>
             )}
 

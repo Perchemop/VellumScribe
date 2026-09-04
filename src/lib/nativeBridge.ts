@@ -4,6 +4,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Clipboard } from '@capacitor/clipboard';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Camera } from '@capacitor/camera';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -212,5 +213,85 @@ export class NativeBridge {
 
     // Fallback to clipboard
     return this.copyText(`${title}\n\n${text}`);
+  }
+
+  /**
+   * Request / verify notification permissions for Android, iOS & Web
+   */
+  public static async checkAndRequestNotificationPermissions(): Promise<boolean> {
+    try {
+      if (this.isNative()) {
+        const check = await LocalNotifications.checkPermissions();
+        if (check.display === 'granted') return true;
+        const req = await LocalNotifications.requestPermissions();
+        return req.display === 'granted';
+      }
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') return true;
+        if (Notification.permission === 'default') {
+          const res = await Notification.requestPermission();
+          return res === 'granted';
+        }
+      }
+    } catch (e) {
+      console.warn('Notification permission check failed:', e);
+    }
+    return false;
+  }
+
+  /**
+   * Schedule a note reminder native alarm or notification
+   */
+  public static async scheduleNoteReminder(
+    noteId: number,
+    title: string,
+    body: string,
+    scheduledDate: Date
+  ): Promise<boolean> {
+    try {
+      // Must be a future date
+      if (scheduledDate.getTime() <= Date.now()) {
+        return false;
+      }
+
+      await this.checkAndRequestNotificationPermissions();
+
+      if (this.isNative()) {
+        // Cancel any existing alarm for this note id first
+        await LocalNotifications.cancel({ notifications: [{ id: noteId }] }).catch(() => {});
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: noteId,
+              title: `Reminder: ${title || 'Untitled Note'}`,
+              body: body ? (body.length > 120 ? body.slice(0, 117) + '...' : body) : 'Note reminder due',
+              schedule: { at: scheduledDate, allowWhileIdle: true },
+              sound: undefined,
+              actionTypeId: '',
+              extra: { noteId },
+            },
+          ],
+        });
+        return true;
+      }
+    } catch (e) {
+      console.warn('Native reminder scheduling failed, relying on web watcher fallback:', e);
+    }
+    return false;
+  }
+
+  /**
+   * Cancel a scheduled note reminder alarm
+   */
+  public static async cancelNoteReminder(noteId: number): Promise<boolean> {
+    try {
+      if (this.isNative()) {
+        await LocalNotifications.cancel({ notifications: [{ id: noteId }] });
+        return true;
+      }
+    } catch (e) {
+      console.warn('Native reminder cancellation failed:', e);
+    }
+    return false;
   }
 }

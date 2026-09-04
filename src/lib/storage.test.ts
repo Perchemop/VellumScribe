@@ -195,4 +195,40 @@ describe('StorageManager note operations & batch processing', () => {
     expect(StorageManager.getNoteById(note2.id)).toBeDefined();
     expect(StorageManager.getNoteById(note3.id)).toBeUndefined();
   });
+
+  it('runs SQLite VACUUM compaction and returns size metrics', async () => {
+    const event = StorageManager.addEvent(makeEvent());
+    for (let i = 0; i < 5; i++) {
+      StorageManager.addNote(makeNote(event.id, { title: `Note ${i}`, body: 'Content '.repeat(100) }));
+    }
+    const res = await StorageManager.vacuumDatabase();
+    expect(res).toBeDefined();
+    expect(res.originalSizeBytes).toBeGreaterThan(0);
+    expect(res.compactedSizeBytes).toBeGreaterThan(0);
+    expect(typeof res.bytesReclaimed).toBe('number');
+  });
+});
+
+describe('CloudSyncEngine offline sync queue', () => {
+  it('enqueues, retrieves, and clears sync requests', async () => {
+    const { CloudSyncEngine } = await import('./cloudSync');
+    CloudSyncEngine.clearSyncQueue();
+    expect(CloudSyncEngine.getSyncQueue()).toEqual([]);
+
+    const item = CloudSyncEngine.enqueueSync(['instant_vault'], 'Network offline test');
+    expect(item).toBeDefined();
+    expect(item.providers).toContain('instant_vault');
+
+    const queue = CloudSyncEngine.getSyncQueue();
+    expect(queue).toHaveLength(1);
+    expect(queue[0].id).toBe(item.id);
+
+    CloudSyncEngine.removeFromSyncQueue(item.id);
+    expect(CloudSyncEngine.getSyncQueue()).toHaveLength(0);
+
+    CloudSyncEngine.enqueueSync(['webdav'], 'Second test');
+    expect(CloudSyncEngine.getSyncQueue()).toHaveLength(1);
+    CloudSyncEngine.clearSyncQueue();
+    expect(CloudSyncEngine.getSyncQueue()).toHaveLength(0);
+  });
 });

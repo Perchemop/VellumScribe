@@ -42,6 +42,7 @@ import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
+import { NativeBridge } from '../lib/nativeBridge';
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -320,12 +321,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   };
 
-  const handleSetReminder = (datetime: string) => {
+  const handleSetReminder = async (datetime: string) => {
     setReminderAt(datetime);
-    if (datetime && typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => {});
+    if (datetime) {
+      const scheduledDate = new Date(datetime);
+      if (scheduledDate.getTime() > Date.now()) {
+        await NativeBridge.scheduleNoteReminder(
+          note.id,
+          title || note.title || 'Untitled Note',
+          body || note.body || '',
+          scheduledDate
+        );
       }
+    } else {
+      await NativeBridge.cancelNoteReminder(note.id);
     }
     const updated = StorageManager.updateNote(note.id, { reminder_at: datetime || undefined });
     if (updated) onNoteUpdated(updated);
