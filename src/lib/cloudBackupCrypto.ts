@@ -47,7 +47,7 @@ export class CloudBackupCrypto {
       try {
         const cs = new CompressionStream('gzip');
         const writer = cs.writable.getWriter();
-        writer.write(data);
+        writer.write(data as any);
         writer.close();
 
         const chunks: Uint8Array[] = [];
@@ -82,7 +82,7 @@ export class CloudBackupCrypto {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
-        writer.write(data);
+        writer.write(data as any);
         writer.close();
 
         const chunks: Uint8Array[] = [];
@@ -128,7 +128,7 @@ export class CloudBackupCrypto {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: fromHex(saltHex),
+        salt: fromHex(saltHex) as any,
         iterations: PBKDF2_ITERATIONS,
         hash: 'SHA-256',
       },
@@ -156,7 +156,7 @@ export class CloudBackupCrypto {
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
-      compressedBytes
+      compressedBytes as any
     );
 
     const envelope: EncryptedCloudBackupEnvelope = {
@@ -216,9 +216,9 @@ export class CloudBackupCrypto {
     let decryptedBuffer: ArrayBuffer;
     try {
       decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as BufferSource },
+        { name: 'AES-GCM', iv: iv as any },
         key,
-        ciphertext as BufferSource
+        ciphertext as any
       );
     } catch (e: any) {
       throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');

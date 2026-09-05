@@ -30,6 +30,8 @@ import {
   ShieldCheck,
   FileCheck,
   ArrowDownToLine,
+  Server,
+  Lock,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
@@ -146,6 +148,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isRestoringBackupId, setIsRestoringBackupId] = useState<string | null>(null);
   const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
   const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() => CloudSyncEngine.getSyncQueue());
+  const [serverProvidersConfig, setServerProvidersConfig] = useState<Record<string, { hasOAuthEnv?: boolean; isConfigured?: boolean }>>({});
+
+  React.useEffect(() => {
+    CloudSyncEngine.fetchConfig()
+      .then((cfg) => {
+        if (cfg?.providers) {
+          setServerProvidersConfig(cfg.providers);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // AI State
   const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
@@ -841,13 +854,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 <ChevronRight className="w-3 h-3" />
                               </button>
                             </>
-                          ) : (
+                          ) : providerKey === 'instant_vault' ? (
                             <>
                               <button
                                 id={`quick-connect-btn-${providerKey}`}
                                 onClick={() => handleQuickConnect(providerKey)}
                                 disabled={isConnecting}
-                                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50"
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                               >
                                 {isConnecting ? (
                                   <>
@@ -856,8 +869,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                   </>
                                 ) : (
                                   <>
-                                    <Zap className="w-3 h-3 text-amber-400 fill-current" />
-                                    <span>Connect Destination</span>
+                                    <Zap className="w-3 h-3 text-amber-300 fill-current" />
+                                    <span>1-Click Connect</span>
                                   </>
                                 )}
                               </button>
@@ -868,6 +881,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 title="Connection Details"
                               >
                                 <ExternalLink className="w-3 h-3" />
+                              </button>
+                            </>
+                          ) : providerKey === 'nextcloud' || providerKey === 'webdav' ? (
+                            <>
+                              <button
+                                id={`configure-provider-btn-${providerKey}`}
+                                onClick={() => setSelectedProviderForConnect(providerKey)}
+                                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Server className="w-3 h-3" />
+                                <span>Configure Server</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                id={`configure-oauth-btn-${providerKey}`}
+                                onClick={() => setSelectedProviderForConnect(providerKey)}
+                                className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <Lock className="w-3 h-3 text-zinc-400" />
+                                <span>
+                                  {serverProvidersConfig[providerKey]?.hasOAuthEnv ? 'Authorize OAuth' : 'OAuth Not Configured'}
+                                </span>
                               </button>
                             </>
                           )}

@@ -208,7 +208,7 @@ export class SqliteEngine {
         }
         return file;
       },
-      ...(wasmBinary ? { wasmBinary } : {}),
+      ...(wasmBinary ? { wasmBinary: wasmBinary as any } : {}),
       printErr: (msg: string) => {
         if (
           typeof msg === 'string' &&
