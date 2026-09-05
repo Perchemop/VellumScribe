@@ -97,7 +97,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
   const handleExportSqlite = () => {
     try {
       const binary = StorageManager.exportSqliteBinary();
-      const blob = new Blob([binary], { type: 'application/x-sqlite3' });
+      const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

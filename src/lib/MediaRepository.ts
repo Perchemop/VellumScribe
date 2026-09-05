@@ -178,7 +178,7 @@ export class SecureMediaRepository {
       if (envelope.magic !== 'vellum_enc_v1') return null;
       const decrypted = await decryptBinaryPayloadWithKey(envelope.data, envelope.iv, cryptoKey);
       if (!decrypted) return null;
-      return new Blob([decrypted], { type: envelope.mimeType });
+      return new Blob([decrypted as any], { type: envelope.mimeType });
     } catch (e) {
       return null;
     }

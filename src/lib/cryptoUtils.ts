@@ -303,7 +303,7 @@ export async function encryptBinaryPayloadWithKey(payload: Uint8Array, key: Cryp
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    payload
+    payload as any
   );
   return {
     iv: toHex(iv),
@@ -316,9 +316,9 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
     const iv = fromHex(ivHex);
     const ciphertext = fromHex(encryptedDataHex);
     const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as BufferSource },
+      { name: 'AES-GCM', iv: iv as any },
       key,
-      ciphertext as BufferSource
+      ciphertext as any
     );
     return new Uint8Array(decryptedBuffer);
   } catch (e) {

@@ -1478,7 +1478,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
           Authorization: account.webdavAuth,
           "Content-Type": "application/octet-stream",
         },
-        body: buffer,
+        body: buffer as any,
       });
       if (!putRes.ok && putRes.status !== 201 && putRes.status !== 204) {
         return res.status(502).json({
@@ -1696,7 +1696,7 @@ app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
 });
 
 // Explicit 404 handler for unmatched /api/* routes (prevents falling through to SPA HTML)
-app.all("/api/*", (req, res) => {
+app.all("/api/*all", (req, res) => {
   res.status(404).json({
     error: "API route not found",
     path: req.originalUrl || req.path,
@@ -1714,7 +1714,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*all", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
