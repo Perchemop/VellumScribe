@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
@@ -8,8 +9,60 @@ import { createServer as createViteServer } from "vite";
 dotenv.config();
 
 const app = express();
-// Respect Cloud Run's injected $PORT while defaulting to 3000
+// Hardcoded to port 3000 per platform specifications
 const PORT = 3000;
+
+/**
+ * SSRF Guard: Validates user-supplied endpoints (Ollama, local Whisper, WebDAV)
+ * Blocks AWS/GCP/Azure metadata services, loopback (unless explicitly allowed for local daemons),
+ * and private RFC1918 addresses where forbidden.
+ */
+function validateSafeUrl(urlStr: string, options: { allowLocalhost?: boolean } = {}): { valid: boolean; error?: string; parsed?: URL } {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { valid: false, error: "Invalid URL scheme. Only http: and https: protocols are permitted." };
+    }
+    const host = parsed.hostname.toLowerCase();
+
+    // Block cloud metadata services and instance endpoints
+    if (
+      host === "169.254.169.254" ||
+      host === "metadata.google.internal" ||
+      host.endsWith(".metadata.google.internal") ||
+      host === "instance-data" ||
+      host === "100.100.100.200" ||
+      host.startsWith("169.254.")
+    ) {
+      return { valid: false, error: "Access to cloud metadata endpoints is strictly forbidden." };
+    }
+
+    const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+    if (isLoopback) {
+      if (!options.allowLocalhost) {
+        return { valid: false, error: "Loopback addresses (localhost/127.0.0.1) are not permitted for this resource." };
+      }
+      return { valid: true, parsed };
+    }
+
+    // Check IP literal addresses for internal private networks
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+      const parts = host.split(".").map(Number);
+      const [a, b] = parts;
+      if (a === 10) return { valid: false, error: "Private RFC1918 networks (10.0.0.0/8) are not permitted." };
+      if (a === 172 && b >= 16 && b <= 31) return { valid: false, error: "Private RFC1918 networks (172.16.0.0/12) are not permitted." };
+      if (a === 192 && b === 168) return { valid: false, error: "Private RFC1918 networks (192.168.0.0/16) are not permitted." };
+      if (a === 127) return { valid: false, error: "Loopback networks are not permitted." };
+      if (a === 0) return { valid: false, error: "0.0.0.0 network is not permitted." };
+      if (a === 169 && b === 254) return { valid: false, error: "Link-local addresses (169.254.0.0/16) are not permitted." };
+      if (a >= 224) return { valid: false, error: "Multicast or reserved IP ranges are not permitted." };
+    }
+
+    return { valid: true, parsed };
+  } catch (err: any) {
+    return { valid: false, error: `Malformed URL: ${err?.message || "Invalid syntax"}` };
+  }
+}
 
 // Trust proxy headers behind Cloud Run / reverse proxies so req.ip reflects actual client IP
 app.set("trust proxy", 1);
@@ -782,7 +835,12 @@ app.post("/api/deepgram/transcribe", async (req, res) => {
 // 6. Local Ollama Tags & Probe Proxy
 app.post("/api/ollama/tags", async (req, res) => {
   try {
-    const endpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const rawEndpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+    const endpoint = rawEndpoint;
     const response = await fetch(`${endpoint}/api/tags`, {
       method: "GET",
       signal: AbortSignal.timeout(4000),
@@ -811,7 +869,12 @@ app.post("/api/ollama/tags", async (req, res) => {
 // 7. Local Ollama Generation Proxy
 app.post("/api/ollama/generate", async (req, res) => {
   try {
-    const endpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const rawEndpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
+    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const endpoint = rawEndpoint;
     const { prompt, model = "llama3.2", system } = req.body;
 
     const response = await fetch(`${endpoint}/api/generate`, {
@@ -847,7 +910,12 @@ app.post("/api/ollama/generate", async (req, res) => {
 // 8. Local Whisper Server Proxy
 app.post("/api/local-whisper/verify", async (req, res) => {
   try {
-    const endpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").replace(/\/+$/, "");
+    const rawEndpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").replace(/\/+$/, "");
+    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
+    if (!validation.valid) {
+      return res.status(400).json({ success: false, error: validation.error });
+    }
+    const endpoint = rawEndpoint;
     const testUrl = endpoint.replace(/\/transcriptions$/, "/models");
     const response = await fetch(testUrl, {
       method: "GET",
@@ -875,7 +943,12 @@ app.post("/api/local-whisper/verify", async (req, res) => {
 
 app.post("/api/local-whisper/transcribe", async (req, res) => {
   try {
-    const endpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").trim();
+    const rawEndpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").trim();
+    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const endpoint = rawEndpoint;
     const { audioBase64, mimeType = "audio/webm" } = req.body;
 
     if (!audioBase64) {
@@ -967,7 +1040,94 @@ interface SessionCloudData {
 const sessionStores = new Map<string, SessionCloudData>();
 const chunkSessionsStore = new Map<string, ChunkSession>();
 
+interface OAuthStateRecord {
+  sessionId: string;
+  provider: string;
+  createdAt: number;
+  expiresAt: number;
+}
+const pendingOAuthStates = new Map<string, OAuthStateRecord>();
+
 const MAX_BACKUP_RETENTION = 10;
+
+// Durable Local Disk Storage for Backups (persists across server restarts)
+const VAULT_STORAGE_DIR = path.join(process.cwd(), "data", "cloud_vault");
+try {
+  if (!fs.existsSync(VAULT_STORAGE_DIR)) {
+    fs.mkdirSync(VAULT_STORAGE_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn("Failed to create vault storage directory:", e);
+}
+
+function sanitizeSessionId(sessionId: string): string {
+  return sessionId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64) || "default_session";
+}
+
+function getVaultSessionDir(sessionId: string): string {
+  const safeSession = sanitizeSessionId(sessionId);
+  const dir = path.join(VAULT_STORAGE_DIR, safeSession);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+function persistBackupToDisk(sessionId: string, backup: CloudBackupRecord): void {
+  try {
+    const dir = getVaultSessionDir(sessionId);
+    const safeBackupId = backup.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const metaFile = path.join(dir, `${safeBackupId}.json`);
+    const binFile = path.join(dir, `${safeBackupId}.bin`);
+    fs.writeFileSync(binFile, backup.buffer);
+    fs.writeFileSync(
+      metaFile,
+      JSON.stringify({
+        id: backup.id,
+        provider: backup.provider,
+        filename: backup.filename,
+        size: backup.size,
+        createdAt: backup.createdAt,
+        checksum: backup.checksum,
+        noteCount: backup.noteCount,
+      })
+    );
+  } catch (e) {
+    console.error("Failed to persist backup to durable disk storage:", e);
+  }
+}
+
+function loadPersistedBackupsFromDisk(sessionId: string): CloudBackupRecord[] {
+  try {
+    const dir = getVaultSessionDir(sessionId);
+    if (!fs.existsSync(dir)) return [];
+    const files = fs.readdirSync(dir);
+    const metaFiles = files.filter((f) => f.endsWith(".json"));
+    const backups: CloudBackupRecord[] = [];
+    for (const mf of metaFiles) {
+      try {
+        const metaPath = path.join(dir, mf);
+        const meta = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+        const safeBackupId = meta.id.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const binPath = path.join(dir, `${safeBackupId}.bin`);
+        if (fs.existsSync(binPath)) {
+          const buffer = fs.readFileSync(binPath);
+          backups.push({
+            ...meta,
+            buffer,
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to read persisted backup metadata:", mf, e);
+      }
+    }
+    backups.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return backups;
+  } catch (e) {
+    console.warn("Failed to list persisted backups:", e);
+    return [];
+  }
+}
 
 function getSessionId(req: express.Request): string {
   const header = req.headers["x-session-id"];
@@ -984,9 +1144,17 @@ function getSessionId(req: express.Request): string {
 function getSessionStore(sessionId: string): SessionCloudData {
   let store = sessionStores.get(sessionId);
   if (!store) {
+    // Rehydrate from disk on first access
+    const diskBackups = loadPersistedBackupsFromDisk(sessionId);
+    const backupsMap = new Map<string, CloudBackupRecord[]>();
+    for (const b of diskBackups) {
+      const list = backupsMap.get(b.provider) || [];
+      list.push(b);
+      backupsMap.set(b.provider, list);
+    }
     store = {
       accounts: new Map(),
-      backups: new Map(),
+      backups: backupsMap,
       lastActive: Date.now(),
     };
     sessionStores.set(sessionId, store);
@@ -995,12 +1163,17 @@ function getSessionStore(sessionId: string): SessionCloudData {
   return store;
 }
 
-// Periodic cleanup of stale chunk upload sessions (older than 30 mins)
+// Periodic cleanup of stale chunk upload sessions and expired OAuth states
 setInterval(() => {
   const now = Date.now();
   for (const [id, session] of chunkSessionsStore.entries()) {
     if (now - session.createdAt > 30 * 60 * 1000) {
       chunkSessionsStore.delete(id);
+    }
+  }
+  for (const [state, record] of pendingOAuthStates.entries()) {
+    if (now > record.expiresAt) {
+      pendingOAuthStates.delete(state);
     }
   }
   for (const [id, store] of sessionStores.entries()) {
@@ -1146,6 +1319,12 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
     if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
       cleanUrl = "https://" + cleanUrl;
     }
+
+    const validation = validateSafeUrl(cleanUrl, { allowLocalhost: false });
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+
     const parsed = new URL(cleanUrl);
     let targetPath = (remotePath && typeof remotePath === "string" ? remotePath.trim() : "").replace(/^\/+/, "");
     if (!targetPath) {
@@ -1233,8 +1412,18 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
       displayName: "Vellum Encrypted Vault",
       connectedAt: new Date().toISOString(),
     });
-    return res.redirect("/?cloud_connected=instant_vault");
+    return res.redirect("/?cloud=connected&provider=instant_vault&cloud_connected=instant_vault");
   }
+
+  // Create cryptographic CSRF state token tied to session
+  const randomNonce = crypto.randomBytes(24).toString("hex");
+  const state = `${sessionId}:${randomNonce}`;
+  pendingOAuthStates.set(state, {
+    sessionId,
+    provider,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
 
   if (provider === "google_drive") {
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -1244,7 +1433,6 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
       return res.redirect("/?cloud_error=" + encodeURIComponent("Google Drive OAuth is not configured on the server. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET."));
     }
 
-    const state = `${sessionId}:${crypto.randomBytes(12).toString("hex")}`;
     const scopes = encodeURIComponent(
       "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
     );
@@ -1263,7 +1451,6 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
       return res.redirect("/?cloud_error=" + encodeURIComponent("Microsoft OneDrive OAuth is not configured on the server. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET."));
     }
 
-    const state = `${sessionId}:${crypto.randomBytes(12).toString("hex")}`;
     const scopes = encodeURIComponent("Files.ReadWrite.AppFolder User.Read offline_access");
     const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
       redirectUri
@@ -1288,7 +1475,16 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
     return res.redirect("/?cloud_error=Missing_authorization_code");
   }
 
-  const sessionId = typeof state === "string" && state.includes(":") ? state.split(":")[0] : getSessionId(req);
+  if (!state || typeof state !== "string") {
+    return res.redirect("/?cloud_error=" + encodeURIComponent("Missing OAuth state parameter"));
+  }
+
+  const stateRecord = pendingOAuthStates.get(state);
+  if (!stateRecord || stateRecord.provider !== provider || Date.now() > stateRecord.expiresAt) {
+    return res.redirect("/?cloud_error=" + encodeURIComponent("Invalid or expired OAuth state parameter (CSRF detected)"));
+  }
+  pendingOAuthStates.delete(state); // Single-use consumption
+  const sessionId = stateRecord.sessionId;
   const session = getSessionStore(sessionId);
 
   const host = req.get("host") || "localhost:3000";
@@ -1349,7 +1545,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       });
 
-      return res.redirect("/?cloud_connected=google_drive");
+      return res.redirect("/?cloud=connected&provider=google_drive&cloud_connected=google_drive");
     }
 
     if (provider === "microsoft") {
@@ -1404,7 +1600,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       });
 
-      return res.redirect("/?cloud_connected=microsoft");
+      return res.redirect("/?cloud=connected&provider=microsoft&cloud_connected=microsoft");
     }
 
     res.redirect("/?cloud_error=Unsupported_provider");
@@ -1472,6 +1668,11 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
   if (account && (provider === "nextcloud" || provider === "webdav") && account.serverUrl && account.webdavAuth) {
     try {
       const uploadUrl = new URL(filename, account.serverUrl).toString();
+      const urlValidation = validateSafeUrl(uploadUrl, { allowLocalhost: false });
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: urlValidation.error });
+      }
+
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
@@ -1513,6 +1714,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
     list = list.slice(0, MAX_BACKUP_RETENTION);
   }
   session.backups.set(provider, list);
+  persistBackupToDisk(sessionId, newBackup);
 
   res.json({
     success: true,
@@ -1626,6 +1828,11 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
   if (account && (chunkSession.provider === "nextcloud" || chunkSession.provider === "webdav") && account.serverUrl && account.webdavAuth) {
     try {
       const uploadUrl = new URL(chunkSession.filename, account.serverUrl).toString();
+      const urlValidation = validateSafeUrl(uploadUrl, { allowLocalhost: false });
+      if (!urlValidation.valid) {
+        return res.status(400).json({ error: urlValidation.error });
+      }
+
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
@@ -1663,6 +1870,7 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
     list = list.slice(0, MAX_BACKUP_RETENTION);
   }
   session.backups.set(chunkSession.provider, list);
+  persistBackupToDisk(sessionId, newBackup);
 
   chunkSessionsStore.delete(uploadId);
 
@@ -1683,7 +1891,13 @@ app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
   const list = session.backups.get(provider) || [];
-  const backup = list.find((b) => b.id === backupId);
+  let backup = list.find((b) => b.id === backupId);
+
+  // If not found in memory, rehydrate from durable disk storage
+  if (!backup) {
+    const diskList = loadPersistedBackupsFromDisk(sessionId);
+    backup = diskList.find((b) => b.id === backupId && b.provider === provider);
+  }
 
   if (!backup) {
     return res.status(404).json({ error: "Backup archive not found in your session." });

@@ -360,6 +360,52 @@ export class SqliteRepository {
     });
   }
 
+  /**
+   * Fast field-specific updater for editor typing.
+   * Updates only title and/or body in-place without expensive checklist or tag recalculation.
+   */
+  public static updateNoteText(id: number, title?: string, body?: string): NoteRecord | null {
+    const existing = this.getNoteById(id);
+    if (!existing) return null;
+
+    const newTitle = title !== undefined ? title : existing.title;
+    const newBody = body !== undefined ? body : existing.body;
+    const now = new Date().toISOString();
+
+    SqliteEngine.transaction(() => {
+      SqliteEngine.run(
+        'UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?',
+        [newTitle, newBody, now, id]
+      );
+
+      if (!existing.is_locked) {
+        try {
+          const chkText = (existing.checklist_items || []).map((c) => c.text).join(' ');
+          const tagText = (existing.tags || []).join(' ');
+          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+            'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
+            [id]
+          );
+          const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
+          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
+          SqliteEngine.run(
+            'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
+            [id, newTitle, newBody, chkText, ocrText, tagText]
+          );
+        } catch (ftsErr) {
+          AppLogger.warn('SqliteRepository', 'FTS quick-sync warning', ftsErr);
+        }
+      }
+    });
+
+    return {
+      ...existing,
+      title: newTitle,
+      body: newBody,
+      updated_at: now,
+    };
+  }
+
   public static deleteNote(id: number): void {
     SqliteEngine.transaction(() => {
       SqliteEngine.run('DELETE FROM notes WHERE id = ?', [id]);
@@ -658,11 +704,13 @@ export class SqliteRepository {
     return SqliteEngine.transaction(() => {
       let eventId = evt.id;
       if (eventId && eventId > 0) {
+        // Must use UPDATE rather than INSERT OR REPLACE.
+        // SQLite's REPLACE delete-then-insert semantics triggers FOREIGN KEY ON DELETE SET NULL on notes.event_id!
         SqliteEngine.run(
-          `INSERT OR REPLACE INTO events (id, title, event_date, description, location, category, color, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `UPDATE events
+           SET title = ?, event_date = ?, description = ?, location = ?, category = ?, color = ?, updated_at = ?
+           WHERE id = ?`,
           [
-            eventId,
             evt.title || 'Untitled',
             evt.event_date || new Date().toISOString().slice(0, 10),
             evt.description || null,
@@ -670,7 +718,7 @@ export class SqliteRepository {
             evt.category || null,
             evt.color || null,
             Date.now(),
-            Date.now(),
+            eventId,
           ]
         );
       } else {

@@ -192,7 +192,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         }
       });
     } else {
-      const updated = StorageManager.updateNote(note.id, { body: newBody });
+      // High-performance field-specific update without full table re-hydration
+      const updated = StorageManager.updateNoteText(note.id, title, newBody);
       if (updated) {
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('stored'), 1800);
@@ -204,7 +205,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     setSaveStatus('saving');
-    const updated = StorageManager.updateNote(note.id, { title: newTitle });
+    const updated = StorageManager.updateNoteText(note.id, newTitle, body);
     if (updated) {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('stored'), 1800);
@@ -1107,7 +1108,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           {saveStatus === 'saved' && (
             <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-sans">
               <CheckSquare className="w-3 h-3" />
-              Saved
+              Saved on device
             </span>
           )}
         </div>
@@ -1116,10 +1117,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <div
             id="storage-status-indicator"
             className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5 font-sans"
-            title="All notes and attached media are stored locally in browser offline storage (SQLite)"
+            title="All notes and media remain private and stored directly on this device"
           >
             <HardDrive className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
-            <span>Offline — stored locally in SQLite</span>
+            <span>Stored on this device</span>
           </div>
 
           <button

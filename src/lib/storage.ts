@@ -329,6 +329,21 @@ export class StorageManager {
     return updated;
   }
 
+  /**
+   * Fast field-specific updater for editor typing.
+   * Updates only title and/or body in-place without triggering full relational joins.
+   */
+  public static updateNoteText(id: number, title?: string, body?: string): NoteRecord | null {
+    const updated = SqliteRepository.updateNoteText(id, title, body);
+    if (updated && this.notesCache) {
+      const idx = this.notesCache.findIndex((n) => n.id === id);
+      if (idx !== -1) {
+        this.notesCache[idx] = updated;
+      }
+    }
+    return updated;
+  }
+
   public static archiveNote(id: number): NoteRecord | null {
     return this.updateNote(id, {
       status: 'archived',
