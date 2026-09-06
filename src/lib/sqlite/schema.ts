@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export const SCHEMA_V1 = `
 -- Workspace Metadata
@@ -171,6 +171,19 @@ export const MIGRATIONS = [
     sql: `
       CREATE INDEX IF NOT EXISTS idx_notes_is_pinned ON notes(is_pinned);
       CREATE INDEX IF NOT EXISTS idx_notes_is_locked ON notes(is_locked);
+    `,
+  },
+  {
+    version: 3,
+    description: 'Verified query plan composite indices and SQLite FTS full-text search table',
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_notes_event_status ON notes(event_id, status);
+      CREATE INDEX IF NOT EXISTS idx_notes_status_updated ON notes(status, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_notes_reminder ON notes(reminder_at);
+      CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_name);
+      CREATE INDEX IF NOT EXISTS idx_recordings_created ON recordings(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_ocr_scans_created ON ocr_scans(created_at DESC);
+      CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts4(note_id, title, body, checklist_text, ocr_text, tags);
     `,
   },
 ];

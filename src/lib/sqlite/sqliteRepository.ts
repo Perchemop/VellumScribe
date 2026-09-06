@@ -1,5 +1,6 @@
 import { SqliteEngine } from './sqliteEngine';
 import { AppLogger } from '../logger';
+import { CURRENT_SCHEMA_VERSION } from './schema';
 import {
   NoteRecord,
   EventRecord,
@@ -31,9 +32,104 @@ export interface SearchOptions {
   status?: 'active' | 'archived' | 'trash';
   eventId?: number;
   includeLocked?: boolean;
+  filterType?: 'all' | 'text' | 'checklist' | 'sketch';
+  dateFrom?: string;
+  dateTo?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SearchResult {
+  notes: NoteRecord[];
+  totalCount: number;
+}
+
+export interface NotesPageOptions {
+  page?: number;
+  pageSize?: number;
+  status?: 'active' | 'archived' | 'trash';
+  eventId?: number | null;
+  tag?: string | null;
+  filterType?: 'all' | 'text' | 'checklist' | 'sketch';
+  searchQuery?: string;
+  sortBy?: 'updated_at' | 'created_at' | 'title';
+  sortDirection?: 'ASC' | 'DESC';
+  includeLocked?: boolean;
+}
+
+export interface NotesPageResult {
+  notes: NoteRecord[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasMore: boolean;
 }
 
 export class SqliteRepository {
+  /**
+   * Efficient batch hydrator for note items (checklists and tags)
+   * Prevents full database loading and eliminates N+1 query overhead
+   */
+  private static populateNotesBatch(noteRows: any[]): NoteRecord[] {
+    if (!noteRows || noteRows.length === 0) return [];
+    const noteIds = noteRows.map((r) => r.id);
+    const placeholders = noteIds.map(() => '?').join(',');
+
+    // Fetch checklists only for this batch
+    const chkRows = SqliteEngine.query<any>(
+      `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
+      noteIds
+    );
+    const chkMap = new Map<number, ChecklistItem[]>();
+    for (const row of chkRows) {
+      if (!chkMap.has(row.note_id)) chkMap.set(row.note_id, []);
+      chkMap.get(row.note_id)!.push({
+        id: row.id,
+        text: row.text,
+        completed: Boolean(row.completed),
+      });
+    }
+
+    // Fetch tags only for this batch
+    const tagRows = SqliteEngine.query<any>(
+      `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
+      noteIds
+    );
+    const tagMap = new Map<number, string[]>();
+    for (const row of tagRows) {
+      if (!tagMap.has(row.note_id)) tagMap.set(row.note_id, []);
+      tagMap.get(row.note_id)!.push(row.tag_name);
+    }
+
+    return noteRows.map((row) => ({
+      id: row.id,
+      event_id: row.event_id || 0,
+      title: row.title || '',
+      body: row.body || '',
+      note_type: row.note_type || 'text',
+      color: row.color || undefined,
+      is_pinned: Boolean(row.is_pinned),
+      is_locked: Boolean(row.is_locked),
+      pin_hash: row.pin_hash || undefined,
+      pin_salt: row.pin_salt || undefined,
+      encrypted_payload: row.encrypted_payload || undefined,
+      status: row.status || 'active',
+      archived_at: row.archived_at || undefined,
+      trashed_at: row.trashed_at || undefined,
+      reminder_at: row.reminder_at || undefined,
+      location_name: row.location_name || undefined,
+      latitude: row.latitude || undefined,
+      longitude: row.longitude || undefined,
+      version: row.version || 1,
+      sketch_media_key: row.sketch_media_key || undefined,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      checklist_items: chkMap.get(row.id) || [],
+      tags: tagMap.get(row.id) || [],
+    }));
+  }
+
   // --- NOTES CRUD ---
 
   public static getAllNotes(): NoteRecord[] {
@@ -43,181 +139,231 @@ export class SqliteRepository {
       LEFT JOIN events e ON n.event_id = e.id
       ORDER BY n.is_pinned DESC, n.updated_at DESC
     `);
-
-    // Fetch all checklists
-    const allChecklists = SqliteEngine.query<{ id: string; note_id: number; text: string; completed: number; position: number }>(`
-      SELECT * FROM checklists ORDER BY note_id, position ASC
-    `);
-    const checklistsByNote: Record<number, ChecklistItem[]> = {};
-    for (const chk of allChecklists) {
-      if (!checklistsByNote[chk.note_id]) checklistsByNote[chk.note_id] = [];
-      checklistsByNote[chk.note_id].push({
-        id: chk.id,
-        text: chk.text,
-        completed: Boolean(chk.completed),
-      });
-    }
-
-    // Fetch all tags
-    const allTags = SqliteEngine.query<{ note_id: number; tag_name: string }>(`
-      SELECT note_id, tag_name FROM note_tags
-    `);
-    const tagsByNote: Record<number, string[]> = {};
-    for (const t of allTags) {
-      if (!tagsByNote[t.note_id]) tagsByNote[t.note_id] = [];
-      tagsByNote[t.note_id].push(t.tag_name);
-    }
-
-    return rawNotes.map((row) => ({
-      id: row.id,
-      event_id: row.event_id || 0,
-      title: row.title || '',
-      body: row.body || '',
-      note_type: row.note_type || 'text',
-      color: row.color || undefined,
-      is_pinned: Boolean(row.is_pinned),
-      is_locked: Boolean(row.is_locked),
-      pin_hash: row.pin_hash || undefined,
-      pin_salt: row.pin_salt || undefined,
-      encrypted_payload: row.encrypted_payload || undefined,
-      status: row.status || 'active',
-      archived_at: row.archived_at || undefined,
-      trashed_at: row.trashed_at || undefined,
-      reminder_at: row.reminder_at || undefined,
-      location_name: row.location_name || undefined,
-      latitude: row.latitude || undefined,
-      longitude: row.longitude || undefined,
-      version: row.version || 1,
-      sketch_media_key: row.sketch_media_key || undefined,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      checklist_items: checklistsByNote[row.id] || [],
-      tags: tagsByNote[row.id] || [],
-    }));
+    return this.populateNotesBatch(rawNotes);
   }
 
   public static getNoteById(id: number): NoteRecord | null {
     const rawNotes = SqliteEngine.query<any>('SELECT * FROM notes WHERE id = ?', [id]);
     if (rawNotes.length === 0) return null;
-    const row = rawNotes[0];
-
-    const checklists = SqliteEngine.query<any>(
-      'SELECT * FROM checklists WHERE note_id = ? ORDER BY position ASC',
-      [id]
-    ).map((chk) => ({
-      id: chk.id,
-      text: chk.text,
-      completed: Boolean(chk.completed),
-    }));
-
-    const tags = SqliteEngine.query<any>(
-      'SELECT tag_name FROM note_tags WHERE note_id = ?',
-      [id]
-    ).map((t) => t.tag_name);
-
-    return {
-      id: row.id,
-      event_id: row.event_id || 0,
-      title: row.title || '',
-      body: row.body || '',
-      note_type: row.note_type || 'text',
-      color: row.color || undefined,
-      is_pinned: Boolean(row.is_pinned),
-      is_locked: Boolean(row.is_locked),
-      pin_hash: row.pin_hash || undefined,
-      pin_salt: row.pin_salt || undefined,
-      encrypted_payload: row.encrypted_payload || undefined,
-      status: row.status || 'active',
-      archived_at: row.archived_at || undefined,
-      trashed_at: row.trashed_at || undefined,
-      reminder_at: row.reminder_at || undefined,
-      location_name: row.location_name || undefined,
-      latitude: row.latitude || undefined,
-      longitude: row.longitude || undefined,
-      version: row.version || 1,
-      sketch_media_key: row.sketch_media_key || undefined,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      checklist_items: checklists,
-      tags,
-    };
+    const populated = this.populateNotesBatch(rawNotes);
+    return populated.length > 0 ? populated[0] : null;
   }
 
-  public static saveNote(note: NoteRecord): void {
-    SqliteEngine.transaction(() => {
-      // 1. Insert/Update Note Record
-      SqliteEngine.run(
-        `INSERT OR REPLACE INTO notes (
-           id, event_id, title, body, note_type, color, is_pinned, is_locked,
-           pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
-           reminder_at, location_name, latitude, longitude, version,
-           sketch_media_key, created_at, updated_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          note.id,
-          note.event_id || null,
-          note.title || '',
-          note.body || '',
-          note.note_type || 'text',
-          note.color || null,
-          note.is_pinned ? 1 : 0,
-          note.is_locked ? 1 : 0,
-          note.pin_hash || null,
-          note.pin_salt || null,
-          note.encrypted_payload || null,
-          note.status || 'active',
-          note.archived_at || null,
-          note.trashed_at || null,
-          note.reminder_at || null,
-          note.location_name || null,
-          note.latitude || null,
-          note.longitude || null,
-          note.version || 1,
-          note.sketch_media_key || null,
-          note.created_at || new Date().toISOString(),
-          note.updated_at || new Date().toISOString(),
-        ]
-      );
+  public static saveNote(note: NoteRecord): NoteRecord {
+    return SqliteEngine.transaction(() => {
+      let noteId = note.id;
+      const isExisting =
+        noteId && noteId > 0
+          ? SqliteEngine.query<{ id: number }>('SELECT id FROM notes WHERE id = ?', [noteId]).length > 0
+          : false;
 
-      // 2. Replace checklists
-      SqliteEngine.run('DELETE FROM checklists WHERE note_id = ?', [note.id]);
+      const now = new Date().toISOString();
+      const createdAt = note.created_at || now;
+      const updatedAt = note.updated_at || now;
+
+      if (isExisting) {
+        SqliteEngine.run(
+          `UPDATE notes SET
+            event_id = ?, title = ?, body = ?, note_type = ?, color = ?,
+            is_pinned = ?, is_locked = ?, pin_hash = ?, pin_salt = ?,
+            encrypted_payload = ?, status = ?, archived_at = ?, trashed_at = ?,
+            reminder_at = ?, location_name = ?, latitude = ?, longitude = ?,
+            version = ?, sketch_media_key = ?, updated_at = ?
+           WHERE id = ?`,
+          [
+            note.event_id || null,
+            note.title || '',
+            note.body || '',
+            note.note_type || 'text',
+            note.color || null,
+            note.is_pinned ? 1 : 0,
+            note.is_locked ? 1 : 0,
+            note.pin_hash || null,
+            note.pin_salt || null,
+            note.encrypted_payload || null,
+            note.status || 'active',
+            note.archived_at || null,
+            note.trashed_at || null,
+            note.reminder_at || null,
+            note.location_name || null,
+            note.latitude || null,
+            note.longitude || null,
+            note.version || 1,
+            note.sketch_media_key || null,
+            updatedAt,
+            noteId,
+          ]
+        );
+      } else {
+        if (noteId && noteId > 0) {
+          SqliteEngine.run(
+            `INSERT INTO notes (
+              id, event_id, title, body, note_type, color, is_pinned, is_locked,
+              pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
+              reminder_at, location_name, latitude, longitude, version,
+              sketch_media_key, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              noteId,
+              note.event_id || null,
+              note.title || '',
+              note.body || '',
+              note.note_type || 'text',
+              note.color || null,
+              note.is_pinned ? 1 : 0,
+              note.is_locked ? 1 : 0,
+              note.pin_hash || null,
+              note.pin_salt || null,
+              note.encrypted_payload || null,
+              note.status || 'active',
+              note.archived_at || null,
+              note.trashed_at || null,
+              note.reminder_at || null,
+              note.location_name || null,
+              note.latitude || null,
+              note.longitude || null,
+              note.version || 1,
+              note.sketch_media_key || null,
+              createdAt,
+              updatedAt,
+            ]
+          );
+        } else {
+          SqliteEngine.run(
+            `INSERT INTO notes (
+              event_id, title, body, note_type, color, is_pinned, is_locked,
+              pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
+              reminder_at, location_name, latitude, longitude, version,
+              sketch_media_key, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              note.event_id || null,
+              note.title || '',
+              note.body || '',
+              note.note_type || 'text',
+              note.color || null,
+              note.is_pinned ? 1 : 0,
+              note.is_locked ? 1 : 0,
+              note.pin_hash || null,
+              note.pin_salt || null,
+              note.encrypted_payload || null,
+              note.status || 'active',
+              note.archived_at || null,
+              note.trashed_at || null,
+              note.reminder_at || null,
+              note.location_name || null,
+              note.latitude || null,
+              note.longitude || null,
+              note.version || 1,
+              note.sketch_media_key || null,
+              createdAt,
+              updatedAt,
+            ]
+          );
+          noteId = SqliteEngine.getLastInsertId();
+        }
+      }
+
+      // 2. Targeted Checklists differential synchronization
+      const existingChecklists = SqliteEngine.query<{ id: string; text: string; completed: number; position: number }>(
+        'SELECT id, text, completed, position FROM checklists WHERE note_id = ?',
+        [noteId]
+      );
+      const existingChkMap = new Map(existingChecklists.map((c) => [c.id, c]));
+      const incomingChkIds = new Set<string>();
+
       if (note.checklist_items && note.checklist_items.length > 0) {
         for (let i = 0; i < note.checklist_items.length; i++) {
           const item = note.checklist_items[i];
-          SqliteEngine.run(
-            `INSERT INTO checklists (id, note_id, text, completed, position)
-             VALUES (?, ?, ?, ?, ?)`,
-            [item.id || `chk_${note.id}_${i}`, note.id, item.text, item.completed ? 1 : 0, i]
-          );
-        }
-      }
+          const chkId = item.id || `chk_${noteId}_${i}_${Date.now()}`;
+          incomingChkIds.add(chkId);
+          const existing = existingChkMap.get(chkId);
+          const completedNum = item.completed ? 1 : 0;
 
-      // 3. Replace tags
-      SqliteEngine.run('DELETE FROM note_tags WHERE note_id = ?', [note.id]);
-      if (note.tags && note.tags.length > 0) {
-        for (const tag of note.tags) {
-          const trimmed = tag.trim();
-          if (trimmed) {
-            SqliteEngine.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [trimmed]);
-            SqliteEngine.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [note.id, trimmed]);
+          if (existing) {
+            if (existing.text !== item.text || existing.completed !== completedNum || existing.position !== i) {
+              SqliteEngine.run(
+                'UPDATE checklists SET text = ?, completed = ?, position = ? WHERE id = ? AND note_id = ?',
+                [item.text, completedNum, i, chkId, noteId]
+              );
+            }
+          } else {
+            SqliteEngine.run(
+              'INSERT INTO checklists (id, note_id, text, completed, position) VALUES (?, ?, ?, ?, ?)',
+              [chkId, noteId, item.text, completedNum, i]
+            );
           }
         }
       }
+      // Delete removed checklists
+      for (const chk of existingChecklists) {
+        if (!incomingChkIds.has(chk.id)) {
+          SqliteEngine.run('DELETE FROM checklists WHERE id = ? AND note_id = ?', [chk.id, noteId]);
+        }
+      }
 
-      // 4. Record media association if sketch key present
+      // 3. Targeted Tags differential synchronization
+      const existingTags = SqliteEngine.query<{ tag_name: string }>(
+        'SELECT tag_name FROM note_tags WHERE note_id = ?',
+        [noteId]
+      ).map((t) => t.tag_name);
+      const existingTagSet = new Set(existingTags);
+      const incomingTagSet = new Set((note.tags || []).map((t) => t.trim()).filter(Boolean));
+
+      for (const tag of incomingTagSet) {
+        if (!existingTagSet.has(tag)) {
+          SqliteEngine.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tag]);
+          SqliteEngine.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [noteId, tag]);
+        }
+      }
+      for (const tag of existingTagSet) {
+        if (!incomingTagSet.has(tag)) {
+          SqliteEngine.run('DELETE FROM note_tags WHERE note_id = ? AND tag_name = ?', [noteId, tag]);
+        }
+      }
+
+      // 4. Synchronize FTS table notes_fts
+      try {
+        SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [noteId]);
+        if (!note.is_locked) {
+          const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
+          const tagText = Array.from(incomingTagSet).join(' ');
+          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+            'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
+            [noteId]
+          );
+          const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
+          SqliteEngine.run(
+            'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
+            [noteId, note.title || '', note.body || '', chkText, ocrText, tagText]
+          );
+        }
+      } catch (ftsErr) {
+        AppLogger.warn('SqliteRepository', 'FTS index sync warning', ftsErr);
+      }
+
+      // 5. Record media association if sketch key present
       if (note.sketch_media_key) {
         SqliteEngine.run(
           `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [note.sketch_media_key, note.id, 'sketch', 'image/png', 0, Date.now()]
+          [note.sketch_media_key, noteId, 'sketch', 'image/png', 0, Date.now()]
         );
       }
+
+      return {
+        ...note,
+        id: noteId,
+        created_at: createdAt,
+        updated_at: updatedAt,
+      };
     });
   }
 
   public static deleteNote(id: number): void {
     SqliteEngine.transaction(() => {
       SqliteEngine.run('DELETE FROM notes WHERE id = ?', [id]);
+      SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?', [id]);
       SqliteEngine.run('DELETE FROM checklists WHERE note_id = ?', [id]);
       SqliteEngine.run('DELETE FROM note_tags WHERE note_id = ?', [id]);
       SqliteEngine.run('DELETE FROM note_versions WHERE note_id = ?', [id]);
@@ -227,68 +373,270 @@ export class SqliteRepository {
     });
   }
 
-  // --- SQLITE-BACKED FULL-TEXT SEARCH ---
+  // --- SQLITE-BACKED FULL-TEXT SEARCH (FTS) ---
 
   public static searchNotes(options: SearchOptions): NoteRecord[] {
-    const { query, category, tag, status, eventId, includeLocked } = options;
-    const trimmedQuery = query.trim().toLowerCase();
+    return this.searchNotesWithCount(options).notes;
+  }
 
-    let sql = `
-      SELECT DISTINCT n.*
-      FROM notes n
-      LEFT JOIN events e ON n.event_id = e.id
-      LEFT JOIN note_tags nt ON n.id = nt.note_id
-      LEFT JOIN checklists c ON n.id = c.note_id
-      LEFT JOIN ocr_scans o ON n.id = o.note_id
-      WHERE 1=1
-    `;
+  public static searchNotesWithCount(options: SearchOptions): SearchResult {
+    const {
+      query,
+      category,
+      tag,
+      status = 'active',
+      eventId,
+      includeLocked = false,
+      filterType = 'all',
+      dateFrom,
+      dateTo,
+      limit = 50,
+      offset = 0,
+    } = options;
+
+    const trimmed = (query || '').trim();
     const params: any[] = [];
+    let whereClause = '1=1';
 
     if (status) {
-      sql += ' AND n.status = ?';
+      whereClause += ' AND n.status = ?';
       params.push(status);
-    } else {
-      sql += " AND (n.status = 'active' OR n.status IS NULL)";
     }
 
     if (eventId) {
-      sql += ' AND n.event_id = ?';
+      whereClause += ' AND n.event_id = ?';
       params.push(eventId);
     }
 
     if (category) {
-      sql += ' AND e.category = ?';
+      whereClause += ' AND e.category = ?';
       params.push(category);
     }
 
     if (tag) {
-      sql += ' AND nt.tag_name = ?';
+      whereClause += ' AND nt.tag_name = ?';
       params.push(tag);
     }
 
-    if (!includeLocked) {
-      // Locked notes are omitted from plaintext keyword search if encrypted
+    if (filterType && filterType !== 'all') {
+      whereClause += ' AND n.note_type = ?';
+      params.push(filterType);
     }
 
-    if (trimmedQuery) {
-      sql += ` AND (
+    if (dateFrom) {
+      whereClause += ' AND n.created_at >= ?';
+      params.push(dateFrom);
+    }
+
+    if (dateTo) {
+      whereClause += ' AND n.created_at <= ?';
+      params.push(dateTo);
+    }
+
+    if (!includeLocked) {
+      whereClause += ' AND (n.is_locked = 0 OR n.is_locked IS NULL)';
+    }
+
+    if (trimmed) {
+      // 1. Full-text search via FTS4 virtual table
+      const terms = trimmed
+        .replace(/[^a-zA-Z0-9_\u00C0-\u017F]+/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+      const ftsExpression = terms.map((t) => `${t}*`).join(' ');
+
+      if (ftsExpression) {
+        try {
+          const countSql = `
+            SELECT COUNT(DISTINCT n.id) as cnt
+            FROM notes n
+            JOIN notes_fts fts ON n.id = fts.note_id
+            LEFT JOIN events e ON n.event_id = e.id
+            LEFT JOIN note_tags nt ON n.id = nt.note_id
+            WHERE notes_fts MATCH ? AND ${whereClause}
+          `;
+          const countRes = SqliteEngine.query<{ cnt: number }>(countSql, [ftsExpression, ...params]);
+          const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
+
+          const matchSql = `
+            SELECT DISTINCT n.*
+            FROM notes n
+            JOIN notes_fts fts ON n.id = fts.note_id
+            LEFT JOIN events e ON n.event_id = e.id
+            LEFT JOIN note_tags nt ON n.id = nt.note_id
+            WHERE notes_fts MATCH ? AND ${whereClause}
+            ORDER BY n.is_pinned DESC, n.updated_at DESC
+            LIMIT ? OFFSET ?
+          `;
+          const rows = SqliteEngine.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          return {
+            notes: this.populateNotesBatch(rows),
+            totalCount,
+          };
+        } catch (ftsErr) {
+          AppLogger.warn('SqliteRepository', 'FTS query syntax error, falling back to LIKE search', ftsErr);
+        }
+      }
+
+      // 2. Fallback parameterized LIKE query
+      const likeWild = `%${trimmed.toLowerCase()}%`;
+      const likeWhere = ` AND (
         LOWER(n.title) LIKE ? OR
         LOWER(n.body) LIKE ? OR
-        LOWER(c.text) LIKE ? OR
-        LOWER(o.ocr_text) LIKE ?
+        EXISTS (SELECT 1 FROM checklists c WHERE c.note_id = n.id AND LOWER(c.text) LIKE ?) OR
+        EXISTS (SELECT 1 FROM ocr_scans o WHERE o.note_id = n.id AND LOWER(o.ocr_text) LIKE ?) OR
+        EXISTS (SELECT 1 FROM note_tags nt2 WHERE nt2.note_id = n.id AND LOWER(nt2.tag_name) LIKE ?)
       )`;
-      const wild = `%${trimmedQuery}%`;
-      params.push(wild, wild, wild, wild);
+      const likeParams = [...params, likeWild, likeWild, likeWild, likeWild, likeWild];
+
+      const countSql = `
+        SELECT COUNT(DISTINCT n.id) as cnt
+        FROM notes n
+        LEFT JOIN events e ON n.event_id = e.id
+        LEFT JOIN note_tags nt ON n.id = nt.note_id
+        WHERE ${whereClause} ${likeWhere}
+      `;
+      const countRes = SqliteEngine.query<{ cnt: number }>(countSql, likeParams);
+      const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
+
+      const fallbackSql = `
+        SELECT DISTINCT n.*
+        FROM notes n
+        LEFT JOIN events e ON n.event_id = e.id
+        LEFT JOIN note_tags nt ON n.id = nt.note_id
+        WHERE ${whereClause} ${likeWhere}
+        ORDER BY n.is_pinned DESC, n.updated_at DESC
+        LIMIT ? OFFSET ?
+      `;
+      const rows = SqliteEngine.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      return {
+        notes: this.populateNotesBatch(rows),
+        totalCount,
+      };
     }
 
-    sql += ' ORDER BY n.is_pinned DESC, n.updated_at DESC';
+    // 3. Simple filtered search without query string
+    const countSql = `
+      SELECT COUNT(DISTINCT n.id) as cnt
+      FROM notes n
+      LEFT JOIN events e ON n.event_id = e.id
+      LEFT JOIN note_tags nt ON n.id = nt.note_id
+      WHERE ${whereClause}
+    `;
+    const countRes = SqliteEngine.query<{ cnt: number }>(countSql, params);
+    const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
 
-    const matchedRaw = SqliteEngine.query<any>(sql, params);
-    const matchedIds = new Set(matchedRaw.map((r) => r.id));
+    const sql = `
+      SELECT DISTINCT n.*
+      FROM notes n
+      LEFT JOIN events e ON n.event_id = e.id
+      LEFT JOIN note_tags nt ON n.id = nt.note_id
+      WHERE ${whereClause}
+      ORDER BY n.is_pinned DESC, n.updated_at DESC
+      LIMIT ? OFFSET ?
+    `;
+    const rows = SqliteEngine.query<any>(sql, [...params, limit, offset]);
+    return {
+      notes: this.populateNotesBatch(rows),
+      totalCount,
+    };
+  }
 
-    // Return populated note records
-    const allNotes = this.getAllNotes();
-    return allNotes.filter((n) => matchedIds.has(n.id));
+  // --- PAGINATED NOTES ACCESS (Avoids Loading Whole DB Into Memory) ---
+
+  public static getNotesPage(options: NotesPageOptions = {}): NotesPageResult {
+    const {
+      page = 1,
+      pageSize = 50,
+      status = 'active',
+      eventId,
+      tag,
+      filterType = 'all',
+      searchQuery,
+      sortBy = 'updated_at',
+      sortDirection = 'DESC',
+      includeLocked = true,
+    } = options;
+
+    if (searchQuery && searchQuery.trim()) {
+      const searchRes = this.searchNotesWithCount({
+        query: searchQuery,
+        status,
+        eventId: eventId ?? undefined,
+        tag: tag ?? undefined,
+        filterType,
+        includeLocked,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      const totalPages = Math.ceil(searchRes.totalCount / pageSize) || 1;
+      return {
+        notes: searchRes.notes,
+        totalCount: searchRes.totalCount,
+        page,
+        pageSize,
+        totalPages,
+        hasMore: page < totalPages,
+      };
+    }
+
+    const params: any[] = [];
+    let where = '1=1';
+
+    if (status) {
+      where += ' AND n.status = ?';
+      params.push(status);
+    }
+
+    if (eventId !== undefined && eventId !== null) {
+      where += ' AND n.event_id = ?';
+      params.push(eventId);
+    }
+
+    if (tag) {
+      where += ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
+      params.push(tag);
+    }
+
+    if (filterType && filterType !== 'all') {
+      where += ' AND n.note_type = ?';
+      params.push(filterType);
+    }
+
+    if (!includeLocked) {
+      where += ' AND (n.is_locked = 0 OR n.is_locked IS NULL)';
+    }
+
+    const countRes = SqliteEngine.query<{ cnt: number }>(
+      `SELECT COUNT(*) as cnt FROM notes n WHERE ${where}`,
+      params
+    );
+    const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
+    const totalPages = Math.ceil(totalCount / pageSize) || 1;
+    const offset = (page - 1) * pageSize;
+
+    const safeSortCol = sortBy === 'created_at' ? 'n.created_at' : sortBy === 'title' ? 'n.title' : 'n.updated_at';
+    const safeDirection = sortDirection.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const sql = `
+      SELECT n.*
+      FROM notes n
+      WHERE ${where}
+      ORDER BY n.is_pinned DESC, ${safeSortCol} ${safeDirection}
+      LIMIT ? OFFSET ?
+    `;
+    const rows = SqliteEngine.query<any>(sql, [...params, pageSize, offset]);
+    const notes = this.populateNotesBatch(rows);
+
+    return {
+      notes,
+      totalCount,
+      page,
+      pageSize,
+      totalPages,
+      hasMore: page < totalPages,
+    };
   }
 
   // --- EVENTS / NOTEBOOKS CRUD ---
@@ -306,22 +654,44 @@ export class SqliteRepository {
     }));
   }
 
-  public static saveEvent(evt: EventRecord): void {
-    SqliteEngine.run(
-      `INSERT OR REPLACE INTO events (id, title, event_date, description, location, category, color, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        evt.id,
-        evt.title || 'Untitled',
-        evt.event_date || new Date().toISOString().slice(0, 10),
-        evt.description || null,
-        evt.location || null,
-        evt.category || null,
-        evt.color || null,
-        Date.now(),
-        Date.now(),
-      ]
-    );
+  public static saveEvent(evt: EventRecord): EventRecord {
+    return SqliteEngine.transaction(() => {
+      let eventId = evt.id;
+      if (eventId && eventId > 0) {
+        SqliteEngine.run(
+          `INSERT OR REPLACE INTO events (id, title, event_date, description, location, category, color, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            eventId,
+            evt.title || 'Untitled',
+            evt.event_date || new Date().toISOString().slice(0, 10),
+            evt.description || null,
+            evt.location || null,
+            evt.category || null,
+            evt.color || null,
+            Date.now(),
+            Date.now(),
+          ]
+        );
+      } else {
+        SqliteEngine.run(
+          `INSERT INTO events (title, event_date, description, location, category, color, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            evt.title || 'Untitled',
+            evt.event_date || new Date().toISOString().slice(0, 10),
+            evt.description || null,
+            evt.location || null,
+            evt.category || null,
+            evt.color || null,
+            Date.now(),
+            Date.now(),
+          ]
+        );
+        eventId = SqliteEngine.getLastInsertId();
+      }
+      return { ...evt, id: eventId };
+    });
   }
 
   public static deleteEvent(id: number): void {
@@ -524,6 +894,29 @@ export class SqliteRepository {
         [ocr.media_key, ocr.note_id, 'ocr_image', 'image/jpeg', 0, Date.now()]
       );
     }
+
+    // Refresh FTS index for note with new OCR text
+    if (ocr.note_id) {
+      try {
+        const note = this.getNoteById(ocr.note_id);
+        if (note && !note.is_locked) {
+          const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
+          const tagText = (note.tags || []).join(' ');
+          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+            'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
+            [ocr.note_id]
+          );
+          const allOcr = ocrRows.map((o) => o.ocr_text).join(' ');
+          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [ocr.note_id]);
+          SqliteEngine.run(
+            'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
+            [ocr.note_id, note.title || '', note.body || '', chkText, allOcr, tagText]
+          );
+        }
+      } catch (err) {
+        AppLogger.warn('SqliteRepository', 'Failed to update FTS on OCR scan save', err);
+      }
+    }
   }
 
   // --- DATABASE METRICS, INTEGRITY & ORPHAN DETECTION ---
@@ -558,7 +951,7 @@ export class SqliteRepository {
       transcriptsCount,
       ocrScansCount,
       databaseSizeBytes: binarySize,
-      schemaVersion: 2,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
       integrityStatus: integrity.status,
     };
   }

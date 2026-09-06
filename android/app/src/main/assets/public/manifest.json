@@ -1,7 +1,7 @@
 {
   "short_name": "VellumScribe",
-  "name": "VellumScribe — Minimalist Multimodal Notes Studio",
-  "description": "Offline-first multimodal note-taking studio with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync.",
+  "name": "VellumScribe — Android Multimodal Notes",
+  "description": "Offline-first multimodal note-taking studio for Android with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync.",
   "icons": [
     {
       "src": "favicon.svg",
@@ -14,5 +14,23 @@
   "background_color": "#121215",
   "theme_color": "#121215",
   "display": "standalone",
-  "orientation": "any"
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities", "notes"],
+  "shortcuts": [
+    {
+      "name": "New Note",
+      "short_name": "Note",
+      "description": "Create a new text note",
+      "url": "./?action=new-note",
+      "icons": [{ "src": "favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "New Checklist",
+      "short_name": "Checklist",
+      "description": "Create a new to-do list",
+      "url": "./?action=new-checklist",
+      "icons": [{ "src": "favicon.svg", "sizes": "any" }]
+    }
+  ]
 }
