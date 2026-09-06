@@ -633,8 +633,11 @@ export class SqliteEngine {
     }
   }
 
+  private static readonly SAVE_DEBOUNCE_MS = 2000;
+
   /**
-   * Schedules debounced persistence flush to disk / IndexedDB
+   * Schedules debounced persistence flush to disk / IndexedDB.
+   * Increased to 2000ms to prevent heavy main-thread binary exports during active typing.
    */
   public static scheduleSave(): void {
     this.isDirty = true;
@@ -645,7 +648,7 @@ export class SqliteEngine {
       this.flush().catch((err) => {
         AppLogger.error('SqliteEngine', 'Background flush error', err);
       });
-    }, 400); // 400ms debounce
+    }, this.SAVE_DEBOUNCE_MS);
   }
 
   public static markDirty(): void {
@@ -671,6 +674,13 @@ export class SqliteEngine {
 
   public static getIsDirty(): boolean {
     return this.isDirty;
+  }
+
+  /**
+   * Alias for immediate, blocking persistence flush to disk/IndexedDB.
+   */
+  public static async flushImmediate(): Promise<void> {
+    return this.flush();
   }
 
   /**
