@@ -14,10 +14,38 @@ const NATIVE_DB_PATH = 'databases/current.sqlite';
 const NATIVE_BACKUP_PATH = 'databases/previous.sqlite';
 const NATIVE_LEGACY_PATH = 'databases/vellumscribe.sqlite';
 
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const CHUNK_SIZE = 0x8000;
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + CHUNK_SIZE);
+    chunks.push(String.fromCharCode.apply(null, chunk as unknown as number[]));
+  }
+  return btoa(chunks.join(''));
+}
+
+export function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+export interface RecoveryState {
+  hasError: boolean;
+  isRecovered: boolean;
+  message?: string;
+  corruptedBackupPath?: string;
+  unrecoverableError?: string;
+}
+
 // Global memory fallback for Node test environments where indexedDB is not polyfilled
 const globalMemoryFallback = (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ || {
   binary: null as Uint8Array | null,
   previousBinary: null as Uint8Array | null,
+  corruptedSnapshots: [] as Array<{ timestamp: number; data: Uint8Array }>,
 };
 (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
 
@@ -47,6 +75,27 @@ class SqliteIndexedDbStorage {
       };
       request.onerror = () => reject(request.error);
     });
+  }
+
+  public async preserveCorruptedBinary(data: Uint8Array, timestamp: number): Promise<string> {
+    const key = `corrupt_db_${timestamp}`;
+    if (!this.isIndexedDbAvailable()) {
+      if (!globalMemoryFallback.corruptedSnapshots) globalMemoryFallback.corruptedSnapshots = [];
+      globalMemoryFallback.corruptedSnapshots.push({ timestamp, data });
+      return key;
+    }
+    try {
+      const db = await this.getDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction(DB_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(DB_STORE_NAME);
+        store.put(data, key);
+        tx.oncomplete = () => resolve(key);
+        tx.onerror = () => resolve(key);
+      });
+    } catch {
+      return key;
+    }
   }
 
   public async loadBinary(): Promise<Uint8Array | null> {
@@ -167,6 +216,19 @@ export class SqliteEngine {
   private static saveTimeout: any = null;
   private static isDirty = false;
   private static transactionDepth = 0;
+  private static recoveryState: RecoveryState = {
+    hasError: false,
+    isRecovered: false,
+  };
+
+  public static getRecoveryState(): RecoveryState {
+    return { ...this.recoveryState };
+  }
+
+  public static getLastInsertId(): number {
+    const res = this.query<{ id: number }>('SELECT last_insert_rowid() as id');
+    return res.length > 0 ? Number(res[0].id) : 0;
+  }
 
   private static async getSqlJsInstance(): Promise<SqlJsStatic> {
     if (this.SQL) return this.SQL;
@@ -246,12 +308,7 @@ export class SqliteEngine {
               directory: Directory.Data,
             });
             if (check.data && typeof check.data === 'string') {
-              const binaryString = atob(check.data);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              binaryData = bytes;
+              binaryData = base64ToUint8Array(check.data);
             }
           } catch {
             // Check legacy path if current doesn't exist
@@ -261,12 +318,7 @@ export class SqliteEngine {
                 directory: Directory.Data,
               });
               if (legacyCheck.data && typeof legacyCheck.data === 'string') {
-                const binaryString = atob(legacyCheck.data);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                  bytes[i] = binaryString.charCodeAt(i);
-                }
-                binaryData = bytes;
+                binaryData = base64ToUint8Array(legacyCheck.data);
               }
             } catch {
               // Neither exists yet
@@ -284,36 +336,94 @@ export class SqliteEngine {
             const check = testDb.exec('PRAGMA integrity_check;');
             if (check.length > 0 && check[0].values[0][0] === 'ok') {
               this.db = testDb;
+              this.db.run('PRAGMA foreign_keys = ON;');
               AppLogger.info('SqliteEngine', `Loaded valid SQLite database (${binaryData.length} bytes)`);
             } else {
               throw new Error('Integrity check failed on primary database');
             }
           } catch (loadErr) {
-            AppLogger.warn('SqliteEngine', 'Primary SQLite database corrupted or unreadable. Initiating recovery from previous snapshot...', loadErr);
-            // Attempt recovery from previous.sqlite
-            const backupBinary = await idbStorage.loadBackupBinary();
-            if (backupBinary && backupBinary.length > 0) {
-              try {
-                const recoveredDb = new this.SQL.Database(backupBinary);
-                const check = recoveredDb.exec('PRAGMA integrity_check;');
-                if (check.length > 0 && check[0].values[0][0] === 'ok') {
-                  this.db = recoveredDb;
-                  loadedFromBackup = true;
-                  AppLogger.info('SqliteEngine', `CRASH RECOVERY SUCCESSFUL: Restored from previous valid SQLite backup (${backupBinary.length} bytes)`);
-                } else {
-                  throw new Error('Backup database also corrupted');
-                }
-              } catch (backupErr) {
-                AppLogger.error('SqliteEngine', 'Recovery from backup failed; creating fresh database', backupErr);
-                this.db = new this.SQL.Database();
+            AppLogger.warn('SqliteEngine', 'Primary SQLite database corrupted or unreadable. Preserving artifact and initiating recovery...', loadErr);
+            
+            // 1. Preserve corrupt copy as timestamped artifact
+            const timestamp = Date.now();
+            const corruptPath = `databases/corrupt_${timestamp}.sqlite`;
+            try {
+              await idbStorage.preserveCorruptedBinary(binaryData, timestamp);
+              if (Capacitor.isNativePlatform()) {
+                const base64Corrupt = uint8ArrayToBase64(binaryData);
+                await Filesystem.writeFile({
+                  path: corruptPath,
+                  data: base64Corrupt,
+                  directory: Directory.Data,
+                  recursive: true,
+                });
               }
+            } catch (presErr) {
+              AppLogger.error('SqliteEngine', 'Failed to preserve corrupt database snapshot', presErr);
+            }
+
+            // 2. Attempt recovery from native previous.sqlite
+            let recoveredDb: Database | null = null;
+            if (Capacitor.isNativePlatform()) {
+              try {
+                const prevCheck = await Filesystem.readFile({
+                  path: NATIVE_BACKUP_PATH,
+                  directory: Directory.Data,
+                });
+                if (prevCheck.data && typeof prevCheck.data === 'string') {
+                  const prevBytes = base64ToUint8Array(prevCheck.data);
+                  const testPrevDb = new this.SQL.Database(prevBytes);
+                  const check = testPrevDb.exec('PRAGMA integrity_check;');
+                  if (check.length > 0 && check[0].values[0][0] === 'ok') {
+                    recoveredDb = testPrevDb;
+                  }
+                }
+              } catch {
+                // Native previous not found or unreadable
+              }
+            }
+
+            // 3. If native previous didn't recover, check IndexedDB backup
+            if (!recoveredDb) {
+              const backupBinary = await idbStorage.loadBackupBinary();
+              if (backupBinary && backupBinary.length > 0) {
+                try {
+                  const testIdbDb = new this.SQL.Database(backupBinary);
+                  const check = testIdbDb.exec('PRAGMA integrity_check;');
+                  if (check.length > 0 && check[0].values[0][0] === 'ok') {
+                    recoveredDb = testIdbDb;
+                  }
+                } catch {}
+              }
+            }
+
+            if (recoveredDb) {
+              this.db = recoveredDb;
+              this.db.run('PRAGMA foreign_keys = ON;');
+              loadedFromBackup = true;
+              this.recoveryState = {
+                hasError: false,
+                isRecovered: true,
+                message: 'We recovered your most recent safe copy. Your original database has been preserved.',
+                corruptedBackupPath: corruptPath,
+              };
+              AppLogger.info('SqliteEngine', 'CRASH RECOVERY SUCCESSFUL: Restored from previous valid SQLite backup.');
             } else {
-              AppLogger.error('SqliteEngine', 'No backup database found; creating fresh database');
+              // 4. Do NOT silently wipe user data!
+              this.recoveryState = {
+                hasError: true,
+                isRecovered: false,
+                unrecoverableError: 'Your data could not be recovered automatically. Your existing database and backups have been preserved. Do not uninstall VellumScribe.',
+                corruptedBackupPath: corruptPath,
+              };
+              AppLogger.error('SqliteEngine', 'Recovery from backup failed; opening isolated scratch session to preserve disk artifacts');
               this.db = new this.SQL.Database();
+              this.db.run('PRAGMA foreign_keys = ON;');
             }
           }
         } else {
           this.db = new this.SQL.Database();
+          this.db.run('PRAGMA foreign_keys = ON;');
           AppLogger.info('SqliteEngine', 'Created new in-memory SQLite database');
         }
 
@@ -341,6 +451,12 @@ export class SqliteEngine {
 
   private static async runMigrations(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+
+    // Ensure foreign keys enabled
+    this.db.run('PRAGMA foreign_keys = ON;');
+
+    // Pre-migration backup snapshot for rollback safety
+    const preMigrationBinary = this.db.export();
 
     // Ensure schema_migrations table exists
     this.db.run(`
@@ -374,7 +490,12 @@ export class SqliteEngine {
           AppLogger.info('SqliteEngine', `Successfully applied migration v${migration.version}`);
         } catch (e) {
           this.db.run('ROLLBACK;');
-          AppLogger.error('SqliteEngine', `Failed migration v${migration.version}`, e);
+          AppLogger.error('SqliteEngine', `Failed migration v${migration.version}, restoring pre-migration state`, e);
+          try {
+            this.db.close();
+            this.db = new this.SQL!.Database(preMigrationBinary);
+            this.db.run('PRAGMA foreign_keys = ON;');
+          } catch {}
           throw e;
         }
       }
@@ -584,11 +705,7 @@ export class SqliteEngine {
         }
 
         // 2. Persist new database binary to current.sqlite
-        let binaryString = '';
-        for (let i = 0; i < binary.length; i++) {
-          binaryString += String.fromCharCode(binary[i]);
-        }
-        const base64 = btoa(binaryString);
+        const base64 = uint8ArrayToBase64(binary);
         await Filesystem.writeFile({
           path: NATIVE_DB_PATH,
           data: base64,

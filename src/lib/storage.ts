@@ -16,7 +16,14 @@ import {
   NotePayloadData,
 } from './cryptoUtils';
 import { SqliteEngine } from './sqlite/sqliteEngine';
-import { SqliteRepository, SqliteStats, SearchOptions } from './sqlite/sqliteRepository';
+import {
+  SqliteRepository,
+  SqliteStats,
+  SearchOptions,
+  SearchResult,
+  NotesPageOptions,
+  NotesPageResult,
+} from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
 import { AppLogger } from './logger';
 import { ImportSafetyPipeline } from './importSafety';
@@ -455,6 +462,37 @@ export class StorageManager {
           (n.title && n.title.toLowerCase().includes(query)) ||
           (n.body && n.body.toLowerCase().includes(query))
       );
+    }
+  }
+
+  public static searchNotesWithCount(options: SearchOptions): SearchResult {
+    try {
+      return SqliteRepository.searchNotesWithCount(options);
+    } catch (e) {
+      AppLogger.warn('StorageManager', 'SQLite searchWithCount fallback', e);
+      const notes = this.searchNotes(options);
+      return { notes, totalCount: notes.length };
+    }
+  }
+
+  public static getNotesPage(options: NotesPageOptions = {}): NotesPageResult {
+    try {
+      return SqliteRepository.getNotesPage(options);
+    } catch (e) {
+      AppLogger.warn('StorageManager', 'SQLite getNotesPage fallback', e);
+      const all = this.getActiveNotes();
+      const page = options.page || 1;
+      const pageSize = options.pageSize || 50;
+      const totalPages = Math.ceil(all.length / pageSize) || 1;
+      const offset = (page - 1) * pageSize;
+      return {
+        notes: all.slice(offset, offset + pageSize),
+        totalCount: all.length,
+        page,
+        pageSize,
+        totalPages,
+        hasMore: page < totalPages,
+      };
     }
   }
 
