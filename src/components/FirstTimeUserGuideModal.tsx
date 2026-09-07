@@ -209,7 +209,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
           <div className="flex items-center gap-2.5">
             <AppLogo size="md" showText={false} />
             <div>
-              <span className="text-[11px] font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">
+              <span className="text-xs font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">
                 {step.badge}
               </span>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -254,7 +254,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                   <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                     {h.title}
                   </h4>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-normal">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal">
                     {h.desc}
                   </p>
                 </div>
@@ -269,7 +269,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                 <p className="font-semibold text-indigo-950 dark:text-indigo-200 text-xs">
                   {canInstall ? 'Ready for One-Tap Install' : 'Install via Android Browser'}
                 </p>
-                <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80 truncate">
+                <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80 truncate">
                   {canInstall
                     ? 'Add directly to your Android launcher now'
                     : 'Tap browser menu (⋮) -> "Add to Home screen"'}
@@ -282,7 +282,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                   id="onboarding-install-pwa-btn"
                   onClick={handleInstallClick}
                   disabled={installSuccess}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[11px] rounded-xl shrink-0 transition-colors shadow-2xs flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shrink-0 transition-colors shadow-2xs flex items-center gap-1.5"
                 >
                   {installSuccess ? (
                     <>
@@ -297,7 +297,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                   )}
                 </button>
               ) : (
-                <span className="text-[10px] font-mono font-semibold px-2 py-1 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 rounded-lg shrink-0">
+                <span className="text-xs font-mono font-semibold px-2 py-1 bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 rounded-lg shrink-0">
                   Android Chrome
                 </span>
               )}

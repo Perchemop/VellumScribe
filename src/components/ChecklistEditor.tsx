@@ -68,7 +68,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
       {/* Progress Bar & Header */}
       {items.length > 0 && (
         <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-zinc-400">
             <span>
               {completedCount} of {items.length} tasks completed ({progressPercent}%)
             </span>

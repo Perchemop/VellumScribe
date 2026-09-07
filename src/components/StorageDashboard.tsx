@@ -268,7 +268,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
               <h4 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
                 Private Offline Mode (Air-Gapped)
                 {privacy.privateOfflineMode && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
                     ACTIVE
                   </span>
                 )}

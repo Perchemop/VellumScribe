@@ -245,7 +245,7 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
           </div>
 
           {/* Line width */}
-          <div className="flex items-center gap-2 text-zinc-500 text-[11px]">
+          <div className="flex items-center gap-2 text-zinc-500 text-xs">
             <span>Size</span>
             <input
               type="range"
@@ -275,7 +275,7 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
 
         {/* Footer actions */}
         <div className="px-5 py-3 bg-zinc-50/50 dark:bg-[#121215] border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <span className="text-[11px] text-zinc-400">
+          <span className="text-xs text-zinc-400">
             Draw ideas, diagrams, handwritten annotations
           </span>
 

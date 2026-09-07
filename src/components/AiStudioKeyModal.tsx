@@ -19,6 +19,8 @@ import {
   Check,
   Terminal,
   HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { AiSettingsManager, LlmProvider, TranscriptionProvider } from '../lib/aiSettings';
 import { useModalBackHandler } from '../lib/modalBackStack';
@@ -41,8 +43,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   initialProvider = 'google',
 }) => {
   useModalBackHandler(isOpen, onClose, 'ai-studio-key-modal');
+  const isAdvancedProvider = ['groq', 'deepgram', 'ollama'].includes(initialProvider);
   const [selectedProvider, setSelectedProvider] = useState<'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules'>(initialProvider);
-  const [showAdvancedProviders, setShowAdvancedProviders] = useState(false);
+  const [showAdvancedProviders, setShowAdvancedProviders] = useState(isAdvancedProvider);
   const [keyInput, setKeyInput] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -80,6 +83,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   };
 
   const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules') => {
+    if (['groq', 'deepgram', 'ollama'].includes(prov)) {
+      setShowAdvancedProviders(true);
+    }
     setSelectedProvider(prov);
     setVerifyStatus(null);
     setFileFeedback(null);
@@ -279,11 +285,11 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         </div>
 
         {/* Provider Tabs */}
-        <div className="flex border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 px-5 pt-3 gap-1 overflow-x-auto">
+        <div className="flex items-center border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 px-5 pt-3 gap-1 overflow-x-auto">
           <button
             type="button"
             onClick={() => handleSelectTab('google')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
               selectedProvider === 'google'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -296,7 +302,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           <button
             type="button"
             onClick={() => handleSelectTab('offline_rules')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
               selectedProvider === 'offline_rules'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -306,44 +312,73 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             <span>Offline Engine (No Keys)</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleSelectTab('groq')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
-              selectedProvider === 'groq'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Groq</span>
-          </button>
+          {showAdvancedProviders || ['groq', 'deepgram', 'ollama'].includes(selectedProvider) ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('groq')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
+                  selectedProvider === 'groq'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Groq</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => handleSelectTab('deepgram')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
-              selectedProvider === 'deepgram'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span>Deepgram</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('deepgram')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
+                  selectedProvider === 'deepgram'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Deepgram</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={() => handleSelectTab('ollama')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
-              selectedProvider === 'ollama'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5" />
-            <span>Local Ollama</span>
-          </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('ollama')}
+                className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
+                  selectedProvider === 'ollama'
+                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Local Ollama</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdvancedProviders(false);
+                  if (['groq', 'deepgram', 'ollama'].includes(selectedProvider)) {
+                    handleSelectTab('google');
+                  }
+                }}
+                className="ml-auto px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-0.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
+                title="Hide developer and self-hosted providers"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>Fewer</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAdvancedProviders(true)}
+              className="ml-auto px-2.5 py-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
+              title="Show developer & self-hosted options (Groq, Deepgram, Ollama)"
+            >
+              <span>+ More Providers</span>
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Body */}

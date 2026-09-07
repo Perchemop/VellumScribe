@@ -203,14 +203,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     href="https://aistudio.google.com/app/apikey"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
                   >
                     <span>Get Key</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
 
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                   Powers instant meeting summaries, audio transcription, and OCR document scanning using Google Gemini models.
                 </p>
 
@@ -251,7 +251,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     {apiKeyInput && (
                       <button
                         onClick={handleClearApiKey}
-                        className="px-2 py-1.5 text-rose-500 hover:underline text-[11px] ml-auto"
+                        className="px-2 py-1.5 text-rose-500 hover:underline text-xs ml-auto"
                       >
                         Clear
                       </button>
@@ -278,7 +278,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
 
                 {fileUploadFeedback && (
-                  <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[11px]">
+                  <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs">
                     {fileUploadFeedback}
                   </div>
                 )}
@@ -288,7 +288,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="p-3.5 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between">
                 <div>
                   <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Load from File</p>
-                  <p className="text-[11px] text-zinc-400">Import key from .env, .json, or key.txt file</p>
+                  <p className="text-xs text-zinc-400">Import key from .env, .json, or key.txt file</p>
                 </div>
                 <input
                   type="file"
@@ -320,26 +320,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Local Browser Storage Engine
                     </h3>
                   </div>
-                  <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
+                  <span className="text-xs font-mono bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-semibold">
                     HEALTHY
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Total Notes</span>
+                    <span className="text-zinc-400 block text-xs">Total Notes</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalNotes}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Audio Memos</span>
+                    <span className="text-zinc-400 block text-xs">Audio Memos</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalRecordings}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Active Notes</span>
+                    <span className="text-zinc-400 block text-xs">Active Notes</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.activeNotes}</span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-[10px]">Archived</span>
+                    <span className="text-zinc-400 block text-xs">Archived</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.archivedNotes}</span>
                   </div>
                 </div>
@@ -353,7 +353,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     100% Offline Air-Gapped Operation
                   </h3>
                 </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
                   All notes, sketches, checklists, and audio recordings are saved locally inside this browser. You can export complete snapshots below or import from previously saved JSON backups anytime.
                 </p>
               </div>
@@ -378,7 +378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="p-3.5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                   >
                     <p className="font-semibold text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
-                    <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
+                    <p className="text-xs text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
                   </button>
 
                   <button
@@ -398,7 +398,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="p-3.5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                   >
                     <p className="font-semibold text-zinc-900 dark:text-zinc-100">Export Markdown Archive</p>
-                    <p className="text-[11px] text-zinc-400">Clean Markdown text files readable in any editor</p>
+                    <p className="text-xs text-zinc-400">Clean Markdown text files readable in any editor</p>
                   </button>
                 </div>
               </div>
@@ -416,11 +416,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       Hardware Keystore Encryption
                     </span>
                   </div>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-mono">
+                  <span className="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-mono">
                     AES-256-GCM
                   </span>
                 </div>
-                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-400 leading-relaxed">
                   Cryptographic keys, token aliases, and locked note master credentials are protected inside your device hardware security container.
                 </p>
               </div>
@@ -439,10 +439,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <Key className="w-3.5 h-3.5 text-zinc-500" />
                         <div>
                           <p className="font-semibold text-zinc-900 dark:text-zinc-100">{s.alias}</p>
-                          <p className="font-mono text-[10px] text-zinc-400">{s.masked_value}</p>
+                          <p className="font-mono text-xs text-zinc-400">{s.masked_value}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                         {s.algorithm}
                       </span>
                     </div>

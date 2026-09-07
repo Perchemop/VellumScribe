@@ -72,11 +72,11 @@ export const AppLogo: React.FC<AppLogoProps> = ({
             <span className="font-semibold text-sm tracking-tight text-zinc-900 dark:text-zinc-100 font-sans leading-none">
               VellumScribe
             </span>
-            <span className="text-[9px] px-1 py-0.2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-md font-mono border border-zinc-200/60 dark:border-zinc-700/60">
+            <span className="text-xs px-1 py-0.2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-md font-mono border border-zinc-200/60 dark:border-zinc-700/60">
               v2.6
             </span>
           </div>
-          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal leading-none mt-0.5">
+          <span className="text-xs text-zinc-500 dark:text-zinc-400 font-normal leading-none mt-0.5">
             Private Multimodal Studio
           </span>
         </div>

@@ -93,6 +93,19 @@ export class StorageManager {
 
         this.isInitialized = true;
         AppLogger.info('StorageManager', 'SQLite Storage Gateway fully initialized and synchronized.');
+
+        // Schedule non-blocking automated background maintenance during idle
+        if (typeof window !== 'undefined') {
+          setTimeout(() => {
+            if ('requestIdleCallback' in window) {
+              (window as any).requestIdleCallback(() => {
+                StorageManager.autoMaintenanceIfNeeded().catch(() => {});
+              }, { timeout: 15000 });
+            } else {
+              StorageManager.autoMaintenanceIfNeeded().catch(() => {});
+            }
+          }, 3000);
+        }
       } catch (err: any) {
         AppLogger.error('StorageManager', 'Initialization failed', err);
         throw err;
@@ -208,7 +221,9 @@ export class StorageManager {
     const newId = events.length > 0 ? Math.max(...events.map((e) => e.id)) + 1 : 1;
     const newEvent: EventRecord = { ...event, id: newId };
     SqliteRepository.saveEvent(newEvent);
-    this.refreshCaches();
+    if (this.eventsCache !== null) {
+      this.eventsCache.push(newEvent);
+    }
     return newEvent;
   }
 
@@ -218,7 +233,12 @@ export class StorageManager {
     if (!existing) return null;
     const updated: EventRecord = { ...existing, ...updates };
     SqliteRepository.saveEvent(updated);
-    this.refreshCaches();
+    if (this.eventsCache !== null) {
+      const idx = this.eventsCache.findIndex((e) => e.id === id);
+      if (idx !== -1) {
+        this.eventsCache[idx] = updated;
+      }
+    }
     return updated;
   }
 
@@ -246,7 +266,9 @@ export class StorageManager {
     }
 
     SqliteRepository.deleteEvent(id);
-    this.refreshCaches();
+    if (this.eventsCache !== null) {
+      this.eventsCache = this.eventsCache.filter((e) => e.id !== id);
+    }
     return true;
   }
 
@@ -312,7 +334,9 @@ export class StorageManager {
       version: 1,
     };
     SqliteRepository.saveNote(newNote);
-    this.refreshCaches();
+    if (this.notesCache !== null) {
+      this.notesCache = [newNote, ...this.notesCache];
+    }
     return newNote;
   }
 
@@ -325,7 +349,14 @@ export class StorageManager {
       updated_at: updates.updated_at || new Date().toISOString(),
     };
     SqliteRepository.saveNote(updated);
-    this.refreshCaches();
+    if (this.notesCache !== null) {
+      const idx = this.notesCache.findIndex((n) => n.id === id);
+      if (idx !== -1) {
+        this.notesCache[idx] = updated;
+      } else {
+        this.notesCache.push(updated);
+      }
+    }
     return updated;
   }
 
@@ -375,7 +406,9 @@ export class StorageManager {
   public static deleteNote(id: number): boolean {
     try {
       SqliteRepository.deleteNote(id);
-      this.refreshCaches();
+      if (this.notesCache !== null) {
+        this.notesCache = this.notesCache.filter((n) => n.id !== id);
+      }
       return true;
     } catch (e) {
       AppLogger.error('StorageManager', `Failed to delete note ${id}`, e);
@@ -405,16 +438,22 @@ export class StorageManager {
 
   public static bulkArchiveNotes(ids: number[]): number {
     let count = 0;
+    const now = new Date().toISOString();
     SqliteEngine.transaction(() => {
       for (const id of ids) {
         const note = this.getNoteById(id);
         if (note) {
-          SqliteRepository.saveNote({ ...note, status: 'archived', archived_at: new Date().toISOString() });
+          SqliteRepository.saveNote({ ...note, status: 'archived', archived_at: now });
+          if (this.notesCache !== null) {
+            const idx = this.notesCache.findIndex((n) => n.id === id);
+            if (idx !== -1) {
+              this.notesCache[idx] = { ...this.notesCache[idx], status: 'archived', archived_at: now };
+            }
+          }
           count++;
         }
       }
     });
-    this.refreshCaches();
     return count;
   }
 
@@ -426,7 +465,10 @@ export class StorageManager {
         count++;
       }
     });
-    this.refreshCaches();
+    if (this.notesCache !== null) {
+      const idSet = new Set(ids);
+      this.notesCache = this.notesCache.filter((n) => !idSet.has(n.id));
+    }
     return count;
   }
 
@@ -678,7 +720,6 @@ export class StorageManager {
         this.updateNote(id, { status: 'trash', trashed_at: now });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -689,7 +730,6 @@ export class StorageManager {
         this.updateNote(id, { status: 'active', trashed_at: undefined });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -701,7 +741,6 @@ export class StorageManager {
         this.updateNote(id, { status: 'archived', archived_at: now });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -712,7 +751,6 @@ export class StorageManager {
         this.updateNote(id, { status: 'active', archived_at: undefined });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -723,7 +761,10 @@ export class StorageManager {
         SqliteRepository.deleteNote(id);
       }
     });
-    this.refreshCaches();
+    if (this.notesCache !== null) {
+      const idSet = new Set(ids);
+      this.notesCache = this.notesCache.filter((n) => !idSet.has(n.id));
+    }
     return ids.length;
   }
 
@@ -734,7 +775,6 @@ export class StorageManager {
         this.updateNote(id, { is_pinned: isPinned });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -745,7 +785,6 @@ export class StorageManager {
         this.updateNote(id, { event_id: newEventId });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -756,7 +795,6 @@ export class StorageManager {
         this.updateNote(id, { color: color || undefined });
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -774,7 +812,6 @@ export class StorageManager {
         }
       }
     });
-    this.refreshCaches();
     return ids.length;
   }
 
@@ -1024,6 +1061,56 @@ export class StorageManager {
 
   public static async vacuumDatabase(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
     return await SqliteEngine.vacuum();
+  }
+
+  private static isMaintenanceRunning = false;
+
+  /**
+   * Automated background storage and version history maintenance.
+   * Runs non-blockingly during idle time at most once every 24 hours:
+   * 1. Prunes historical note version snapshots (retains the latest 10 versions per note)
+   * 2. Removes orphaned media records and binary files
+   * 3. Performs SQLite VACUUM compaction when the database exceeds 512KB
+   */
+  public static async autoMaintenanceIfNeeded(): Promise<{ didRun: boolean; versionsPruned: number; orphansCleaned: number }> {
+    if (this.isMaintenanceRunning) return { didRun: false, versionsPruned: 0, orphansCleaned: 0 };
+
+    const LAST_MAINTENANCE_KEY = 'vellumscribe_last_auto_maintenance_at';
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const lastRun = Number(localStorage.getItem(LAST_MAINTENANCE_KEY) || 0);
+    const now = Date.now();
+
+    if (now - lastRun < ONE_DAY_MS) {
+      return { didRun: false, versionsPruned: 0, orphansCleaned: 0 };
+    }
+
+    this.isMaintenanceRunning = true;
+    try {
+      AppLogger.info('StorageManager', 'Running scheduled automatic storage & version maintenance...');
+
+      // 1. Auto-prune old versions (keep latest 10 versions per note)
+      const versionsPruned = SqliteRepository.pruneAllVersions(10);
+
+      // 2. Clean orphan media keys & files
+      const orphanKeys = SqliteRepository.findOrphanMediaKeys();
+      orphanKeys.forEach((k) => SqliteRepository.removeOrphanMediaRecord(k));
+      const mediaRes = await this.cleanOrphanedMedia();
+
+      // 3. Compact database if size exceeds 512KB
+      const stats = this.getSqliteStats();
+      if (stats.databaseSizeBytes > 512 * 1024) {
+        await this.vacuumDatabase();
+      }
+
+      localStorage.setItem(LAST_MAINTENANCE_KEY, now.toString());
+      AppLogger.info('StorageManager', `Automated maintenance complete. Pruned ${versionsPruned} versions, cleaned ${orphanKeys.length + mediaRes.cleanedCount} orphan entries.`);
+      return { didRun: true, versionsPruned, orphansCleaned: orphanKeys.length + mediaRes.cleanedCount };
+    } catch (err) {
+      AppLogger.warn('StorageManager', 'Automated maintenance encountered non-fatal issue', err);
+      return { didRun: false, versionsPruned: 0, orphansCleaned: 0 };
+    } finally {
+      this.isMaintenanceRunning = false;
+    }
   }
 
   public static scheduleSave(): void {

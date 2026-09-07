@@ -798,7 +798,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               onChange={(e) => handleSetReminder(e.target.value ? new Date(e.target.value).toISOString() : '')}
               className="px-2 py-1 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg text-xs"
             />
-            <span className="text-[11px] text-zinc-500 dark:text-zinc-400">(notifies in-app and via browser alert when due)</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">(notifies in-app and via browser alert when due)</span>
           </div>
           <div className="flex items-center gap-2">
             {reminderAt && (
@@ -836,7 +836,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             />
             <button
               onClick={handleDetectLocation}
-              className="px-2.5 py-1 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold rounded-lg text-[11px] shrink-0"
+              className="px-2.5 py-1 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold rounded-lg text-xs shrink-0"
             >
               Use GPS
             </button>
@@ -880,14 +880,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {/* Metadata Chips */}
             <div className="flex flex-wrap items-center gap-2">
               {reminderAt && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px] font-medium border border-amber-200 dark:border-amber-800">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-xs font-medium border border-amber-200 dark:border-amber-800">
                   <Bell className="w-3 h-3" />
                   <span>Reminder: {new Date(reminderAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                 </span>
               )}
 
               {locationName && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium border border-emerald-200 dark:border-emerald-800">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-xs font-medium border border-emerald-200 dark:border-emerald-800">
                   <MapPin className="w-3 h-3" />
                   <span>{locationName}</span>
                 </span>
@@ -897,7 +897,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {/* Audio Recordings */}
             {recordings.length > 0 && (
               <div className="space-y-1.5 pt-1">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold block">
+                <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold block">
                   Audio Memos ({recordings.length})
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -918,13 +918,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {/* OCR Scans */}
             {ocrScans.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mr-1">
+                <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold mr-1">
                   Scans:
                 </span>
                 {ocrScans.map((scan) => (
                   <span
                     key={scan.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-[11px] text-zinc-700 dark:text-zinc-300 font-mono"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 font-mono"
                   >
                     Scan #{scan.id}
                     <button
@@ -962,7 +962,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {tags.map((t) => (
               <span
                 key={t}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 text-[11px] font-medium"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 text-xs font-medium"
               >
                 #{t}
                 <button
@@ -979,7 +979,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               value={newTagInput}
               onChange={(e) => setNewTagInput(e.target.value)}
               onKeyDown={handleAddTag}
-              className="text-[11px] bg-transparent text-zinc-500 placeholder-zinc-400 focus:outline-hidden px-1 py-0.5 w-16"
+              className="text-xs bg-transparent text-zinc-500 placeholder-zinc-400 focus:outline-hidden px-1 py-0.5 w-16"
             />
           </div>
 
@@ -1032,7 +1032,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleAddChecklistItem}
-                    className="px-2 py-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-750 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                    className="px-2 py-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-750 text-xs font-medium rounded-lg flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     Add Task
@@ -1094,7 +1094,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       </div>
 
       {/* Quiet Status Bar */}
-      <div className="px-4 sm:px-6 py-2 border-t border-zinc-100 dark:border-zinc-850 bg-white/80 dark:bg-[#0c0c0e]/80 flex items-center justify-between text-[11px] text-zinc-400 font-mono shrink-0">
+      <div className="px-4 sm:px-6 py-2 border-t border-zinc-100 dark:border-zinc-850 bg-white/80 dark:bg-[#0c0c0e]/80 flex items-center justify-between text-xs text-zinc-400 font-mono shrink-0">
         <div className="flex items-center gap-3">
           <span>{stats.words} words</span>
           <span>·</span>

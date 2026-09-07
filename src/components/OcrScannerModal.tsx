@@ -347,7 +347,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                       <p className="text-xs font-semibold text-zinc-200">
                         Camera Ready
                       </p>
-                      <p className="text-[11px] text-zinc-400">
+                      <p className="text-xs text-zinc-400">
                         {cameraError || 'Use your device camera to photograph notes, whiteboards, or documents.'}
                       </p>
                     </div>
@@ -394,7 +394,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                 <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                   Select Document or Photo to Extract
                 </p>
-                <p className="text-[11px] text-zinc-400">
+                <p className="text-xs text-zinc-400">
                   Supports JPEG, PNG, WEBP handwriting photos up to 15MB
                 </p>
               </div>
@@ -414,7 +414,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                   Extracted Text Output
                 </span>
                 {ocrStatus && (
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400 italic">
                     • {ocrStatus}
                   </span>
                 )}

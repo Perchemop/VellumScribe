@@ -208,11 +208,11 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
             <div>
               <h3 id="cloud-connect-modal-title" className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                 <span>{meta.name}</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal">
+                <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal">
                   {meta.badge}
                 </span>
               </h3>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 {existingAccount ? 'Connected & Active' : meta.description}
               </p>
             </div>
@@ -234,7 +234,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Client-Side AES-256-GCM Envelope</span>
             </div>
-            <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
+            <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
               Backups are encrypted in your browser using AES-256-GCM and GZIP before transport. Cloud destinations receive an encrypted envelope.
             </p>
           </div>
@@ -258,20 +258,20 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                 {existingAccount.serverUrl && (
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-400">Server:</span>
-                    <span className="text-zinc-600 dark:text-zinc-300 font-mono text-[11px] truncate max-w-[200px]">
+                    <span className="text-zinc-600 dark:text-zinc-300 font-mono text-xs truncate max-w-[200px]">
                       {existingAccount.serverUrl}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-zinc-400">Connected:</span>
-                  <span className="text-zinc-600 dark:text-zinc-300 font-mono text-[11px]">
+                  <span className="text-zinc-600 dark:text-zinc-300 font-mono text-xs">
                     {new Date(existingAccount.connectedAt).toLocaleDateString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-zinc-400">Encryption:</span>
-                  <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                  <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     AES-256-GCM
                   </span>
@@ -386,13 +386,13 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] text-zinc-500 dark:text-zinc-400">Remote Backup Folder</label>
+                    <label className="text-xs text-zinc-500 dark:text-zinc-400">Remote Backup Folder</label>
                     <input
                       type="text"
                       placeholder="/VellumScribeBackups"
                       value={remotePath}
                       onChange={(e) => setRemotePath(e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-mono text-[11px]"
+                      className="w-full px-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-mono text-xs"
                     />
                   </div>
 
@@ -438,10 +438,10 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                         <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                         <span>OAuth Credentials Not Configured</span>
                       </div>
-                      <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+                      <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
                         To connect {meta.name}, configure {provider === 'google_drive' ? 'GOOGLE_CLIENT_ID' : 'MICROSOFT_CLIENT_ID'} in the server environment variables.
                       </p>
-                      <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
                         Alternatively, use the <strong>Vellum Encrypted Vault</strong> or connect a <strong>Nextcloud / WebDAV</strong> server.
                       </p>
                     </div>

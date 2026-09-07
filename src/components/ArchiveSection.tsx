@@ -259,19 +259,19 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 
                       {/* Folder / Event tag */}
                       {event && (
-                        <span className="shrink-0 px-2 py-0.5 text-[10px] font-medium rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                        <span className="shrink-0 px-2 py-0.5 text-xs font-medium rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
                           {event.title}
                         </span>
                       )}
                     </div>
 
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3 leading-relaxed">
                       {previewText}
                     </p>
                   </div>
 
                   <div className="pt-2 border-t border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-zinc-400">
+                    <span className="text-xs text-zinc-400">
                       {formatArchivedDate(note.archived_at || note.updated_at)}
                     </span>
 
@@ -280,7 +280,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                       <button
                         onClick={(e) => handleUnarchive(note.id, e)}
                         title="Restore to active notes"
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-[11px] font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs transition-colors"
                       >
                         <RotateCcw className="w-3 h-3 text-zinc-500" />
                         <span>Restore</span>
@@ -312,7 +312,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Permanently Delete Note?</h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5 truncate">
+                <p className="text-xs text-zinc-400 mt-0.5 truncate">
                   &ldquo;{confirmDeleteNote.title}&rdquo; will be deleted permanently.
                 </p>
               </div>
@@ -348,7 +348,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Restore All Notes?</h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-400 mt-0.5">
                   Move all {archivedNotes.length} archived notes back to your active notes list.
                 </p>
               </div>

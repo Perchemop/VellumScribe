@@ -390,7 +390,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
             <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
               Drag and drop an audio file, or click to browse
             </p>
-            <p className="text-[11px] text-zinc-400 mt-0.5">
+            <p className="text-xs text-zinc-400 mt-0.5">
               Supports MP3, M4A, WAV, AAC, OGG, FLAC & WebM
             </p>
           </div>
@@ -427,7 +427,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               {/* Live Speech Recognition text preview */}
               {liveTranscript && (
                 <div className="w-full px-3 py-2 bg-white/80 dark:bg-zinc-900/80 rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 text-xs text-zinc-700 dark:text-zinc-300">
-                  <span className="text-[10px] font-semibold text-indigo-500 block mb-0.5">
+                  <span className="text-xs font-semibold text-indigo-500 block mb-0.5">
                     Live Speech (Offline):
                   </span>
                   <p className="line-clamp-2 italic">{liveTranscript}</p>
@@ -465,7 +465,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
                 Tap start to begin microphone recording
               </p>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 Audio is captured in high fidelity and stored locally
               </p>
             </div>
@@ -518,7 +518,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           <div className="w-full space-y-3">
             {/* Playback Progress Slider */}
             <div className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-zinc-500">
+              <span className="text-xs font-mono text-zinc-500">
                 {formatTime(currentTime)}
               </span>
               <input
@@ -530,7 +530,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                 onChange={handleSeek}
                 className="flex-1 accent-indigo-600 h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg cursor-pointer"
               />
-              <span className="text-[11px] font-mono text-zinc-500">
+              <span className="text-xs font-mono text-zinc-500">
                 {formatTime(recordedAudio.durationSeconds)}
               </span>
             </div>
@@ -567,7 +567,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                   <button
                     key={rate}
                     onClick={() => handleRateChange(rate)}
-                    className={`px-1.5 py-0.5 text-[10px] font-mono rounded ${
+                    className={`px-1.5 py-0.5 text-xs font-mono rounded ${
                       playbackRate === rate
                         ? 'bg-white dark:bg-zinc-700 font-bold text-zinc-900 dark:text-zinc-100 shadow-2xs'
                         : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -596,7 +596,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                   {isTranscribing ? 'Transcribing Audio...' : transcriptionText ? 'Re-transcribe Audio' : 'Transcribe to Text'}
                 </button>
 
-                <span className="text-[10px] text-zinc-400">
+                <span className="text-xs text-zinc-400">
                   {AiSettingsManager.getSettings().primaryTranscriptionProvider === 'browser_speech' ? 'Offline Native Engine' : 'Speech Engine Active'}
                 </span>
               </div>
@@ -607,7 +607,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-medium">Transcription Notice</p>
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300">{transcribeError}</p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300">{transcribeError}</p>
                     </div>
                   </div>
                 </div>
@@ -616,7 +616,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               {transcriptionText && (
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                       Transcript ({transcriptionSource || 'Offline Engine'})
                     </span>

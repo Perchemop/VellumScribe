@@ -243,7 +243,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             </span>
             <button
               onClick={isAllSelected ? onDeselectAll : onSelectAll}
-              className="text-[11px] font-medium opacity-80 hover:opacity-100 underline decoration-dotted ml-1"
+              className="text-xs font-medium opacity-80 hover:opacity-100 underline decoration-dotted ml-1"
             >
               {isAllSelected ? 'Deselect All' : 'Select All'}
             </button>
@@ -445,7 +445,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     ? `Move ${count} Note${count > 1 ? 's' : ''} to Trash?`
                     : `Permanently Delete ${count} Note${count > 1 ? 's' : ''}?`}
                 </h3>
-                <p className="text-[11px] text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-400 mt-0.5">
                   {confirmModal === 'trash'
                     ? 'Notes can be restored from the Archive & Trash tab anytime.'
                     : 'This action is irreversible and will delete all attachments.'}
@@ -504,7 +504,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     style={{ backgroundColor: ev.color || '#3b82f6' }}
                   />
                   <span className="truncate flex-1">{ev.title}</span>
-                  <span className="text-[10px] text-zinc-400 uppercase tracking-wider">{ev.category}</span>
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">{ev.category}</span>
                 </button>
               ))}
             </div>
@@ -539,7 +539,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     className={`w-6 h-6 rounded-full ${!c.value ? 'border border-dashed border-zinc-400' : ''}`}
                     style={{ backgroundColor: c.value || 'transparent' }}
                   />
-                  <span className="text-[10px] text-zinc-600 dark:text-zinc-400">{c.label}</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">{c.label}</span>
                 </button>
               ))}
             </div>
