@@ -232,7 +232,7 @@ export default function App() {
       setShowFabSpeedDial(false);
     } catch (e: any) {
       console.error('Failed to create new note:', e);
-      showToast(`Storage Error: ${e.message}`);
+      showToast(e.message ? `Could not create note: ${e.message}` : 'Could not create note. Please verify available device storage.');
     }
   };
 
@@ -325,7 +325,7 @@ export default function App() {
                 <Archive className="w-3.5 h-3.5" />
                 <span>Archive</span>
                 {archivedNotesCount > 0 && (
-                  <span className="px-1.5 py-0.2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full text-[10px] font-semibold">
+                  <span className="px-1.5 py-0.2 bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full text-xs font-semibold">
                     {archivedNotesCount}
                   </span>
                 )}
@@ -581,7 +581,7 @@ export default function App() {
               >
                 <FileText className="w-4 h-4" />
               </div>
-              <span className="text-[10px] tracking-tight">Notes</span>
+              <span className="text-xs tracking-tight">Notes</span>
             </button>
 
             <button
@@ -603,7 +603,7 @@ export default function App() {
               >
                 <Clock className="w-4 h-4" />
               </div>
-              <span className="text-[10px] tracking-tight">Recent</span>
+              <span className="text-xs tracking-tight">Recent</span>
             </button>
 
             <button
@@ -625,7 +625,7 @@ export default function App() {
               >
                 <Archive className="w-4 h-4" />
               </div>
-              <span className="text-[10px] tracking-tight">Archive</span>
+              <span className="text-xs tracking-tight">Archive</span>
             </button>
 
             <button
@@ -647,7 +647,7 @@ export default function App() {
               >
                 <Settings className="w-4 h-4" />
               </div>
-              <span className="text-[10px] tracking-tight">Settings</span>
+              <span className="text-xs tracking-tight">Settings</span>
             </button>
           </nav>
         )}
@@ -686,7 +686,7 @@ export default function App() {
                     toastAction.onClick();
                     dismissToast();
                   }}
-                  className="px-2 py-0.5 bg-zinc-800 dark:bg-zinc-200 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded font-semibold text-[11px] transition-colors"
+                  className="px-2 py-0.5 bg-zinc-800 dark:bg-zinc-200 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded font-semibold text-xs transition-colors"
                 >
                   {toastAction.label}
                 </button>

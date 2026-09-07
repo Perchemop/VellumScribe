@@ -160,7 +160,7 @@ ${formattedText}
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Share &amp; Export Note
               </h2>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 {note.title || 'Untitled Note'} &bull; {note.note_type === 'checklist' ? 'To-Do List' : 'Document'}
               </p>
             </div>
@@ -253,7 +253,7 @@ ${formattedText}
                   <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                     Direct System Share
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-medium">
                     Native Android Intent
                   </span>
                 </div>
@@ -284,7 +284,7 @@ ${formattedText}
                     <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                       {copied ? 'Copied!' : 'Copy Note'}
                     </div>
-                    <div className="text-[10px] text-zinc-400">To clipboard</div>
+                    <div className="text-xs text-zinc-400">To clipboard</div>
                   </div>
                 </button>
 
@@ -299,14 +299,14 @@ ${formattedText}
                     <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                       Print / PDF
                     </div>
-                    <div className="text-[10px] text-zinc-400">System print view</div>
+                    <div className="text-xs text-zinc-400">System print view</div>
                   </div>
                 </button>
               </div>
 
               {/* Text Preview */}
               <div className="space-y-1.5">
-                <div className="text-[11px] font-medium text-zinc-400">Document Excerpt</div>
+                <div className="text-xs font-medium text-zinc-400">Document Excerpt</div>
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 text-xs text-zinc-700 dark:text-zinc-300 max-h-36 overflow-y-auto whitespace-pre-wrap font-mono">
                   {formattedText}
                 </div>
@@ -328,7 +328,7 @@ ${formattedText}
                 <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                   Instant Air-Gapped Device Scanning
                 </div>
-                <p className="text-[11px] text-zinc-400 max-w-xs leading-relaxed">
+                <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
                   Scan this code directly with another smartphone camera to transfer the note offline without internet, cloud, or pairing.
                 </p>
               </div>
@@ -354,7 +354,7 @@ ${formattedText}
                   <span>Share .md File</span>
                 </button>
               </div>
-              <pre className="p-3 bg-zinc-900 text-zinc-200 dark:bg-black dark:text-zinc-300 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-56">
+              <pre className="p-3 bg-zinc-900 text-zinc-200 dark:bg-black dark:text-zinc-300 rounded-2xl text-xs font-mono overflow-x-auto max-h-56">
                 {markdownText}
               </pre>
             </div>
@@ -393,7 +393,7 @@ ${formattedText}
                   <span>Share .json</span>
                 </button>
               </div>
-              <pre className="p-3 bg-zinc-900 text-emerald-400 dark:bg-black dark:text-emerald-400 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-56">
+              <pre className="p-3 bg-zinc-900 text-emerald-400 dark:bg-black dark:text-emerald-400 rounded-2xl text-xs font-mono overflow-x-auto max-h-56">
                 {JSON.stringify(note, null, 2)}
               </pre>
             </div>

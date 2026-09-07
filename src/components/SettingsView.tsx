@@ -47,6 +47,7 @@ import { SyncProgressBar } from './SyncProgressBar';
 import { StorageDashboard } from './StorageDashboard';
 import { AppLogger, LogEntry } from '../lib/logger';
 import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
@@ -146,6 +147,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [remoteBackups, setRemoteBackups] = useState<Record<string, RemoteBackupItem[]>>({});
   const [loadingRemoteBackups, setLoadingRemoteBackups] = useState<Record<string, boolean>>({});
   const [isRestoringBackupId, setIsRestoringBackupId] = useState<string | null>(null);
+  const [restoreConfirmTarget, setRestoreConfirmTarget] = useState<{ provider: CloudStorageProvider; backupId: string; title?: string } | null>(null);
+
+  useModalBackHandler(!!restoreConfirmTarget, () => setRestoreConfirmTarget(null), 'settings-restore-backup-modal');
   const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
   const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() => CloudSyncEngine.getSyncQueue());
   const [serverProvidersConfig, setServerProvidersConfig] = useState<Record<string, { hasOAuthEnv?: boolean; isConfigured?: boolean }>>({});
@@ -292,18 +296,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setSyncFeedback(`Connected ${PROVIDERS[provider].name} destination with end-to-end encryption.`);
       handleLoadRemoteBackups(provider);
     } catch (e: any) {
-      setSyncFeedback(`Connection failed: ${e.message}`);
+      setSyncFeedback(`Connection failed: ${e.message || 'Unable to connect to service'}. Please check your credentials and network connection.`);
     } finally {
       setQuickConnectingProvider(null);
       setTimeout(() => setSyncFeedback(null), 3500);
     }
   };
 
-  const handleRestoreRemoteBackup = async (provider: CloudStorageProvider, backupId: string) => {
-    const confirm = window.confirm(
-      'Restore local notes from this remote cloud backup? A safety rollback snapshot of your current local data will be preserved.'
-    );
-    if (!confirm) return;
+  const promptRestoreRemoteBackup = (provider: CloudStorageProvider, backupId: string, title?: string) => {
+    setRestoreConfirmTarget({ provider, backupId, title });
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!restoreConfirmTarget) return;
+    const { provider, backupId } = restoreConfirmTarget;
+    setRestoreConfirmTarget(null);
 
     setIsRestoringBackupId(backupId);
     setSyncFeedback('Restoring and decrypting cloud backup snapshot...');
@@ -314,10 +321,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setNotes(StorageManager.getNotes());
         onRefreshNotes();
       } else {
-        setSyncFeedback(`Restore aborted: ${res.message}`);
+        setSyncFeedback(`Could not restore backup: ${res.message || 'Snapshot verification failed'}. Your local notes remain safe.`);
       }
     } catch (e: any) {
-      setSyncFeedback(`Restore error: ${e.message}`);
+      setSyncFeedback(`Restore failed: ${e.message || 'Error occurred while decrypting'}. Your existing local notes remain completely safe.`);
     } finally {
       setIsRestoringBackupId(null);
       setTimeout(() => setSyncFeedback(null), 5000);
@@ -563,7 +570,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Cloud className="w-4 h-4" />
           <span>Cloud Backup &amp; Providers</span>
           {activeAccounts.length > 0 && (
-            <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold">
+            <span className="px-1.5 py-0.2 text-xs rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold">
               {activeAccounts.length}
             </span>
           )}
@@ -668,7 +675,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <div>
                     <span className="font-semibold">{syncQueue.length} Offline Sync Request{syncQueue.length !== 1 ? 's' : ''} Queued</span>
-                    <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80">
+                    <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
                       Syncs interrupted by network drops will auto-retry when connection is restored.
                     </p>
                   </div>
@@ -701,12 +708,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       Cloud Backup Engine
                     </h3>
                     {isAirGapped ? (
-                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-full flex items-center gap-1">
                         <WifiOff className="w-3 h-3" />
                         Offline Air-Gapped Mode
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
                         {activeAccounts.length} Connected Destination{activeAccounts.length !== 1 ? 's' : ''}
                       </span>
@@ -766,7 +773,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>End-to-End Encrypted Cloud Architecture</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-emerald-700 dark:text-emerald-400">
+              <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
                 Connect backup destinations securely. Notes and attachments are encrypted locally using AES-256-GCM before transport. Cloud destinations never receive plaintext note contents.
               </p>
             </div>
@@ -805,30 +812,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <div>
                             <div className="flex items-center gap-1.5">
                               <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{meta.name}</h4>
-                              <span className={`text-[10px] px-1.5 py-0.2 rounded-md border font-medium ${meta.badgeBg}`}>
+                              <span className={`text-xs px-1.5 py-0.2 rounded-md border font-medium ${meta.badgeBg}`}>
                                 {meta.category}
                               </span>
                               {isConnected ? (
-                                <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
+                                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded-md">
                                   Connected
                                 </span>
                               ) : null}
                             </div>
-                            <p className="text-[11px] text-zinc-400 mt-0.5 line-clamp-1">{meta.description}</p>
+                            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{meta.description}</p>
                           </div>
                         </div>
                       </div>
 
                       {/* Connection status and path info */}
                       {isConnected ? (
-                        <div className="p-2.5 bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-1 text-[11px]">
+                        <div className="p-2.5 bg-emerald-500/5 dark:bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-1 text-xs">
                           <div className="flex items-center justify-between text-emerald-700 dark:text-emerald-300 font-semibold">
                             <span className="flex items-center gap-1">
                               <Check className="w-3 h-3" />
                               {account?.email || account?.displayName || 'Connected'}
                             </span>
                           </div>
-                          <p className="font-mono text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                          <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400 truncate">
                             /vellumscribe_backup.json.gz (AES-256-GCM)
                           </p>
                         </div>
@@ -836,7 +843,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                       {/* Action buttons */}
                       <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] text-zinc-400">
+                        <span className="text-xs text-zinc-400">
                           {isConnected && account?.connectedAt
                             ? `Connected: ${new Date(account.connectedAt).toLocaleDateString()}`
                             : 'Client-side encrypted'}
@@ -924,12 +931,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                       Remote Cloud Backups &amp; Snapshots
                     </h3>
-                    <span className="px-2 py-0.5 text-[10px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full flex items-center gap-1">
+                    <span className="px-2 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full flex items-center gap-1">
                       <FileCheck className="w-3 h-3" />
                       SHA-256 Verified
                     </span>
                   </div>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Verify cloud archives, inspect cryptographic checksums, or restore notes from a cloud snapshot.
                   </p>
                 </div>
@@ -951,7 +958,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     No cloud destinations connected yet.
                   </p>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Tap &quot;1-Click Connect&quot; on any destination above to enable automatic encrypted backups with zero configuration.
                   </p>
                 </div>
@@ -976,7 +983,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                               {meta?.name || acc.provider}
                             </span>
-                            <span className="text-[10px] text-zinc-400 font-mono">
+                            <span className="text-xs text-zinc-400 font-mono">
                               ({providerBackups.length} snapshot{providerBackups.length !== 1 ? 's' : ''})
                             </span>
                           </div>
@@ -992,14 +999,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         </div>
 
                         {isLoading ? (
-                          <p className="text-[11px] text-zinc-400 py-2">Querying remote cloud storage...</p>
+                          <p className="text-xs text-zinc-400 py-2">Querying remote cloud storage...</p>
                         ) : providerBackups.length === 0 ? (
-                          <div className="py-2 text-[11px] text-zinc-400 flex items-center justify-between">
+                          <div className="py-2 text-xs text-zinc-400 flex items-center justify-between">
                             <span>No backup snapshots found in this vault yet.</span>
                             <button
                               onClick={handleManualSync}
                               disabled={isSyncing}
-                              className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
                             >
                               Create first backup
                             </button>
@@ -1022,14 +1029,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 >
                                   <div className="min-w-0 space-y-0.5">
                                     <div className="flex items-center gap-2">
-                                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate text-[11px]">
+                                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate text-xs">
                                         {b.filename}
                                       </p>
-                                      <span className="text-[10px] font-mono text-zinc-400 shrink-0">
+                                      <span className="text-xs font-mono text-zinc-400 shrink-0">
                                         {sizeFormatted}
                                       </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+                                    <div className="flex items-center gap-2 text-xs text-zinc-400">
                                       <span>{new Date(b.createdAt).toLocaleString()}</span>
                                       {b.checksum && (
                                         <span
@@ -1046,16 +1053,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                     <a
                                       href={`/api/cloud/${acc.provider}/restore/${b.id}`}
                                       download={b.filename}
-                                      className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
+                                      aria-label={`Download encrypted archive file ${b.filename}`}
+                                      className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
                                       title="Download encrypted archive file"
                                     >
                                       <ArrowDownToLine className="w-3.5 h-3.5" />
                                     </a>
 
                                     <button
-                                      onClick={() => handleRestoreRemoteBackup(acc.provider, b.id)}
+                                      type="button"
+                                      onClick={() => promptRestoreRemoteBackup(acc.provider, b.id, b.filename)}
                                       disabled={isRestoring}
-                                      className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-lg font-semibold text-[11px] transition-colors flex items-center gap-1 disabled:opacity-40"
+                                      aria-label={`Restore backup snapshot ${b.filename || b.id}`}
+                                      className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 disabled:opacity-40 min-h-[36px]"
                                     >
                                       {isRestoring ? (
                                         <>
@@ -1086,7 +1096,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
                     Granular Document Cloud Backup Preferences
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Control which individual notes sync to the cloud versus remain strictly offline on this device.
                   </p>
                 </div>
@@ -1107,7 +1117,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           <p className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                             {note.title || 'Untitled Document'}
                           </p>
-                          <p className="text-[10px] text-zinc-400 truncate">
+                          <p className="text-xs text-zinc-400 truncate">
                             Updated {new Date(note.updated_at || note.created_at).toLocaleString()}
                           </p>
                         </div>
@@ -1146,12 +1156,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <h3 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
                       Default Built-In Offline Engines
                     </h3>
-                    <p className="text-[11px] text-emerald-800/90 dark:text-emerald-300/80">
+                    <p className="text-xs text-emerald-800/90 dark:text-emerald-300/80">
                       Zero accounts, zero external API keys, zero network lag.
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 rounded-full flex items-center gap-1.5">
+                <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 rounded-full flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Offline-First Active
                 </span>
@@ -1163,7 +1173,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Mic className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Native Speech Transcription</span>
                   </div>
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                     Uses Web Speech and Web Audio APIs for instant, on-device audio transcription while recording.
                   </p>
                 </div>
@@ -1173,7 +1183,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Local Rule Intelligence</span>
                   </div>
-                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                     Synthesizes executive summaries, action item checklists, and key takeaways completely offline.
                   </p>
                 </div>
@@ -1204,7 +1214,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <option value="groq_whisper">Groq Cloud Whisper Large v3 (Cloud Opt-in)</option>
                     <option value="deepgram">Deepgram Speech Platform (Cloud Opt-in)</option>
                   </select>
-                  <p className="text-[10px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Determines how meeting voice recordings and live speech are transcribed.
                   </p>
                 </div>
@@ -1225,7 +1235,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <option value="google">Google AI Studio Gemini (Cloud Opt-in)</option>
                     <option value="groq">Groq Cloud Llama 3.3 70B (Cloud Opt-in)</option>
                   </select>
-                  <p className="text-[10px] text-zinc-400">
+                  <p className="text-xs text-zinc-400">
                     Powers meeting minutes synthesis, key action extraction, and document summaries.
                   </p>
                 </div>
@@ -1237,7 +1247,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                     Automatic Offline Fallback
                   </p>
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     If an external cloud provider fails or device is disconnected, seamlessly fall back to the native offline engines.
                   </p>
                 </div>
@@ -1263,7 +1273,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                   External APIs &amp; Remote Servers (Opt-In)
                 </h3>
-                <span className="px-2 py-0.5 text-[10px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-full">
+                <span className="px-2 py-0.5 text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-full">
                   Optional
                 </span>
               </div>
@@ -1280,16 +1290,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Key className="w-4 h-4 text-indigo-500" />
                     <span>Google AI Studio API Key</span>
                     {googleKeyInput ? (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
                         Configured
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
                         Not configured (Using Offline Engine)
                       </span>
                     )}
                   </label>
-                  <p className="text-[11px] text-zinc-400">Optional: For Gemini 2.5 / 1.5 cloud summaries and multimodal OCR.</p>
+                  <p className="text-xs text-zinc-400">Optional: For Gemini 2.5 / 1.5 cloud summaries and multimodal OCR.</p>
                 </div>
                 <a
                   href="https://aistudio.google.com/app/apikey"
@@ -1375,16 +1385,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Key className="w-4 h-4 text-orange-500" />
                     <span>Groq Cloud API Key</span>
                     {groqKeyInput ? (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
                         Configured
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
                         Not configured
                       </span>
                     )}
                   </label>
-                  <p className="text-[11px] text-zinc-400">Optional: For ultra-fast Llama 3.3 70B and Whisper Large v3 cloud processing.</p>
+                  <p className="text-xs text-zinc-400">Optional: For ultra-fast Llama 3.3 70B and Whisper Large v3 cloud processing.</p>
                 </div>
                 <a
                   href="https://console.groq.com/keys"
@@ -1470,16 +1480,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Key className="w-4 h-4 text-cyan-500" />
                     <span>Deepgram API Key</span>
                     {deepgramKeyInput ? (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
                         Configured
                       </span>
                     ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
                         Not configured
                       </span>
                     )}
                   </label>
-                  <p className="text-[11px] text-zinc-400">Optional: For Deepgram Nova-3 speech intelligence cloud API.</p>
+                  <p className="text-xs text-zinc-400">Optional: For Deepgram Nova-3 speech intelligence cloud API.</p>
                 </div>
                 <a
                   href="https://console.deepgram.com/"
@@ -1564,16 +1574,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Cpu className="w-4 h-4 text-emerald-500" />
                   <span>Self-Hosted Ollama Daemon</span>
                   {ollamaEndpointInput ? (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
+                    <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
                       Endpoint Set
                     </span>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                    <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
                       Optional LAN / PC
                     </span>
                   )}
                 </label>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   On mobile devices, <code>localhost</code> refers to your phone. To connect to Ollama on your PC, enter your computer's local Wi-Fi IP address (e.g. <code>http://192.168.1.150:11434</code>).
                 </p>
               </div>
@@ -1601,7 +1611,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               {ollamaModels.length > 0 && (
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl">
-                  <span className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                     Detected Local Models:
                   </span>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -1657,16 +1667,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <Cpu className="w-4 h-4 text-purple-500" />
                   <span>Self-Hosted Local Whisper Speech Server</span>
                   {localWhisperEndpointInput ? (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold rounded-md">
+                    <span className="text-xs px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold rounded-md">
                       Endpoint Set
                     </span>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
+                    <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
                       Optional LAN / PC
                     </span>
                   )}
                 </label>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
                   Optional: If running <code>whisper.cpp</code> or Faster-Whisper on your PC, enter its network URL (e.g. <code>http://192.168.1.150:8080/v1/audio/transcriptions</code>).
                 </p>
               </div>
@@ -1723,7 +1733,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex items-center justify-between">
               <div className="space-y-0.5">
                 <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Bulk Key Import</span>
-                <p className="text-[10px] text-zinc-400">Import keys from .env or JSON files directly.</p>
+                <p className="text-xs text-zinc-400">Import keys from .env or JSON files directly.</p>
               </div>
               <button
                 type="button"
@@ -1775,12 +1785,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                 >
                   <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Workspace</p>
-                  <p className="text-[11px] text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
+                  <p className="text-xs text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
                 </button>
 
                 <label className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216] cursor-pointer">
                   <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from JSON File</p>
-                  <p className="text-[11px] text-zinc-400">Validate format, preview contents, and safely restore</p>
+                  <p className="text-xs text-zinc-400">Validate format, preview contents, and safely restore</p>
                   <input 
                     type="file" 
                     accept=".json" 
@@ -1821,7 +1831,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                 >
                   <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export Markdown Archive</p>
-                  <p className="text-[11px] text-zinc-400">Clean Markdown text files readable in any standard text editor</p>
+                  <p className="text-xs text-zinc-400">Clean Markdown text files readable in any standard text editor</p>
                 </button>
               </div>
             </div>
@@ -1868,10 +1878,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       <Key className="w-4 h-4 text-zinc-500" />
                       <div>
                         <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{s.alias}</p>
-                        <p className="font-mono text-[10px] text-zinc-400">{s.masked_value}</p>
+                        <p className="font-mono text-xs text-zinc-400">{s.masked_value}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                       {s.algorithm}
                     </span>
                   </div>
@@ -1895,18 +1905,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       Android Phone Platform &amp; Performance
                     </h3>
-                    <p className="text-[11px] text-zinc-400">
+                    <p className="text-xs text-zinc-400">
                       Primary mobile workstation configuration &amp; hardware status
                     </p>
                   </div>
                 </div>
                 {AndroidPwaManager.isStandalone() ? (
-                  <span className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5">
+                  <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Standalone App</span>
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
+                  <span className="px-2.5 py-1 text-xs font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 rounded-full">
                     Android Mobile Web / PWA
                   </span>
                 )}
@@ -1918,7 +1928,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Zap className="w-3.5 h-3.5 text-amber-500" />
                     <span>Sub-Millisecond Speed</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  <p className="text-xs text-zinc-400 leading-relaxed">
                     Zero network delay for edits, search, and checklists using on-device SQLite &amp; client-side caching.
                   </p>
                 </div>
@@ -1928,7 +1938,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                     <span>Single-Thumb Navigation</span>
                   </div>
-                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                  <p className="text-xs text-zinc-400 leading-relaxed">
                     Ergonomic bottom navigation, Material speed-dial FAB, and 48px+ touch targets for one-handed use.
                   </p>
                 </div>
@@ -1941,7 +1951,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <p className="font-semibold text-indigo-950 dark:text-indigo-200">
                       Add to Android Home Screen
                     </p>
-                    <p className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
                       Install for full-screen edge-to-edge experience without browser address bar.
                     </p>
                   </div>
@@ -1971,7 +1981,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       )}
                     </button>
                   ) : (
-                    <span className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
                       Browser Menu (⋮) &rarr; Add to Home screen
                     </span>
                   )}
@@ -2029,7 +2039,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                           {t.lastSyncStatus === 'success' ? `Synced (${Math.round((t.lastTransferBytes || 0) / 1024)} KB)` : t.lastSyncError || 'Sync failed'}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 text-zinc-400 text-[11px]">
+                      <div className="flex items-center gap-3 text-zinc-400 text-xs">
                         <span>{t.lastTransferDurationMs}ms</span>
                         <span>{new Date(t.lastSyncAt).toLocaleTimeString()}</span>
                       </div>
@@ -2081,7 +2091,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
               </div>
-              <span className={`px-2.5 py-1 text-[11px] font-mono font-semibold rounded-full ${
+              <span className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-full ${
                 importPreviewData.valid 
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800' 
                   : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800'
@@ -2105,24 +2115,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
                     <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.notes}</p>
-                    <p className="text-[10px] text-zinc-400 font-medium">Notes</p>
+                    <p className="text-xs text-zinc-400 font-medium">Notes</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
                     <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.events}</p>
-                    <p className="text-[10px] text-zinc-400 font-medium">Categories</p>
+                    <p className="text-xs text-zinc-400 font-medium">Categories</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
                     <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.recordings}</p>
-                    <p className="text-[10px] text-zinc-400 font-medium">Voice Memos</p>
+                    <p className="text-xs text-zinc-400 font-medium">Voice Memos</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
                     <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.ocrScans}</p>
-                    <p className="text-[10px] text-zinc-400 font-medium">OCR Scans</p>
+                    <p className="text-xs text-zinc-400 font-medium">OCR Scans</p>
                   </div>
                 </div>
 
                 {importPreviewData.warnings.length > 0 && (
-                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs text-amber-800 dark:text-amber-300 space-y-1">
                     <p className="font-semibold flex items-center gap-1.5">
                       <AlertCircle className="w-3.5 h-3.5" />
                       Compatibility Warnings:
@@ -2135,7 +2145,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 )}
 
-                <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+                <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                   <p>
                     A safety snapshot of your current local workspace will be generated automatically before importing. The import executes within an atomic SQLite transaction and verifies database integrity before saving.
@@ -2198,6 +2208,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cloud Backup Restore In-App Confirmation Modal */}
+      {restoreConfirmTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="restore-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in"
+        >
+          <div className="bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 id="restore-modal-title" className="text-base font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
+                  Restore Cloud Backup?
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                  {restoreConfirmTarget.title || restoreConfirmTarget.backupId}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
+              Restoring will synchronize your local notes from this encrypted remote cloud snapshot. A safety rollback snapshot of your current local notes will be automatically preserved before restoring.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setRestoreConfirmTarget(null)}
+                className="px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteRestore}
+                className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 min-h-[44px]"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Confirm &amp; Restore</span>
+              </button>
             </div>
           </div>
         </div>

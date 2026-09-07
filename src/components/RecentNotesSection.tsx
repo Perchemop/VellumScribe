@@ -165,7 +165,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                       className="w-2 h-2 rounded-full shrink-0"
                       style={{ backgroundColor: event?.color || '#a1a1aa' }}
                     />
-                    <span className="text-[11px] font-medium text-zinc-400 truncate">
+                    <span className="text-xs font-medium text-zinc-400 truncate">
                       {event?.title || 'General'}
                     </span>
                   </div>
@@ -174,12 +174,12 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                     <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
                       {note.title || 'Untitled Note'}
                     </h3>
-                    <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
                       {isLocked ? 'Protected note with PIN security' : note.body || 'No text added...'}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 text-[10px] text-zinc-400 font-mono">
+                  <div className="flex items-center justify-between pt-1 text-xs text-zinc-400 font-mono">
                     <div className="flex items-center gap-1.5">
                       {isLocked && <Lock className="w-3 h-3 text-amber-500" />}
                       {note.reminder_at && <Bell className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
@@ -216,11 +216,11 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
 
       {/* Footer System Status */}
       <div className="max-w-md mx-auto w-full text-center space-y-1">
-        <div className="flex items-center justify-center gap-2 text-[11px] text-zinc-400">
+        <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span>Local Browser Storage Active</span>
         </div>
-        <p className="text-[10px] text-zinc-400">
+        <p className="text-xs text-zinc-400">
           Offline-first architecture with cloud backup support.
         </p>
       </div>

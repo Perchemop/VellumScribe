@@ -23,7 +23,7 @@ export const SyncProgressBar: React.FC<SyncProgressBarProps> = ({ isSyncing, pro
         </div>
         
         <div className="flex-1">
-          <p className="text-[11px] font-semibold truncate max-w-[200px]">
+          <p className="text-xs font-semibold truncate max-w-[200px]">
             {progress?.message || 'Syncing to cloud...'}
           </p>
           {progress?.percent !== undefined && (

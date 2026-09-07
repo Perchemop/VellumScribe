@@ -76,11 +76,11 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                 <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                   VellumScribe Update &amp; Versioning
                 </h2>
-                <span className="px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-mono font-semibold rounded-md border border-emerald-500/20">
+                <span className="px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-mono font-semibold rounded-md border border-emerald-500/20">
                   v{CURRENT_APP_VERSION}
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-xs text-zinc-400">
                 Installed Build #{CURRENT_BUILD_NUMBER} &bull; Local Storage Schema v3
               </p>
             </div>
@@ -152,7 +152,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                         Version {rel.version}
                       </span>
                       {rel.isCurrent && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500 text-white font-medium">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500 text-white font-medium">
                           Active Build
                         </span>
                       )}
@@ -162,7 +162,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
 
                   {/* Highlights */}
                   <div className="space-y-1.5">
-                    <div className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                    <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
                       Key Enhancements
                     </div>
                     <ul className="space-y-1 text-xs text-zinc-600 dark:text-zinc-400">
@@ -178,8 +178,8 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                   {/* Fixes */}
                   {rel.fixes && rel.fixes.length > 0 && (
                     <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-1">
-                      <div className="text-[10px] font-medium text-zinc-400">Performance &amp; Bugfixes:</div>
-                      <div className="text-[11px] text-zinc-500">
+                      <div className="text-xs font-medium text-zinc-400">Performance &amp; Bugfixes:</div>
+                      <div className="text-xs text-zinc-500">
                         {rel.fixes.join(' • ')}
                       </div>
                     </div>
@@ -243,20 +243,20 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
               {/* Version Specs */}
               <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-zinc-800/60 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <div className="text-zinc-400 text-[10px]">Package ID</div>
-                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-[11px]">com.vellumscribe.app</div>
+                  <div className="text-zinc-400 text-xs">Package ID</div>
+                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">com.vellumscribe.app</div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[10px]">Release Track</div>
-                  <div className="font-medium text-emerald-600 dark:text-emerald-400 text-[11px]">Production (Stable)</div>
+                  <div className="text-zinc-400 text-xs">Release Track</div>
+                  <div className="font-medium text-emerald-600 dark:text-emerald-400 text-xs">Production (Stable)</div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[10px]">Database Architecture</div>
-                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-[11px]">Local Storage / Schema v3</div>
+                  <div className="text-zinc-400 text-xs">Database Architecture</div>
+                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">Local Storage / Schema v3</div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-[10px]">Storage Migration</div>
-                  <div className="font-medium text-zinc-800 dark:text-zinc-200 text-[11px]">Automatic Safe Backfill</div>
+                  <div className="text-zinc-400 text-xs">Storage Migration</div>
+                  <div className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">Automatic Safe Backfill</div>
                 </div>
               </div>
             </div>
@@ -283,10 +283,10 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                     >
                       <div className="flex items-center justify-between text-zinc-800 dark:text-zinc-200">
                         <span>v{log.fromVersion} &rarr; v{log.toVersion}</span>
-                        <span className="text-[10px] text-emerald-500 uppercase">{log.status}</span>
+                        <span className="text-xs text-emerald-500 uppercase">{log.status}</span>
                       </div>
-                      <div className="text-[11px] text-zinc-500 font-sans">{log.details}</div>
-                      <div className="text-[10px] text-zinc-400">{new Date(log.timestamp).toLocaleString()}</div>
+                      <div className="text-xs text-zinc-500 font-sans">{log.details}</div>
+                      <div className="text-xs text-zinc-400">{new Date(log.timestamp).toLocaleString()}</div>
                     </div>
                   ))}
                 </div>
