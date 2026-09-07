@@ -18,6 +18,7 @@ import {
 import { AppLogo } from './AppLogo';
 import { StorageManager } from '../lib/storage';
 import { AndroidPwaManager } from '../lib/androidPwaManager';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface FirstTimeUserGuideModalProps {
   isOpen: boolean;
@@ -81,6 +82,13 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
   isOpen,
   onClose,
 }) => {
+  const handleDismiss = () => {
+    markOnboardingCompleted();
+    onClose();
+  };
+
+  useModalBackHandler(isOpen, handleDismiss, 'first-time-user-guide');
+
   const [currentStep, setCurrentStep] = useState(0);
   const [canInstall, setCanInstall] = useState(() => AndroidPwaManager.canPromptInstall());
   const [installSuccess, setInstallSuccess] = useState(false);
@@ -104,11 +112,6 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const handleDismiss = () => {
-    markOnboardingCompleted();
-    onClose();
-  };
 
   const handleInstallClick = async () => {
     const res = await AndroidPwaManager.promptInstall();

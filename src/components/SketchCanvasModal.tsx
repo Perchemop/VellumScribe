@@ -8,6 +8,7 @@ import {
   Eraser,
   Download,
 } from 'lucide-react';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SketchCanvasModalProps {
   initialDataUrl?: string;
@@ -30,6 +31,7 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
   onSave,
   onClose,
 }) => {
+  useModalBackHandler(true, onClose, 'sketch-canvas-modal');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [strokeColor, setStrokeColor] = useState('#09090b');

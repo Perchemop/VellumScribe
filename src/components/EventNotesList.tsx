@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Search,
@@ -30,6 +30,7 @@ import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { BatchActionBar } from './BatchActionBar';
 import { NoteShareModal } from './NoteShareModal';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface EventNotesListProps {
   events: EventRecord[];
@@ -62,6 +63,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   onRefresh,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<NoteTabFilter>('all');
   const [sortBy, setSortBy] = useState<SortOption>('updated');
@@ -71,10 +73,49 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   const [newEventCategory, setNewEventCategory] = useState<EventRecord['category']>('meeting');
   const [newEventColor, setNewEventColor] = useState('#3b82f6');
 
+  // Debounce search query input (180ms) to avoid stuttering on large note collections
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 180);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Pre-aggregate counts for recordings and OCR scans to avoid N+1 scans in note render loops
+  const recordingsCountMap = useMemo(() => {
+    const map = new Map<number, number>();
+    try {
+      const all = StorageManager.getRecordings();
+      for (const r of all) {
+        if (r.note_id) {
+          map.set(r.note_id, (map.get(r.note_id) || 0) + 1);
+        }
+      }
+    } catch {}
+    return map;
+  }, [notes]);
+
+  const ocrScansCountMap = useMemo(() => {
+    const map = new Map<number, number>();
+    try {
+      const all = StorageManager.getOcrScans();
+      for (const s of all) {
+        if (s.note_id) {
+          map.set(s.note_id, (map.get(s.note_id) || 0) + 1);
+        }
+      }
+    } catch {}
+    return map;
+  }, [notes]);
+
   // Batch Selection State
   const [selectedNoteIds, setSelectedNoteIds] = useState<number[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState<boolean>(false);
   const [shareNoteTarget, setShareNoteTarget] = useState<NoteRecord | null>(null);
+
+  // Hook up Android hardware & gesture back handling for modals in this component
+  useModalBackHandler(showNewEventModal, () => setShowNewEventModal(false), 'new-event-modal');
+  useModalBackHandler(!!shareNoteTarget, () => setShareNoteTarget(null), 'share-note-modal');
 
   // Extract all unique tags across notes
   const allAvailableTags = useMemo(() => {
@@ -115,9 +156,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           return false;
         }
 
-        // Search query filter
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim();
+        // Search query filter (using debounced query)
+        if (debouncedQuery.trim()) {
+          const query = debouncedQuery.toLowerCase().trim();
           const bodyMatch = n.body.toLowerCase().includes(query);
           const titleMatch = (n.title || '').toLowerCase().includes(query);
           const locMatch = (n.location_name || '').toLowerCase().includes(query);
@@ -157,7 +198,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         const timeB = new Date(b.updated_at || b.created_at).getTime();
         return timeB - timeA;
       });
-  }, [notes, activeTab, selectedEventId, selectedTag, searchQuery, sortBy, events]);
+  }, [notes, activeTab, selectedEventId, selectedTag, debouncedQuery, sortBy, events]);
 
   // Batch Selection Handlers
   const handleToggleNoteSelect = (noteId: number, e?: React.MouseEvent) => {
@@ -204,6 +245,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   // In-app confirm state (avoids iframe window.confirm blocks)
   const [confirmEmptyTrashModal, setConfirmEmptyTrashModal] = useState(false);
   const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<number | null>(null);
+  useModalBackHandler(confirmEmptyTrashModal, () => setConfirmEmptyTrashModal(false), 'confirm-empty-trash-modal');
 
   const handleEmptyTrash = () => {
     setConfirmEmptyTrashModal(true);
@@ -544,8 +586,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             {filteredNotes.map((note) => {
               const isSelectedInBatch = selectedNoteIds.includes(note.id);
               const isActiveEditor = selectedNoteId === note.id;
-              const recordings = StorageManager.getRecordingsForNote(note.id);
-              const ocrScans = StorageManager.getOcrScansForNote(note.id);
+              const recordingsCount = recordingsCountMap.get(note.id) || 0;
+              const ocrScansCount = ocrScansCountMap.get(note.id) || 0;
               const isChecklist = note.note_type === 'checklist';
               const isSketch = note.note_type === 'sketch';
               const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
@@ -562,6 +604,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 <div
                   key={note.id}
                   id={`note-item-${note.id}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Note: ${displayTitle}`}
                   onClick={(e) => {
                     if (isSelectionMode || selectedNoteIds.length > 0) {
                       handleToggleNoteSelect(note.id, e);
@@ -569,11 +614,21 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                       onSelectNote(note.id);
                     }
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (isSelectionMode || selectedNoteIds.length > 0) {
+                        handleToggleNoteSelect(note.id);
+                      } else {
+                        onSelectNote(note.id);
+                      }
+                    }
+                  }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     handleToggleNoteSelect(note.id, e);
                   }}
-                  className={`p-3.5 rounded-2xl cursor-pointer transition-all relative overflow-hidden group ${
+                  className={`p-3.5 rounded-2xl cursor-pointer transition-all relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
                     isSelectedInBatch
                       ? 'bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-900 dark:border-zinc-100 shadow-md ring-1 ring-zinc-400'
                       : isActiveEditor
@@ -584,13 +639,24 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   {/* Selection Checkbox (always visible when in selection mode, or on card hover) */}
                   {(isSelectionMode || selectedNoteIds.length > 0) && (
                     <div
+                      role="checkbox"
+                      tabIndex={0}
+                      aria-checked={isSelectedInBatch}
+                      aria-label={`Select note ${displayTitle}`}
                       onClick={(e) => handleToggleNoteSelect(note.id, e)}
-                      className="absolute top-3 right-3 z-10 p-0.5 rounded-full"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleToggleNoteSelect(note.id);
+                        }
+                      }}
+                      className="absolute top-3 right-3 z-10 p-1 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-400"
                     >
                       {isSelectedInBatch ? (
-                        <CheckCircle2 className="w-4 h-4 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
+                        <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
                       ) : (
-                        <Circle className="w-4 h-4 text-zinc-400 hover:text-zinc-700" />
+                        <Circle className="w-5 h-5 text-zinc-400 hover:text-zinc-700" />
                       )}
                     </div>
                   )}
@@ -600,14 +666,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                     <div className="flex items-center gap-1.5 min-w-0">
                       {note.color && !isPrivateLocked && (
                         <span
-                          className="w-2 h-2 rounded-full shrink-0"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: note.color }}
                           title="Color Tag"
                         />
                       )}
-                      {isChecklist && <CheckSquare className="w-3.5 h-3.5 text-zinc-500 shrink-0" />}
-                      {isSketch && <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                      {note.is_locked && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+                      {isChecklist && <CheckSquare className="w-4 h-4 text-zinc-500 shrink-0" />}
+                      {isSketch && <PenTool className="w-4 h-4 text-amber-500 shrink-0" />}
+                      {note.is_locked && <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                       <h4
                         className={`text-xs truncate ${
                           isActiveEditor || isSelectedInBatch
@@ -621,14 +687,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
                     <div className="flex items-center gap-1 shrink-0">
                       {note.is_pinned && (
-                        <Pin className="w-3 h-3 text-zinc-700 dark:text-zinc-300 fill-current" />
+                        <Pin className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 fill-current" />
                       )}
                     </div>
                   </div>
 
                   {/* Body or Checklist summary */}
                   {isChecklist && totalItems > 0 && !note.is_locked ? (
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-2.5">
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2.5">
                       <span>{completedItems} of {totalItems} items checked</span>
                       <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
                         <div
@@ -638,66 +704,68 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <p className={`text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
+                    <p className={`text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
                       {displayBody}
                     </p>
                   )}
 
                   {/* Subdued Metadata & Badges */}
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-zinc-100/80 dark:border-zinc-850">
+                  <div className="flex items-center justify-between text-xs text-zinc-400 pt-1.5 border-t border-zinc-100/80 dark:border-zinc-850">
                     <div className="flex flex-wrap items-center gap-2">
                       {!isPrivateLocked && note.reminder_at && (
-                        <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
-                          <Bell className="w-2.5 h-2.5" />
+                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <Bell className="w-3 h-3" />
                           <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                         </span>
                       )}
 
                       {!isPrivateLocked && note.location_name && (
-                        <span className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
-                          <MapPin className="w-2.5 h-2.5" />
-                          <span className="truncate max-w-[65px]">{note.location_name}</span>
+                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <MapPin className="w-3 h-3" />
+                          <span className="truncate max-w-[70px]">{note.location_name}</span>
                         </span>
                       )}
 
-                      {recordings.length > 0 && (
-                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
-                          <Mic className="w-2.5 h-2.5" />
-                          {recordings.length}
+                      {recordingsCount > 0 && (
+                        <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${recordingsCount} audio recordings`}>
+                          <Mic className="w-3 h-3" />
+                          {recordingsCount}
                         </span>
                       )}
 
-                      {ocrScans.length > 0 && (
-                        <span className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
-                          <Camera className="w-2.5 h-2.5" />
-                          {ocrScans.length}
+                      {ocrScansCount > 0 && (
+                        <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${ocrScansCount} scanned documents`}>
+                          <Camera className="w-3 h-3" />
+                          {ocrScansCount}
                         </span>
                       )}
 
                       {(note.sketch_data || note.sketch_media_key) && (
-                        <span className="flex items-center gap-0.5 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
-                          <PenTool className="w-2.5 h-2.5" />
+                        <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
+                          <PenTool className="w-3 h-3" />
                         </span>
                       )}
                     </div>
 
                     {/* Right side actions for Trash / Archive / Date */}
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       {activeTab === 'trash' && (
                         <>
                           <button
                             onClick={(e) => handleRestoreNote(e, note.id)}
                             title="Restore Note"
-                            className="text-zinc-600 dark:text-zinc-300 hover:text-emerald-600 p-0.5"
+                            aria-label="Restore Note"
+                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-emerald-600 p-1 rounded-lg transition-colors"
                           >
-                            <RotateCcw className="w-3 h-3" />
+                            <RotateCcw className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={(e) => handlePermanentDelete(e, note.id)}
                             title="Delete Permanently"
-                            className="text-zinc-600 dark:text-zinc-300 hover:text-rose-600 p-0.5"
+                            aria-label="Delete Permanently"
+                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-rose-600 p-1 rounded-lg transition-colors"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </>
                       )}
@@ -706,9 +774,10 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                         <button
                           onClick={(e) => handleUnarchiveNote(e, note.id)}
                           title="Restore Note (Unarchive)"
-                          className="text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 p-0.5"
+                          aria-label="Restore Note (Unarchive)"
+                          className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 p-1 rounded-lg transition-colors"
                         >
-                          <RotateCcw className="w-3 h-3" />
+                          <RotateCcw className="w-3.5 h-3.5" />
                         </button>
                       )}
 
@@ -722,13 +791,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                               onRefresh();
                             }}
                             title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
-                            className={`p-0.5 transition-colors ${
+                            aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+                            className={`min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded-lg transition-colors ${
                               note.is_pinned
                                 ? 'text-zinc-900 dark:text-zinc-100'
                                 : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
                             }`}
                           >
-                            <Pin className={`w-3 h-3 ${note.is_pinned ? 'fill-current' : ''}`} />
+                            <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
                           </button>
                           <button
                             id={`quick-duplicate-btn-${note.id}`}
@@ -741,9 +811,10 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                               }
                             }}
                             title="Duplicate Note"
-                            className="text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                            aria-label="Duplicate Note"
+                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <Copy className="w-3 h-3" />
+                            <Copy className="w-3.5 h-3.5" />
                           </button>
                           <button
                             id={`quick-share-btn-${note.id}`}
@@ -752,9 +823,10 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                               setShareNoteTarget(note);
                             }}
                             title="Share & Export Note"
-                            className="text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                            aria-label="Share & Export Note"
+                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <Share2 className="w-3 h-3" />
+                            <Share2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={(e) => {
@@ -766,14 +838,15 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                               onRefresh();
                             }}
                             title="Archive Note (Hide from active notes)"
-                            className="text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-0.5 transition-colors opacity-0 group-hover:opacity-100"
+                            aria-label="Archive Note (Hide from active notes)"
+                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                           >
-                            <Archive className="w-3 h-3" />
+                            <Archive className="w-3.5 h-3.5" />
                           </button>
                         </>
                       )}
 
-                      <span>
+                      <span className="text-zinc-400 dark:text-zinc-500 pl-1">
                         {new Date(note.updated_at || note.created_at).toLocaleDateString([], {
                           month: 'short',
                           day: 'numeric',

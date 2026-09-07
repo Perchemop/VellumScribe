@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ExternalLink, Trash2, ShieldCheck, Cloud, Lock, RefreshCw, Zap, Server, KeyRound, AlertCircle } from 'lucide-react';
 import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface CloudConnectModalProps {
   provider: CloudStorageProvider;
@@ -54,6 +55,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
   onConnected,
   onDisconnected,
 }) => {
+  useModalBackHandler(true, onClose, 'cloud-connect-modal');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSyncingNow, setIsSyncingNow] = useState(false);

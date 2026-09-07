@@ -25,6 +25,7 @@ import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SettingsModalProps {
   initialTab?: 'ai' | 'backup' | 'security';
@@ -37,6 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onSettingsUpdated,
 }) => {
+  useModalBackHandler(true, onClose, 'settings-modal');
   const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security'>(
     initialTab === 'security' ? 'security' : initialTab === 'backup' ? 'backup' : 'ai'
   );
@@ -129,14 +131,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Settings &amp; Configuration
               </h2>
-              <p className="text-[11px] text-zinc-400">Manage Google AI Studio API key, local database, and storage</p>
+              <p className="text-xs text-zinc-400">Manage Google AI Studio API key, local database, and storage</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Close"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 

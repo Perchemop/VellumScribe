@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { AppUpdateManager, APP_CHANGELOGS, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, ReleaseInfo } from '../lib/appUpdateManager';
 import { NativeBridge } from '../lib/nativeBridge';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface AppUpdateModalProps {
   onClose: () => void;
 }
 
 export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
+  useModalBackHandler(true, onClose, 'app-update-modal');
   const [isChecking, setIsChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<{
     isUpToDate: boolean;
@@ -85,9 +87,10 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl"
+            aria-label="Close"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 

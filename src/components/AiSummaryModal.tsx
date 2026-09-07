@@ -22,6 +22,7 @@ import { NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '..
 import { GeminiApiService, SummaryFormat, SummaryResult } from '../lib/geminiService';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface AiSummaryModalProps {
   isOpen: boolean;
@@ -80,6 +81,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
   ocrScans = [],
   onApplySummary,
 }) => {
+  useModalBackHandler(isOpen, onClose, 'ai-summary-modal');
   const [selectedFormat, setSelectedFormat] = useState<SummaryFormat>('executive');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [includeTranscripts, setIncludeTranscripts] = useState<boolean>(true);
