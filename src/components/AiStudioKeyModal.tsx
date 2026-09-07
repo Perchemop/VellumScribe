@@ -21,6 +21,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { AiSettingsManager, LlmProvider, TranscriptionProvider } from '../lib/aiSettings';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface AiStudioKeyModalProps {
   isOpen: boolean;
@@ -39,7 +40,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   description = 'Choose your preferred intelligence engine: use free BYOK cloud keys or 100% offline private processing.',
   initialProvider = 'google',
 }) => {
+  useModalBackHandler(isOpen, onClose, 'ai-studio-key-modal');
   const [selectedProvider, setSelectedProvider] = useState<'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules'>(initialProvider);
+  const [showAdvancedProviders, setShowAdvancedProviders] = useState(false);
   const [keyInput, setKeyInput] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState<boolean>(false);
@@ -248,6 +251,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     setVerifyStatus({ success: false, message: 'Key removed from local browser keystore.' });
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
       <div className="bg-white dark:bg-[#131317] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -259,16 +264,17 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{title}</h2>
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-snug">
                 {description}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Close"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -284,7 +290,20 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Google AI</span>
+            <span>Google AI (Recommended)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSelectTab('offline_rules')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
+              selectedProvider === 'offline_rules'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Offline Engine (No Keys)</span>
           </button>
 
           <button
@@ -325,19 +344,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             <Cpu className="w-3.5 h-3.5" />
             <span>Local Ollama</span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => handleSelectTab('offline_rules')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap ${
-              selectedProvider === 'offline_rules'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Offline Engine</span>
-          </button>
         </div>
 
         {/* Body */}
@@ -350,7 +356,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <p className="font-semibold text-xs text-amber-800 dark:text-amber-300">
                   Google AI Studio (Gemini 3.7 / 3.6 / OCR)
                 </p>
-                <p className="text-[11px] text-amber-700 dark:text-amber-400/90 leading-relaxed">
+                <p className="text-xs text-amber-700 dark:text-amber-400/90 leading-relaxed">
                   Free tier provides 15 RPM / 1,500 RPD for multimodal summaries, audio transcription, and handwritten notes OCR.
                 </p>
               </div>
@@ -364,7 +370,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <p className="font-semibold text-xs text-orange-800 dark:text-orange-300">
                   Groq Cloud (Llama 3.3 70B &amp; Whisper Large v3)
                 </p>
-                <p className="text-[11px] text-orange-700 dark:text-orange-400/90 leading-relaxed">
+                <p className="text-xs text-orange-700 dark:text-orange-400/90 leading-relaxed">
                   Ultra-fast LPU inference with generous free tier credits for Llama 3.3 70B text synthesis and Whisper audio transcription.
                 </p>
               </div>
@@ -378,7 +384,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <p className="font-semibold text-xs text-cyan-800 dark:text-cyan-300">
                   Deepgram Speech Intelligence
                 </p>
-                <p className="text-[11px] text-cyan-700 dark:text-cyan-400/90 leading-relaxed">
+                <p className="text-xs text-cyan-700 dark:text-cyan-400/90 leading-relaxed">
                   Provides $200 free credit upon signup for Nova-3 automated speech-to-text with word-level accuracy.
                 </p>
               </div>
@@ -392,7 +398,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <p className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
                   100% Private Local Offline Ollama
                 </p>
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
+                <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
                   Runs local open-weights LLMs (Llama 3.2, Mistral, Qwen) on your computer. Zero network tokens or accounts needed.
                 </p>
               </div>
@@ -407,7 +413,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   <p className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
                     Zero Setup Built-in Offline Engine
                   </p>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
                     No Ollama daemon or API keys required. Extracts action items, meeting minutes, and executive summaries directly inside the browser using deterministic natural language heuristics.
                   </p>
                 </div>
@@ -415,7 +421,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               <button
                 type="button"
                 onClick={handleSwitchToOfflineRules}
-                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-2xs"
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-2 shadow-2xs min-h-[44px]"
               >
                 <Check className="w-4 h-4" />
                 <span>Activate Built-in Offline Engine Now</span>
@@ -427,10 +433,10 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           {selectedProvider !== 'ollama' && selectedProvider !== 'offline_rules' && (
             <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-[10px]">
+                <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-xs">
                   1
                 </span>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">
+                <span className="font-medium text-xs text-zinc-800 dark:text-zinc-200">
                   Get your free API key
                 </span>
               </div>
@@ -444,10 +450,10 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 }
                 target="_blank"
                 rel="noreferrer"
-                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-[11px] flex items-center gap-1.5 shadow-2xs transition-colors"
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-colors min-h-[44px]"
               >
                 <span>Open {selectedProvider === 'google' ? 'AI Studio' : selectedProvider === 'groq' ? 'Groq Console' : 'Deepgram'}</span>
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           )}
@@ -456,8 +462,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           {selectedProvider !== 'ollama' && selectedProvider !== 'offline_rules' ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-[10px]">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-xs">
                     2
                   </span>
                   <span>Paste {selectedProvider === 'google' ? 'AIzaSy...' : selectedProvider === 'groq' ? 'gsk_...' : 'Deepgram'} Key</span>
@@ -465,9 +471,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <button
                   type="button"
                   onClick={handlePasteClipboard}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
+                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium"
                 >
-                  <Clipboard className="w-3 h-3" />
+                  <Clipboard className="w-3.5 h-3.5" />
                   <span>Paste</span>
                 </button>
               </div>
@@ -513,15 +519,15 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           ) : selectedProvider === 'ollama' ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   Ollama Daemon Endpoint
                 </label>
                 <button
                   type="button"
                   onClick={handleSwitchToOfflineRules}
-                  className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1"
+                  className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1 min-h-[44px]"
                 >
-                  <Shield className="w-3 h-3" />
+                  <Shield className="w-3.5 h-3.5" />
                   <span>Use Built-in Offline Engine Instead</span>
                 </button>
               </div>
@@ -539,14 +545,14 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
 
               {/* Endpoint Presets for Quick Selection on Mobile & PC */}
               <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-[10px] text-zinc-500 mr-1">Presets:</span>
+                <span className="text-xs text-zinc-500 mr-1">Presets:</span>
                 <button
                   type="button"
                   onClick={() => {
                     setOllamaEndpoint('http://localhost:11434');
                     setVerifyStatus(null);
                   }}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono border transition-colors ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
                     ollamaEndpoint === 'http://localhost:11434'
                       ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
                       : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -560,7 +566,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     setOllamaEndpoint('http://10.0.2.2:11434');
                     setVerifyStatus(null);
                   }}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono border transition-colors ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
                     ollamaEndpoint === 'http://10.0.2.2:11434'
                       ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
                       : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -574,7 +580,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     setOllamaEndpoint('http://192.168.1.50:11434');
                     setVerifyStatus(null);
                   }}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono border transition-colors ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
                     ollamaEndpoint.startsWith('http://192.168')
                       ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
                       : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -587,45 +593,45 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               {/* Troubleshooting and Quick Commands Box */}
               <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
                 <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
-                  <span className="font-semibold text-[11px] flex items-center gap-1.5">
+                  <span className="font-semibold text-xs flex items-center gap-1.5">
                     <Terminal className="w-3.5 h-3.5 text-indigo-500" />
                     <span>Start Ollama with CORS Origins Enabled:</span>
                   </span>
                   <button
                     type="button"
                     onClick={() => handleCopy('OLLAMA_ORIGINS="*" ollama serve', 'serve-cmd')}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-[10px] text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors min-h-[36px]"
                   >
-                    {copiedCmd === 'serve-cmd' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedCmd === 'serve-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedCmd === 'serve-cmd' ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <pre className="p-2 rounded-lg bg-zinc-950 text-emerald-400 font-mono text-[11px] overflow-x-auto select-all">
+                <pre className="p-2.5 rounded-lg bg-zinc-950 text-emerald-400 font-mono text-xs overflow-x-auto select-all">
                   OLLAMA_ORIGINS="*" ollama serve
                 </pre>
 
                 <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300 pt-1">
-                  <span className="text-[10px] text-zinc-500">Pull lightweight model:</span>
+                  <span className="text-xs text-zinc-500">Pull lightweight model:</span>
                   <button
                     type="button"
                     onClick={() => handleCopy('ollama pull llama3.2', 'pull-cmd')}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-[10px] text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors min-h-[36px]"
                   >
-                    {copiedCmd === 'pull-cmd' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    {copiedCmd === 'pull-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedCmd === 'pull-cmd' ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
-                <pre className="p-2 rounded-lg bg-zinc-950 text-zinc-300 font-mono text-[11px] overflow-x-auto select-all">
+                <pre className="p-2.5 rounded-lg bg-zinc-950 text-zinc-300 font-mono text-xs overflow-x-auto select-all">
                   ollama pull llama3.2
                 </pre>
               </div>
 
               {ollamaModels.length > 0 && (
                 <div className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
-                  <span className="font-semibold text-[10px] uppercase tracking-wider text-zinc-500">Available local models:</span>
+                  <span className="font-semibold text-xs uppercase tracking-wider text-zinc-500">Available local models:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {ollamaModels.map((m) => (
-                      <span key={m} className="px-2 py-0.5 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]">
+                      <span key={m} className="px-2.5 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-xs">
                         {m}
                       </span>
                     ))}
@@ -660,7 +666,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     <button
                       type="button"
                       onClick={handleSwitchToOfflineRules}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-[11px] transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs min-h-[44px]"
                     >
                       <Shield className="w-3.5 h-3.5" />
                       <span>Use Built-in Offline Engine (Instant)</span>
@@ -668,7 +674,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     <button
                       type="button"
                       onClick={handleSaveOllamaWithFallback}
-                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold text-[11px] transition-colors flex items-center justify-center gap-1.5"
+                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
                     >
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Save &amp; Use Offline Fallback</span>
@@ -678,7 +684,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSelectTab('google')}
-                      className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl font-medium text-[11px] transition-colors flex items-center justify-center gap-1.5"
+                      className="px-3 py-2 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
                     >
                       <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
                       <span>Use Free Google AI Key</span>
@@ -686,7 +692,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSelectTab('groq')}
-                      className="px-3 py-1.5 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 rounded-xl font-medium text-[11px] transition-colors flex items-center justify-center gap-1.5"
+                      className="px-3 py-2 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
                     >
                       <Zap className="w-3.5 h-3.5 text-orange-500" />
                       <span>Use Free Groq Key</span>
@@ -698,7 +704,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           )}
 
           {/* Privacy Footnote */}
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
             All API keys are strictly retained on your local device in encrypted browser storage. Zero keys are logged or stored on remote servers.
           </p>
         </div>

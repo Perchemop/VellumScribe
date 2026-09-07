@@ -4,6 +4,7 @@ import { NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface NoteSecurityModalProps {
   note: NoteRecord;
@@ -22,6 +23,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
   onSuccess,
   onClose,
 }) => {
+  useModalBackHandler(true, onClose, 'note-security-modal');
   const isCurrentlyLocked = note.is_locked;
   const effectiveMode = initialMode || (isCurrentlyLocked ? 'gate' : 'set');
 

@@ -17,6 +17,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { NoteRecord, EventRecord } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface NoteShareModalProps {
   note: NoteRecord;
@@ -31,6 +32,7 @@ export const NoteShareModal: React.FC<NoteShareModalProps> = ({
   event,
   onClose,
 }) => {
+  useModalBackHandler(true, onClose, 'note-share-modal');
   const [activeFormat, setActiveFormat] = useState<ShareFormat>('share_sheet');
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);

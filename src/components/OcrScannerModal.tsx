@@ -19,6 +19,7 @@ import { OcrScanRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -31,6 +32,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
   onOcrExtracted,
   onClose,
 }) => {
+  useModalBackHandler(true, onClose, 'ocr-scanner-modal');
   const [activeTab, setActiveTab] = useState<'camera' | 'upload'>('camera');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string>('');

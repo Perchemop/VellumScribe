@@ -22,6 +22,7 @@ import { RecordingRecord, TranscriptRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { AiSettingsManager } from '../lib/aiSettings';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface AudioRecorderPlayerProps {
   noteId: number;
@@ -64,11 +65,25 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const timerRef = useRef<number | null>(null);
   const audioElemRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const createdBlobUrlRef = useRef<string | null>(null);
+
+  // Hook up Android hardware & gesture back handling when rendered as modal dialog
+  useModalBackHandler(!!onClose, onClose || (() => {}), 'audio-recorder-modal');
+
+  const revokeActiveBlobUrl = () => {
+    if (createdBlobUrlRef.current) {
+      try {
+        URL.revokeObjectURL(createdBlobUrlRef.current);
+      } catch {}
+      createdBlobUrlRef.current = null;
+    }
+  };
 
   useEffect(() => {
     recorderRef.current = new AudioRecorderManager();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      revokeActiveBlobUrl();
     };
   }, []);
 
@@ -104,7 +119,9 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     setIsRecording(false);
 
     const result = await recorderRef.current.stopRecording();
+    revokeActiveBlobUrl();
     const url = URL.createObjectURL(result.blob);
+    createdBlobUrlRef.current = url;
     setRecordedAudio({
       ...result,
       url,
@@ -122,7 +139,9 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     setTranscriptionText(null);
     setCurrentTime(0);
 
+    revokeActiveBlobUrl();
     const url = URL.createObjectURL(file);
+    createdBlobUrlRef.current = url;
     const mimeType = file.type || 'audio/mp4';
 
     // Convert file to base64

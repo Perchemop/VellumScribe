@@ -26,6 +26,7 @@ import { ArchiveSection } from './components/ArchiveSection';
 import { SettingsView } from './components/SettingsView';
 import { AppUpdateModal } from './components/AppUpdateModal';
 import { AppUpdateManager } from './lib/appUpdateManager';
+import { ModalBackStack } from './lib/modalBackStack';
 import {
   FirstTimeUserGuideModal,
   hasCompletedOnboarding,
@@ -93,8 +94,21 @@ export default function App() {
 
   // Active Note Reminder Notification Watcher (In-app alerts + Web Notification API)
   useEffect(() => {
+    // Skip scheduling interval if no active notes have reminders
+    const hasAnyReminders = notes.some(
+      (n) => n.reminder_at && n.status !== 'archived' && n.status !== 'trash'
+    );
+    if (!hasAnyReminders) {
+      return;
+    }
+
     const notifiedKey = 'vellumscribe_notified_reminders';
     const checkReminders = () => {
+      // Pause reminder processing when app/tab is hidden or backgrounded
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
+
       try {
         const notified: string[] = JSON.parse(sessionStorage.getItem(notifiedKey) || '[]');
         const now = Date.now();
@@ -138,7 +152,12 @@ export default function App() {
     }
 
     const handlePopState = () => {
-      // User triggered Android hardware back button or edge swipe gesture
+      // 1. First priority: Dismiss any open foreground modal on top of stack
+      if (ModalBackStack.handlePopState()) {
+        return;
+      }
+
+      // 2. User triggered Android hardware back button or edge swipe gesture for main views
       if (showFabSpeedDial) {
         setShowFabSpeedDial(false);
         window.history.pushState({ vellumscribe: 'active' }, '');
@@ -351,14 +370,15 @@ export default function App() {
                   setSelectedNoteId(null);
                   setActiveView('settings');
                 }}
-                title="Settings"
-                className={`p-2 rounded-xl transition-colors ${
+                title="Settings & AI Configuration"
+                aria-label="Settings & AI Configuration"
+                className={`min-h-[44px] min-w-[44px] p-2.5 rounded-xl transition-colors flex items-center justify-center ${
                   activeView === 'settings'
                     ? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
                 }`}
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="w-5 h-5" />
               </button>
 
               {/* Theme Toggle */}
@@ -366,9 +386,10 @@ export default function App() {
                 id="theme-toggle-btn"
                 onClick={() => setDarkMode((prev: boolean) => !prev)}
                 title={darkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-                className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-xl transition-colors"
+                aria-label={darkMode ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+                className="min-h-[44px] min-w-[44px] p-2.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-xl transition-colors flex items-center justify-center"
               >
-                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
             </div>
           </header>
