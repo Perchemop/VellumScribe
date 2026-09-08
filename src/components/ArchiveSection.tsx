@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface ArchiveSectionProps {
   notes: NoteRecord[];
@@ -73,6 +74,10 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 
   const [confirmDeleteNote, setConfirmDeleteNote] = useState<{ id: number; title: string } | null>(null);
   const [confirmRestoreAll, setConfirmRestoreAll] = useState(false);
+
+  // Hardware back stack navigation integration
+  useModalBackHandler(confirmDeleteNote !== null, () => setConfirmDeleteNote(null), 'archive-delete-note');
+  useModalBackHandler(confirmRestoreAll, () => setConfirmRestoreAll(false), 'archive-restore-all');
 
   const handleUnarchive = (noteId: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -140,8 +145,10 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
             <div className="flex items-center gap-2">
               <button
                 id="unarchive-all-btn"
+                type="button"
                 onClick={handleUnarchiveAll}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-xl border border-zinc-200/80 dark:border-zinc-700 transition-colors"
+                aria-label="Restore all archived notes"
+                className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium rounded-xl border border-zinc-200/80 dark:border-zinc-700 transition-colors"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Restore All</span>
@@ -161,12 +168,14 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search archived notes..."
-                className="w-full pl-9 pr-4 py-2 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-1 focus:ring-zinc-400 transition-all"
+                className="w-full pl-9 pr-10 py-2 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-1 focus:ring-zinc-400 transition-all"
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600"
+                  aria-label="Clear search"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center absolute right-0 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                 >
                   Clear
                 </button>
@@ -278,20 +287,24 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                     {/* Action buttons */}
                     <div className="flex items-center gap-1">
                       <button
+                        type="button"
                         onClick={(e) => handleUnarchive(note.id, e)}
+                        aria-label="Restore to active notes"
                         title="Restore to active notes"
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[44px] bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs transition-colors"
                       >
-                        <RotateCcw className="w-3 h-3 text-zinc-500" />
+                        <RotateCcw className="w-3.5 h-3.5 text-zinc-500" />
                         <span>Restore</span>
                       </button>
 
                       <button
+                        type="button"
                         onClick={(e) => handlePermanentDelete(note.id, note.title, e)}
+                        aria-label="Delete note permanently"
                         title="Delete permanently"
-                        className="p-1 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -322,14 +335,14 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmDeleteNote(null)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={executePermanentDelete}
-                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs"
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
               >
                 Delete
               </button>
@@ -358,14 +371,14 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmRestoreAll(false)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={executeRestoreAll}
-                className="px-4 py-1.5 text-xs bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold rounded-xl shadow-2xs"
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-semibold rounded-xl shadow-2xs transition-colors"
               >
                 Restore All
               </button>

@@ -203,6 +203,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [importRawPayload, setImportRawPayload] = useState<string | null>(null);
   const [isExecutingImport, setIsExecutingImport] = useState<boolean>(false);
 
+  useModalBackHandler(
+    !!importPreviewData,
+    () => {
+      setImportPreviewData(null);
+      setImportRawPayload(null);
+    },
+    'settings-import-preview-modal'
+  );
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAirGapped = backupFrequency === 'off';
@@ -2162,7 +2171,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   setImportRawPayload(null);
                 }}
                 disabled={isExecutingImport}
-                className="px-4 py-2 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                className="px-4 py-2.5 min-h-[44px] border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
@@ -2193,7 +2202,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       setTimeout(() => setSyncFeedback(null), 4000);
                     }
                   }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
+                  className="px-4 py-2.5 min-h-[44px] bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
                 >
                   {isExecutingImport ? (
                     <>

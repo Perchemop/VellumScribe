@@ -220,11 +220,13 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
 
           <button
             id="onboarding-close-x-btn"
+            type="button"
             onClick={handleDismiss}
+            aria-label="Close"
             title="Close Guide"
-            className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl transition-colors cursor-pointer"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 

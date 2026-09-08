@@ -21,6 +21,7 @@ import {
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { NativeBridge } from '../lib/nativeBridge';
+import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface BatchActionBarProps {
   selectedNoteIds: number[];
@@ -69,6 +70,35 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const [unlockPinInput, setUnlockPinInput] = useState('');
   const [unlockError, setUnlockError] = useState<string | null>(null);
 
+  // In-app confirmation modal state for deletion/trashing (avoids iframe window.confirm blocks)
+  const [confirmModal, setConfirmModal] = useState<'trash' | 'permanent_delete' | null>(null);
+
+  // Hardware back button integration for all bottom sheets, modals, and dropdown menus
+  useModalBackHandler(confirmModal !== null, () => setConfirmModal(null), 'batch-confirm-modal');
+  useModalBackHandler(showCategorySheet, () => setShowCategorySheet(false), 'batch-category-sheet');
+  useModalBackHandler(showColorSheet, () => setShowColorSheet(false), 'batch-color-sheet');
+  useModalBackHandler(showTagSheet, () => setShowTagSheet(false), 'batch-tag-sheet');
+  useModalBackHandler(
+    showLockSheet,
+    () => {
+      setShowLockSheet(false);
+      setLockError(null);
+      setLockPinInput('');
+    },
+    'batch-lock-sheet'
+  );
+  useModalBackHandler(
+    showUnlockSheet,
+    () => {
+      setShowUnlockSheet(false);
+      setUnlockError(null);
+      setUnlockPinInput('');
+    },
+    'batch-unlock-sheet'
+  );
+  useModalBackHandler(showExportMenu, () => setShowExportMenu(false), 'batch-export-menu');
+  useModalBackHandler(showMoreMenu, () => setShowMoreMenu(false), 'batch-more-menu');
+
   const count = selectedNoteIds.length;
   if (count === 0) return null;
 
@@ -78,9 +108,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const selectedNotes = allNotes.filter((n) => selectedNoteIds.includes(n.id));
   const hasUnpinned = selectedNotes.some((n) => !n.is_pinned);
   const hasLocked = selectedNotes.some((n) => n.is_locked);
-
-  // In-app confirmation modal state for deletion/trashing (avoids iframe window.confirm blocks)
-  const [confirmModal, setConfirmModal] = useState<'trash' | 'permanent_delete' | null>(null);
 
   // Batch actions
   const executeBatchTrash = () => {
@@ -230,9 +257,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             id="batch-cancel-btn"
+            type="button"
             onClick={onClearSelection}
+            aria-label="Cancel Selection"
             title="Cancel Selection"
-            className="p-1.5 rounded-full hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -242,8 +271,10 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {count} selected
             </span>
             <button
+              type="button"
               onClick={isAllSelected ? onDeselectAll : onSelectAll}
-              className="text-xs font-medium opacity-80 hover:opacity-100 underline decoration-dotted ml-1"
+              aria-label={isAllSelected ? 'Deselect All notes' : 'Select All notes'}
+              className="text-xs font-medium opacity-80 hover:opacity-100 underline decoration-dotted ml-1 min-h-[44px] flex items-center"
             >
               {isAllSelected ? 'Deselect All' : 'Select All'}
             </button>
@@ -256,17 +287,21 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           {activeTab === 'trash' ? (
             <>
               <button
+                type="button"
                 onClick={handleBatchRestore}
+                aria-label="Restore selected notes"
                 title="Restore Selected"
-                className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1 text-xs font-medium"
+                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
               >
                 <RotateCcw className="w-4 h-4" />
                 <span className="hidden sm:inline">Restore</span>
               </button>
               <button
+                type="button"
                 onClick={handleBatchTrashOrDelete}
+                aria-label="Delete selected notes permanently"
                 title="Delete Permanently"
-                className="p-2 rounded-lg hover:bg-rose-500/20 text-rose-300 dark:text-rose-600 transition-colors flex items-center gap-1 text-xs font-medium"
+                className="min-h-[44px] px-2.5 rounded-lg hover:bg-rose-500/20 text-rose-300 dark:text-rose-600 transition-colors flex items-center gap-1.5 text-xs font-medium"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Delete</span>
@@ -278,9 +313,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {count >= 2 && onOpenMergeModal && (
                 <button
                   id="batch-merge-btn"
+                  type="button"
                   onClick={onOpenMergeModal}
+                  aria-label="Merge selected notes"
                   title="Merge Selected Notes"
-                  className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1 text-xs font-medium"
+                  className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
                 >
                   <GitMerge className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
                   <span className="hidden sm:inline">Merge</span>
@@ -290,9 +327,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {/* Move to Category */}
               <button
                 id="batch-move-category-btn"
+                type="button"
                 onClick={() => setShowCategorySheet(true)}
+                aria-label="Move selected notes to category"
                 title="Move Category"
-                className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1 text-xs font-medium"
+                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
               >
                 <FolderInput className="w-4 h-4" />
                 <span className="hidden md:inline">Move</span>
@@ -300,9 +339,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
               {/* Pin / Unpin */}
               <button
+                type="button"
                 onClick={handleBatchPin}
+                aria-label={hasUnpinned ? 'Pin selected notes' : 'Unpin selected notes'}
                 title={hasUnpinned ? 'Pin Selected' : 'Unpin Selected'}
-                className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1 text-xs font-medium"
+                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
               >
                 <Pin className={`w-4 h-4 ${!hasUnpinned ? 'fill-current' : ''}`} />
                 <span className="hidden md:inline">{hasUnpinned ? 'Pin' : 'Unpin'}</span>
@@ -310,9 +351,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
               {/* Archive / Unarchive */}
               <button
+                type="button"
                 onClick={handleBatchArchive}
+                aria-label={activeTab === 'archived' ? 'Unarchive selected notes' : 'Archive selected notes'}
                 title={activeTab === 'archived' ? 'Unarchive Selected' : 'Archive Selected'}
-                className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1 text-xs font-medium"
+                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
               >
                 <Archive className="w-4 h-4" />
                 <span className="hidden md:inline">{activeTab === 'archived' ? 'Unarchive' : 'Archive'}</span>
@@ -320,9 +363,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
               {/* Color Palette Picker */}
               <button
+                type="button"
                 onClick={() => setShowColorSheet(true)}
+                aria-label="Change note color accent"
                 title="Change Color"
-                className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
               >
                 <Palette className="w-4 h-4" />
               </button>
@@ -330,9 +375,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {/* Trash */}
               <button
                 id="batch-trash-btn"
+                type="button"
                 onClick={handleBatchTrashOrDelete}
+                aria-label="Move selected notes to trash"
                 title="Move to Trash"
-                className="p-2 rounded-lg hover:bg-rose-500/20 text-rose-300 dark:text-rose-600 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-rose-300 dark:text-rose-600 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -341,9 +388,11 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               <div className="relative">
                 <button
                   id="batch-more-menu-btn"
+                  type="button"
                   onClick={() => setShowMoreMenu((p) => !p)}
+                  aria-label="More batch actions"
                   title="More Batch Actions"
-                  className="p-2 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
@@ -457,14 +506,14 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmModal(null)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={confirmModal === 'trash' ? executeBatchTrash : executeBatchPermanentDelete}
-                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
               >
                 {confirmModal === 'trash' ? 'Move to Trash' : 'Delete Permanently'}
               </button>
@@ -485,10 +534,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 <p className="text-xs text-zinc-500">Choose destination category</p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowCategorySheet(false)}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -496,8 +547,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {events.map((ev) => (
                 <button
                   key={ev.id}
+                  type="button"
                   onClick={() => handleBatchMoveCategory(ev.id)}
-                  className="w-full px-3 py-2.5 rounded-xl text-left text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5 transition-colors"
+                  className="w-full min-h-[44px] px-3 py-2.5 rounded-xl text-left text-xs font-medium text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2.5 transition-colors"
                 >
                   <span
                     className="w-3 h-3 rounded-full shrink-0"
@@ -521,10 +573,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 Apply Color Accent ({count} notes)
               </h3>
               <button
+                type="button"
                 onClick={() => setShowColorSheet(false)}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -532,8 +586,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
               {PALETTE_COLORS.map((c) => (
                 <button
                   key={c.label}
+                  type="button"
                   onClick={() => handleBatchColor(c.value)}
-                  className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-850 transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-2.5 min-h-[44px] rounded-xl border border-zinc-200/80 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-850 transition-colors"
                 >
                   <div
                     className={`w-6 h-6 rounded-full ${!c.value ? 'border border-dashed border-zinc-400' : ''}`}
@@ -556,10 +611,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 Add Tag to {count} note{count > 1 ? 's' : ''}
               </h3>
               <button
+                type="button"
                 onClick={() => setShowTagSheet(false)}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -576,13 +633,13 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowTagSheet(false)}
-                  className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 font-semibold rounded-lg"
+                  className="px-4 py-2.5 min-h-[44px] text-xs bg-zinc-950 dark:bg-zinc-50 text-white dark:text-zinc-950 font-semibold rounded-xl"
                 >
                   Add Tag
                 </button>
@@ -601,14 +658,16 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 Lock {count} note{count > 1 ? 's' : ''} with PIN
               </h3>
               <button
+                type="button"
                 onClick={() => {
                   setShowLockSheet(false);
                   setLockError(null);
                   setLockPinInput('');
                 }}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -636,14 +695,14 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     setLockError(null);
                     setLockPinInput('');
                   }}
-                  className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isLocking}
-                  className="px-4 py-1.5 text-xs bg-amber-600 text-white font-semibold rounded-lg disabled:opacity-50"
+                  className="px-4 py-2.5 min-h-[44px] text-xs bg-amber-600 text-white font-semibold rounded-xl disabled:opacity-50"
                 >
                   {isLocking ? 'Locking...' : 'Set Lock'}
                 </button>
@@ -662,13 +721,15 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 Unlock {count} note{count > 1 ? 's' : ''} with PIN
               </h3>
               <button
+                type="button"
                 onClick={() => {
                   setShowUnlockSheet(false);
                   setUnlockError(null);
                 }}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -695,13 +756,13 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     setShowUnlockSheet(false);
                     setUnlockError(null);
                   }}
-                  className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                  className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs bg-emerald-600 text-white font-semibold rounded-lg"
+                  className="px-4 py-2.5 min-h-[44px] text-xs bg-emerald-600 text-white font-semibold rounded-xl"
                 >
                   Unlock Notes
                 </button>
