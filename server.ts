@@ -1061,7 +1061,11 @@ try {
 }
 
 function sanitizeSessionId(sessionId: string): string {
-  return sessionId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64) || "default_session";
+  const clean = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  if (!clean || clean === "default_session") {
+    return "sess_" + crypto.randomBytes(12).toString("hex");
+  }
+  return clean;
 }
 
 function getVaultSessionDir(sessionId: string): string {
@@ -1138,7 +1142,8 @@ function getSessionId(req: express.Request): string {
   if (typeof query === "string" && query.trim()) {
     return query.trim();
   }
-  return "default_session";
+  // Isolate unauthenticated callers with an ephemeral per-request session ID
+  return "anon_" + crypto.randomBytes(16).toString("hex");
 }
 
 function getSessionStore(sessionId: string): SessionCloudData {

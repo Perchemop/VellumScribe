@@ -111,6 +111,9 @@ export class SqliteRepository {
       color: row.color || undefined,
       is_pinned: Boolean(row.is_pinned),
       is_locked: Boolean(row.is_locked),
+      lock_mode: row.lock_mode || undefined,
+      security_type: row.security_type || undefined,
+      cloud_save_enabled: row.cloud_save_enabled !== undefined && row.cloud_save_enabled !== null ? Boolean(row.cloud_save_enabled) : true,
       pin_hash: row.pin_hash || undefined,
       pin_salt: row.pin_salt || undefined,
       encrypted_payload: row.encrypted_payload || undefined,
@@ -165,8 +168,8 @@ export class SqliteRepository {
         SqliteEngine.run(
           `UPDATE notes SET
             event_id = ?, title = ?, body = ?, note_type = ?, color = ?,
-            is_pinned = ?, is_locked = ?, pin_hash = ?, pin_salt = ?,
-            encrypted_payload = ?, status = ?, archived_at = ?, trashed_at = ?,
+            is_pinned = ?, is_locked = ?, lock_mode = ?, security_type = ?, cloud_save_enabled = ?,
+            pin_hash = ?, pin_salt = ?, encrypted_payload = ?, status = ?, archived_at = ?, trashed_at = ?,
             reminder_at = ?, location_name = ?, latitude = ?, longitude = ?,
             version = ?, sketch_media_key = ?, updated_at = ?
            WHERE id = ?`,
@@ -178,6 +181,9 @@ export class SqliteRepository {
             note.color || null,
             note.is_pinned ? 1 : 0,
             note.is_locked ? 1 : 0,
+            note.lock_mode || 'standard',
+            note.security_type || 'pin',
+            note.cloud_save_enabled !== false ? 1 : 0,
             note.pin_hash || null,
             note.pin_salt || null,
             note.encrypted_payload || null,
@@ -199,10 +205,11 @@ export class SqliteRepository {
           SqliteEngine.run(
             `INSERT INTO notes (
               id, event_id, title, body, note_type, color, is_pinned, is_locked,
+              lock_mode, security_type, cloud_save_enabled,
               pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
               reminder_at, location_name, latitude, longitude, version,
               sketch_media_key, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               noteId,
               note.event_id || null,
@@ -212,6 +219,9 @@ export class SqliteRepository {
               note.color || null,
               note.is_pinned ? 1 : 0,
               note.is_locked ? 1 : 0,
+              note.lock_mode || 'standard',
+              note.security_type || 'pin',
+              note.cloud_save_enabled !== false ? 1 : 0,
               note.pin_hash || null,
               note.pin_salt || null,
               note.encrypted_payload || null,
@@ -232,10 +242,11 @@ export class SqliteRepository {
           SqliteEngine.run(
             `INSERT INTO notes (
               event_id, title, body, note_type, color, is_pinned, is_locked,
+              lock_mode, security_type, cloud_save_enabled,
               pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
               reminder_at, location_name, latitude, longitude, version,
               sketch_media_key, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               note.event_id || null,
               note.title || '',
@@ -244,6 +255,9 @@ export class SqliteRepository {
               note.color || null,
               note.is_pinned ? 1 : 0,
               note.is_locked ? 1 : 0,
+              note.lock_mode || 'standard',
+              note.security_type || 'pin',
+              note.cloud_save_enabled !== false ? 1 : 0,
               note.pin_hash || null,
               note.pin_salt || null,
               note.encrypted_payload || null,
@@ -987,6 +1001,14 @@ export class SqliteRepository {
       // ignore
     }
 
+    let activeVersion = CURRENT_SCHEMA_VERSION;
+    try {
+      const vRes = SqliteEngine.query<{ version: number }>('SELECT MAX(version) as version FROM schema_migrations');
+      if (vRes.length > 0 && typeof vRes[0].version === 'number' && vRes[0].version > 0) {
+        activeVersion = vRes[0].version;
+      }
+    } catch {}
+
     const integrity = SqliteEngine.checkIntegrity();
 
     return {
@@ -999,7 +1021,7 @@ export class SqliteRepository {
       transcriptsCount,
       ocrScansCount,
       databaseSizeBytes: binarySize,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
+      schemaVersion: activeVersion,
       integrityStatus: integrity.status,
     };
   }

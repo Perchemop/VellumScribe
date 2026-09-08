@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude sensitive credentials, temporary auth tokens, and key stores -->
+    <exclude domain="sharedpref" path="device_backup_credentials.xml" />
+    <exclude domain="sharedpref" path="vellum_secure_prefs.xml" />
+    <exclude domain="root" path="keystore/" />
+    <!-- Include local database and application storage -->
+    <include domain="database" path="vellumscribe_relational_v3.sqlite" />
+    <include domain="file" path="storage/" />
+</full-backup-content>

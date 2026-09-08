@@ -486,6 +486,7 @@ export class SqliteEngine {
             'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?);',
             [migration.version, Date.now(), migration.description]
           );
+          this.db.run(`PRAGMA user_version = ${migration.version};`);
           this.db.run('COMMIT;');
           AppLogger.info('SqliteEngine', `Successfully applied migration v${migration.version}`);
         } catch (e) {

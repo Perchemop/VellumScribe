@@ -361,7 +361,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
               Verbatim Voice Transcript
             </span>
             <span className="text-xs text-indigo-600/80 dark:text-indigo-400 font-normal">
-              {transcript.speaker_count || 1} Speaker{(transcript.speaker_count || 1) > 1 ? 's' : ''}
+              {transcript.speaker_count && transcript.speaker_count > 1 ? `${transcript.speaker_count} Speakers` : 'Voice Transcription'}
             </span>
           </div>
           <p className="text-zinc-800 dark:text-zinc-200 leading-relaxed font-normal bg-white/70 dark:bg-zinc-900/70 p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
