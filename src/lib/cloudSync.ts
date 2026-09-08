@@ -115,6 +115,9 @@ export class CloudSyncEngine {
     return { processed: successCount + failedCount, success: successCount, failed: failedCount };
   }
 
+  private static sessionToken: string | null = null;
+  private static tokenInitPromise: Promise<string> | null = null;
+
   private static getSessionId(): string {
     let id = localStorage.getItem('vs_cloud_session_id');
     if (!id) {
@@ -124,11 +127,56 @@ export class CloudSyncEngine {
     return id;
   }
 
+  public static async ensureSessionToken(): Promise<string> {
+    if (this.sessionToken) return this.sessionToken;
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vs_cloud_token') : null;
+    if (stored) {
+      this.sessionToken = stored;
+      return stored;
+    }
+    if (this.tokenInitPromise) return this.tokenInitPromise;
+
+    this.tokenInitPromise = (async () => {
+      try {
+        const existingSessionId = this.getSessionId();
+        const res = await fetch('/api/cloud/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: existingSessionId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            this.sessionToken = data.token;
+            localStorage.setItem('vs_cloud_token', data.token);
+            if (data.sessionId) {
+              localStorage.setItem('vs_cloud_session_id', data.sessionId);
+            }
+            return data.token;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to establish signed cloud session token:', err);
+      } finally {
+        this.tokenInitPromise = null;
+      }
+      return '';
+    })();
+
+    return this.tokenInitPromise;
+  }
+
   private static getHeaders(extra: Record<string, string> = {}): Record<string, string> {
-    return {
+    const token = this.sessionToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('vs_cloud_token') || '' : '');
+    const headers: Record<string, string> = {
       'x-session-id': this.getSessionId(),
       ...extra,
     };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-session-token'] = token;
+    }
+    return headers;
   }
 
   private static async computeChecksum(buffer: ArrayBuffer): Promise<string> {
@@ -144,6 +192,7 @@ export class CloudSyncEngine {
   static async fetchConfig() {
     try {
       PrivacyManager.assertNetworkAllowed('Cloud Storage Configuration');
+      await this.ensureSessionToken();
       const res = await fetch('/api/cloud/config', {
         headers: this.getHeaders(),
       });
@@ -186,6 +235,7 @@ export class CloudSyncEngine {
       throw new Error(`Instant connect is only supported for Vellum Encrypted Vault. ${provider} requires authentication credentials.`);
     }
 
+    await this.ensureSessionToken();
     const res = await fetch(`/api/cloud/${provider}/connect-instant`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
@@ -216,6 +266,7 @@ export class CloudSyncEngine {
     credentials: { serverUrl: string; username: string; password: string; remotePath?: string }
   ): Promise<CloudAccount> {
     PrivacyManager.assertNetworkAllowed(`Cloud Storage (${provider})`);
+    await this.ensureSessionToken();
     const res = await fetch(`/api/cloud/${provider}/connect-credentials`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
@@ -243,6 +294,7 @@ export class CloudSyncEngine {
   static async disconnectAccount(provider: CloudStorageProvider): Promise<void> {
     try {
       PrivacyManager.assertNetworkAllowed('Cloud Storage Disconnect');
+      await this.ensureSessionToken();
       await fetch(`/api/cloud/${provider}/disconnect`, {
         method: 'POST',
         headers: this.getHeaders(),
@@ -271,6 +323,7 @@ export class CloudSyncEngine {
   static async fetchRemoteBackups(provider: CloudStorageProvider): Promise<RemoteBackupItem[]> {
     try {
       PrivacyManager.assertNetworkAllowed('Remote Backups List');
+      await this.ensureSessionToken();
       const res = await fetch(`/api/cloud/${provider}/backups`, {
         headers: this.getHeaders(),
       });
@@ -298,6 +351,7 @@ export class CloudSyncEngine {
     const totalBytes = blob.size;
     const totalChunks = Math.ceil(totalBytes / this.CHUNK_SIZE);
 
+    await this.ensureSessionToken();
     // 1. Init chunked session
     const initRes = await fetch(`/api/cloud/${provider}/chunk/init`, {
       method: 'POST',
@@ -469,6 +523,7 @@ export class CloudSyncEngine {
     backupId: string
   ): Promise<{ success: boolean; message: string }> {
     PrivacyManager.assertNetworkAllowed('Cloud Backup Restore');
+    await this.ensureSessionToken();
     // 1. Safety snapshot of current local store
     const safetySnapshot = StorageManager.exportFullDump();
     sessionStorage.setItem('vs_pre_restore_snapshot', safetySnapshot);

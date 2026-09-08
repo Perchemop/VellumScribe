@@ -159,28 +159,35 @@ export class MediaRepository {
 import { encryptBinaryPayloadWithKey, decryptBinaryPayloadWithKey } from './cryptoUtils';
 
 export class SecureMediaRepository {
-  static async putEncryptedWithKey(key: string, blob: Blob, cryptoKey: CryptoKey): Promise<void> {
+  static async encryptBlobWithKey(blob: Blob, cryptoKey: CryptoKey): Promise<Blob> {
     const arrayBuffer = await blob.arrayBuffer();
     const payload = new Uint8Array(arrayBuffer);
     const { iv, data } = await encryptBinaryPayloadWithKey(payload, cryptoKey);
-    // envelope
     const envelope = JSON.stringify({ magic: 'vellum_enc_v1', mimeType: blob.type, iv, data });
-    const envelopeBlob = new Blob([envelope], { type: 'application/json' });
+    return new Blob([envelope], { type: 'application/json' });
+  }
+
+  static async decryptBlobWithKey(envelopeBlob: Blob, cryptoKey: CryptoKey): Promise<Blob | null> {
+    try {
+      const text = await envelopeBlob.text();
+      const envelope = JSON.parse(text);
+      if (envelope.magic !== 'vellum_enc_v1') return null;
+      const decrypted = await decryptBinaryPayloadWithKey(envelope.data, envelope.iv, cryptoKey);
+      if (!decrypted) return null;
+      return new Blob([decrypted as any], { type: envelope.mimeType });
+    } catch {
+      return null;
+    }
+  }
+
+  static async putEncryptedWithKey(key: string, blob: Blob, cryptoKey: CryptoKey): Promise<void> {
+    const envelopeBlob = await this.encryptBlobWithKey(blob, cryptoKey);
     await MediaRepository.putBinary(key, envelopeBlob);
   }
 
   static async getEncryptedWithKey(key: string, cryptoKey: CryptoKey): Promise<Blob | null> {
     const blob = await MediaRepository.getBinary(key, 'application/json');
     if (!blob) return null;
-    try {
-      const text = await blob.text();
-      const envelope = JSON.parse(text);
-      if (envelope.magic !== 'vellum_enc_v1') return null;
-      const decrypted = await decryptBinaryPayloadWithKey(envelope.data, envelope.iv, cryptoKey);
-      if (!decrypted) return null;
-      return new Blob([decrypted as any], { type: envelope.mimeType });
-    } catch (e) {
-      return null;
-    }
+    return this.decryptBlobWithKey(blob, cryptoKey);
   }
 }

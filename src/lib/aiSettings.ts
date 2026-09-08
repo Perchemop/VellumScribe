@@ -1,4 +1,5 @@
 import { StorageManager } from './storage';
+import { AndroidKeystoreManager } from './keystore';
 
 export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
 
@@ -158,10 +159,66 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
 
 export class AiSettingsManager {
   private static initPromise: Promise<void> | null = null;
+  private static cachedGoogleKey: string | null = null;
+  private static cachedGroqKey: string | null = null;
+  private static cachedDeepgramKey: string | null = null;
 
   public static async initialize(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = (async () => {
+        try {
+          // 1. Google API Key
+          let googleKey = await AndroidKeystoreManager.getSecret('google_api_key');
+          if (!googleKey) {
+            const legacy = StorageManager.getItem<string>(STORAGE_KEYS.GOOGLE_KEY, '') ||
+                           (typeof localStorage !== 'undefined' ? (localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key') || '') : '');
+            if (legacy && legacy.trim()) {
+              await AndroidKeystoreManager.saveSecret('google_api_key', legacy.trim(), 'api_key');
+              const verified = await AndroidKeystoreManager.getSecret('google_api_key');
+              if (verified === legacy.trim()) {
+                StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
+                if (typeof localStorage !== 'undefined') {
+                  localStorage.removeItem('gemini_api_key');
+                  localStorage.removeItem('vs_gemini_api_key');
+                }
+                googleKey = verified;
+              }
+            }
+          }
+          this.cachedGoogleKey = googleKey || '';
+
+          // 2. Groq API Key
+          let groqKey = await AndroidKeystoreManager.getSecret('groq_api_key');
+          if (!groqKey) {
+            const legacy = StorageManager.getItem<string>(STORAGE_KEYS.GROQ_KEY, '');
+            if (legacy && legacy.trim()) {
+              await AndroidKeystoreManager.saveSecret('groq_api_key', legacy.trim(), 'api_key');
+              const verified = await AndroidKeystoreManager.getSecret('groq_api_key');
+              if (verified === legacy.trim()) {
+                StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
+                groqKey = verified;
+              }
+            }
+          }
+          this.cachedGroqKey = groqKey || '';
+
+          // 3. Deepgram API Key
+          let deepgramKey = await AndroidKeystoreManager.getSecret('deepgram_api_key');
+          if (!deepgramKey) {
+            const legacy = StorageManager.getItem<string>(STORAGE_KEYS.DEEPGRAM_KEY, '');
+            if (legacy && legacy.trim()) {
+              await AndroidKeystoreManager.saveSecret('deepgram_api_key', legacy.trim(), 'api_key');
+              const verified = await AndroidKeystoreManager.getSecret('deepgram_api_key');
+              if (verified === legacy.trim()) {
+                StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
+                deepgramKey = verified;
+              }
+            }
+          }
+          this.cachedDeepgramKey = deepgramKey || '';
+        } catch (e) {
+          console.warn('[AiSettingsManager] Failed during secure key initialization:', e);
+        }
         this.getSettings();
       })();
     }
@@ -170,41 +227,62 @@ export class AiSettingsManager {
 
   // --- Key Accessors ---
   public static getGoogleApiKey(): string {
+    if (this.cachedGoogleKey !== null) return this.cachedGoogleKey;
     return StorageManager.getItem<string>(STORAGE_KEYS.GOOGLE_KEY, '') || '';
   }
 
   public static setGoogleApiKey(key: string): void {
     const trimmed = key.trim();
+    this.cachedGoogleKey = trimmed;
+    StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
     if (trimmed) {
-      StorageManager.setItem(STORAGE_KEYS.GOOGLE_KEY, trimmed);
+      AndroidKeystoreManager.saveSecret('google_api_key', trimmed, 'api_key').catch((e) => {
+        console.warn('Failed to save Google API key to keystore', e);
+      });
     } else {
-      StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
+      AndroidKeystoreManager.deleteSecret('google_api_key').catch((e) => {
+        console.warn('Failed to delete Google API key from keystore', e);
+      });
     }
   }
 
   public static getGroqApiKey(): string {
+    if (this.cachedGroqKey !== null) return this.cachedGroqKey;
     return StorageManager.getItem<string>(STORAGE_KEYS.GROQ_KEY, '') || '';
   }
 
   public static setGroqApiKey(key: string): void {
     const trimmed = key.trim();
+    this.cachedGroqKey = trimmed;
+    StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
     if (trimmed) {
-      StorageManager.setItem(STORAGE_KEYS.GROQ_KEY, trimmed);
+      AndroidKeystoreManager.saveSecret('groq_api_key', trimmed, 'api_key').catch((e) => {
+        console.warn('Failed to save Groq API key to keystore', e);
+      });
     } else {
-      StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
+      AndroidKeystoreManager.deleteSecret('groq_api_key').catch((e) => {
+        console.warn('Failed to delete Groq API key from keystore', e);
+      });
     }
   }
 
   public static getDeepgramApiKey(): string {
+    if (this.cachedDeepgramKey !== null) return this.cachedDeepgramKey;
     return StorageManager.getItem<string>(STORAGE_KEYS.DEEPGRAM_KEY, '') || '';
   }
 
   public static setDeepgramApiKey(key: string): void {
     const trimmed = key.trim();
+    this.cachedDeepgramKey = trimmed;
+    StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
     if (trimmed) {
-      StorageManager.setItem(STORAGE_KEYS.DEEPGRAM_KEY, trimmed);
+      AndroidKeystoreManager.saveSecret('deepgram_api_key', trimmed, 'api_key').catch((e) => {
+        console.warn('Failed to save Deepgram API key to keystore', e);
+      });
     } else {
-      StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
+      AndroidKeystoreManager.deleteSecret('deepgram_api_key').catch((e) => {
+        console.warn('Failed to delete Deepgram API key from keystore', e);
+      });
     }
   }
 
@@ -229,10 +307,16 @@ export class AiSettingsManager {
   }
 
   public static clearApiKey(): void {
+    this.cachedGoogleKey = '';
+    this.cachedGroqKey = '';
+    this.cachedDeepgramKey = '';
     StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
     StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
     StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
     StorageManager.removeItem(STORAGE_KEYS.LAST_VERIFIED);
+    AndroidKeystoreManager.deleteSecret('google_api_key').catch(() => {});
+    AndroidKeystoreManager.deleteSecret('groq_api_key').catch(() => {});
+    AndroidKeystoreManager.deleteSecret('deepgram_api_key').catch(() => {});
   }
 
   public static hasLocalKey(): boolean {

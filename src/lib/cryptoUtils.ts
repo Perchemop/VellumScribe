@@ -151,12 +151,41 @@ export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey
   );
 }
 
+export interface PrivateNotePayloadV1 {
+  payload_version: 1;
+  title?: string;
+  body: string;
+  tags?: string[];
+  checklist_items?: any[];
+  sketch_data?: string;
+  sketch_media_key?: string;
+  attachment_references?: string[];
+  protected_metadata?: {
+    security_type?: string;
+    reminder_at?: string;
+    location_name?: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  lock_mode?: 'standard' | 'private';
+}
+
 export interface NotePayloadData {
+  payload_version?: number;
   title?: string;
   body: string;
   checklist_items?: any[];
   sketch_data?: string;
+  sketch_media_key?: string;
+  attachment_references?: string[];
   tags?: string[];
+  protected_metadata?: {
+    security_type?: string;
+    reminder_at?: string;
+    location_name?: string;
+    latitude?: number;
+    longitude?: number;
+  };
   lock_mode?: 'standard' | 'private';
 }
 

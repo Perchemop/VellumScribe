@@ -35,12 +35,21 @@ export class CloudBackupCrypto {
       const { AndroidKeystoreManager } = await import('./keystore');
       let key = await AndroidKeystoreManager.getSecret('client_vault_key');
       if (!key) {
-        key = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
-        if (!key) {
+        const legacyKey = typeof localStorage !== 'undefined' ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE) : null;
+        if (legacyKey && legacyKey.trim()) {
+          key = legacyKey.trim();
+          await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
+          const verified = await AndroidKeystoreManager.getSecret('client_vault_key');
+          if (verified === key && typeof localStorage !== 'undefined') {
+            localStorage.removeItem(CLIENT_VAULT_KEY_STORAGE);
+          }
+        } else {
           key = generateSalt() + generateSalt(); // 64 hex characters (256-bit entropy)
+          await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
         }
-        await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
-        localStorage.setItem(CLIENT_VAULT_KEY_STORAGE, key);
+      } else if (typeof localStorage !== 'undefined') {
+        // Ensure any legacy plaintext key in localStorage is purged
+        localStorage.removeItem(CLIENT_VAULT_KEY_STORAGE);
       }
       this.cachedVaultKey = key;
       return key;
@@ -51,17 +60,18 @@ export class CloudBackupCrypto {
 
   public static getOrCreateClientVaultKey(): string {
     if (this.cachedVaultKey) return this.cachedVaultKey;
-    try {
-      let key = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
-      if (!key) {
-        key = generateSalt() + generateSalt(); // 64 hex characters (256-bit entropy)
-        localStorage.setItem(CLIENT_VAULT_KEY_STORAGE, key);
+    // Volatile in-memory vault key - never stored in localStorage
+    if (typeof localStorage !== 'undefined') {
+      const legacyKey = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
+      if (legacyKey && legacyKey.trim()) {
+        this.cachedVaultKey = legacyKey.trim();
+        localStorage.removeItem(CLIENT_VAULT_KEY_STORAGE);
+        return this.cachedVaultKey;
       }
-      this.cachedVaultKey = key;
-      return key;
-    } catch {
-      return 'vellumscribe-client-vault-ephemeral-key';
     }
+    const ephemeralKey = generateSalt() + generateSalt();
+    this.cachedVaultKey = ephemeralKey;
+    return ephemeralKey;
   }
 
   /**
