@@ -594,17 +594,23 @@ export class StorageManager {
     };
   }
 
-  public static async setNotePinLock(
+  public static async lockNoteTransactionally(
     id: number,
     pin: string,
     currentPayload?: NotePayloadData,
     lockMode: 'standard' | 'private' = 'standard',
     securityType: 'pin' | 'passphrase' = 'pin'
   ): Promise<NoteRecord | null> {
+    if (!pin || !pin.trim()) {
+      throw new Error('Lock credential is required.');
+    }
+
     const note = this.getNoteById(id);
     if (!note) return null;
 
     const { hashPin, deriveEncryptionKey, encryptNotePayloadV2, generateSalt } = await import('./cryptoUtils');
+    const { SecureMediaRepository, MediaRepository } = await import('./MediaRepository');
+
     const salt = generateSalt();
     const { hash } = await hashPin(pin, salt);
     const key = await deriveEncryptionKey(pin, salt);
@@ -612,46 +618,78 @@ export class StorageManager {
       throw new Error('Failed to derive encryption key from credentials.');
     }
 
+    // Enumerate all associated attachments
+    const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
+    const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
+    const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
+    const allMediaKeys = new Set<string>();
+    mediaFiles.forEach((m) => m.media_key && allMediaKeys.add(m.media_key));
+    recordings.forEach((r) => r.media_key && allMediaKeys.add(r.media_key));
+    ocrScans.forEach((o) => o.media_key && allMediaKeys.add(o.media_key));
+    if (note.sketch_media_key) allMediaKeys.add(note.sketch_media_key);
+
+    const attachmentReferences = Array.from(allMediaKeys);
+
+    // Staged fail-closed media encryption pipeline
+    const stagedEncrypted = new Map<string, Blob>();
+    for (const mediaKey of attachmentReferences) {
+      const rawBlob = await MediaRepository.getBinary(mediaKey);
+      if (rawBlob) {
+        let isAlreadyEncrypted = false;
+        try {
+          const headerText = await rawBlob.slice(0, 50).text();
+          if (headerText.includes('vellum_enc_v1')) isAlreadyEncrypted = true;
+        } catch {}
+
+        if (!isAlreadyEncrypted) {
+          try {
+            const encryptedBlob = await SecureMediaRepository.encryptBlobWithKey(rawBlob, key);
+            // Verify roundtrip decryption immediately
+            const roundTrip = await SecureMediaRepository.decryptBlobWithKey(encryptedBlob, key);
+            if (!roundTrip || roundTrip.size !== rawBlob.size) {
+              throw new Error(`Integrity verification failed for encrypted attachment: ${mediaKey}`);
+            }
+            stagedEncrypted.set(mediaKey, encryptedBlob);
+          } catch (encErr: any) {
+            AppLogger.error('StorageManager', `Attachment encryption failed for ${mediaKey}, aborting lock operation.`, encErr);
+            throw new Error(`Note lock failed: Attachment ${mediaKey} could not be securely encrypted (${encErr?.message || 'Verification failed'}). Note remains unlocked.`);
+          }
+        }
+      }
+    }
+
     const payload: NotePayloadData = {
+      payload_version: 1,
       title: lockMode === 'private' ? (currentPayload?.title || note.title) : undefined,
       body: currentPayload?.body !== undefined ? currentPayload.body : note.body,
       checklist_items: currentPayload?.checklist_items !== undefined ? currentPayload.checklist_items : note.checklist_items,
       sketch_data: currentPayload?.sketch_data !== undefined ? currentPayload.sketch_data : note.sketch_data,
+      sketch_media_key: note.sketch_media_key,
+      attachment_references: attachmentReferences,
       tags: lockMode === 'private' ? (currentPayload?.tags || note.tags) : undefined,
+      protected_metadata: {
+        security_type: securityType,
+        reminder_at: note.reminder_at,
+        location_name: note.location_name,
+        latitude: note.latitude,
+        longitude: note.longitude,
+      },
       lock_mode: lockMode,
     };
 
-    const encryptedPayload = await encryptNotePayloadV2(payload, key);
-
-    // Encrypt any associated media binaries using the derived key
+    let encryptedPayload: string;
     try {
-      const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
-      const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
-      const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
-      const allMediaKeys = new Set<string>();
-      mediaFiles.forEach((m) => m.media_key && allMediaKeys.add(m.media_key));
-      recordings.forEach((r) => r.media_key && allMediaKeys.add(r.media_key));
-      ocrScans.forEach((o) => o.media_key && allMediaKeys.add(o.media_key));
-      if (note.sketch_media_key) allMediaKeys.add(note.sketch_media_key);
-
-      const { SecureMediaRepository, MediaRepository } = await import('./MediaRepository');
-      for (const mediaKey of allMediaKeys) {
-        const rawBlob = await MediaRepository.getBinary(mediaKey);
-        if (rawBlob) {
-          let isAlreadyEncrypted = false;
-          try {
-            const headerText = await rawBlob.slice(0, 50).text();
-            if (headerText.includes('vellum_enc_v1')) isAlreadyEncrypted = true;
-          } catch {}
-          if (!isAlreadyEncrypted) {
-            await SecureMediaRepository.putEncryptedWithKey(mediaKey, rawBlob, key);
-          }
-        }
-      }
-    } catch (e) {
-      AppLogger.warn('StorageManager', 'Associated media encryption during note lock had warnings:', e);
+      encryptedPayload = await encryptNotePayloadV2(payload, key);
+    } catch (payErr: any) {
+      throw new Error(`Note payload encryption failed: ${payErr?.message || 'Cipher error'}. Note remains unlocked.`);
     }
 
+    // Commit encrypted media blobs to disk
+    for (const [mediaKey, encryptedBlob] of stagedEncrypted.entries()) {
+      await MediaRepository.putBinary(mediaKey, encryptedBlob);
+    }
+
+    // Atomically commit note locking to SQLite
     return this.updateNote(id, {
       is_locked: true,
       lock_mode: lockMode,
@@ -665,6 +703,16 @@ export class StorageManager {
       sketch_data: undefined,
       tags: lockMode === 'private' ? [] : note.tags,
     });
+  }
+
+  public static async setNotePinLock(
+    id: number,
+    pin: string,
+    currentPayload?: NotePayloadData,
+    lockMode: 'standard' | 'private' = 'standard',
+    securityType: 'pin' | 'passphrase' = 'pin'
+  ): Promise<NoteRecord | null> {
+    return this.lockNoteTransactionally(id, pin, currentPayload, lockMode, securityType);
   }
 
   public static async removeNotePinLock(id: number, enteredPin: string): Promise<NoteRecord | null> {

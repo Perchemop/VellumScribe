@@ -37,12 +37,22 @@ function validateSafeUrl(urlStr: string, options: { allowLocalhost?: boolean } =
       return { valid: false, error: "Access to cloud metadata endpoints is strictly forbidden." };
     }
 
-    const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+    const isLoopback = host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1" || host === "[::1]";
     if (isLoopback) {
       if (!options.allowLocalhost) {
         return { valid: false, error: "Loopback addresses (localhost/127.0.0.1) are not permitted for this resource." };
       }
       return { valid: true, parsed };
+    }
+
+    // Block IPv6 link-local and unique local addresses (ULA)
+    if (
+      host.startsWith("[fe8") || host.startsWith("[fe9") || host.startsWith("[fea") || host.startsWith("[feb") ||
+      host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb") ||
+      host.startsWith("[fc") || host.startsWith("[fd") || host.startsWith("fc") || host.startsWith("fd") ||
+      host.includes("::ffff:")
+    ) {
+      return { valid: false, error: "Private or link-local IPv6 addresses are not permitted." };
     }
 
     // Check IP literal addresses for internal private networks
@@ -996,11 +1006,12 @@ app.post("/api/local-whisper/transcribe", async (req, res) => {
 interface CloudAccountRecord {
   provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
   accountId: string;
-  email: string;
+  email?: string;
+  username?: string;
   displayName: string;
   connectedAt: string;
   serverUrl?: string;
-  webdavAuth?: string;
+  webdavAuth?: string; // Symmetrically encrypted with SERVER_SESSION_SECRET at rest
   remotePath?: string;
   accessToken?: string;
   refreshToken?: string;
@@ -1049,6 +1060,85 @@ interface OAuthStateRecord {
 const pendingOAuthStates = new Map<string, OAuthStateRecord>();
 
 const MAX_BACKUP_RETENTION = 10;
+
+// Server-side session signing secret & encryption key
+const SERVER_SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+
+interface SessionTokenPayload {
+  sub: string;
+  iss: "vellumscribe";
+  aud: "cloud_sync";
+  iat: number;
+  exp: number;
+  nonce: string;
+}
+
+function signSessionToken(sessionId: string, ttlMs = 14 * 24 * 60 * 60 * 1000): string {
+  const payload: SessionTokenPayload = {
+    sub: sanitizeSessionId(sessionId),
+    iss: "vellumscribe",
+    aud: "cloud_sync",
+    iat: Date.now(),
+    exp: Date.now() + ttlMs,
+    nonce: crypto.randomBytes(8).toString("hex"),
+  };
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", SERVER_SESSION_SECRET).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+function verifySessionToken(token: string): { valid: boolean; sessionId?: string; error?: string } {
+  if (!token || typeof token !== "string" || !token.includes(".")) {
+    return { valid: false, error: "Malformed token" };
+  }
+  const [body, signature] = token.split(".");
+  if (!body || !signature) {
+    return { valid: false, error: "Invalid token structure" };
+  }
+  const expectedSignature = crypto.createHmac("sha256", SERVER_SESSION_SECRET).update(body).digest("base64url");
+  if (expectedSignature.length !== signature.length) {
+    return { valid: false, error: "Signature length mismatch" };
+  }
+  const match = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  if (!match) {
+    return { valid: false, error: "Signature mismatch" };
+  }
+  try {
+    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf-8")) as SessionTokenPayload;
+    if (payload.iss !== "vellumscribe" || payload.aud !== "cloud_sync") {
+      return { valid: false, error: "Invalid token claims" };
+    }
+    if (Date.now() > payload.exp) {
+      return { valid: false, error: "Session token expired" };
+    }
+    return { valid: true, sessionId: payload.sub };
+  } catch {
+    return { valid: false, error: "Failed to parse token claims" };
+  }
+}
+
+function encryptCredential(plaintext: string): string {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", crypto.createHash("sha256").update(SERVER_SESSION_SECRET).digest(), iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf-8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
+}
+
+function decryptCredential(ciphertext?: string): string | null {
+  if (!ciphertext) return null;
+  if (!ciphertext.includes(":")) return ciphertext; // Migration fallback
+  try {
+    const [ivHex, tagHex, dataHex] = ciphertext.split(":");
+    if (!ivHex || !tagHex || !dataHex) return null;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", crypto.createHash("sha256").update(SERVER_SESSION_SECRET).digest(), Buffer.from(ivHex, "hex"));
+    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(dataHex, "hex")), decipher.final()]);
+    return decrypted.toString("utf-8");
+  } catch {
+    return null;
+  }
+}
 
 // Durable Local Disk Storage for Backups (persists across server restarts)
 const VAULT_STORAGE_DIR = path.join(process.cwd(), "data", "cloud_vault");
@@ -1134,14 +1224,46 @@ function loadPersistedBackupsFromDisk(sessionId: string): CloudBackupRecord[] {
 }
 
 function getSessionId(req: express.Request): string {
-  const header = req.headers["x-session-id"];
-  if (typeof header === "string" && header.trim()) {
-    return header.trim();
+  // 1. Authorization: Bearer <token>
+  const authHeader = req.headers["authorization"];
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    const verified = verifySessionToken(token);
+    if (verified.valid && verified.sessionId) {
+      return sanitizeSessionId(verified.sessionId);
+    }
   }
-  const query = req.query.sessionId;
-  if (typeof query === "string" && query.trim()) {
-    return query.trim();
+
+  // 2. x-session-token header
+  const tokenHeader = req.headers["x-session-token"];
+  if (typeof tokenHeader === "string" && tokenHeader.trim()) {
+    const verified = verifySessionToken(tokenHeader.trim());
+    if (verified.valid && verified.sessionId) {
+      return sanitizeSessionId(verified.sessionId);
+    }
   }
+
+  // 3. Cookie fallback
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    const match = cookieHeader.match(/vs_cloud_token=([^;]+)/);
+    if (match && match[1]) {
+      const verified = verifySessionToken(decodeURIComponent(match[1]));
+      if (verified.valid && verified.sessionId) {
+        return sanitizeSessionId(verified.sessionId);
+      }
+    }
+  }
+
+  // 4. Legacy migration header during initial client handshake
+  const legacyHeader = req.headers["x-session-id"];
+  if (typeof legacyHeader === "string") {
+    const cleaned = legacyHeader.trim();
+    if (/^[a-zA-Z0-9_-]{12,64}$/.test(cleaned)) {
+      return sanitizeSessionId(cleaned);
+    }
+  }
+
   // Isolate unauthenticated callers with an ephemeral per-request session ID
   return "anon_" + crypto.randomBytes(16).toString("hex");
 }
@@ -1199,6 +1321,25 @@ function isProviderConfigured(provider: string): boolean {
   }
   return false;
 }
+
+// 0. Cloud Session Token Minting & Rotation Endpoint
+app.post("/api/cloud/session", (req, res) => {
+  const existing = req.body?.sessionId || req.headers["x-session-id"];
+  let sessionId: string;
+  if (typeof existing === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(existing.trim())) {
+    sessionId = sanitizeSessionId(existing.trim());
+  } else {
+    sessionId = "vs_sess_" + crypto.randomBytes(16).toString("hex");
+  }
+  const token = signSessionToken(sessionId);
+  res.setHeader("Set-Cookie", `vs_cloud_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600`);
+  res.json({
+    success: true,
+    sessionId,
+    token,
+    expiresIn: 14 * 24 * 3600,
+  });
+});
 
 // 1. Cloud Configuration & Status Endpoint
 app.get("/api/cloud/config", (req, res) => {
@@ -1275,7 +1416,7 @@ app.post("/api/cloud/:provider/connect-instant", (req, res) => {
   const userEmail =
     typeof req.body?.email === "string" && req.body.email.includes("@")
       ? req.body.email.trim()
-      : "vault@vellumscribe.app";
+      : undefined;
 
   const displayName = "Vellum Encrypted Vault";
   const accountId = `acc_vault_${sessionId.slice(0, 8)}_${crypto.randomBytes(3).toString("hex")}`;
@@ -1347,6 +1488,7 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
         Authorization: authHeader,
         Depth: "0",
       },
+      redirect: "error",
     }).catch(async () => {
       return fetch(cleanUrl, {
         method: "PROPFIND",
@@ -1354,6 +1496,7 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
           Authorization: authHeader,
           Depth: "0",
         },
+        redirect: "error",
       });
     });
 
@@ -1366,15 +1509,16 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
     const accountId = `acc_${provider}_${crypto.randomBytes(4).toString("hex")}`;
     const connectedAt = new Date().toISOString();
     const displayName = `${username.trim()} (${parsed.hostname})`;
+    const encryptedAuth = encryptCredential(authHeader);
 
     const record: CloudAccountRecord = {
       provider: provider as "nextcloud" | "webdav",
       accountId,
-      email: `${username.trim()}@${parsed.hostname}`,
+      username: username.trim(),
       displayName,
       connectedAt,
       serverUrl: fullUrl,
-      webdavAuth: authHeader,
+      webdavAuth: encryptedAuth,
       remotePath: targetPath,
     };
 
@@ -1386,7 +1530,6 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
       account: {
         provider,
         accountId,
-        email: record.email,
         displayName,
         connectedAt,
         serverUrl: fullUrl,
@@ -1413,7 +1556,6 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
     session.accounts.set("instant_vault", {
       provider: "instant_vault",
       accountId,
-      email: "vault@vellumscribe.app",
       displayName: "Vellum Encrypted Vault",
       connectedAt: new Date().toISOString(),
     });
@@ -1524,24 +1666,25 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       const accessToken = tokenData.access_token;
 
       // Query User Profile
-      let email = "google_user@vellumscribe.app";
-      let displayName = "Google Drive User";
+      let email: string | undefined;
+      let displayName = "Google Drive Account";
       try {
         const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          email = userData.email || email;
+          email = userData.email || undefined;
           displayName = userData.name || displayName;
         }
       } catch (e) {
         console.warn("Failed to fetch Google profile info:", e);
       }
 
+      const accountId = email || `google_${crypto.randomBytes(6).toString("hex")}`;
       session.accounts.set("google_drive", {
         provider: "google_drive",
-        accountId: email,
+        accountId,
         email,
         displayName,
         connectedAt: new Date().toISOString(),
@@ -1579,24 +1722,25 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
 
-      let email = "onedrive_user@vellumscribe.app";
-      let displayName = "OneDrive User";
+      let email: string | undefined;
+      let displayName = "OneDrive Account";
       try {
         const userRes = await fetch("https://graph.microsoft.com/v1.0/me", {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          email = userData.mail || userData.userPrincipalName || email;
+          email = userData.mail || userData.userPrincipalName || undefined;
           displayName = userData.displayName || displayName;
         }
       } catch (e) {
         console.warn("Failed to fetch Microsoft profile info:", e);
       }
 
+      const accountId = email || `ms_${crypto.randomBytes(6).toString("hex")}`;
       session.accounts.set("microsoft", {
         provider: "microsoft",
-        accountId: email,
+        accountId,
         email,
         displayName,
         connectedAt: new Date().toISOString(),
@@ -1672,6 +1816,11 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
   // If uploading to real Nextcloud or WebDAV server
   if (account && (provider === "nextcloud" || provider === "webdav") && account.serverUrl && account.webdavAuth) {
     try {
+      const decryptedAuth = decryptCredential(account.webdavAuth);
+      if (!decryptedAuth) {
+        return res.status(502).json({ error: "Failed to decrypt WebDAV authorization credentials." });
+      }
+
       const uploadUrl = new URL(filename, account.serverUrl).toString();
       const urlValidation = validateSafeUrl(uploadUrl, { allowLocalhost: false });
       if (!urlValidation.valid) {
@@ -1681,10 +1830,11 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
-          Authorization: account.webdavAuth,
+          Authorization: decryptedAuth,
           "Content-Type": "application/octet-stream",
         },
         body: buffer as any,
+        redirect: "error",
       });
       if (!putRes.ok && putRes.status !== 201 && putRes.status !== 204) {
         return res.status(502).json({
@@ -1832,6 +1982,11 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
   const account = session.accounts.get(chunkSession.provider);
   if (account && (chunkSession.provider === "nextcloud" || chunkSession.provider === "webdav") && account.serverUrl && account.webdavAuth) {
     try {
+      const decryptedAuth = decryptCredential(account.webdavAuth);
+      if (!decryptedAuth) {
+        return res.status(502).json({ error: "Failed to decrypt WebDAV authorization credentials." });
+      }
+
       const uploadUrl = new URL(chunkSession.filename, account.serverUrl).toString();
       const urlValidation = validateSafeUrl(uploadUrl, { allowLocalhost: false });
       if (!urlValidation.valid) {
@@ -1841,10 +1996,11 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
       const putRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: {
-          Authorization: account.webdavAuth,
+          Authorization: decryptedAuth,
           "Content-Type": "application/octet-stream",
         },
         body: fullBuffer,
+        redirect: "error",
       });
       if (!putRes.ok && putRes.status !== 201 && putRes.status !== 204) {
         return res.status(502).json({
