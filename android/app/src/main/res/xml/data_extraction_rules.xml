@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Exclude secrets and credential stores from Android Cloud Backup -->
+        <exclude domain="sharedpref" path="device_backup_credentials.xml" />
+        <exclude domain="sharedpref" path="vellum_secure_prefs.xml" />
+        <exclude domain="root" path="keystore/" />
+        <include domain="database" path="vellumscribe_relational_v3.sqlite" />
+        <include domain="file" path="storage/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="device_backup_credentials.xml" />
+        <include domain="database" path="vellumscribe_relational_v3.sqlite" />
+        <include domain="file" path="storage/" />
+    </device-transfer>
+</data-extraction-rules>

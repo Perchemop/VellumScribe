@@ -32,9 +32,13 @@ const STORAGE_KEYS = {
   MIGRATION_LOGS: 'vellumscribe_migration_logs_v1',
 };
 
+import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/schema';
+
 export const CURRENT_APP_VERSION = '3.0.0';
 export const CURRENT_BUILD_NUMBER = 30000;
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
+export const CURRENT_BACKUP_FORMAT_VERSION = '3.0';
+export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {

@@ -2,7 +2,8 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const DB_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
 -- Workspace Metadata
@@ -184,6 +185,15 @@ export const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_recordings_created ON recordings(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_ocr_scans_created ON ocr_scans(created_at DESC);
       CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts4(note_id, title, body, checklist_text, ocr_text, tags);
+    `,
+  },
+  {
+    version: 4,
+    description: 'Add lock_mode, security_type, and cloud_save_enabled columns to notes table',
+    sql: `
+      ALTER TABLE notes ADD COLUMN lock_mode TEXT DEFAULT 'standard';
+      ALTER TABLE notes ADD COLUMN security_type TEXT DEFAULT 'pin';
+      ALTER TABLE notes ADD COLUMN cloud_save_enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
 ];

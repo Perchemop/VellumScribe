@@ -623,6 +623,35 @@ export class StorageManager {
 
     const encryptedPayload = await encryptNotePayloadV2(payload, key);
 
+    // Encrypt any associated media binaries using the derived key
+    try {
+      const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
+      const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
+      const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
+      const allMediaKeys = new Set<string>();
+      mediaFiles.forEach((m) => m.media_key && allMediaKeys.add(m.media_key));
+      recordings.forEach((r) => r.media_key && allMediaKeys.add(r.media_key));
+      ocrScans.forEach((o) => o.media_key && allMediaKeys.add(o.media_key));
+      if (note.sketch_media_key) allMediaKeys.add(note.sketch_media_key);
+
+      const { SecureMediaRepository, MediaRepository } = await import('./MediaRepository');
+      for (const mediaKey of allMediaKeys) {
+        const rawBlob = await MediaRepository.getBinary(mediaKey);
+        if (rawBlob) {
+          let isAlreadyEncrypted = false;
+          try {
+            const headerText = await rawBlob.slice(0, 50).text();
+            if (headerText.includes('vellum_enc_v1')) isAlreadyEncrypted = true;
+          } catch {}
+          if (!isAlreadyEncrypted) {
+            await SecureMediaRepository.putEncryptedWithKey(mediaKey, rawBlob, key);
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.warn('StorageManager', 'Associated media encryption during note lock had warnings:', e);
+    }
+
     return this.updateNote(id, {
       is_locked: true,
       lock_mode: lockMode,
@@ -645,6 +674,30 @@ export class StorageManager {
     const verifyResult = await this.verifyAndUnlockNote(note, enteredPin);
     if (!verifyResult.success || !verifyResult.payload) {
       return null;
+    }
+
+    // Decrypt any encrypted media binaries back to plaintext if session key is available
+    if (verifyResult.sessionKey) {
+      try {
+        const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
+        const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
+        const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
+        const allMediaKeys = new Set<string>();
+        mediaFiles.forEach((m) => m.media_key && allMediaKeys.add(m.media_key));
+        recordings.forEach((r) => r.media_key && allMediaKeys.add(r.media_key));
+        ocrScans.forEach((o) => o.media_key && allMediaKeys.add(o.media_key));
+        if (note.sketch_media_key) allMediaKeys.add(note.sketch_media_key);
+
+        const { SecureMediaRepository, MediaRepository } = await import('./MediaRepository');
+        for (const mediaKey of allMediaKeys) {
+          const decryptedBlob = await SecureMediaRepository.getEncryptedWithKey(mediaKey, verifyResult.sessionKey);
+          if (decryptedBlob) {
+            await MediaRepository.putBinary(mediaKey, decryptedBlob);
+          }
+        }
+      } catch (e) {
+        AppLogger.warn('StorageManager', 'Associated media decryption during note unlock had warnings:', e);
+      }
     }
 
     return this.updateNote(id, {
@@ -676,11 +729,15 @@ export class StorageManager {
       const sessionKey = UnlockSessionManager.getSessionKey(id);
       const { encryptNotePayloadV2, encryptNotePayload } = await import('./cryptoUtils');
 
+      const isPrivate = note.lock_mode === 'private';
       let encryptedPayload: string | null = null;
       const payload: NotePayloadData = {
+        title: isPrivate ? (updates.title !== undefined ? updates.title : note.title) : undefined,
         body: updates.body !== undefined ? updates.body : note.body,
         checklist_items: updates.checklist_items !== undefined ? updates.checklist_items : note.checklist_items,
         sketch_data: updates.sketch_data !== undefined ? updates.sketch_data : note.sketch_data,
+        tags: isPrivate ? (updates.tags !== undefined ? updates.tags : note.tags) : undefined,
+        lock_mode: note.lock_mode,
       };
 
       if (sessionKey) {
@@ -695,12 +752,18 @@ export class StorageManager {
       delete sanitizedUpdates.body;
       delete sanitizedUpdates.checklist_items;
       delete sanitizedUpdates.sketch_data;
+      if (isPrivate) {
+        delete sanitizedUpdates.title;
+        delete sanitizedUpdates.tags;
+      }
       return this.updateNote(id, {
         ...sanitizedUpdates,
         encrypted_payload: encryptedPayload,
+        title: isPrivate ? '🔒 Locked Note' : (updates.title !== undefined ? updates.title : note.title),
         body: '',
         checklist_items: [],
         sketch_data: undefined,
+        tags: isPrivate ? [] : (updates.tags !== undefined ? updates.tags : note.tags),
       });
     }
 
@@ -837,27 +900,11 @@ export class StorageManager {
 
   public static async batchLockNotes(ids: number[], pin: string): Promise<number> {
     if (!ids || ids.length === 0 || !pin) return 0;
-    const { hash, salt } = await hashPin(pin);
     let count = 0;
 
     for (const id of ids) {
-      const note = this.getNoteById(id);
-      if (note) {
-        const payload: NotePayloadData = {
-          body: note.body || '',
-          checklist_items: note.checklist_items || [],
-          sketch_data: note.sketch_data || undefined,
-        };
-        const encryptedPayload = await encryptNotePayload(payload, pin, salt);
-        this.updateNote(id, {
-          is_locked: true,
-          pin_hash: hash,
-          pin_salt: salt,
-          encrypted_payload: encryptedPayload,
-          body: '',
-          checklist_items: [],
-          sketch_data: undefined,
-        });
+      const locked = await this.setNotePinLock(id, pin, undefined, 'standard', 'pin');
+      if (locked) {
         count++;
       }
     }

@@ -23,16 +23,41 @@ export interface EncryptedCloudBackupEnvelope {
  * Cloud backup archives leaving this device contain only encrypted ciphertext.
  */
 export class CloudBackupCrypto {
+  private static cachedVaultKey: string | null = null;
+
   /**
    * Retrieves or creates a secure client-side master vault key unique to this device.
+   * Leverages AndroidKeystoreManager (hardware-backed AES/GCM) when available.
    */
+  public static async getClientVaultKeyAsync(): Promise<string> {
+    if (this.cachedVaultKey) return this.cachedVaultKey;
+    try {
+      const { AndroidKeystoreManager } = await import('./keystore');
+      let key = await AndroidKeystoreManager.getSecret('client_vault_key');
+      if (!key) {
+        key = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
+        if (!key) {
+          key = generateSalt() + generateSalt(); // 64 hex characters (256-bit entropy)
+        }
+        await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
+        localStorage.setItem(CLIENT_VAULT_KEY_STORAGE, key);
+      }
+      this.cachedVaultKey = key;
+      return key;
+    } catch {
+      return this.getOrCreateClientVaultKey();
+    }
+  }
+
   public static getOrCreateClientVaultKey(): string {
+    if (this.cachedVaultKey) return this.cachedVaultKey;
     try {
       let key = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
       if (!key) {
         key = generateSalt() + generateSalt(); // 64 hex characters (256-bit entropy)
         localStorage.setItem(CLIENT_VAULT_KEY_STORAGE, key);
       }
+      this.cachedVaultKey = key;
       return key;
     } catch {
       return 'vellumscribe-client-vault-ephemeral-key';
@@ -144,7 +169,7 @@ export class CloudBackupCrypto {
    * Returns a binary Blob ready for cloud upload.
    */
   public static async encryptArchive(jsonString: string, userPassphrase?: string): Promise<Blob> {
-    const passphrase = userPassphrase?.trim() || this.getOrCreateClientVaultKey();
+    const passphrase = userPassphrase?.trim() || (await this.getClientVaultKeyAsync());
     const saltHex = generateSalt();
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -207,7 +232,7 @@ export class CloudBackupCrypto {
       throw new Error('Unsupported or corrupted encrypted backup envelope.');
     }
 
-    const passphrase = userPassphrase?.trim() || this.getOrCreateClientVaultKey();
+    const passphrase = userPassphrase?.trim() || (await this.getClientVaultKeyAsync());
     const key = await this.deriveKey(passphrase, envelope.salt);
 
     const iv = fromHex(envelope.iv);

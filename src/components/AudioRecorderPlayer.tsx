@@ -275,8 +275,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           recording_id: savedRec.id,
           transcript_text: transcriptionText,
           created_at: timestamp,
-          confidence: 0.98,
-          speaker_count: 2,
+          confidence: undefined,
+          speaker_count: 1,
         });
       }
 

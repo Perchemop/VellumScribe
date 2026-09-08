@@ -111,8 +111,8 @@ export class OfflineTranscriptionEngine {
     if (trimmedLive.length > 0) {
       return {
         transcript: trimmedLive,
-        source: 'browser_speech (Offline Native Speech)',
-        confidence: 0.95,
+        source: 'browser_speech (Device Speech Recognition)',
+        confidence: undefined,
         durationSeconds: durationSeconds || undefined,
       };
     }
@@ -131,22 +131,22 @@ export class OfflineTranscriptionEngine {
 
         if (acousticInfo.hasVoiceActivity && acousticInfo.segments.length > 0) {
           const segmentLines = acousticInfo.segments.map((seg, idx) => {
-            return `[${formatTime(seg.start)} - ${formatTime(seg.end)}] Vocal Segment ${idx + 1}: Speech activity captured locally (~${seg.energyRms.toFixed(2)} relative RMS energy).`;
+            return `[${formatTime(seg.start)} - ${formatTime(seg.end)}] Vocal Segment ${idx + 1}: Speech activity detected (~${seg.energyRms.toFixed(2)} relative RMS energy).`;
           });
 
           const transcriptSummary = [
-            `### Audio Recording Transcript (Offline Native)`,
-            `**Total Duration:** ${formatTime(dur)} | **Format:** ${mimeType} | **Acoustic Fidelity:** High`,
+            `### Audio Recording (Voice Activity Detection)`,
+            `**Total Duration:** ${formatTime(dur)} | **Format:** ${mimeType} | **Voice Activity:** Detected`,
             ``,
             ...segmentLines,
             ``,
-            `*Processed 100% on-device with zero external network requests. Spoken content can also be dictated directly using native speech recognition or summarized using the Built-in Rule Engine.*`,
+            `*Voice activity detected locally on device. To capture full spoken text, enable the microphone dictation during live recording.*`,
           ].join('\n');
 
           return {
             transcript: transcriptSummary,
-            source: 'browser_speech (Acoustic Analyzer)',
-            confidence: 0.9,
+            source: 'browser_audio (Voice Activity Detection)',
+            confidence: undefined,
             durationSeconds: dur,
             segments: acousticInfo.segments.map((s) => ({
               start: s.start,
@@ -169,13 +169,13 @@ export class OfflineTranscriptionEngine {
     const defaultTranscript = [
       `### Audio Voice Memo (${timeStr})`,
       `Audio recording captured locally on-device. Duration: ${timeStr} (${mimeType}).`,
-      `To transcribe speech into text on-device, speak clearly during recording with the microphone enabled, or dictate notes directly.`,
+      `To transcribe speech into text on-device, speak clearly during recording with microphone recognition enabled.`,
     ].join('\n');
 
     return {
       transcript: defaultTranscript,
-      source: 'offline_native',
-      confidence: 0.85,
+      source: 'device_recording',
+      confidence: undefined,
       durationSeconds: dur,
     };
   }
