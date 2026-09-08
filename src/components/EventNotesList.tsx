@@ -246,6 +246,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   const [confirmEmptyTrashModal, setConfirmEmptyTrashModal] = useState(false);
   const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<number | null>(null);
   useModalBackHandler(confirmEmptyTrashModal, () => setConfirmEmptyTrashModal(false), 'confirm-empty-trash-modal');
+  useModalBackHandler(confirmDeleteNoteId !== null, () => setConfirmDeleteNoteId(null), 'confirm-delete-note-modal');
 
   const handleEmptyTrash = () => {
     setConfirmEmptyTrashModal(true);
@@ -326,11 +327,13 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1"
+                  aria-label="Clear search"
                   title="Clear search"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -338,12 +341,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             {/* Select Mode Button for Mobile */}
             <button
               id="batch-select-mode-toggle-btn"
+              type="button"
               onClick={() => {
                 setIsSelectionMode((p) => !p);
                 if (isSelectionMode) setSelectedNoteIds([]);
               }}
+              aria-label={isSelectionMode ? 'Cancel Selection' : 'Select Notes'}
               title={isSelectionMode ? 'Cancel Selection' : 'Select Notes'}
-              className={`p-2 rounded-xl text-xs font-semibold border transition-all ${
+              className={`min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-xs font-semibold border transition-all ${
                 isSelectionMode
                   ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent shadow-xs'
                   : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -892,10 +897,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 New Category
               </h3>
               <button
+                type="button"
                 onClick={() => setShowNewEventModal(false)}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                aria-label="Close"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -978,14 +985,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmEmptyTrashModal(false)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={executeEmptyTrash}
-                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs"
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
               >
                 Empty Trash
               </button>
@@ -1019,14 +1026,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
               <button
                 type="button"
                 onClick={() => setConfirmDeleteNoteId(null)}
-                className="px-3.5 py-1.5 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium"
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={executePermanentDeleteNote}
-                className="px-4 py-1.5 text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs"
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
               >
                 Delete Note
               </button>

@@ -182,17 +182,21 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
             <button
+              type="button"
               onClick={handleClear}
+              aria-label="Clear canvas"
               title="Clear canvas"
-              className="p-1.5 text-zinc-500 hover:text-rose-600 rounded-lg"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-500 hover:text-rose-600 rounded-lg"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg"
+              aria-label="Close"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
