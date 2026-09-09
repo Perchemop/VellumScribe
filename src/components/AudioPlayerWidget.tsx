@@ -10,9 +10,19 @@ import {
   FileText,
   Clock,
   Sparkles,
+  Copy,
+  Check,
+  Maximize2,
+  Minimize2,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { RecordingRecord, TranscriptRecord } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
+import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
+import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import { GeminiApiService } from '../lib/geminiService';
+import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 
 interface AudioPlayerWidgetProps {
   recording: RecordingRecord;
@@ -31,12 +41,116 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [isMuted, setIsMuted] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const [isTranscriptCopied, setIsTranscriptCopied] = useState(false);
+
+  const [currentTranscript, setCurrentTranscript] = useState<TranscriptRecord | undefined>(() =>
+    SQLiteDatabase.getTranscriptForRecording(recording.id)
+  );
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribeError, setTranscribeError] = useState<string | null>(null);
+
+  const transcript: TranscriptRecord | undefined =
+    currentTranscript || SQLiteDatabase.getTranscriptForRecording(recording.id);
+
+  const handleTranscribeWithAi = async () => {
+    if (isTranscribing) return;
+    setIsTranscribing(true);
+    setTranscribeError(null);
+
+    try {
+      let audioBlob: Blob | null = null;
+      let mimeType = 'audio/webm';
+
+      if (recording.media_key) {
+        const sessionKey = recording.note_id
+          ? UnlockSessionManager.getSessionKey(recording.note_id)
+          : null;
+        if (sessionKey) {
+          audioBlob = await SecureMediaRepository.getEncryptedWithKey(recording.media_key, sessionKey);
+        }
+        if (!audioBlob) {
+          audioBlob = await MediaRepository.getBinary(recording.media_key);
+        }
+      }
+
+      if (!audioBlob && recording.audio_url) {
+        try {
+          const res = await fetch(recording.audio_url);
+          if (res.ok) {
+            audioBlob = await res.blob();
+          }
+        } catch (fetchErr) {
+          console.warn('Could not fetch audio URL blob:', fetchErr);
+        }
+      }
+
+      if (!audioBlob) {
+        throw new Error('Audio recording data is not available on this device.');
+      }
+
+      if (audioBlob.type) {
+        mimeType = audioBlob.type;
+      }
+
+      const res = await GeminiApiService.transcribeAudio(
+        audioBlob,
+        mimeType,
+        recording.duration_seconds,
+        '',
+        recording.file_path || 'recording.wav'
+      );
+
+      if (!res.transcript || !res.transcript.trim()) {
+        throw new Error('No speech text could be recognized from this audio recording.');
+      }
+
+      // Save or update in SQLite
+      const existing = SQLiteDatabase.getTranscriptForRecording(recording.id);
+      let saved: TranscriptRecord;
+      if (existing) {
+        saved = {
+          ...existing,
+          transcript_text: res.transcript,
+          confidence: 0.95,
+          created_at: new Date().toISOString(),
+        };
+        SqliteRepository.saveTranscript(saved);
+        SQLiteDatabase.refreshCaches();
+      } else {
+        saved = SQLiteDatabase.addTranscript({
+          recording_id: recording.id,
+          transcript_text: res.transcript,
+          confidence: 0.95,
+          speaker_count: 1,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      setCurrentTranscript(saved);
+      setShowTranscript(true);
+      setTranscribeError(null);
+    } catch (err: any) {
+      console.error('AudioPlayerWidget transcription error:', err);
+      setTranscribeError(err?.message || 'Failed to transcribe audio with AI.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleCopyTranscript = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setIsTranscriptCopied(true);
+      setTimeout(() => setIsTranscriptCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy transcript:', err);
+    }
+  };
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const synthTimerRef = useRef<number | null>(null);
-
-  const transcript: TranscriptRecord | undefined = SQLiteDatabase.getTranscriptForRecording(recording.id);
 
   // Initialize or handle audio src
   const hasRealUrl = !!(recording.audio_url && recording.audio_url.startsWith('blob:'));
@@ -250,6 +364,23 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             </button>
           )}
 
+          {/* AI Transcribe / Re-transcribe action */}
+          <button
+            onClick={handleTranscribeWithAi}
+            disabled={isTranscribing}
+            title={transcript ? "Re-transcribe recording with AI" : "Transcribe recording to text"}
+            className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-medium flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer"
+          >
+            {isTranscribing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+            )}
+            <span className="hidden sm:inline text-xs">
+              {isTranscribing ? 'Transcribing...' : transcript ? 'Re-transcribe' : 'Transcribe'}
+            </span>
+          </button>
+
           {onDelete && (
             <button
               onClick={() => onDelete(recording.id)}
@@ -352,21 +483,117 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         </div>
       </div>
 
+      {/* Error notice if transcription fails */}
+      {transcribeError && (
+        <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-lg text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-medium">Transcription Error</p>
+            <p className="text-amber-700 dark:text-amber-300">{transcribeError}</p>
+          </div>
+          <button
+            onClick={handleTranscribeWithAi}
+            className="px-2 py-0.5 bg-amber-600 text-white rounded text-[11px] font-medium hover:bg-amber-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Transcript Collapsible Drawer */}
       {showTranscript && transcript && (
-        <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl text-xs space-y-1.5 animate-fadeIn">
-          <div className="flex items-center justify-between text-xs font-semibold text-indigo-900 dark:text-indigo-200">
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-              Verbatim Voice Transcript
-            </span>
-            <span className="text-xs text-indigo-600/80 dark:text-indigo-400 font-normal">
-              {transcript.speaker_count && transcript.speaker_count > 1 ? `${transcript.speaker_count} Speakers` : 'Voice Transcription'}
-            </span>
+        <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/80 rounded-xl text-xs space-y-2 animate-fadeIn">
+          {/* Notice if only offline acoustic VAD segments were detected */}
+          {(transcript.transcript_text.includes('Voice Activity Detection') ||
+            transcript.transcript_text.includes('Vocal Segment')) && (
+            <div className="p-2.5 bg-amber-50/90 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 rounded-lg text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>Offline acoustic segments detected. Click to run high-accuracy AI speech recognition.</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleTranscribeWithAi}
+                disabled={isTranscribing}
+                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-xs flex items-center gap-1 transition-all disabled:opacity-50 shrink-0 cursor-pointer"
+              >
+                {isTranscribing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                {isTranscribing ? 'Transcribing...' : 'Transcribe with AI'}
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs font-semibold text-indigo-900 dark:text-indigo-200 flex-wrap gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Verbatim Voice Transcript</span>
+              <span className="text-[11px] text-indigo-600/70 dark:text-indigo-400/70 font-normal">
+                • {transcript.transcript_text.trim().split(/\s+/).filter(Boolean).length} words
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {transcript.speaker_count && transcript.speaker_count > 1 && (
+                <span className="text-[11px] text-indigo-600/80 dark:text-indigo-400 font-normal bg-indigo-100/70 dark:bg-indigo-900/50 px-1.5 py-0.5 rounded">
+                  {transcript.speaker_count} Speakers
+                </span>
+              )}
+
+              {/* Copy transcript button */}
+              <button
+                type="button"
+                onClick={() => handleCopyTranscript(transcript.transcript_text)}
+                className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border border-indigo-200/80 dark:border-indigo-800 bg-white dark:bg-zinc-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                title="Copy transcript text"
+              >
+                {isTranscriptCopied ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-500" />
+                    <span className="text-emerald-600 dark:text-emerald-400">Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 text-indigo-500" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </button>
+
+              {/* Expand / Collapse toggle for large transcripts */}
+              {transcript.transcript_text.length > 180 && (
+                <button
+                  type="button"
+                  onClick={() => setIsTranscriptExpanded((prev) => !prev)}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border border-indigo-200/80 dark:border-indigo-800 bg-white dark:bg-zinc-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                  title={isTranscriptExpanded ? 'Collapse transcript view' : 'Expand transcript view'}
+                >
+                  {isTranscriptExpanded ? (
+                    <>
+                      <Minimize2 className="w-3 h-3" />
+                      <span>Compact</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="w-3 h-3" />
+                      <span>Expand</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
-          <p className="text-zinc-800 dark:text-zinc-200 leading-relaxed font-normal bg-white/70 dark:bg-zinc-900/70 p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
+
+          {/* Scrollable Transcript Text Box */}
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Scrollable verbatim voice transcript"
+            className={`text-zinc-800 dark:text-zinc-200 leading-relaxed font-normal bg-white/80 dark:bg-zinc-900/80 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 overflow-y-auto overscroll-contain pr-2 custom-minimal-scrollbar select-text text-xs whitespace-pre-line focus:outline-none focus:ring-1 focus:ring-indigo-500/50 transition-all ${
+              isTranscriptExpanded ? 'max-h-80 sm:max-h-[420px]' : 'max-h-36 sm:max-h-48'
+            }`}
+          >
             "{transcript.transcript_text}"
-          </p>
+          </div>
         </div>
       )}
     </div>

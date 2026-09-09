@@ -130,17 +130,11 @@ export class OfflineTranscriptionEngine {
         };
 
         if (acousticInfo.hasVoiceActivity && acousticInfo.segments.length > 0) {
-          const segmentLines = acousticInfo.segments.map((seg, idx) => {
-            return `[${formatTime(seg.start)} - ${formatTime(seg.end)}] Vocal Segment ${idx + 1}: Speech activity detected (~${seg.energyRms.toFixed(2)} relative RMS energy).`;
-          });
-
           const transcriptSummary = [
-            `### Audio Recording (Voice Activity Detection)`,
-            `**Total Duration:** ${formatTime(dur)} | **Format:** ${mimeType} | **Voice Activity:** Detected`,
+            `### Audio Recording (${formatTime(dur)})`,
+            `*Speech activity detected across ${acousticInfo.segments.length} vocal segments.*`,
             ``,
-            ...segmentLines,
-            ``,
-            `*Voice activity detected locally on device. To capture full spoken text, enable the microphone dictation during live recording.*`,
+            `*Verbatim speech-to-text transcription requires an active network connection for Cloud AI transcription, or live microphone dictation during recording.*`,
           ].join('\n');
 
           return {
@@ -151,7 +145,7 @@ export class OfflineTranscriptionEngine {
             segments: acousticInfo.segments.map((s) => ({
               start: s.start,
               end: s.end,
-              text: `Vocal Segment (~${s.energyRms.toFixed(2)} RMS)`,
+              text: `Speech Segment`,
             })),
           };
         }

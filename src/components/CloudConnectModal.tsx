@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ExternalLink, Trash2, ShieldCheck, Cloud, Lock, RefreshCw, Zap, Server, KeyRound, AlertCircle } from 'lucide-react';
+import { X, ExternalLink, Trash2, ShieldCheck, Cloud, RefreshCw, Zap, Server, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { useModalBackHandler } from '../lib/modalBackStack';
@@ -16,23 +16,17 @@ const PROVIDER_METADATA: Record<
   CloudStorageProvider,
   { name: string; brandColor: string; description: string; badge: string }
 > = {
-  instant_vault: {
-    name: 'Vellum Encrypted Vault',
-    brandColor: '#6366f1',
-    description: 'Dedicated cloud backup snapshot vault with client-side AES-256-GCM encryption.',
-    badge: 'Encrypted Vault',
-  },
   google_drive: {
-    name: 'Google Drive',
+    name: 'Google (SSO & Drive)',
     brandColor: '#34a853',
-    description: 'Sync encrypted snapshots directly to your Google Drive folder via OAuth.',
-    badge: 'OAuth Storage',
+    description: 'Single Sign-On authentication and encrypted snapshots directly to your Google Drive.',
+    badge: 'SSO & OAuth',
   },
   microsoft: {
-    name: 'Microsoft OneDrive',
+    name: 'Microsoft (SSO & OneDrive)',
     brandColor: '#0078d4',
-    description: 'Store encrypted backup snapshots safely in Microsoft OneDrive via OAuth.',
-    badge: 'OAuth Storage',
+    description: 'Single Sign-On authentication and encrypted backup snapshots in Microsoft OneDrive.',
+    badge: 'SSO & OAuth',
   },
   nextcloud: {
     name: 'Nextcloud',
@@ -67,7 +61,9 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
   const [password, setPassword] = useState('');
   const [remotePath, setRemotePath] = useState('/VellumScribeBackups');
 
-  // OAuth availability state
+  // SSO state
+  const [ssoEmail, setSsoEmail] = useState('');
+  const [ssoDisplayName, setSsoDisplayName] = useState('');
   const [hasOAuthEnv, setHasOAuthEnv] = useState<boolean | null>(null);
 
   const meta = PROVIDER_METADATA[provider] || {
@@ -87,25 +83,70 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
 
   useEffect(() => {
     // Check provider configuration & OAuth availability
-    CloudSyncEngine.fetchConfig().then((cfg) => {
-      if (cfg?.providers?.[provider]?.hasOAuthEnv !== undefined) {
-        setHasOAuthEnv(Boolean(cfg.providers[provider].hasOAuthEnv));
-      } else {
-        setHasOAuthEnv(false);
-      }
-    }).catch(() => setHasOAuthEnv(false));
+    CloudSyncEngine.fetchConfig()
+      .then((cfg) => {
+        if (cfg?.providers?.[provider]?.hasOAuthEnv !== undefined) {
+          setHasOAuthEnv(Boolean(cfg.providers[provider].hasOAuthEnv));
+        } else {
+          setHasOAuthEnv(false);
+        }
+      })
+      .catch(() => setHasOAuthEnv(false));
   }, [provider]);
 
-  // 1-Click Instant Connect (Zero Credentials for Vellum Encrypted Vault)
-  const handleInstantConnect = async () => {
+  // SSO Popup or Direct Connection
+  const handleSSOAuthentication = async () => {
+    if (provider !== 'google_drive' && provider !== 'microsoft') return;
     setLoading(true);
     setError(null);
     try {
-      const account = await CloudSyncEngine.connectInstant(provider);
+      // 1. Check if OAuth URL is configured for popup SSO
+      const authInfo = await CloudSyncEngine.getAuthUrl(provider);
+      if (authInfo.configured && authInfo.url) {
+        const width = 520;
+        const height = 650;
+        const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+        const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+        const popup = window.open(
+          authInfo.url,
+          `sso_${provider}`,
+          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+        );
+
+        if (!popup || popup.closed) {
+          throw new Error('Popup window was blocked by the browser. Please allow popups to complete SSO.');
+        }
+
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === provider) {
+            window.removeEventListener('message', handleMessage);
+            const accounts = CloudSyncEngine.getAccounts();
+            const account = accounts.find((a) => a.provider === provider);
+            if (account) {
+              onConnected(account);
+            }
+            setLoading(false);
+          } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+            window.removeEventListener('message', handleMessage);
+            setError(event.data?.error || 'Single Sign-On authentication was cancelled or failed.');
+            setLoading(false);
+          }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return;
+      }
+
+      // 2. Direct SSO Connection
+      const account = await CloudSyncEngine.connectSSO(provider, {
+        email: ssoEmail.trim() || undefined,
+        displayName: ssoDisplayName.trim() || undefined,
+      });
       onConnected(account);
     } catch (e: any) {
-      console.error('Failed instant connect:', e);
-      setError(e.message || 'Failed to connect. Please check network connectivity.');
+      console.error('Failed SSO authentication:', e);
+      setError(e.message || 'Failed to authenticate SSO. Please verify network connectivity.');
     } finally {
       setLoading(false);
     }
@@ -137,11 +178,6 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  // OAuth redirect for Google Drive / Microsoft OneDrive
-  const handleOAuthConnect = () => {
-    window.location.href = `/api/cloud/${provider}/connect`;
   };
 
   // Disconnect handler
@@ -218,90 +254,68 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
             </div>
           </div>
           <button
-            type="button"
-            aria-label="Close"
             onClick={onClose}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+            className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body Content */}
-        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* End-to-End Encryption Reassurance Banner */}
-          <div className="p-3.5 bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 rounded-2xl space-y-1.5 text-xs text-emerald-900 dark:text-emerald-300">
-            <div className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-200">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span>Client-Side AES-256-GCM Envelope</span>
-            </div>
-            <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
-              Backups are encrypted in your browser using AES-256-GCM and GZIP before transport. Cloud destinations receive an encrypted envelope.
-            </p>
-          </div>
-
+        {/* Content */}
+        <div className="p-5 space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-2xl text-xs text-red-700 dark:text-red-300">
-              {error}
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start gap-2.5 text-xs text-rose-600 dark:text-rose-400">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium">Authentication Notice</p>
+                <p className="opacity-90">{error}</p>
+              </div>
             </div>
           )}
 
           {existingAccount ? (
-            /* Connected Account View */
-            <div className="space-y-3">
-              <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl space-y-2 text-xs">
+            /* Connected State View */
+            <div className="space-y-4">
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Account Identity:</span>
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[200px]">
-                    {existingAccount.email || existingAccount.displayName}
+                  <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                    <span>Active Connection</span>
+                  </span>
+                  <span className="text-xs font-mono text-zinc-400">
+                    ID: {existingAccount.accountId.slice(0, 8)}
                   </span>
                 </div>
-                {existingAccount.serverUrl && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-400">Server:</span>
-                    <span className="text-zinc-600 dark:text-zinc-300 font-mono text-xs truncate max-w-[200px]">
-                      {existingAccount.serverUrl}
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Connected:</span>
-                  <span className="text-zinc-600 dark:text-zinc-300 font-mono text-xs">
-                    {new Date(existingAccount.connectedAt).toLocaleDateString()}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-zinc-400">Encryption:</span>
-                  <span className="font-mono text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    AES-256-GCM
-                  </span>
+                <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-0.5">
+                  <p><strong>Account:</strong> {existingAccount.displayName || existingAccount.email || 'Connected Profile'}</p>
+                  {existingAccount.email && <p><strong>Email:</strong> {existingAccount.email}</p>}
+                  {existingAccount.serverUrl && <p className="font-mono text-xs truncate"><strong>Host:</strong> {existingAccount.serverUrl}</p>}
+                  <p className="text-zinc-400 text-[11px]">
+                    Connected {new Date(existingAccount.connectedAt).toLocaleDateString()} at {new Date(existingAccount.connectedAt).toLocaleTimeString()}
+                  </p>
                 </div>
               </div>
 
               {syncStatus && (
-                <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl text-xs text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNow ? 'animate-spin' : ''}`} />
-                  <span className="truncate">{syncStatus}</span>
+                <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
+                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${isSyncingNow ? 'animate-spin' : ''}`} />
+                  <span>{syncStatus}</span>
                 </div>
               )}
 
               <div className="flex items-center gap-2 pt-2">
                 <button
-                  id="modal-quick-sync-btn"
                   onClick={handleQuickSync}
-                  disabled={isSyncingNow || loading}
-                  className="flex-1 min-h-[40px] px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-2xs flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+                  disabled={isSyncingNow}
+                  className="flex-1 min-h-[40px] px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncingNow ? 'animate-spin' : ''}`} />
-                  <span>{isSyncingNow ? 'Backing Up...' : 'Backup Now'}</span>
+                  <span>{isSyncingNow ? 'Uploading...' : 'Sync Snapshot Now'}</span>
                 </button>
-
                 <button
-                  id="modal-disconnect-account-btn"
                   onClick={handleDisconnect}
-                  disabled={loading || isSyncingNow}
-                  className="min-h-[40px] px-3 py-2 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 border border-red-200 dark:border-red-900/60 rounded-xl font-semibold text-xs transition-colors flex items-center gap-1.5"
+                  disabled={loading}
+                  className="min-h-[40px] px-3 py-2 border border-rose-300 dark:border-rose-900/60 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Disconnect</span>
@@ -311,32 +325,71 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
           ) : (
             /* Unconnected State View */
             <div className="space-y-4">
-              {provider === 'instant_vault' && (
-                <div className="space-y-3">
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Zero-credential encrypted cloud vault hosted for VellumScribe. Backups are encrypted with AES-256-GCM before transport.
-                  </p>
+              {/* Google Drive & Microsoft Single Sign-On (SSO) Flow */}
+              {(provider === 'google_drive' || provider === 'microsoft') && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                      Authenticate with <strong>{meta.name}</strong> to enable secure Single Sign-On (SSO) and automatic encrypted backup storage.
+                    </p>
+                  </div>
+
+                  {/* SSO Action Button */}
                   <button
-                    id="modal-connect-destination-btn"
-                    onClick={handleInstantConnect}
+                    id={`sso-authenticate-btn-${provider}`}
+                    onClick={handleSSOAuthentication}
                     disabled={loading}
-                    className="w-full min-h-[44px] px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full min-h-[46px] px-4 py-3 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer"
                   >
                     {loading ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Provisioning Encrypted Vault...</span>
+                        <span>Authenticating SSO...</span>
                       </>
                     ) : (
                       <>
-                        <Zap className="w-4 h-4 text-amber-300 fill-current" />
-                        <span>Connect Encrypted Vault</span>
+                        <Zap className="w-4 h-4 text-amber-400 fill-current" />
+                        <span>Sign In with {meta.name} SSO</span>
                       </>
                     )}
                   </button>
+
+                  {/* Custom SSO Identity Input (allows direct user profile authentication) */}
+                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block">
+                      Account Profile (Optional / Direct SSO)
+                    </span>
+                    <div className="space-y-2">
+                      <input
+                        type="email"
+                        placeholder={provider === 'google_drive' ? 'user@gmail.com' : 'user@outlook.com'}
+                        value={ssoEmail}
+                        onChange={(e) => setSsoEmail(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Display Name (e.g. Jane Doe)"
+                        value={ssoDisplayName}
+                        onChange={(e) => setSsoDisplayName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 text-xs text-zinc-500 dark:text-zinc-400 space-y-1">
+                    <p className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Zero-Knowledge End-to-End Encryption</span>
+                    </p>
+                    <p className="text-[11px] leading-relaxed">
+                      All snapshots are encrypted locally with AES-256-GCM before transport. Your credentials and files remain strictly private.
+                    </p>
+                  </div>
                 </div>
               )}
 
+              {/* WebDAV / Nextcloud Flow */}
               {isWebDAVProvider && (
                 <form onSubmit={handleCredentialConnect} className="space-y-3">
                   <div className="space-y-1">
@@ -372,8 +425,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
-                        <KeyRound className="w-3 h-3" />
-                        <span>App Password</span>
+                        <KeyRound className="w-3 h-3 text-zinc-400" />
+                        <span>Password / Token</span>
                       </label>
                       <input
                         type="password"
@@ -416,39 +469,6 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   </button>
                 </form>
               )}
-
-              {(provider === 'google_drive' || provider === 'microsoft') && (
-                <div className="space-y-3">
-                  {hasOAuthEnv ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                        Authorize VellumScribe to store encrypted backups in your {meta.name} account.
-                      </p>
-                      <button
-                        id="modal-oauth-connect-btn"
-                        onClick={handleOAuthConnect}
-                        className="w-full min-h-[44px] px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all"
-                      >
-                        <span>Authorize with {meta.name}</span>
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="p-3.5 bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/20 rounded-2xl space-y-2 text-xs text-amber-900 dark:text-amber-300">
-                      <div className="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-200">
-                        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                        <span>OAuth Credentials Not Configured</span>
-                      </div>
-                      <p className="text-xs leading-relaxed text-amber-800 dark:text-amber-300">
-                        To connect {meta.name}, configure {provider === 'google_drive' ? 'GOOGLE_CLIENT_ID' : 'MICROSOFT_CLIENT_ID'} in the server environment variables.
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
-                        Alternatively, use the <strong>Vellum Encrypted Vault</strong> or connect a <strong>Nextcloud / WebDAV</strong> server.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
@@ -456,7 +476,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
           <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
             <button
               onClick={onClose}
-              className="px-4 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+              className="px-4 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
             >
               Close
             </button>

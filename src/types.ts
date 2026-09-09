@@ -46,7 +46,7 @@ export interface NoteRecord {
   cloud_save_enabled?: boolean;
 }
 
-export type CloudStorageProvider = 'instant_vault' | 'google_drive' | 'microsoft' | 'nextcloud' | 'webdav';
+export type CloudStorageProvider = 'google_drive' | 'microsoft' | 'nextcloud' | 'webdav';
 
 export type SyncState = 'idle' | 'queued' | 'preparing' | 'uploading' | 'verifying' | 'completed' | 'partial_failure' | 'failed';
 

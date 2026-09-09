@@ -14,6 +14,10 @@ import {
   Radio,
   CheckCircle2,
   AlertCircle,
+  RefreshCw,
+  Copy,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { AudioRecorderManager } from '../lib/audioRecorder';
 import { GeminiApiService } from '../lib/geminiService';
@@ -49,6 +53,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     url: string;
     originalFileName?: string;
     liveTranscript?: string;
+    wasConverted?: boolean;
+    originalFormat?: string;
   } | null>(null);
 
   // Playback states
@@ -60,6 +66,20 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   const [transcriptionSource, setTranscriptionSource] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isConvertingAudio, setIsConvertingAudio] = useState(false);
+  const [conversionNotice, setConversionNotice] = useState<string | null>(null);
+  const [isTranscriptExpanded, setIsTranscriptExpanded] = useState(false);
+  const [isTranscriptCopied, setIsTranscriptCopied] = useState(false);
+
+  const handleCopyTranscript = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setIsTranscriptCopied(true);
+      setTimeout(() => setIsTranscriptCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy transcript:', err);
+    }
+  };
 
   const recorderRef = useRef<AudioRecorderManager | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -133,16 +153,165 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     }
   };
 
+  // Universal audio converter via backend FFmpeg
+  const convertAudioOnServer = async (file: File, preloadedBase64?: string) => {
+    setIsConvertingAudio(true);
+    const originalExt = file.name.split('.').pop()?.toUpperCase() || 'AUDIO';
+    setConversionNotice(`Optimizing ${originalExt} recording format...`);
+
+    let base64 = preloadedBase64;
+    try {
+      if (!base64) {
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            resolve(res.includes(',') ? res.split(',')[1] : res);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // Call conversion endpoint with timeout controller
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
+
+      const response = await fetch('/api/audio/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          audioBase64: base64,
+          originalFileName: file.name,
+          mimeType: file.type,
+          targetFormat: 'mp3',
+        }),
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Server audio conversion unavailable');
+      }
+
+      const res = await response.json();
+      if (!res.base64) {
+        throw new Error('No audio data returned from conversion');
+      }
+
+      const binaryString = atob(res.base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const convertedBlob = new Blob([bytes], { type: res.mimeType || 'audio/mp3' });
+
+      revokeActiveBlobUrl();
+      const convertedUrl = URL.createObjectURL(convertedBlob);
+      createdBlobUrlRef.current = convertedUrl;
+
+      const testAudio = new Audio(convertedUrl);
+      testAudio.onloadedmetadata = () => {
+        const dur = Math.round(testAudio.duration) || 30;
+        setRecordedAudio({
+          blob: convertedBlob,
+          base64: res.base64,
+          durationSeconds: dur,
+          fileSizeBytes: res.fileSize,
+          mimeType: res.mimeType || 'audio/mp3',
+          url: convertedUrl,
+          originalFileName: res.fileName,
+          wasConverted: true,
+          originalFormat: originalExt,
+        });
+        setConversionNotice(`✓ Converted ${originalExt} to MP3 (${(res.fileSize / 1024).toFixed(0)} KB)`);
+        setIsConvertingAudio(false);
+        setTimeout(() => setConversionNotice(null), 4000);
+      };
+
+      testAudio.onerror = () => {
+        setRecordedAudio({
+          blob: convertedBlob,
+          base64: res.base64,
+          durationSeconds: 30,
+          fileSizeBytes: res.fileSize,
+          mimeType: res.mimeType || 'audio/mp3',
+          url: convertedUrl,
+          originalFileName: res.fileName,
+          wasConverted: true,
+          originalFormat: originalExt,
+        });
+        setConversionNotice(`✓ Converted to universal MP3`);
+        setIsConvertingAudio(false);
+        setTimeout(() => setConversionNotice(null), 4000);
+      };
+    } catch (err: any) {
+      console.warn('Audio conversion unavailable, using original audio:', err?.message || err);
+      // Fallback seamlessly to the original audio recording so user data is never lost
+      revokeActiveBlobUrl();
+      const fallbackUrl = URL.createObjectURL(file);
+      createdBlobUrlRef.current = fallbackUrl;
+
+      const fallbackAudio = new Audio(fallbackUrl);
+      fallbackAudio.onloadedmetadata = () => {
+        const dur = Math.round(fallbackAudio.duration) || 30;
+        setRecordedAudio({
+          blob: file,
+          base64: base64 || '',
+          durationSeconds: dur,
+          fileSizeBytes: file.size,
+          mimeType: file.type || 'audio/wav',
+          url: fallbackUrl,
+          originalFileName: file.name,
+        });
+        setConversionNotice(`Audio loaded in original format (${originalExt})`);
+        setIsConvertingAudio(false);
+        setTimeout(() => setConversionNotice(null), 4000);
+      };
+
+      fallbackAudio.onerror = () => {
+        setRecordedAudio({
+          blob: file,
+          base64: base64 || '',
+          durationSeconds: 30,
+          fileSizeBytes: file.size,
+          mimeType: file.type || 'audio/wav',
+          url: fallbackUrl,
+          originalFileName: file.name,
+        });
+        setConversionNotice(`Audio loaded (${originalExt})`);
+        setIsConvertingAudio(false);
+        setTimeout(() => setConversionNotice(null), 4000);
+      };
+    }
+  };
+
   // Handle file upload
   const handleAudioFileUpload = async (file: File) => {
     if (!file) return;
     setTranscriptionText(null);
     setCurrentTime(0);
 
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    // Only codecs that modern browsers strictly cannot decode require conversion
+    const strictlyUnsupportedByBrowser =
+      ['wma', 'amr', 'aiff', 'aif', 'caf', '3gp', 'mka', 'dss', 'vox'].includes(ext) ||
+      file.type.includes('wma') ||
+      file.type.includes('amr') ||
+      file.type.includes('aiff');
+
+    if (strictlyUnsupportedByBrowser) {
+      await convertAudioOnServer(file);
+      return;
+    }
+
+    // For standard browser formats (MP3, WAV, M4A, OGG, WEBM, FLAC, AAC):
+    // Load directly in browser for instant playback without unnecessary network round-trips
     revokeActiveBlobUrl();
     const url = URL.createObjectURL(file);
     createdBlobUrlRef.current = url;
-    const mimeType = file.type || 'audio/mp4';
+    const mimeType = file.type || 'audio/wav';
 
     // Convert file to base64
     const reader = new FileReader();
@@ -150,7 +319,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
       const base64Full = reader.result as string;
       const base64Data = base64Full.includes(',') ? base64Full.split(',')[1] : base64Full;
 
-      // Extract duration via temp Audio element
+      // Test playback duration via temp Audio element
       const tempAudio = new Audio(url);
       tempAudio.onloadedmetadata = () => {
         const dur = Math.round(tempAudio.duration) || 30;
@@ -164,16 +333,11 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           originalFileName: file.name,
         });
       };
+
+      // If browser fails to load audio (codec or container compatibility issue), automatically convert via server FFmpeg!
       tempAudio.onerror = () => {
-        setRecordedAudio({
-          blob: file,
-          base64: base64Data,
-          durationSeconds: 45,
-          fileSizeBytes: file.size,
-          mimeType,
-          url,
-          originalFileName: file.name,
-        });
+        console.warn('Audio decoding issue detected in browser. Triggering universal conversion to MP3...');
+        convertAudioOnServer(file, base64Data);
       };
     };
     reader.readAsDataURL(file);
@@ -184,7 +348,10 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|m4a|aac|ogg|webm|flac)$/i)) {
+      if (
+        file.type.startsWith('audio/') ||
+        file.name.match(/\.(mp3|wav|m4a|aac|ogg|webm|flac|wma|amr|aiff|aif|opus|caf|3gp|mp4|mka)$/i)
+      ) {
         handleAudioFileUpload(file);
       }
     }
@@ -223,16 +390,17 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     setTranscribeError(null);
     try {
       const res = await GeminiApiService.transcribeAudio(
-        recordedAudio.base64,
+        recordedAudio.blob || recordedAudio.base64,
         recordedAudio.mimeType,
         recordedAudio.durationSeconds,
-        liveTranscript || recordedAudio.liveTranscript
+        liveTranscript || recordedAudio.liveTranscript,
+        recordedAudio.originalFileName
       );
       setTranscriptionText(res.transcript);
       setTranscriptionSource(res.source || 'Offline Native');
       setTranscribeError(null);
     } catch (err: any) {
-      console.error('Audio transcription notice:', err);
+      console.warn('Audio transcription notice:', err?.message || err);
       const errMsg = err?.message || 'Could not complete audio transcription.';
       setTranscribeError(errMsg);
     } finally {
@@ -375,7 +543,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+            accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac,.wma,.amr,.aiff,.aif,.opus,.caf,.3gp,.mp4,.mka"
             className="hidden"
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
@@ -391,9 +559,33 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               Drag and drop an audio file, or click to browse
             </p>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Supports MP3, M4A, WAV, AAC, OGG, FLAC & WebM
+              Supports MP3, M4A, WAV, AAC, OGG, FLAC, WMA, AMR, AIFF, OPUS & all voice formats
+            </p>
+            <p className="text-[11px] text-indigo-500/90 dark:text-indigo-400/90 mt-1">
+              Alternate formats are automatically transcoded to standard MP3 during upload
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Converting Progress Notification */}
+      {isConvertingAudio && (
+        <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center gap-2.5 text-xs text-indigo-600 dark:text-indigo-400 animate-pulse">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">Transcoding Audio Format...</p>
+            <p className="text-[11px] opacity-80">
+              Converting alternate recording format to standard MP3 using FFmpeg for universal playback.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Conversion Success/Status Banner */}
+      {conversionNotice && !isConvertingAudio && (
+        <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          <span>{conversionNotice}</span>
         </div>
       )}
 
@@ -436,11 +628,16 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
             </div>
           ) : recordedAudio ? (
             <div className="w-full flex flex-col items-center gap-3">
-              <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
-                <FileAudio className="w-4 h-4 text-indigo-500" />
-                <span className="text-xs font-semibold truncate max-w-[260px]">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-zinc-800 dark:text-zinc-200">
+                <FileAudio className="w-4 h-4 text-indigo-500 shrink-0" />
+                <span className="text-xs font-semibold truncate max-w-[220px]">
                   {recordedAudio.originalFileName || 'Audio Recording'}: {formatTime(recordedAudio.durationSeconds)} ({(recordedAudio.fileSizeBytes / 1024).toFixed(0)} KB)
                 </span>
+                {recordedAudio.wasConverted && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Transcoded to MP3 {recordedAudio.originalFormat ? `(from .${recordedAudio.originalFormat.toLowerCase()})` : ''}
+                  </span>
+                )}
               </div>
 
               {/* Audio waveform visual representation */}
@@ -597,7 +794,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
                 </button>
 
                 <span className="text-xs text-zinc-400">
-                  {AiSettingsManager.getSettings().primaryTranscriptionProvider === 'browser_speech' ? 'Offline Native Engine' : 'Speech Engine Active'}
+                  {transcriptionSource ? `Source: ${transcriptionSource}` : 'AI Speech Recognition Ready'}
                 </span>
               </div>
 
@@ -614,14 +811,74 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               )}
 
               {transcriptionText && (
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                      Transcript ({transcriptionSource || 'Offline Engine'})
-                    </span>
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-950/60 border border-zinc-200 dark:border-zinc-800 rounded-lg text-xs text-zinc-800 dark:text-zinc-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2 border-b border-zinc-200/60 dark:border-zinc-800/80 pb-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        Transcript ({transcriptionSource || 'Offline Engine'})
+                      </span>
+                      <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500">
+                        • {transcriptionText.trim().split(/\s+/).filter(Boolean).length} words
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Copy transcript button */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyTranscript(transcriptionText)}
+                        className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                        title="Copy transcript to clipboard"
+                      >
+                        {isTranscriptCopied ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-500" />
+                            <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3 text-zinc-400" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Expand / Compact view toggle for large transcripts */}
+                      {transcriptionText.length > 200 && (
+                        <button
+                          type="button"
+                          onClick={() => setIsTranscriptExpanded((prev) => !prev)}
+                          className="flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                          title={isTranscriptExpanded ? 'Switch to compact scroll' : 'Expand view'}
+                        >
+                          {isTranscriptExpanded ? (
+                            <>
+                              <Minimize2 className="w-3 h-3 text-zinc-400" />
+                              <span>Compact</span>
+                            </>
+                          ) : (
+                            <>
+                              <Maximize2 className="w-3 h-3 text-zinc-400" />
+                              <span>Expand</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="leading-relaxed whitespace-pre-line">{transcriptionText}</p>
+
+                  {/* Scrollable Transcript Text Box */}
+                  <div
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Scrollable audio transcript text"
+                    className={`overflow-y-auto overscroll-contain pr-2 custom-minimal-scrollbar select-text leading-relaxed whitespace-pre-line text-xs font-normal text-zinc-800 dark:text-zinc-200 bg-white/70 dark:bg-zinc-900/70 p-3 rounded-lg border border-zinc-200/70 dark:border-zinc-800 transition-all focus:outline-none focus:ring-1 focus:ring-indigo-500/40 ${
+                      isTranscriptExpanded ? 'max-h-96 sm:max-h-[460px]' : 'max-h-36 sm:max-h-52'
+                    }`}
+                  >
+                    {transcriptionText}
+                  </div>
                 </div>
               )}
             </div>

@@ -215,9 +215,9 @@ describe('CloudSyncEngine offline sync queue', () => {
     CloudSyncEngine.clearSyncQueue();
     expect(CloudSyncEngine.getSyncQueue()).toEqual([]);
 
-    const item = CloudSyncEngine.enqueueSync(['instant_vault'], 'Network offline test');
+    const item = CloudSyncEngine.enqueueSync(['google_drive'], 'Network offline test');
     expect(item).toBeDefined();
-    expect(item.providers).toContain('instant_vault');
+    expect(item.providers).toContain('google_drive');
 
     const queue = CloudSyncEngine.getSyncQueue();
     expect(queue).toHaveLength(1);

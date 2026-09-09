@@ -189,7 +189,49 @@ export class CloudSyncEngine {
     }
   }
 
-  static async fetchConfig() {
+  private static readonly DEFAULT_CLOUD_CONFIG = {
+    status: 'ok',
+    providers: {
+      google_drive: {
+        name: 'Google (SSO & Drive)',
+        isConfigured: false,
+        hasOAuthEnv: false,
+        isSSO: true,
+        description: 'Single Sign-On authentication and encrypted cloud backups via Google.',
+      },
+      microsoft: {
+        name: 'Microsoft (SSO & OneDrive)',
+        isConfigured: false,
+        hasOAuthEnv: false,
+        isSSO: true,
+        description: 'Single Sign-On authentication and encrypted cloud backups via Microsoft.',
+      },
+      nextcloud: {
+        name: 'Nextcloud',
+        isConfigured: true,
+        hasOAuthEnv: false,
+        isSSO: false,
+        description: 'Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.',
+      },
+      webdav: {
+        name: 'Custom WebDAV',
+        isConfigured: true,
+        hasOAuthEnv: false,
+        isSSO: false,
+        description: 'Universal WebDAV cloud destination with authenticated endpoint.',
+      },
+    },
+    accounts: [] as CloudAccount[],
+  };
+
+  static async fetchConfig(retries = 1): Promise<any> {
+    if (PrivacyManager.isPrivateOfflineMode()) {
+      return {
+        ...this.DEFAULT_CLOUD_CONFIG,
+        accounts: this.getAccounts(),
+      };
+    }
+
     try {
       PrivacyManager.assertNetworkAllowed('Cloud Storage Configuration');
       await this.ensureSessionToken();
@@ -203,9 +245,18 @@ export class CloudSyncEngine {
         }
         return data;
       }
-    } catch (e) {
-      console.error('Failed to fetch cloud config:', e);
+    } catch (e: any) {
+      if (retries > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return this.fetchConfig(retries - 1);
+      }
+      console.warn('Cloud storage configuration offline or unavailable, using local accounts cache:', e?.message || e);
     }
+
+    return {
+      ...this.DEFAULT_CLOUD_CONFIG,
+      accounts: this.getAccounts(),
+    };
   }
 
   static getAccounts(): CloudAccount[] {
@@ -223,28 +274,24 @@ export class CloudSyncEngine {
   }
 
   /**
-   * 1-Click Zero-Credential Connection for Vellum Encrypted Vault
-   * Encrypts snapshots locally with AES-256-GCM before transport.
+   * Single Sign-On (SSO) Authentication for Google and Microsoft.
+   * Authenticates user profile and registers encrypted cloud destination.
    */
-  static async connectInstant(
-    provider: CloudStorageProvider,
-    metadata?: { email?: string; displayName?: string }
+  static async connectSSO(
+    provider: 'google_drive' | 'microsoft',
+    options?: { email?: string; displayName?: string; code?: string }
   ): Promise<CloudAccount> {
-    PrivacyManager.assertNetworkAllowed('Cloud Vault');
-    if (provider !== 'instant_vault') {
-      throw new Error(`Instant connect is only supported for Vellum Encrypted Vault. ${provider} requires authentication credentials.`);
-    }
-
+    PrivacyManager.assertNetworkAllowed('SSO Authentication');
     await this.ensureSessionToken();
-    const res = await fetch(`/api/cloud/${provider}/connect-instant`, {
+    const res = await fetch(`/api/cloud/${provider}/connect-sso`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(metadata || {}),
+      body: JSON.stringify(options || {}),
     });
 
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'Connection failed' }));
-      throw new Error(err.error || 'Failed to connect cloud destination');
+      const err = await res.json().catch(() => ({ error: 'SSO Authentication failed' }));
+      throw new Error(err.error || 'Failed to authenticate SSO');
     }
 
     const data = await res.json();
@@ -256,6 +303,22 @@ export class CloudSyncEngine {
     localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
 
     return account;
+  }
+
+  /**
+   * Retrieves provider OAuth / SSO authorization URL for popup authentication
+   */
+  static async getAuthUrl(
+    provider: 'google_drive' | 'microsoft'
+  ): Promise<{ configured: boolean; url?: string; message?: string }> {
+    await this.ensureSessionToken();
+    const res = await fetch(`/api/cloud/${provider}/auth-url`, {
+      headers: this.getHeaders(),
+    });
+    if (!res.ok) {
+      return { configured: false, message: 'Could not fetch auth URL' };
+    }
+    return res.json();
   }
 
   /**

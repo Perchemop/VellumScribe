@@ -402,21 +402,130 @@ export class GeminiApiService {
   /**
    * Multi-provider Audio Transcription (Offline-first Native Engine, Google, Groq Whisper, Deepgram, Local Whisper)
    */
+  /**
+   * Helper to upload and transcribe large audio files in small HTTP chunks
+   * Bypasses Cloud Run and reverse proxy 32MB payload limits
+   */
+  private static async transcribeLargeAudioChunks(
+    audioBlobOrBase64: Blob | string,
+    mimeType: string,
+    originalFileName?: string
+  ): Promise<TranscribeResult> {
+    const uploadId = `up_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const headers = await this.getHeaders();
+    headers['Content-Type'] = 'application/json';
+
+    if (audioBlobOrBase64 instanceof Blob) {
+      const blob = audioBlobOrBase64;
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB binary slices
+      const totalChunks = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(blob.size, (i + 1) * CHUNK_SIZE);
+        const slice = blob.slice(start, end);
+
+        const sliceBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = reader.result as string;
+            resolve(res.includes(',') ? res.split(',')[1] : res);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(slice);
+        });
+
+        const res = await fetch('/api/audio/chunk-upload', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            uploadId,
+            chunkIndex: i,
+            totalChunks,
+            chunkBase64: sliceBase64,
+            originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+            mimeType,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Upload chunk ${i + 1}/${totalChunks} failed`);
+        }
+
+        const data = await res.json();
+        if (data.done && data.transcript) {
+          return {
+            transcript: data.transcript,
+            source: data.source || 'gemini-3.5-transcribe (Multi-segment)',
+          };
+        }
+      }
+    } else {
+      // Base64 string chunking
+      const cleanBase64 = stripBase64Prefix(audioBlobOrBase64);
+      const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB string slices
+      const totalChunks = Math.max(1, Math.ceil(cleanBase64.length / CHUNK_SIZE));
+
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(cleanBase64.length, (i + 1) * CHUNK_SIZE);
+        const sliceBase64 = cleanBase64.slice(start, end);
+
+        const res = await fetch('/api/audio/chunk-upload', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            uploadId,
+            chunkIndex: i,
+            totalChunks,
+            chunkBase64: sliceBase64,
+            originalFileName: originalFileName || 'recording.wav',
+            mimeType,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Upload chunk ${i + 1}/${totalChunks} failed`);
+        }
+
+        const data = await res.json();
+        if (data.done && data.transcript) {
+          return {
+            transcript: data.transcript,
+            source: data.source || 'gemini-3.5-transcribe (Multi-segment)',
+          };
+        }
+      }
+    }
+
+    throw new Error('Completed chunk upload but received no transcript from server.');
+  }
+
+  /**
+   * Transcribe recorded audio with multi-provider fallback and long-recording chunking
+   */
   public static async transcribeAudio(
-    audioBase64: string,
+    audioBlobOrBase64: Blob | string,
     mimeType = 'audio/webm',
     sampleDuration = 0,
-    liveCapturedText = ''
+    liveCapturedText = '',
+    originalFileName?: string
   ): Promise<TranscribeResult> {
-    const cleanBase64 = stripBase64Prefix(audioBase64);
+    const isBlob = audioBlobOrBase64 instanceof Blob;
+    let cleanBase64 = '';
+    if (!isBlob) {
+      cleanBase64 = stripBase64Prefix(audioBlobOrBase64);
+    }
     const sanitizedMime = cleanMimeType(mimeType, 'audio/webm');
     const settings = AiSettingsManager.getSettings();
     const provider = settings.primaryTranscriptionProvider || 'browser_speech';
 
-    // 1. Primary Offline-First Native Engine (Default)
-    if (provider === 'browser_speech' || provider === ('offline_rules' as any)) {
+    // 1. If liveCapturedText is provided (from active microphone Web Speech API dictation), use it immediately
+    if (liveCapturedText && liveCapturedText.trim().length > 0) {
       const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
-        cleanBase64,
+        audioBlobOrBase64,
         sanitizedMime,
         sampleDuration,
         liveCapturedText
@@ -427,7 +536,35 @@ export class GeminiApiService {
       };
     }
 
-    // 2. Groq Whisper (Opt-in External)
+    // 2. If the audio is large (> 8MB Blob or > 10MB base64), use chunked upload to safely bypass proxy limits
+    const isLargeAudio = (isBlob && audioBlobOrBase64.size > 8 * 1024 * 1024) || (!isBlob && cleanBase64.length > 10 * 1024 * 1024);
+    if (isLargeAudio) {
+      try {
+        PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
+        return await this.transcribeLargeAudioChunks(audioBlobOrBase64, sanitizedMime, originalFileName);
+      } catch (chunkErr: any) {
+        console.warn('Chunked audio transcription notice:', chunkErr?.message || chunkErr);
+        // If error occurred online, rethrow so UI can display specific failure rather than silent RMS placeholder
+        if (navigator.onLine) {
+          throw chunkErr;
+        }
+      }
+    }
+
+    // Convert blob to base64 if not large and not already base64
+    if (isBlob && !cleanBase64) {
+      cleanBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result as string;
+          resolve(stripBase64Prefix(res));
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlobOrBase64);
+      });
+    }
+
+    // 3. Groq Whisper (Opt-in External)
     if (provider === 'groq_whisper' && settings.groqApiKey) {
       try {
         PrivacyManager.assertNetworkAllowed('Groq Whisper');
@@ -442,11 +579,11 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Groq transcription failed');
       } catch (groqErr: any) {
-        console.warn('Groq Whisper failed, falling back to on-device transcription:', groqErr);
+        console.warn('Groq Whisper failed, checking alternative providers:', groqErr);
       }
     }
 
-    // 3. Deepgram (Opt-in External)
+    // 4. Deepgram (Opt-in External)
     if (provider === 'deepgram' && settings.deepgramApiKey) {
       try {
         PrivacyManager.assertNetworkAllowed('Deepgram');
@@ -466,11 +603,11 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
       } catch (dgErr: any) {
-        console.warn('Deepgram failed, falling back to on-device transcription:', dgErr);
+        console.warn('Deepgram failed, checking alternative providers:', dgErr);
       }
     }
 
-    // 4. Local Whisper (Opt-in Self-Hosted)
+    // 5. Local Whisper (Opt-in Self-Hosted)
     if (provider === 'local_whisper' && settings.localWhisperEndpoint) {
       try {
         PrivacyManager.assertNetworkAllowed('Local Whisper');
@@ -489,11 +626,11 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Local Whisper server failed');
       } catch (lwErr: any) {
-        console.warn('Local Whisper failed, falling back to on-device transcription:', lwErr);
+        console.warn('Local Whisper failed, checking alternative providers:', lwErr);
       }
     }
 
-    // 5. Google AI Studio (Opt-in External)
+    // 6. Direct Google AI Studio SDK (if custom API key is configured and selected)
     const localKey = (settings.googleApiKey || settings.apiKey || '').trim();
     if (provider === 'google' && (NativeBridge.isNative() || localKey)) {
       const prompt = 'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
@@ -508,38 +645,46 @@ export class GeminiApiService {
               },
             },
           ],
-          ['gemini-3.5-transcribe', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest']
+          ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.6-flash']
         );
-        return {
-          transcript: directResult.text,
-          source: directResult.model,
-        };
-      } catch (directErr: any) {
-        console.warn('Direct Google AI transcription failed, checking server or on-device fallback:', directErr);
-      }
-    }
-
-    if (provider === 'google') {
-      try {
-        PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
-        const res = await fetch('/api/gemini/transcribe', {
-          method: 'POST',
-          headers: await this.getHeaders(),
-          body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime }),
-        });
-        const data = await res.json().catch(() => null);
-        if (res.ok && data?.transcript !== undefined) {
+        if (directResult.text && directResult.text.trim()) {
           return {
-            transcript: data.transcript,
-            source: data.source || 'gemini-3.6-flash',
+            transcript: directResult.text,
+            source: directResult.model,
           };
         }
-      } catch (proxyErr) {
-        console.warn('Server Google transcription failed, activating on-device engine:', proxyErr);
+      } catch (directErr: any) {
+        console.warn('Direct Google AI transcription failed, checking server proxy fallback:', directErr);
       }
     }
 
-    // 6. Universal Seamless Fallback to Built-in Offline Engine
+    // 7. High-Accuracy Multi-segment AI Transcription via backend /api/gemini/transcribe
+    // Primary path for uploaded audio recordings and files without live microphone dictation
+    try {
+      PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
+      const res = await fetch('/api/gemini/transcribe', {
+        method: 'POST',
+        headers: await this.getHeaders(),
+        body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.transcript && data.transcript.trim()) {
+        return {
+          transcript: data.transcript,
+          source: data.source || 'gemini-3.5-transcribe',
+        };
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+    } catch (proxyErr: any) {
+      console.warn('Server Google transcription notice:', proxyErr?.message || proxyErr);
+      if (navigator.onLine) {
+        throw new Error(proxyErr?.message || 'Audio transcription server unavailable.');
+      }
+    }
+
+    // 8. Universal Offline Fallback Engine (when strictly offline or network unavailable)
     const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
       cleanBase64,
       sanitizedMime,

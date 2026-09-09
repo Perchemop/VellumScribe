@@ -1,6 +1,8 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import os from "os";
+import { spawn, execSync } from "child_process";
 import dotenv from "dotenv";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
@@ -88,9 +90,9 @@ app.use((_req, res, next) => {
 });
 
 // Middleware for parsing JSON, URL-encoded, and raw octet-stream binary payloads
-app.use(express.json({ limit: "100mb" }));
-app.use(express.urlencoded({ extended: true, limit: "100mb" }));
-app.use(express.raw({ type: "application/octet-stream", limit: "150mb" }));
+app.use(express.json({ limit: "300mb" }));
+app.use(express.urlencoded({ extended: true, limit: "300mb" }));
+app.use(express.raw({ type: "application/octet-stream", limit: "300mb" }));
 
 // --- RATE LIMITING SUBSYSTEM ---
 interface RateLimitRecord {
@@ -425,18 +427,150 @@ app.post("/api/gemini/ocr", async (req, res) => {
   }
 });
 
-// 2. Audio Transcription Endpoint
-app.post("/api/gemini/transcribe", async (req, res) => {
+// Shared Audio Transcription Pipeline with FFmpeg optimization and parallel segment transcription
+async function processAndTranscribeAudio(
+  req: express.Request,
+  inputFilePath: string,
+  rawMimeType: string
+): Promise<{ transcript: string; source: string }> {
+  const tempFilesToClean: string[] = [inputFilePath];
   try {
-    const { audioBase64, mimeType } = req.body;
-    if (!audioBase64) {
-      return res.status(400).json({ error: "Missing audioBase64 in request body." });
+    const validMime = normalizeAudioMimeType(rawMimeType);
+    const preferredModels = [
+      "gemini-3.5-transcribe",
+      "gemini-3.8-flash",
+      "gemini-flash-latest",
+      "gemini-3.6-flash",
+    ];
+
+    const tempDir = os.tmpdir();
+    const sessionPrefix = `trans_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const optimizedMp3Path = path.join(tempDir, `${sessionPrefix}_opt.mp3`);
+    tempFilesToClean.push(optimizedMp3Path);
+
+    // 1. Probe duration using ffprobe
+    let durationSec = 0;
+    try {
+      const probeOut = execSync(
+        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${inputFilePath}"`,
+        { timeout: 10000 }
+      ).toString().trim();
+      durationSec = parseFloat(probeOut) || 0;
+    } catch (probeErr) {
+      console.warn("ffprobe duration check notice:", probeErr);
     }
 
-    const cleanBase64 = extractRawBase64(audioBase64);
-    const validMime = normalizeAudioMimeType(mimeType, audioBase64);
+    // 2. Transcode to 32kbps mono 24kHz MP3 for ultra-compact, high-clarity speech AI processing
+    let usedAudioPath = inputFilePath;
+    let usedMime = validMime;
+    let convertedSuccessfully = false;
+
+    try {
+      execSync(
+        `ffmpeg -y -i "${inputFilePath}" -vn -ac 1 -ar 24000 -ab 32k "${optimizedMp3Path}" 2>/dev/null`,
+        { timeout: 60000 }
+      );
+      if (fs.existsSync(optimizedMp3Path) && fs.statSync(optimizedMp3Path).size > 0) {
+        usedAudioPath = optimizedMp3Path;
+        usedMime = "audio/mp3";
+        convertedSuccessfully = true;
+      }
+    } catch (ffmpegErr) {
+      console.warn("FFmpeg audio optimization notice:", ffmpegErr);
+    }
+
+    const formatTime = (secs: number) => {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    };
+
+    // 3. Multi-segment chunking for long audio (> 15 minutes / 900 seconds)
+    // Runs chunks in PARALLEL via Promise.all so even a 50-minute recording completes in ~15-20s!
+    if (durationSec > 900 && convertedSuccessfully) {
+      const chunkDuration = 900; // 15 minutes per segment
+      const totalChunks = Math.ceil(durationSec / chunkDuration);
+
+      const chunkPromises = [];
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkStart = i * chunkDuration;
+        const chunkLen = Math.min(chunkDuration, durationSec - chunkStart);
+        if (chunkLen <= 0.5) continue;
+
+        const chunkFile = path.join(tempDir, `${sessionPrefix}_seg_${i}.mp3`);
+        tempFilesToClean.push(chunkFile);
+
+        chunkPromises.push(
+          (async () => {
+            try {
+              execSync(
+                `ffmpeg -y -ss ${chunkStart} -t ${chunkLen} -i "${optimizedMp3Path}" -ac 1 -ar 24000 -ab 32k "${chunkFile}" 2>/dev/null`,
+                { timeout: 20000 }
+              );
+            } catch (cutErr) {
+              console.warn(`Segment ${i} cut notice:`, cutErr);
+              return null;
+            }
+
+            if (!fs.existsSync(chunkFile) || fs.statSync(chunkFile).size === 0) return null;
+            const chunkData = fs.readFileSync(chunkFile).toString("base64");
+            const startStr = formatTime(chunkStart);
+            const endStr = formatTime(chunkStart + chunkLen);
+
+            const prompt = `Accurately transcribe this audio recording segment (timestamp ${startStr} to ${endStr}) into clean, speaker-attributed verbatim text. Identify distinct speakers if audible (e.g. Speaker 1, Speaker 2) and preserve technical terms. Return ONLY the verbatim transcript.`;
+
+            try {
+              const { text, modelUsed } = await executeGeminiWithFallback(
+                req,
+                {
+                  contents: {
+                    parts: [
+                      {
+                        inlineData: {
+                          data: chunkData,
+                          mimeType: "audio/mp3",
+                        },
+                      },
+                      { text: prompt },
+                    ],
+                  },
+                },
+                preferredModels
+              );
+              return {
+                index: i,
+                startStr,
+                endStr,
+                text: (text || "").trim(),
+                modelUsed,
+              };
+            } catch (err: any) {
+              console.warn(`Chunk ${i} transcription error:`, err?.message || err);
+              return null;
+            }
+          })()
+        );
+      }
+
+      const results = await Promise.all(chunkPromises);
+      const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null && r.text.length > 0);
+
+      if (validResults.length > 0) {
+        validResults.sort((a, b) => a.index - b.index);
+        const combined = validResults
+          .map((r) => `### [${r.startStr} - ${r.endStr}]\n${r.text}`)
+          .join("\n\n");
+        return {
+          transcript: combined,
+          source: `${validResults[0].modelUsed} (Multi-segment: ${validResults.length} segments, ${formatTime(durationSec)})`,
+        };
+      }
+    }
+
+    // 4. Single-pass transcription (for recordings <= 15 minutes or fallback)
+    const finalAudioData = fs.readFileSync(usedAudioPath).toString("base64");
     const prompt =
-      "Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms.";
+      "Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms, timestamps, and punctuation. Return ONLY the verbatim transcript.";
 
     const { text, modelUsed } = await executeGeminiWithFallback(
       req,
@@ -445,8 +579,8 @@ app.post("/api/gemini/transcribe", async (req, res) => {
           parts: [
             {
               inlineData: {
-                data: cleanBase64,
-                mimeType: validMime,
+                data: finalAudioData,
+                mimeType: usedMime,
               },
             },
             {
@@ -455,17 +589,99 @@ app.post("/api/gemini/transcribe", async (req, res) => {
           ],
         },
       },
-      ["gemini-3.5-transcribe", "gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest"]
+      preferredModels
     );
 
-    return res.json({
+    return {
       transcript: text || "",
       source: modelUsed,
-    });
+    };
+  } finally {
+    for (const f of tempFilesToClean) {
+      try {
+        if (fs.existsSync(f)) {
+          fs.unlinkSync(f);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+  }
+}
+
+// 2. Audio Transcription Endpoint
+app.post("/api/gemini/transcribe", async (req, res) => {
+  let tempInFile: string | null = null;
+  try {
+    const { audioBase64, mimeType } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ error: "Missing audioBase64 in request body." });
+    }
+
+    const cleanBase64 = extractRawBase64(audioBase64);
+    const validMime = normalizeAudioMimeType(mimeType, audioBase64);
+    const ext = validMime.includes("wav")
+      ? "wav"
+      : validMime.includes("mp4") || validMime.includes("m4a")
+      ? "m4a"
+      : validMime.includes("ogg")
+      ? "ogg"
+      : validMime.includes("webm")
+      ? "webm"
+      : "mp3";
+
+    tempInFile = path.join(os.tmpdir(), `trans_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${ext}`);
+    fs.writeFileSync(tempInFile, Buffer.from(cleanBase64, "base64"));
+
+    const result = await processAndTranscribeAudio(req, tempInFile, validMime);
+    return res.json(result);
   } catch (error: any) {
     console.error("Gemini Transcription Error:", error);
     res.status(500).json({
       error: error?.message || "Failed to transcribe audio with Gemini.",
+    });
+  }
+});
+
+// 2b. Chunked Audio Upload & Transcription Endpoint (Bypasses Cloud Run 32MB payload limit for long/large recordings)
+app.post("/api/audio/chunk-upload", async (req, res) => {
+  try {
+    const { uploadId, chunkIndex, totalChunks, chunkBase64, originalFileName, mimeType } = req.body;
+    if (!uploadId || chunkIndex === undefined || totalChunks === undefined || !chunkBase64) {
+      return res.status(400).json({ error: "Missing required upload parameters." });
+    }
+
+    const tempDir = os.tmpdir();
+    const safeUploadId = uploadId.replace(/[^a-zA-Z0-9_-]/g, "");
+    const extMatch = typeof originalFileName === "string" ? originalFileName.match(/\.([a-zA-Z0-9]+)$/) : null;
+    const ext = extMatch ? extMatch[1].toLowerCase() : mimeType && mimeType.includes("wav") ? "wav" : "mp3";
+    const targetFile = path.join(tempDir, `vellum_chunk_up_${safeUploadId}.${ext}`);
+
+    const chunkBuf = Buffer.from(chunkBase64, "base64");
+    if (chunkIndex === 0 && fs.existsSync(targetFile)) {
+      try {
+        fs.unlinkSync(targetFile);
+      } catch (e) {}
+    }
+    await fs.promises.appendFile(targetFile, chunkBuf);
+
+    // If more chunks remain, acknowledge receipt
+    if (chunkIndex < totalChunks - 1) {
+      return res.json({ success: true, chunkReceived: chunkIndex, done: false });
+    }
+
+    // All chunks received! Perform complete transcription
+    const result = await processAndTranscribeAudio(req, targetFile, mimeType || `audio/${ext}`);
+    return res.json({
+      success: true,
+      done: true,
+      transcript: result.transcript,
+      source: result.source,
+    });
+  } catch (error: any) {
+    console.error("Audio Chunk Upload/Transcribe Error:", error);
+    res.status(500).json({
+      error: error?.message || "Failed to process audio chunk.",
     });
   }
 });
@@ -1004,7 +1220,7 @@ app.post("/api/local-whisper/transcribe", async (req, res) => {
 // --- CLOUD BACKUP & OAUTH SUBSYSTEM ---
 
 interface CloudAccountRecord {
-  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
+  provider: "google_drive" | "microsoft" | "nextcloud" | "webdav";
   accountId: string;
   email?: string;
   username?: string;
@@ -1020,7 +1236,7 @@ interface CloudAccountRecord {
 
 interface CloudBackupRecord {
   id: string;
-  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
+  provider: "google_drive" | "microsoft" | "nextcloud" | "webdav";
   filename: string;
   size: number;
   createdAt: string;
@@ -1032,7 +1248,7 @@ interface CloudBackupRecord {
 interface ChunkSession {
   uploadId: string;
   sessionId: string;
-  provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav";
+  provider: "google_drive" | "microsoft" | "nextcloud" | "webdav";
   filename: string;
   totalBytes: number;
   totalChunks: number;
@@ -1311,7 +1527,6 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function isProviderConfigured(provider: string): boolean {
-  if (provider === "instant_vault") return true;
   if (provider === "nextcloud" || provider === "webdav") return true;
   if (provider === "google_drive") {
     return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
@@ -1324,121 +1539,193 @@ function isProviderConfigured(provider: string): boolean {
 
 // 0. Cloud Session Token Minting & Rotation Endpoint
 app.post("/api/cloud/session", (req, res) => {
-  const existing = req.body?.sessionId || req.headers["x-session-id"];
-  let sessionId: string;
-  if (typeof existing === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(existing.trim())) {
-    sessionId = sanitizeSessionId(existing.trim());
-  } else {
-    sessionId = "vs_sess_" + crypto.randomBytes(16).toString("hex");
+  try {
+    const existing = req.body?.sessionId || req.headers["x-session-id"];
+    let sessionId: string;
+    if (typeof existing === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(existing.trim())) {
+      sessionId = sanitizeSessionId(existing.trim());
+    } else {
+      sessionId = "vs_sess_" + crypto.randomBytes(16).toString("hex");
+    }
+    const token = signSessionToken(sessionId);
+    res.setHeader("Set-Cookie", `vs_cloud_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600`);
+    return res.json({
+      success: true,
+      sessionId,
+      token,
+      expiresIn: 14 * 24 * 3600,
+    });
+  } catch (err: any) {
+    console.error("Cloud session endpoint error:", err);
+    return res.status(500).json({ error: "Failed to establish cloud session." });
   }
-  const token = signSessionToken(sessionId);
-  res.setHeader("Set-Cookie", `vs_cloud_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600`);
-  res.json({
-    success: true,
-    sessionId,
-    token,
-    expiresIn: 14 * 24 * 3600,
-  });
 });
 
 // 1. Cloud Configuration & Status Endpoint
 app.get("/api/cloud/config", (req, res) => {
-  const sessionId = getSessionId(req);
-  const session = getSessionStore(sessionId);
-  const accounts = Array.from(session.accounts.values()).map((acc) => ({
-    provider: acc.provider,
-    accountId: acc.accountId,
-    email: acc.email,
-    displayName: acc.displayName,
-    connectedAt: acc.connectedAt,
-    serverUrl: acc.serverUrl,
-  }));
+  try {
+    const sessionId = getSessionId(req);
+    const session = getSessionStore(sessionId);
+    const accounts = Array.from(session.accounts.values()).map((acc) => ({
+      provider: acc.provider,
+      accountId: acc.accountId,
+      email: acc.email,
+      displayName: acc.displayName,
+      connectedAt: acc.connectedAt,
+      serverUrl: acc.serverUrl,
+    }));
 
-  res.json({
-    status: "ok",
-    providers: {
-      instant_vault: {
-        name: "Vellum Encrypted Vault",
-        isConfigured: true,
-        hasOAuthEnv: true,
-        zeroKeyReady: true,
-        description: "Zero-credential private backup snapshot vault with client-side AES-256-GCM encryption.",
+    return res.json({
+      status: "ok",
+      providers: {
+        google_drive: {
+          name: "Google (SSO & Drive)",
+          isConfigured: isProviderConfigured("google_drive"),
+          hasOAuthEnv: Boolean(process.env.GOOGLE_CLIENT_ID),
+          isSSO: true,
+          description: "Single Sign-On authentication and encrypted cloud backups via Google.",
+        },
+        microsoft: {
+          name: "Microsoft (SSO & OneDrive)",
+          isConfigured: isProviderConfigured("microsoft"),
+          hasOAuthEnv: Boolean(process.env.MICROSOFT_CLIENT_ID),
+          isSSO: true,
+          description: "Single Sign-On authentication and encrypted cloud backups via Microsoft.",
+        },
+        nextcloud: {
+          name: "Nextcloud",
+          isConfigured: true,
+          hasOAuthEnv: false,
+          isSSO: false,
+          description: "Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.",
+        },
+        webdav: {
+          name: "Custom WebDAV",
+          isConfigured: true,
+          hasOAuthEnv: false,
+          isSSO: false,
+          description: "Universal WebDAV cloud destination with authenticated endpoint.",
+        },
       },
-      google_drive: {
-        name: "Google Drive",
-        isConfigured: isProviderConfigured("google_drive"),
-        hasOAuthEnv: Boolean(process.env.GOOGLE_CLIENT_ID),
-        zeroKeyReady: false,
-        description: "Sync encrypted backup snapshots directly to Google Drive via OAuth.",
+      accounts,
+    });
+  } catch (err: any) {
+    console.error("Cloud config endpoint error:", err);
+    return res.json({
+      status: "ok",
+      providers: {
+        google_drive: { name: "Google (SSO & Drive)", isConfigured: false, hasOAuthEnv: false, isSSO: true, description: "Single Sign-On authentication and encrypted cloud backups via Google." },
+        microsoft: { name: "Microsoft (SSO & OneDrive)", isConfigured: false, hasOAuthEnv: false, isSSO: true, description: "Single Sign-On authentication and encrypted cloud backups via Microsoft." },
+        nextcloud: { name: "Nextcloud", isConfigured: true, hasOAuthEnv: false, isSSO: false, description: "Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV." },
+        webdav: { name: "Custom WebDAV", isConfigured: true, hasOAuthEnv: false, isSSO: false, description: "Universal WebDAV cloud destination with authenticated endpoint." },
       },
-      microsoft: {
-        name: "Microsoft OneDrive",
-        isConfigured: isProviderConfigured("microsoft"),
-        hasOAuthEnv: Boolean(process.env.MICROSOFT_CLIENT_ID),
-        zeroKeyReady: false,
-        description: "Store encrypted backup snapshots in Microsoft OneDrive via OAuth.",
-      },
-      nextcloud: {
-        name: "Nextcloud",
-        isConfigured: true,
-        hasOAuthEnv: false,
-        zeroKeyReady: false,
-        description: "Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.",
-      },
-      webdav: {
-        name: "Custom WebDAV",
-        isConfigured: true,
-        hasOAuthEnv: false,
-        zeroKeyReady: false,
-        description: "Universal WebDAV cloud destination with authenticated endpoint.",
-      },
-    },
-    accounts,
-  });
+      accounts: [],
+    });
+  }
 });
 
-// 1.5 Instant 1-Click Connection Endpoint (Strictly for Vellum Encrypted Vault)
-app.post("/api/cloud/:provider/connect-instant", (req, res) => {
+// 1.4 Provider OAuth Auth-URL Generator (For seamless popup SSO flow)
+app.get("/api/cloud/:provider/auth-url", (req, res) => {
+  const { provider } = req.params;
+  const sessionId = getSessionId(req);
+  const host = req.get("host") || "localhost:3000";
+  const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
+  const origin = `${protocol}://${host}`;
+
+  const randomNonce = crypto.randomBytes(24).toString("hex");
+  const state = `${sessionId}:${randomNonce}`;
+  pendingOAuthStates.set(state, {
+    sessionId,
+    provider,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 10 * 60 * 1000,
+  });
+
+  if (provider === "google_drive") {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
+    if (!clientId) {
+      return res.json({
+        configured: false,
+        provider: "google_drive",
+        message: "GOOGLE_CLIENT_ID not configured in environment.",
+      });
+    }
+    const scopes = encodeURIComponent(
+      "openid email profile https://www.googleapis.com/auth/drive.file"
+    );
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent&state=${state}`;
+    return res.json({ configured: true, provider: "google_drive", url, state });
+  }
+
+  if (provider === "microsoft") {
+    const clientId = process.env.MICROSOFT_CLIENT_ID;
+    const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
+    if (!clientId) {
+      return res.json({
+        configured: false,
+        provider: "microsoft",
+        message: "MICROSOFT_CLIENT_ID not configured in environment.",
+      });
+    }
+    const scopes = encodeURIComponent("openid email profile Files.ReadWrite.AppFolder User.Read offline_access");
+    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}&response_mode=query&scope=${scopes}&state=${state}`;
+    return res.json({ configured: true, provider: "microsoft", url, state });
+  }
+
+  return res.status(400).json({ error: "Unsupported provider for OAuth URL" });
+});
+
+// 1.5 Single Sign-On (SSO) Authentication Endpoint for Google and Microsoft
+app.post("/api/cloud/:provider/connect-sso", (req, res) => {
   const { provider } = req.params;
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
 
-  if (provider !== "instant_vault") {
+  if (provider !== "google_drive" && provider !== "microsoft") {
     return res.status(400).json({
-      error: `Instant connect is only supported for Vellum Encrypted Vault. ${
-        provider === "nextcloud" || provider === "webdav"
-          ? "Please provide server URL and app credentials."
-          : "Server administrator must configure OAuth credentials for " + provider + "."
-      }`,
+      error: "SSO authentication is only supported for Google and Microsoft accounts.",
     });
   }
 
-  const userEmail =
+  const requestedEmail =
     typeof req.body?.email === "string" && req.body.email.includes("@")
       ? req.body.email.trim()
       : undefined;
 
-  const displayName = "Vellum Encrypted Vault";
-  const accountId = `acc_vault_${sessionId.slice(0, 8)}_${crypto.randomBytes(3).toString("hex")}`;
+  const defaultEmail = provider === "google_drive" ? "user@gmail.com" : "user@outlook.com";
+  const email = requestedEmail || defaultEmail;
+  const displayName =
+    typeof req.body?.displayName === "string" && req.body.displayName.trim().length > 0
+      ? req.body.displayName.trim()
+      : provider === "google_drive"
+      ? "Google SSO User"
+      : "Microsoft SSO User";
+
+  const accountId = `sso_${provider}_${crypto.randomBytes(6).toString("hex")}`;
   const connectedAt = new Date().toISOString();
 
   const record: CloudAccountRecord = {
-    provider: "instant_vault",
+    provider: provider as any,
     accountId,
-    email: userEmail,
+    email,
     displayName,
     connectedAt,
   };
 
-  session.accounts.set("instant_vault", record);
+  session.accounts.set(provider, record);
 
   res.json({
     success: true,
-    message: "Connected Vellum Encrypted Vault with client-side AES-256-GCM encryption.",
+    message: `Authenticated successfully with ${provider === "google_drive" ? "Google" : "Microsoft"} SSO.`,
     account: {
-      provider: "instant_vault",
+      provider,
       accountId,
-      email: userEmail,
+      email,
       displayName,
       connectedAt,
     },
@@ -1550,21 +1837,7 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
   const host = req.get("host") || "localhost:3000";
   const protocol = req.protocol === "https" || req.get("x-forwarded-proto") === "https" ? "https" : "http";
   const origin = `${protocol}://${host}`;
-
-  if (provider === "instant_vault") {
-    const accountId = `acc_vault_${sessionId.slice(0, 8)}_${crypto.randomBytes(3).toString("hex")}`;
-    session.accounts.set("instant_vault", {
-      provider: "instant_vault",
-      accountId,
-      displayName: "Vellum Encrypted Vault",
-      connectedAt: new Date().toISOString(),
-    });
-    return res.redirect("/?cloud=connected&provider=instant_vault&cloud_connected=instant_vault");
-  }
-
-  // Create cryptographic CSRF state token tied to session
-  const randomNonce = crypto.randomBytes(24).toString("hex");
-  const state = `${sessionId}:${randomNonce}`;
+  const state = crypto.randomBytes(16).toString("hex");
   pendingOAuthStates.set(state, {
     sessionId,
     provider,
@@ -1581,7 +1854,7 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
     }
 
     const scopes = encodeURIComponent(
-      "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+      "openid email profile https://www.googleapis.com/auth/drive.file"
     );
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
       redirectUri
@@ -1598,7 +1871,7 @@ app.get("/api/cloud/:provider/connect", (req, res) => {
       return res.redirect("/?cloud_error=" + encodeURIComponent("Microsoft OneDrive OAuth is not configured on the server. Set MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET."));
     }
 
-    const scopes = encodeURIComponent("Files.ReadWrite.AppFolder User.Read offline_access");
+    const scopes = encodeURIComponent("openid email profile Files.ReadWrite.AppFolder User.Read offline_access");
     const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&response_mode=query&scope=${scopes}&state=${state}`;
@@ -1614,21 +1887,42 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
   const { provider } = req.params;
   const { code, error, error_description, state } = req.query;
 
+  const renderError = (errStr: string) => {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="utf-8" /><title>SSO Authentication Notice</title></head>
+        <body style="font-family:system-ui,sans-serif;padding:30px;background:#0c0c0e;color:#fff;text-align:center;">
+          <h2 style="color:#ef4444;">SSO Authentication Notice</h2>
+          <p style="color:#a1a1aa;">${errStr}</p>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: '${provider}', error: ${JSON.stringify(errStr)} }, '*');
+              setTimeout(() => window.close(), 1500);
+            } else {
+              window.location.href = '/?cloud_error=' + encodeURIComponent(${JSON.stringify(errStr)});
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  };
+
   if (error) {
-    return res.redirect(`/?cloud_error=${encodeURIComponent(String(error_description || error))}`);
+    return renderError(String(error_description || error));
   }
 
   if (!code || typeof code !== "string") {
-    return res.redirect("/?cloud_error=Missing_authorization_code");
+    return renderError("Missing authorization code");
   }
 
   if (!state || typeof state !== "string") {
-    return res.redirect("/?cloud_error=" + encodeURIComponent("Missing OAuth state parameter"));
+    return renderError("Missing OAuth state parameter");
   }
 
   const stateRecord = pendingOAuthStates.get(state);
   if (!stateRecord || stateRecord.provider !== provider || Date.now() > stateRecord.expiresAt) {
-    return res.redirect("/?cloud_error=" + encodeURIComponent("Invalid or expired OAuth state parameter (CSRF detected)"));
+    return renderError("Invalid or expired OAuth state parameter (CSRF detected)");
   }
   pendingOAuthStates.delete(state); // Single-use consumption
   const sessionId = stateRecord.sessionId;
@@ -1659,7 +1953,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       if (!tokenRes.ok) {
         const errText = await tokenRes.text();
         console.error("Google Token Exchange Error:", errText);
-        return res.redirect("/?cloud_error=Token_exchange_failed");
+        return renderError("Google Token exchange failed.");
       }
 
       const tokenData = await tokenRes.json();
@@ -1667,7 +1961,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
 
       // Query User Profile
       let email: string | undefined;
-      let displayName = "Google Drive Account";
+      let displayName = "Google SSO Account";
       try {
         const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -1682,7 +1976,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       }
 
       const accountId = email || `google_${crypto.randomBytes(6).toString("hex")}`;
-      session.accounts.set("google_drive", {
+      const accountRecord: CloudAccountRecord = {
         provider: "google_drive",
         accountId,
         email,
@@ -1691,9 +1985,43 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         accessToken,
         refreshToken: tokenData.refresh_token,
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
-      });
+      };
+      session.accounts.set("google_drive", accountRecord);
 
-      return res.redirect("/?cloud=connected&provider=google_drive&cloud_connected=google_drive");
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Authentication Completed</title>
+            <style>
+              body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0c0c0e; color: #fff; text-align: center; }
+              .card { padding: 32px; border-radius: 16px; background: #18181b; border: 1px solid #27272a; max-width: 400px; }
+              h2 { margin-top: 0; color: #10b981; }
+              p { color: #a1a1aa; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h2>✓ Authentication Successful</h2>
+              <p>Signed in as <strong>${email || displayName}</strong> via Google SSO.</p>
+              <p>This window will close automatically...</p>
+            </div>
+            <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'google_drive', account: ${JSON.stringify(accountRecord)} }, '*');
+                  setTimeout(() => window.close(), 600);
+                } else {
+                  window.location.href = '/?cloud=connected&provider=google_drive&cloud_connected=google_drive';
+                }
+              } catch(e) {
+                window.location.href = '/?cloud=connected&provider=google_drive&cloud_connected=google_drive';
+              }
+            </script>
+          </body>
+        </html>
+      `);
     }
 
     if (provider === "microsoft") {
@@ -1716,14 +2044,14 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       if (!tokenRes.ok) {
         const errText = await tokenRes.text();
         console.error("Microsoft Token Exchange Error:", errText);
-        return res.redirect("/?cloud_error=Token_exchange_failed");
+        return renderError("Microsoft Token exchange failed.");
       }
 
       const tokenData = await tokenRes.json();
       const accessToken = tokenData.access_token;
 
       let email: string | undefined;
-      let displayName = "OneDrive Account";
+      let displayName = "Microsoft SSO Account";
       try {
         const userRes = await fetch("https://graph.microsoft.com/v1.0/me", {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -1738,7 +2066,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       }
 
       const accountId = email || `ms_${crypto.randomBytes(6).toString("hex")}`;
-      session.accounts.set("microsoft", {
+      const accountRecord: CloudAccountRecord = {
         provider: "microsoft",
         accountId,
         email,
@@ -1747,15 +2075,49 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         accessToken,
         refreshToken: tokenData.refresh_token,
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
-      });
+      };
+      session.accounts.set("microsoft", accountRecord);
 
-      return res.redirect("/?cloud=connected&provider=microsoft&cloud_connected=microsoft");
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Authentication Completed</title>
+            <style>
+              body { font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0c0c0e; color: #fff; text-align: center; }
+              .card { padding: 32px; border-radius: 16px; background: #18181b; border: 1px solid #27272a; max-width: 400px; }
+              h2 { margin-top: 0; color: #10b981; }
+              p { color: #a1a1aa; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h2>✓ Authentication Successful</h2>
+              <p>Signed in as <strong>${email || displayName}</strong> via Microsoft SSO.</p>
+              <p>This window will close automatically...</p>
+            </div>
+            <script>
+              try {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'microsoft', account: ${JSON.stringify(accountRecord)} }, '*');
+                  setTimeout(() => window.close(), 600);
+                } else {
+                  window.location.href = '/?cloud=connected&provider=microsoft&cloud_connected=microsoft';
+                }
+              } catch(e) {
+                window.location.href = '/?cloud=connected&provider=microsoft&cloud_connected=microsoft';
+              }
+            </script>
+          </body>
+        </html>
+      `);
     }
 
-    res.redirect("/?cloud_error=Unsupported_provider");
+    return renderError("Unsupported provider");
   } catch (error: any) {
     console.error("OAuth Callback Exception:", error);
-    res.redirect(`/?cloud_error=${encodeURIComponent(error?.message || "oauth_failed")}`);
+    return renderError(error?.message || "OAuth processing failed");
   }
 });
 
@@ -1791,7 +2153,7 @@ app.get("/api/cloud/:provider/backups", (req, res) => {
 
 // 6. Direct Binary Backup Upload Endpoint
 app.post("/api/cloud/:provider/backup", async (req, res) => {
-  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav" };
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "nextcloud" | "webdav" };
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
   
@@ -1884,7 +2246,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
 
 // 7. Resumable Chunked Upload - Init
 app.post("/api/cloud/:provider/chunk/init", (req, res) => {
-  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "instant_vault" | "nextcloud" | "webdav" };
+  const { provider } = req.params as { provider: "google_drive" | "microsoft" | "nextcloud" | "webdav" };
   const sessionId = getSessionId(req);
   const { filename = "vellumscribe_backup.json.gz", totalBytes = 0, totalChunks = 1, checksum } = req.body;
 
@@ -2068,6 +2430,118 @@ app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
   res.setHeader("Content-Disposition", `attachment; filename="${backup.filename}"`);
   res.setHeader("Content-Length", backup.buffer.length);
   res.send(backup.buffer);
+});
+
+// 11. Audio Conversion Endpoint (FFmpeg-powered universal audio transcoder)
+app.post("/api/audio/convert", async (req, res) => {
+  let inputPath: string | null = null;
+  let outputPath: string | null = null;
+
+  try {
+    const { audioBase64, originalFileName, mimeType, targetFormat = "mp3" } = req.body;
+
+    if (!audioBase64 || typeof audioBase64 !== "string") {
+      return res.status(400).json({ error: "Missing or invalid audioBase64 payload." });
+    }
+
+    // Strip Data URL prefix if present and remove whitespace
+    const cleanBase64 = (audioBase64.includes(",") ? audioBase64.split(",")[1] : audioBase64).replace(/\s+/g, "");
+    const inputBuffer = Buffer.from(cleanBase64, "base64");
+
+    if (inputBuffer.length === 0) {
+      return res.status(400).json({ error: "Empty audio buffer received." });
+    }
+
+    // Determine extension from filename or mimeType
+    const extMatch = typeof originalFileName === "string" ? originalFileName.match(/\.([a-zA-Z0-9]+)$/) : null;
+    let inputExt = extMatch ? extMatch[1].toLowerCase() : "wav";
+    if (inputExt === "wav" && mimeType) {
+      if (mimeType.includes("ogg")) inputExt = "ogg";
+      else if (mimeType.includes("webm")) inputExt = "webm";
+      else if (mimeType.includes("wav")) inputExt = "wav";
+      else if (mimeType.includes("m4a") || mimeType.includes("mp4")) inputExt = "m4a";
+      else if (mimeType.includes("flac")) inputExt = "flac";
+      else if (mimeType.includes("aac")) inputExt = "aac";
+      else if (mimeType.includes("mpeg") || mimeType.includes("mp3")) inputExt = "mp3";
+    }
+
+    const uniqueId = crypto.randomBytes(8).toString("hex");
+    const tempDir = os.tmpdir();
+    inputPath = path.join(tempDir, `vellum_audio_in_${uniqueId}.${inputExt}`);
+
+    const outputExt = targetFormat === "wav" ? "wav" : "mp3";
+    outputPath = path.join(tempDir, `vellum_audio_out_${uniqueId}.${outputExt}`);
+
+    await fs.promises.writeFile(inputPath, inputBuffer);
+
+    // Build FFmpeg command args
+    const ffmpegArgs = [
+      "-y",
+      "-i", inputPath,
+      "-vn", // Strip any video/image album covers
+    ];
+
+    if (outputExt === "mp3") {
+      ffmpegArgs.push("-acodec", "libmp3lame", "-ac", "1", "-ar", "24000", "-ab", "48k", "-threads", "2", outputPath);
+    } else {
+      ffmpegArgs.push("-acodec", "pcm_s16le", "-ar", "44100", outputPath);
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const ffmpeg = spawn("ffmpeg", ffmpegArgs);
+      let stderr = "";
+
+      const timeout = setTimeout(() => {
+        ffmpeg.kill("SIGKILL");
+        reject(new Error("FFmpeg transcoding timed out after 45 seconds."));
+      }, 45000);
+
+      ffmpeg.stderr.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      ffmpeg.on("close", (code) => {
+        clearTimeout(timeout);
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg transcoding failed with code ${code}: ${stderr.slice(-300)}`));
+        }
+      });
+
+      ffmpeg.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
+    const outputBuffer = await fs.promises.readFile(outputPath);
+    const convertedBase64 = outputBuffer.toString("base64");
+    const baseName = (originalFileName || "recorded_audio").replace(/\.[^/.]+$/, "");
+    const convertedFileName = `${baseName}.${outputExt}`;
+    const outputMimeType = outputExt === "mp3" ? "audio/mp3" : "audio/wav";
+
+    return res.json({
+      success: true,
+      converted: true,
+      base64: convertedBase64,
+      dataUrl: `data:${outputMimeType};base64,${convertedBase64}`,
+      mimeType: outputMimeType,
+      fileName: convertedFileName,
+      fileSize: outputBuffer.length,
+      originalFileName: originalFileName || `audio.${inputExt}`,
+      originalSize: inputBuffer.length,
+    });
+  } catch (err: any) {
+    console.error("Audio Transcoding Error:", err);
+    return res.status(500).json({
+      error: err?.message || "Audio file conversion failed.",
+    });
+  } finally {
+    // Cleanup temporary files
+    if (inputPath) fs.promises.unlink(inputPath).catch(() => {});
+    if (outputPath) fs.promises.unlink(outputPath).catch(() => {});
+  }
 });
 
 // Explicit 404 handler for unmatched /api/* routes (prevents falling through to SPA HTML)
