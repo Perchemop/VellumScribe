@@ -68,24 +68,17 @@ interface ProviderCardMeta {
 }
 
 const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
-  instant_vault: {
-    name: 'Vellum Encrypted Vault',
-    category: 'Encrypted Vault',
-    description: 'Direct encrypted snapshot vault with client-side AES-256-GCM encryption.',
-    brandColor: '#6366f1',
-    badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
-  },
   google_drive: {
-    name: 'Google Drive',
-    category: 'Google Drive',
-    description: 'Sync encrypted snapshots directly to Google Drive via OAuth authentication.',
+    name: 'Google (SSO & Drive)',
+    category: 'Google SSO',
+    description: 'Single Sign-On authentication and encrypted backups directly to Google Drive.',
     brandColor: '#34a853',
     badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   },
   microsoft: {
-    name: 'Microsoft OneDrive',
-    category: 'OneDrive',
-    description: 'Store encrypted backup snapshots safely in Microsoft OneDrive via OAuth.',
+    name: 'Microsoft (SSO & OneDrive)',
+    category: 'Microsoft SSO',
+    description: 'Single Sign-On authentication and encrypted backup snapshots in Microsoft OneDrive.',
     brandColor: '#0078d4',
     badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
   },
@@ -296,19 +289,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleQuickConnect = async (provider: CloudStorageProvider) => {
+  const handleSSOConnect = async (provider: 'google_drive' | 'microsoft') => {
     setQuickConnectingProvider(provider);
     setSyncFeedback(null);
     try {
-      await CloudSyncEngine.connectInstant(provider);
-      setAccounts(CloudSyncEngine.getAccounts());
-      setSyncFeedback(`Connected ${PROVIDERS[provider].name} destination with end-to-end encryption.`);
-      handleLoadRemoteBackups(provider);
+      // First check if OAuth URL is configured for popup SSO
+      const authInfo = await CloudSyncEngine.getAuthUrl(provider);
+      if (authInfo.configured && authInfo.url) {
+        const width = 520;
+        const height = 650;
+        const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+        const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+        const popup = window.open(
+          authInfo.url,
+          `sso_${provider}`,
+          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+        );
+
+        if (!popup || popup.closed) {
+          throw new Error('SSO popup blocked by browser. Please allow popups or use the connect modal.');
+        }
+
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === provider) {
+            window.removeEventListener('message', handleMessage);
+            setAccounts(CloudSyncEngine.getAccounts());
+            setSyncFeedback(`✓ Successfully authenticated with ${PROVIDERS[provider].name}.`);
+            handleLoadRemoteBackups(provider);
+            setQuickConnectingProvider(null);
+          } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+            window.removeEventListener('message', handleMessage);
+            setSyncFeedback(`Authentication notice: ${event.data?.error || 'SSO was not completed.'}`);
+            setQuickConnectingProvider(null);
+          }
+        };
+        window.addEventListener('message', handleMessage);
+      } else {
+        // Direct SSO profile connection
+        await CloudSyncEngine.connectSSO(provider);
+        setAccounts(CloudSyncEngine.getAccounts());
+        setSyncFeedback(`✓ Authenticated with ${PROVIDERS[provider].name}.`);
+        handleLoadRemoteBackups(provider);
+        setQuickConnectingProvider(null);
+      }
     } catch (e: any) {
-      setSyncFeedback(`Connection failed: ${e.message || 'Unable to connect to service'}. Please check your credentials and network connection.`);
-    } finally {
+      setSyncFeedback(`SSO connection notice: ${e.message || 'Unable to connect'}.`);
       setQuickConnectingProvider(null);
-      setTimeout(() => setSyncFeedback(null), 3500);
+    } finally {
+      setTimeout(() => setSyncFeedback(null), 4000);
     }
   };
 
@@ -870,36 +899,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 <ChevronRight className="w-3 h-3" />
                               </button>
                             </>
-                          ) : providerKey === 'instant_vault' ? (
+                          ) : providerKey === 'google_drive' || providerKey === 'microsoft' ? (
                             <>
                               <button
-                                id={`quick-connect-btn-${providerKey}`}
-                                onClick={() => handleQuickConnect(providerKey)}
+                                id={`sso-connect-btn-${providerKey}`}
+                                onClick={() => handleSSOConnect(providerKey)}
                                 disabled={isConnecting}
-                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                                className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                               >
                                 {isConnecting ? (
                                   <>
                                     <RefreshCw className="w-3 h-3 animate-spin" />
-                                    <span>Connecting...</span>
+                                    <span>Authenticating...</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Zap className="w-3 h-3 text-amber-300 fill-current" />
-                                    <span>1-Click Connect</span>
+                                    <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                                    <span>Sign in with SSO</span>
                                   </>
                                 )}
                               </button>
 
                               <button
                                 onClick={() => setSelectedProviderForConnect(providerKey)}
-                                className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-                                title="Connection Details"
+                                className="p-1.5 border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+                                title="Connection Options & Settings"
                               >
                                 <ExternalLink className="w-3 h-3" />
                               </button>
                             </>
-                          ) : providerKey === 'nextcloud' || providerKey === 'webdav' ? (
+                          ) : (
                             <>
                               <button
                                 id={`configure-provider-btn-${providerKey}`}
@@ -908,19 +937,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               >
                                 <Server className="w-3 h-3" />
                                 <span>Configure Server</span>
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                id={`configure-oauth-btn-${providerKey}`}
-                                onClick={() => setSelectedProviderForConnect(providerKey)}
-                                className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Lock className="w-3 h-3 text-zinc-400" />
-                                <span>
-                                  {serverProvidersConfig[providerKey]?.hasOAuthEnv ? 'Authorize OAuth' : 'OAuth Not Configured'}
-                                </span>
                               </button>
                             </>
                           )}
