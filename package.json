@@ -54,7 +54,7 @@
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "autoprefixer": "^10.4.21",
+    "autoprefixer": "^10.5.5",
     "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
