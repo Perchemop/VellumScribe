@@ -326,11 +326,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         };
         window.addEventListener('message', handleMessage);
       } else {
-        // Direct SSO profile connection
-        await CloudSyncEngine.connectSSO(provider);
-        setAccounts(CloudSyncEngine.getAccounts());
-        setSyncFeedback(`✓ Authenticated with ${PROVIDERS[provider].name}.`);
-        handleLoadRemoteBackups(provider);
+        setSyncFeedback(
+          authInfo.message ||
+            `OAuth credentials are not configured on the server for ${PROVIDERS[provider].name}. Please configure environment variables or use WebDAV.`
+        );
         setQuickConnectingProvider(null);
       }
     } catch (e: any) {

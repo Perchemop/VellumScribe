@@ -25,6 +25,11 @@ export interface QueuedSyncItem {
   attempts: number;
   lastError?: string;
   providers: CloudStorageProvider[];
+  snapshotId?: string;
+  checksum?: string;
+  byteSize?: number;
+  filename?: string;
+  stagedStorageKey?: string;
 }
 
 export class CloudSyncEngine {
@@ -32,6 +37,20 @@ export class CloudSyncEngine {
   private static isProcessingQueue = false;
   private static readonly QUEUE_STORAGE_KEY = 'vs_offline_sync_queue';
   private static readonly CHUNK_SIZE = 1024 * 1024; // 1MB chunk slices for network resilience
+
+  // In-memory signed session token (isolated from localStorage to prevent XSS exfiltration)
+  private static sessionToken: string | null = null;
+  private static tokenInitPromise: Promise<string> | null = null;
+
+  static {
+    // Purge any legacy unauthenticated or plaintext tokens from browser storage
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem('vs_cloud_token');
+        localStorage.removeItem('vs_cloud_session_id');
+      } catch {}
+    }
+  }
 
   public static getSyncQueue(): QueuedSyncItem[] {
     try {
@@ -42,18 +61,44 @@ export class CloudSyncEngine {
     }
   }
 
-  public static enqueueSync(providers?: CloudStorageProvider[], reason?: string): QueuedSyncItem {
+  public static enqueueSync(
+    providers?: CloudStorageProvider[],
+    reason?: string,
+    stagedBlob?: Blob,
+    meta?: { filename?: string; checksum?: string }
+  ): QueuedSyncItem {
     const queue = this.getSyncQueue();
     const activeProviders = providers && providers.length > 0
       ? providers
       : this.getAccounts().map((a) => a.provider);
 
+    const randBytes = new Uint8Array(4);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(randBytes);
+    }
+    const randHex = Array.from(randBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const id = 'queue_' + Date.now().toString(36) + '_' + randHex;
+    const stagedKey = stagedBlob ? `vs_staged_queue_${id}` : undefined;
+
+    if (stagedBlob && stagedKey) {
+      import('./MediaRepository').then(({ MediaRepository }) => {
+        MediaRepository.putBinary(stagedKey, stagedBlob).catch((e) => {
+          console.warn('Failed to stage offline sync archive in media repository:', e);
+        });
+      });
+    }
+
     const item: QueuedSyncItem = {
-      id: 'queue_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 6),
+      id,
       queuedAt: new Date().toISOString(),
       attempts: 0,
       lastError: reason || 'Queued for retry',
       providers: activeProviders,
+      snapshotId: id,
+      checksum: meta?.checksum,
+      byteSize: stagedBlob ? stagedBlob.size : undefined,
+      filename: meta?.filename,
+      stagedStorageKey: stagedKey,
     };
 
     queue.push(item);
@@ -62,12 +107,27 @@ export class CloudSyncEngine {
   }
 
   public static clearSyncQueue(): void {
+    const queue = this.getSyncQueue();
+    for (const item of queue) {
+      if (item.stagedStorageKey) {
+        import('./MediaRepository').then(({ MediaRepository }) => {
+          MediaRepository.deleteBinary(item.stagedStorageKey!).catch(() => {});
+        });
+      }
+    }
     localStorage.removeItem(this.QUEUE_STORAGE_KEY);
   }
 
   public static removeFromSyncQueue(id: string): void {
-    const queue = this.getSyncQueue().filter((item) => item.id !== id);
-    localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    const queue = this.getSyncQueue();
+    const item = queue.find((q) => q.id === id);
+    if (item?.stagedStorageKey) {
+      import('./MediaRepository').then(({ MediaRepository }) => {
+        MediaRepository.deleteBinary(item.stagedStorageKey!).catch(() => {});
+      });
+    }
+    const filtered = queue.filter((item) => item.id !== id);
+    localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(filtered));
   }
 
   public static isQueueActive(): boolean {
@@ -87,10 +147,24 @@ export class CloudSyncEngine {
     let failedCount = 0;
 
     try {
-      // Process one by one
+      // Process items sequentially
       for (const item of [...queue]) {
         try {
-          const success = await this.triggerSync({ enqueueOnFailure: false });
+          let stagedBlob: Blob | null = null;
+          if (item.stagedStorageKey) {
+            try {
+              const { MediaRepository } = await import('./MediaRepository');
+              stagedBlob = await MediaRepository.getBinary(item.stagedStorageKey);
+            } catch {}
+          }
+
+          const success = await this.triggerSync({
+            enqueueOnFailure: false,
+            targetProviders: item.providers,
+            pregeneratedBlob: stagedBlob || undefined,
+            customFilename: item.filename,
+          });
+
           if (success) {
             successCount++;
             this.removeFromSyncQueue(item.id);
@@ -115,43 +189,42 @@ export class CloudSyncEngine {
     return { processed: successCount + failedCount, success: successCount, failed: failedCount };
   }
 
-  private static sessionToken: string | null = null;
-  private static tokenInitPromise: Promise<string> | null = null;
-
-  private static getSessionId(): string {
-    let id = localStorage.getItem('vs_cloud_session_id');
-    if (!id) {
-      id = 'vs_sess_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
-      localStorage.setItem('vs_cloud_session_id', id);
-    }
-    return id;
-  }
-
+  /**
+   * Ensures an authentic, signed session token is active.
+   * Stores secret in Keystore on native platforms and in memory on web.
+   */
   public static async ensureSessionToken(): Promise<string> {
     if (this.sessionToken) return this.sessionToken;
-    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vs_cloud_token') : null;
-    if (stored) {
-      this.sessionToken = stored;
-      return stored;
-    }
     if (this.tokenInitPromise) return this.tokenInitPromise;
 
     this.tokenInitPromise = (async () => {
       try {
-        const existingSessionId = this.getSessionId();
+        if (typeof window !== 'undefined') {
+          try {
+            const { AndroidKeystoreManager } = await import('./keystore');
+            const storedSecret = await AndroidKeystoreManager.getSecret('cloud_session_token');
+            if (storedSecret) {
+              this.sessionToken = storedSecret;
+              return storedSecret;
+            }
+          } catch {}
+        }
+
         const res = await fetch('/api/cloud/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: existingSessionId }),
+          credentials: 'same-origin',
+          body: JSON.stringify({}),
         });
+
         if (res.ok) {
           const data = await res.json();
           if (data.token) {
             this.sessionToken = data.token;
-            localStorage.setItem('vs_cloud_token', data.token);
-            if (data.sessionId) {
-              localStorage.setItem('vs_cloud_session_id', data.sessionId);
-            }
+            try {
+              const { AndroidKeystoreManager } = await import('./keystore');
+              await AndroidKeystoreManager.saveSecret('cloud_session_token', data.token, 'cloud_credential');
+            } catch {}
             return data.token;
           }
         }
@@ -167,9 +240,8 @@ export class CloudSyncEngine {
   }
 
   private static getHeaders(extra: Record<string, string> = {}): Record<string, string> {
-    const token = this.sessionToken || (typeof localStorage !== 'undefined' ? localStorage.getItem('vs_cloud_token') || '' : '');
+    const token = this.sessionToken || '';
     const headers: Record<string, string> = {
-      'x-session-id': this.getSessionId(),
       ...extra,
     };
     if (token) {
@@ -237,6 +309,7 @@ export class CloudSyncEngine {
       await this.ensureSessionToken();
       const res = await fetch('/api/cloud/config', {
         headers: this.getHeaders(),
+        credentials: 'same-origin',
       });
       if (res.ok) {
         const data = await res.json();
@@ -274,34 +347,12 @@ export class CloudSyncEngine {
   }
 
   /**
-   * Single Sign-On (SSO) Authentication for Google and Microsoft.
-   * Authenticates user profile and registers encrypted cloud destination.
+   * Saves or updates a genuine authenticated cloud account
    */
-  static async connectSSO(
-    provider: 'google_drive' | 'microsoft',
-    options?: { email?: string; displayName?: string; code?: string }
-  ): Promise<CloudAccount> {
-    PrivacyManager.assertNetworkAllowed('SSO Authentication');
-    await this.ensureSessionToken();
-    const res = await fetch(`/api/cloud/${provider}/connect-sso`, {
-      method: 'POST',
-      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(options || {}),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: 'SSO Authentication failed' }));
-      throw new Error(err.error || 'Failed to authenticate SSO');
-    }
-
-    const data = await res.json();
-    const account: CloudAccount = data.account;
-
-    // Update local accounts
-    const current = this.getAccounts().filter((a) => a.provider !== provider);
+  static saveConnectedAccount(account: CloudAccount): CloudAccount {
+    const current = this.getAccounts().filter((a) => a.provider !== account.provider);
     current.push(account);
     localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
-
     return account;
   }
 
@@ -314,6 +365,7 @@ export class CloudSyncEngine {
     await this.ensureSessionToken();
     const res = await fetch(`/api/cloud/${provider}/auth-url`, {
       headers: this.getHeaders(),
+      credentials: 'same-origin',
     });
     if (!res.ok) {
       return { configured: false, message: 'Could not fetch auth URL' };
@@ -333,6 +385,7 @@ export class CloudSyncEngine {
     const res = await fetch(`/api/cloud/${provider}/connect-credentials`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'same-origin',
       body: JSON.stringify(credentials),
     });
 
@@ -361,6 +414,7 @@ export class CloudSyncEngine {
       await fetch(`/api/cloud/${provider}/disconnect`, {
         method: 'POST',
         headers: this.getHeaders(),
+        credentials: 'same-origin',
       });
     } catch (e) {
       console.warn(`Failed to notify server of disconnect for ${provider}:`, e);
@@ -389,6 +443,7 @@ export class CloudSyncEngine {
       await this.ensureSessionToken();
       const res = await fetch(`/api/cloud/${provider}/backups`, {
         headers: this.getHeaders(),
+        credentials: 'same-origin',
       });
       if (res.ok) {
         const data = await res.json();
@@ -419,6 +474,7 @@ export class CloudSyncEngine {
     const initRes = await fetch(`/api/cloud/${provider}/chunk/init`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'same-origin',
       body: JSON.stringify({
         filename,
         totalBytes,
@@ -439,25 +495,17 @@ export class CloudSyncEngine {
       const start = chunkIndex * this.CHUNK_SIZE;
       const end = Math.min(totalBytes, start + this.CHUNK_SIZE);
       const chunkBlob = blob.slice(start, end);
-      const chunkBuffer = await chunkBlob.arrayBuffer();
-
-      // Convert chunk to base64 for reliable transport
-      const bytes = new Uint8Array(chunkBuffer);
-      let binaryStr = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binaryStr += String.fromCharCode(bytes[i]);
-      }
-      const chunkBase64 = btoa(binaryStr);
 
       const chunkRes = await fetch(`/api/cloud/${provider}/chunk/upload`, {
         method: 'POST',
-        headers: this.getHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          uploadId,
-          chunkIndex,
-          totalChunks,
-          chunkBase64,
+        headers: this.getHeaders({
+          'Content-Type': 'application/octet-stream',
+          'x-upload-id': uploadId,
+          'x-chunk-index': String(chunkIndex),
+          'x-total-chunks': String(totalChunks),
         }),
+        credentials: 'same-origin',
+        body: chunkBlob,
       });
 
       if (!chunkRes.ok) {
@@ -479,6 +527,7 @@ export class CloudSyncEngine {
     const commitRes = await fetch(`/api/cloud/${provider}/chunk/commit`, {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      credentials: 'same-origin',
       body: JSON.stringify({ uploadId }),
     });
 
@@ -496,10 +545,17 @@ export class CloudSyncEngine {
   static async triggerSync(options?: {
     onProgress?: (p: SyncProgressUpdate) => void;
     enqueueOnFailure?: boolean;
+    targetProviders?: CloudStorageProvider[];
+    pregeneratedBlob?: Blob;
+    customFilename?: string;
   }): Promise<boolean> {
     PrivacyManager.assertNetworkAllowed('Cloud Backup Upload');
     const startTime = Date.now();
-    const accounts = this.getAccounts();
+    const allAccounts = this.getAccounts();
+    const accounts = options?.targetProviders && options.targetProviders.length > 0
+      ? allAccounts.filter((a) => options.targetProviders!.includes(a.provider))
+      : allAccounts;
+
     const shouldEnqueue = options?.enqueueOnFailure !== false;
 
     if (accounts.length === 0) {
@@ -510,10 +566,11 @@ export class CloudSyncEngine {
     options?.onProgress?.({ percent: 10, message: 'Generating and compressing backup snapshot...', phase: 'compressing' });
 
     try {
-      const backupBlob = await StorageManager.exportCloudBackupArchive();
+      await this.ensureSessionToken();
+      const backupBlob = options?.pregeneratedBlob || (await StorageManager.exportCloudBackupArchive());
       const arrayBuffer = await backupBlob.arrayBuffer();
       const checksum = await this.computeChecksum(arrayBuffer);
-      const filename = `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
+      const filename = options?.customFilename || `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
 
       options?.onProgress?.({ percent: 25, message: 'Starting cloud backup upload...', phase: 'uploading' });
 
@@ -528,6 +585,7 @@ export class CloudSyncEngine {
             const res = await fetch(`/api/cloud/${acc.provider}/backup`, {
               method: 'POST',
               headers: this.getHeaders({ 'Content-Type': 'application/octet-stream' }),
+              credentials: 'same-origin',
               body: backupBlob,
             });
             if (!res.ok) {
@@ -554,12 +612,11 @@ export class CloudSyncEngine {
             lastTransferBytes: backupBlob.size,
             lastTransferDurationMs: Date.now() - startTime,
           });
-          options?.onProgress?.({ percent: 100, message: `Upload failed: ${e.message}`, phase: 'error' });
           allSuccess = false;
           if (shouldEnqueue) {
-            this.enqueueSync([acc.provider], `Upload failed for ${acc.provider}: ${e.message}`);
+            this.enqueueSync([acc.provider], `Upload failed for ${acc.provider}: ${e.message}`, backupBlob, { filename, checksum });
           }
-          return false;
+          // Continue iteration so remaining providers are given a chance to sync
         }
       }
 
@@ -583,35 +640,37 @@ export class CloudSyncEngine {
    */
   static async restoreFromCloudBackup(
     provider: CloudStorageProvider,
-    backupId: string
+    backupId: string,
+    options?: { mode?: 'exact' | 'merge' }
   ): Promise<{ success: boolean; message: string }> {
     PrivacyManager.assertNetworkAllowed('Cloud Backup Restore');
     await this.ensureSessionToken();
-    // 1. Safety snapshot of current local store
-    const safetySnapshot = StorageManager.exportFullDump();
-    sessionStorage.setItem('vs_pre_restore_snapshot', safetySnapshot);
 
     try {
       const res = await fetch(`/api/cloud/${provider}/restore/${backupId}`, {
         headers: this.getHeaders(),
+        credentials: 'same-origin',
       });
       if (!res.ok) {
         throw new Error(`Failed to download backup archive from ${provider}`);
       }
 
       const blob = await res.blob();
-      const importResult = await StorageManager.importCloudBackupArchive(blob);
+      const importResult = await StorageManager.importCloudBackupArchive(blob, {
+        mode: options?.mode || 'exact',
+      });
 
       if (!importResult.success) {
-        // Rollback from safety snapshot on validation failure
-        StorageManager.importFullDump(safetySnapshot);
         return { success: false, message: `Restore aborted: ${importResult.error || 'Validation error'}` };
       }
 
-      return { success: true, message: 'Cloud backup successfully restored into local database.' };
+      return {
+        success: true,
+        message: options?.mode === 'merge'
+          ? 'Cloud backup successfully merged into local database.'
+          : 'Cloud backup successfully restored into local database (exact restore).',
+      };
     } catch (e: any) {
-      // Rollback safety snapshot
-      StorageManager.importFullDump(safetySnapshot);
       return { success: false, message: `Restore failed: ${e.message || 'Corrupted archive'}` };
     }
   }

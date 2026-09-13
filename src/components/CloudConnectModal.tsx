@@ -62,8 +62,6 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
   const [remotePath, setRemotePath] = useState('/VellumScribeBackups');
 
   // SSO state
-  const [ssoEmail, setSsoEmail] = useState('');
-  const [ssoDisplayName, setSsoDisplayName] = useState('');
   const [hasOAuthEnv, setHasOAuthEnv] = useState<boolean | null>(null);
 
   const meta = PROVIDER_METADATA[provider] || {
@@ -94,60 +92,59 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       .catch(() => setHasOAuthEnv(false));
   }, [provider]);
 
-  // SSO Popup or Direct Connection
+  // SSO Popup OAuth Authentication
   const handleSSOAuthentication = async () => {
     if (provider !== 'google_drive' && provider !== 'microsoft') return;
     setLoading(true);
     setError(null);
     try {
-      // 1. Check if OAuth URL is configured for popup SSO
       const authInfo = await CloudSyncEngine.getAuthUrl(provider);
-      if (authInfo.configured && authInfo.url) {
-        const width = 520;
-        const height = 650;
-        const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
-        const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
-
-        const popup = window.open(
-          authInfo.url,
-          `sso_${provider}`,
-          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+      if (!authInfo.configured || !authInfo.url) {
+        throw new Error(
+          authInfo.message ||
+            `OAuth credentials are not configured on this server for ${meta.name}. Please set ${
+              provider === 'google_drive'
+                ? 'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET'
+                : 'MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET'
+            } in the server environment.`
         );
-
-        if (!popup || popup.closed) {
-          throw new Error('Popup window was blocked by the browser. Please allow popups to complete SSO.');
-        }
-
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === provider) {
-            window.removeEventListener('message', handleMessage);
-            const accounts = CloudSyncEngine.getAccounts();
-            const account = accounts.find((a) => a.provider === provider);
-            if (account) {
-              onConnected(account);
-            }
-            setLoading(false);
-          } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
-            window.removeEventListener('message', handleMessage);
-            setError(event.data?.error || 'Single Sign-On authentication was cancelled or failed.');
-            setLoading(false);
-          }
-        };
-
-        window.addEventListener('message', handleMessage);
-        return;
       }
 
-      // 2. Direct SSO Connection
-      const account = await CloudSyncEngine.connectSSO(provider, {
-        email: ssoEmail.trim() || undefined,
-        displayName: ssoDisplayName.trim() || undefined,
-      });
-      onConnected(account);
+      const width = 520;
+      const height = 650;
+      const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+      const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+
+      const popup = window.open(
+        authInfo.url,
+        `sso_${provider}`,
+        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+      );
+
+      if (!popup || popup.closed) {
+        throw new Error('Popup window was blocked by the browser. Please allow popups to complete authentication.');
+      }
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === provider) {
+          window.removeEventListener('message', handleMessage);
+          const accounts = CloudSyncEngine.getAccounts();
+          const account = accounts.find((a) => a.provider === provider);
+          if (account) {
+            onConnected(account);
+          }
+          setLoading(false);
+        } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+          window.removeEventListener('message', handleMessage);
+          setError(event.data?.error || 'Authentication was cancelled or failed.');
+          setLoading(false);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
     } catch (e: any) {
-      console.error('Failed SSO authentication:', e);
-      setError(e.message || 'Failed to authenticate SSO. Please verify network connectivity.');
-    } finally {
+      console.error('Failed OAuth authentication:', e);
+      setError(e.message || 'Failed to authenticate. Please verify server configuration and network connectivity.');
       setLoading(false);
     }
   };
@@ -334,48 +331,47 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                     </p>
                   </div>
 
+                  {hasOAuthEnv === false && (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-700 dark:text-amber-400 space-y-1">
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>OAuth Environment Credentials Required</span>
+                      </p>
+                      <p className="text-[11px] leading-relaxed opacity-90">
+                        {provider === 'google_drive'
+                          ? 'Server environment variables GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured to establish an authentic Google Drive connection.'
+                          : 'Server environment variables MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET must be configured to establish an authentic OneDrive connection.'}
+                      </p>
+                      <p className="text-[11px] leading-relaxed pt-1">
+                        For self-hosted zero-configuration storage, you can connect via <strong>Nextcloud</strong> or <strong>WebDAV</strong>.
+                      </p>
+                    </div>
+                  )}
+
                   {/* SSO Action Button */}
                   <button
                     id={`sso-authenticate-btn-${provider}`}
                     onClick={handleSSOAuthentication}
-                    disabled={loading}
-                    className="w-full min-h-[46px] px-4 py-3 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer"
+                    disabled={loading || hasOAuthEnv === false}
+                    className="w-full min-h-[46px] px-4 py-3 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-2xl font-bold text-xs shadow-md flex items-center justify-center gap-2.5 transition-all disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Authenticating SSO...</span>
+                        <span>Authenticating with {meta.name}...</span>
+                      </>
+                    ) : hasOAuthEnv === false ? (
+                      <>
+                        <KeyRound className="w-4 h-4 text-zinc-400" />
+                        <span>OAuth Unconfigured on Server</span>
                       </>
                     ) : (
                       <>
                         <Zap className="w-4 h-4 text-amber-400 fill-current" />
-                        <span>Sign In with {meta.name} SSO</span>
+                        <span>Sign In with {meta.name}</span>
                       </>
                     )}
                   </button>
-
-                  {/* Custom SSO Identity Input (allows direct user profile authentication) */}
-                  <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80 space-y-3">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 block">
-                      Account Profile (Optional / Direct SSO)
-                    </span>
-                    <div className="space-y-2">
-                      <input
-                        type="email"
-                        placeholder={provider === 'google_drive' ? 'user@gmail.com' : 'user@outlook.com'}
-                        value={ssoEmail}
-                        onChange={(e) => setSsoEmail(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Display Name (e.g. Jane Doe)"
-                        value={ssoDisplayName}
-                        onChange={(e) => setSsoDisplayName(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
 
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800/60 text-xs text-zinc-500 dark:text-zinc-400 space-y-1">
                     <p className="flex items-center gap-1.5 font-medium text-zinc-700 dark:text-zinc-300">

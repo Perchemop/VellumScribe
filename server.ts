@@ -670,6 +670,17 @@ app.post("/api/audio/chunk-upload", async (req, res) => {
       return res.json({ success: true, chunkReceived: chunkIndex, done: false });
     }
 
+    // If caller only wanted chunk assembly (e.g. for session initialization)
+    if (req.body.assembleOnly === true || req.query.assembleOnly === "true") {
+      return res.json({
+        success: true,
+        done: true,
+        uploadId: safeUploadId,
+        filePath: targetFile,
+        mimeType: mimeType || `audio/${ext}`,
+      });
+    }
+
     // All chunks received! Perform complete transcription
     const result = await processAndTranscribeAudio(req, targetFile, mimeType || `audio/${ext}`);
     return res.json({
@@ -684,6 +695,395 @@ app.post("/api/audio/chunk-upload", async (req, res) => {
       error: error?.message || "Failed to process audio chunk.",
     });
   }
+});
+
+// 2c. Resumable Multi-Segment Transcription Session API
+interface AudioTranscribeSession {
+  sessionId: string;
+  sourceAudioPath: string;
+  optimizedAudioPath: string;
+  durationSec: number;
+  totalSegments: number;
+  segments: {
+    index: number;
+    startSec: number;
+    endSec: number;
+    startStr: string;
+    endStr: string;
+    status: "pending" | "processing" | "completed" | "failed";
+    text?: string;
+    error?: string;
+  }[];
+  createdAt: number;
+  lastAccessedAt: number;
+}
+
+const audioTranscribeSessionsStore = new Map<string, AudioTranscribeSession>();
+
+function calculateAudioSegments(durationSec: number): AudioTranscribeSession["segments"] {
+  const formatTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // For very short audio (<= 2 minutes), keep as a single unified segment
+  if (durationSec <= 120) {
+    return [
+      {
+        index: 0,
+        startSec: 0,
+        endSec: Math.max(1, durationSec),
+        startStr: "00:00",
+        endStr: formatTime(durationSec),
+        status: "pending",
+      },
+    ];
+  }
+
+  // Target segment duration: 180s (3m) for <= 15m, 300s (5m) for longer
+  const segmentDuration = durationSec <= 900 ? 180 : 300;
+  const count = Math.max(1, Math.ceil(durationSec / segmentDuration));
+  const segments: AudioTranscribeSession["segments"] = [];
+
+  for (let i = 0; i < count; i++) {
+    const startSec = i * segmentDuration;
+    const endSec = Math.min(durationSec, (i + 1) * segmentDuration);
+    if (endSec - startSec < 0.5 && i > 0) continue;
+    segments.push({
+      index: i,
+      startSec,
+      endSec,
+      startStr: formatTime(startSec),
+      endStr: formatTime(endSec),
+      status: "pending",
+    });
+  }
+  return segments;
+}
+
+// Session Init: Prepares audio and breaks down into trackable segments
+app.post("/api/audio/transcribe-session/init", async (req, res) => {
+  try {
+    const { uploadId, audioBase64, mimeType, originalFileName } = req.body;
+    const tempDir = os.tmpdir();
+    let sourcePath: string | null = null;
+    let inputExt = "mp3";
+
+    if (uploadId) {
+      const safeUploadId = String(uploadId).replace(/[^a-zA-Z0-9_-]/g, "");
+      const files = fs.readdirSync(tempDir);
+      const match = files.find((f) => f.startsWith(`vellum_chunk_up_${safeUploadId}.`));
+      if (!match) {
+        return res.status(404).json({ error: "Uploaded audio file not found on server." });
+      }
+      sourcePath = path.join(tempDir, match);
+      const matchExt = match.match(/\.([a-zA-Z0-9]+)$/);
+      if (matchExt) inputExt = matchExt[1].toLowerCase();
+    } else if (audioBase64) {
+      const cleanBase64 = extractRawBase64(audioBase64);
+      const validMime = normalizeAudioMimeType(mimeType, audioBase64);
+      inputExt = validMime.includes("wav")
+        ? "wav"
+        : validMime.includes("m4a") || validMime.includes("mp4")
+        ? "m4a"
+        : validMime.includes("ogg")
+        ? "ogg"
+        : validMime.includes("webm")
+        ? "webm"
+        : "mp3";
+      sourcePath = path.join(tempDir, `trans_init_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.${inputExt}`);
+      fs.writeFileSync(sourcePath, Buffer.from(cleanBase64, "base64"));
+    } else {
+      return res.status(400).json({ error: "Missing audio data or uploadId." });
+    }
+
+    // Check duration with ffprobe
+    let durationSec = 0;
+    try {
+      const probeOut = execSync(
+        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sourcePath}"`,
+        { timeout: 15000 }
+      ).toString().trim();
+      durationSec = parseFloat(probeOut) || 0;
+    } catch (probeErr) {
+      console.warn("ffprobe check notice in session init:", probeErr);
+    }
+
+    // Optimize to 24kHz mono MP3 for high-speed speech AI processing
+    const sessionId = `ts_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const optimizedPath = path.join(tempDir, `${sessionId}_optimized.mp3`);
+    let converted = false;
+    try {
+      execSync(
+        `ffmpeg -y -i "${sourcePath}" -vn -ac 1 -ar 24000 -ab 32k "${optimizedPath}" 2>/dev/null`,
+        { timeout: 60000 }
+      );
+      if (fs.existsSync(optimizedPath) && fs.statSync(optimizedPath).size > 0) {
+        converted = true;
+      }
+    } catch (ffErr) {
+      console.warn("FFmpeg session optimization notice:", ffErr);
+    }
+
+    const workingAudioPath = converted ? optimizedPath : sourcePath;
+    if (durationSec === 0) {
+      try {
+        const probeOut = execSync(
+          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${workingAudioPath}"`,
+          { timeout: 10000 }
+        ).toString().trim();
+        durationSec = parseFloat(probeOut) || 60;
+      } catch {
+        durationSec = 60;
+      }
+    }
+
+    const segments = calculateAudioSegments(durationSec);
+    const session: AudioTranscribeSession = {
+      sessionId,
+      sourceAudioPath: sourcePath,
+      optimizedAudioPath: workingAudioPath,
+      durationSec,
+      totalSegments: segments.length,
+      segments,
+      createdAt: Date.now(),
+      lastAccessedAt: Date.now(),
+    };
+
+    audioTranscribeSessionsStore.set(sessionId, session);
+
+    return res.json({
+      success: true,
+      sessionId,
+      durationSec,
+      totalSegments: segments.length,
+      segments: segments.map((s) => ({
+        index: s.index,
+        startSec: s.startSec,
+        endSec: s.endSec,
+        startStr: s.startStr,
+        endStr: s.endStr,
+        status: s.status,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Transcribe session init error:", error);
+    res.status(500).json({ error: error?.message || "Failed to initialize transcription session." });
+  }
+});
+
+// Segment Transcription: Transcribes a single segment with progress tracking and caching
+app.post("/api/audio/transcribe-session/segment", async (req, res) => {
+  const { sessionId, segmentIndex } = req.body;
+  if (!sessionId || segmentIndex === undefined) {
+    return res.status(400).json({ error: "Missing sessionId or segmentIndex." });
+  }
+
+  const session = audioTranscribeSessionsStore.get(sessionId);
+  if (!session) {
+    return res.status(404).json({
+      error: "Transcription session not found or expired. Please re-initialize to resume.",
+      canResume: false,
+    });
+  }
+
+  session.lastAccessedAt = Date.now();
+  const segment = session.segments[segmentIndex];
+  if (!segment) {
+    return res.status(404).json({ error: `Segment index ${segmentIndex} does not exist.` });
+  }
+
+  // Return cached result if already completed
+  if (segment.status === "completed" && segment.text) {
+    const completed = session.segments.filter((s) => s.status === "completed" && s.text);
+    const partialTranscript = completed
+      .sort((a, b) => a.index - b.index)
+      .map((s) => (session.totalSegments === 1 ? s.text : `### [${s.startStr} - ${s.endStr}]\n${s.text}`))
+      .join("\n\n");
+
+    return res.json({
+      success: true,
+      sessionId,
+      segmentIndex,
+      text: segment.text,
+      startStr: segment.startStr,
+      endStr: segment.endStr,
+      completedCount: completed.length,
+      totalSegments: session.totalSegments,
+      isDone: completed.length === session.totalSegments,
+      partialTranscript,
+      cached: true,
+    });
+  }
+
+  segment.status = "processing";
+  const tempDir = os.tmpdir();
+  const segmentFile = path.join(tempDir, `${sessionId}_seg_${segmentIndex}_${Date.now()}.mp3`);
+
+  try {
+    const segLen = Math.max(0.5, segment.endSec - segment.startSec);
+    execSync(
+      `ffmpeg -y -ss ${segment.startSec} -t ${segLen} -i "${session.optimizedAudioPath}" -ac 1 -ar 24000 -ab 32k "${segmentFile}" 2>/dev/null`,
+      { timeout: 30000 }
+    );
+
+    if (!fs.existsSync(segmentFile) || fs.statSync(segmentFile).size === 0) {
+      throw new Error(`Failed to extract audio slice for segment ${segmentIndex + 1}.`);
+    }
+
+    const chunkData = fs.readFileSync(segmentFile).toString("base64");
+    const prompt = `Accurately transcribe this audio recording segment (timestamp ${segment.startStr} to ${segment.endStr}) into clean, speaker-attributed verbatim text. Identify distinct speakers if audible (e.g. Speaker 1, Speaker 2) and preserve technical terms, timestamps, and punctuation. Return ONLY the verbatim transcript.`;
+
+    const preferredModels = [
+      "gemini-3.5-transcribe",
+      "gemini-3.8-flash",
+      "gemini-flash-latest",
+      "gemini-3.6-flash",
+    ];
+
+    const { text, modelUsed } = await executeGeminiWithFallback(
+      req,
+      {
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: chunkData,
+                mimeType: "audio/mp3",
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      },
+      preferredModels
+    );
+
+    segment.text = (text || "").trim();
+    segment.status = "completed";
+    segment.error = undefined;
+
+    const completed = session.segments.filter((s) => s.status === "completed" && s.text);
+    const partialTranscript = completed
+      .sort((a, b) => a.index - b.index)
+      .map((s) => (session.totalSegments === 1 ? s.text : `### [${s.startStr} - ${s.endStr}]\n${s.text}`))
+      .join("\n\n");
+
+    return res.json({
+      success: true,
+      sessionId,
+      segmentIndex,
+      text: segment.text,
+      startStr: segment.startStr,
+      endStr: segment.endStr,
+      completedCount: completed.length,
+      totalSegments: session.totalSegments,
+      isDone: completed.length === session.totalSegments,
+      partialTranscript,
+      modelUsed,
+    });
+  } catch (err: any) {
+    console.error(`Error transcribing segment ${segmentIndex}:`, err);
+    segment.status = "failed";
+    segment.error = err?.message || "Segment transcription failed.";
+
+    const completed = session.segments.filter((s) => s.status === "completed" && s.text);
+    const partialTranscript = completed
+      .sort((a, b) => a.index - b.index)
+      .map((s) => (session.totalSegments === 1 ? s.text : `### [${s.startStr} - ${s.endStr}]\n${s.text}`))
+      .join("\n\n");
+
+    return res.status(500).json({
+      error: segment.error,
+      sessionId,
+      failedSegmentIndex: segmentIndex,
+      canResume: true,
+      completedCount: completed.length,
+      totalSegments: session.totalSegments,
+      partialTranscript,
+    });
+  } finally {
+    try {
+      if (fs.existsSync(segmentFile)) fs.unlinkSync(segmentFile);
+    } catch {}
+  }
+});
+
+// Session Status & Resumption Inspection
+app.get("/api/audio/transcribe-session/status/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  const session = audioTranscribeSessionsStore.get(sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found or expired.", canResume: false });
+  }
+
+  session.lastAccessedAt = Date.now();
+  const completed = session.segments.filter((s) => s.status === "completed" && s.text);
+  const partialTranscript = completed
+    .sort((a, b) => a.index - b.index)
+    .map((s) => (session.totalSegments === 1 ? s.text : `### [${s.startStr} - ${s.endStr}]\n${s.text}`))
+    .join("\n\n");
+
+  res.json({
+    sessionId,
+    durationSec: session.durationSec,
+    totalSegments: session.totalSegments,
+    completedCount: completed.length,
+    segments: session.segments.map((s) => ({
+      index: s.index,
+      startStr: s.startStr,
+      endStr: s.endStr,
+      status: s.status,
+      error: s.error,
+    })),
+    partialTranscript,
+    isDone: completed.length === session.totalSegments,
+  });
+});
+
+// Finalize Session: Joins all completed parts and cleans up temp files
+app.post("/api/audio/transcribe-session/finalize", async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: "Missing sessionId." });
+  }
+
+  const session = audioTranscribeSessionsStore.get(sessionId);
+  if (!session) {
+    return res.status(404).json({ error: "Session not found." });
+  }
+
+  const completed = session.segments
+    .filter((s) => s.status === "completed" && s.text)
+    .sort((a, b) => a.index - b.index);
+
+  if (completed.length === 0) {
+    return res.status(400).json({ error: "No segments were successfully transcribed in this session." });
+  }
+
+  const finalTranscript = session.totalSegments === 1
+    ? (completed[0].text || "")
+    : completed
+        .map((s) => `### [${s.startStr} - ${s.endStr}]\n${s.text}`)
+        .join("\n\n");
+
+  // Cleanup session temp files
+  try {
+    if (fs.existsSync(session.optimizedAudioPath)) fs.unlinkSync(session.optimizedAudioPath);
+    if (fs.existsSync(session.sourceAudioPath) && session.sourceAudioPath !== session.optimizedAudioPath) {
+      fs.unlinkSync(session.sourceAudioPath);
+    }
+  } catch (e) {}
+  audioTranscribeSessionsStore.delete(sessionId);
+
+  return res.json({
+    success: true,
+    transcript: finalTranscript,
+    source: `gemini-3.5-transcribe (Multi-segment: ${completed.length}/${session.totalSegments} segments)`,
+    completedCount: completed.length,
+    totalSegments: session.totalSegments,
+  });
 });
 
 // 3. AI Summary Studio & Synthesis Endpoint
@@ -1439,7 +1839,7 @@ function loadPersistedBackupsFromDisk(sessionId: string): CloudBackupRecord[] {
   }
 }
 
-function getSessionId(req: express.Request): string {
+function getVerifiedSessionId(req: express.Request): string | null {
   // 1. Authorization: Bearer <token>
   const authHeader = req.headers["authorization"];
   if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
@@ -1459,7 +1859,7 @@ function getSessionId(req: express.Request): string {
     }
   }
 
-  // 3. Cookie fallback
+  // 3. HttpOnly Cookie fallback
   const cookieHeader = req.headers.cookie;
   if (cookieHeader) {
     const match = cookieHeader.match(/vs_cloud_token=([^;]+)/);
@@ -1471,18 +1871,26 @@ function getSessionId(req: express.Request): string {
     }
   }
 
-  // 4. Legacy migration header during initial client handshake
-  const legacyHeader = req.headers["x-session-id"];
-  if (typeof legacyHeader === "string") {
-    const cleaned = legacyHeader.trim();
-    if (/^[a-zA-Z0-9_-]{12,64}$/.test(cleaned)) {
-      return sanitizeSessionId(cleaned);
-    }
-  }
+  // Strictly reject unauthenticated callers or legacy x-session-id bypass
+  return null;
+}
 
-  // Isolate unauthenticated callers with an ephemeral per-request session ID
+function getSessionId(req: express.Request): string {
+  const verified = getVerifiedSessionId(req);
+  if (verified) return verified;
+  // Ephemeral identifier for anonymous callers
   return "anon_" + crypto.randomBytes(16).toString("hex");
 }
+
+function requireCloudAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const sessionId = getVerifiedSessionId(req);
+  if (!sessionId) {
+    return res.status(401).json({ error: "Unauthorized: Valid signed cloud session token required." });
+  }
+  (req as any).cloudSessionId = sessionId;
+  next();
+}
+const requireAuthSession = requireCloudAuth;
 
 function getSessionStore(sessionId: string): SessionCloudData {
   let store = sessionStores.get(sessionId);
@@ -1540,15 +1948,15 @@ function isProviderConfigured(provider: string): boolean {
 // 0. Cloud Session Token Minting & Rotation Endpoint
 app.post("/api/cloud/session", (req, res) => {
   try {
-    const existing = req.body?.sessionId || req.headers["x-session-id"];
-    let sessionId: string;
-    if (typeof existing === "string" && /^[a-zA-Z0-9_-]{12,64}$/.test(existing.trim())) {
-      sessionId = sanitizeSessionId(existing.trim());
-    } else {
-      sessionId = "vs_sess_" + crypto.randomBytes(16).toString("hex");
-    }
+    // Audit Requirement: The session-minting endpoint MUST NOT accept caller-selected session IDs.
+    // Possession/knowledge of another session ID cannot be upgraded into a signed token.
+    // Server cryptographically generates a new unique session ID.
+    const sessionId = "vs_sess_" + crypto.randomBytes(24).toString("hex");
     const token = signSessionToken(sessionId);
-    res.setHeader("Set-Cookie", `vs_cloud_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600`);
+    res.setHeader(
+      "Set-Cookie",
+      `vs_cloud_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600`
+    );
     return res.json({
       success: true,
       sessionId,
@@ -1564,7 +1972,10 @@ app.post("/api/cloud/session", (req, res) => {
 // 1. Cloud Configuration & Status Endpoint
 app.get("/api/cloud/config", (req, res) => {
   try {
-    const sessionId = getSessionId(req);
+    const sessionId = getVerifiedSessionId(req);
+    if (!sessionId) {
+      return res.status(401).json({ error: "Unauthorized: Valid signed cloud session required." });
+    }
     const session = getSessionStore(sessionId);
     const accounts = Array.from(session.accounts.values()).map((acc) => ({
       provider: acc.provider,
@@ -1680,57 +2091,205 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
   return res.status(400).json({ error: "Unsupported provider for OAuth URL" });
 });
 
-// 1.5 Single Sign-On (SSO) Authentication Endpoint for Google and Microsoft
-app.post("/api/cloud/:provider/connect-sso", (req, res) => {
-  const { provider } = req.params;
-  const sessionId = getSessionId(req);
-  const session = getSessionStore(sessionId);
+// Helper: Real Google Drive OAuth token refresh & API upload
+async function refreshGoogleAccessToken(account: CloudAccountRecord): Promise<string | null> {
+  if (!account.refreshToken) return null;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
 
-  if (provider !== "google_drive" && provider !== "microsoft") {
-    return res.status(400).json({
-      error: "SSO authentication is only supported for Google and Microsoft accounts.",
+  try {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: account.refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!res.ok) {
+      console.warn("Failed to refresh Google access token, HTTP", res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (data.access_token) {
+      account.accessToken = data.access_token;
+      account.expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+      return (account.accessToken as string) || null;
+    }
+  } catch (e) {
+    console.error("Error refreshing Google access token:", e);
+  }
+  return null;
+}
+
+async function uploadToGoogleDrive(
+  account: CloudAccountRecord,
+  buffer: Buffer,
+  filename: string
+): Promise<{ fileId: string; name: string }> {
+  if (!account.accessToken) {
+    throw new Error("Google Drive account is missing access token. Please re-authenticate via OAuth.");
+  }
+
+  let token = account.accessToken;
+  if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+    const refreshed = await refreshGoogleAccessToken(account);
+    if (refreshed) token = refreshed;
+  }
+
+  const boundary = `-------VellumScribeBoundary${crypto.randomBytes(8).toString("hex")}`;
+  const metadata = JSON.stringify({
+    name: filename,
+    description: "VellumScribe Encrypted Backup Snapshot",
+    mimeType: "application/gzip",
+  });
+
+  const preBody = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/gzip\r\n\r\n`;
+  const postBody = `\r\n--${boundary}--`;
+
+  const multipartBody = Buffer.concat([
+    Buffer.from(preBody, "utf-8"),
+    buffer,
+    Buffer.from(postBody, "utf-8"),
+  ]);
+
+  const payload = new Uint8Array(multipartBody);
+  let res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+      "Content-Length": String(multipartBody.length),
+    },
+    body: payload,
+  });
+
+  if (res.status === 401 && account.refreshToken) {
+    const refreshed = await refreshGoogleAccessToken(account);
+    if (refreshed) {
+      token = refreshed;
+      res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+          "Content-Length": String(multipartBody.length),
+        },
+        body: payload,
+      });
+    }
+  }
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Google Drive API rejected upload (HTTP ${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  return { fileId: data.id, name: data.name || filename };
+}
+
+// Helper: Real Microsoft Graph OAuth token refresh & API upload
+async function refreshMicrosoftAccessToken(account: CloudAccountRecord): Promise<string | null> {
+  if (!account.refreshToken) return null;
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  try {
+    const res = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: account.refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!res.ok) {
+      console.warn("Failed to refresh Microsoft access token, HTTP", res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (data.access_token) {
+      account.accessToken = data.access_token;
+      account.expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+      if (data.refresh_token) {
+        account.refreshToken = data.refresh_token;
+      }
+      return (account.accessToken as string) || null;
+    }
+  } catch (e) {
+    console.error("Error refreshing Microsoft access token:", e);
+  }
+  return null;
+}
+
+async function uploadToOneDrive(
+  account: CloudAccountRecord,
+  buffer: Buffer,
+  filename: string
+): Promise<{ fileId: string; name: string }> {
+  if (!account.accessToken) {
+    throw new Error("Microsoft OneDrive account is missing access token. Please re-authenticate via OAuth.");
+  }
+
+  let token = account.accessToken;
+  if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+    const refreshed = await refreshMicrosoftAccessToken(account);
+    if (refreshed) token = refreshed;
+  }
+
+  const payload = new Uint8Array(buffer);
+  let uploadUrl = `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${encodeURIComponent(filename)}:/content`;
+  let res = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+    },
+    body: payload,
+  });
+
+  if (res.status === 401 && account.refreshToken) {
+    const refreshed = await refreshMicrosoftAccessToken(account);
+    if (refreshed) {
+      token = refreshed;
+      res = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: payload,
+      });
+    }
+  }
+
+  if (res.status === 404) {
+    uploadUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/VellumScribe/${encodeURIComponent(filename)}:/content`;
+    res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/octet-stream",
+      },
+      body: payload,
     });
   }
 
-  const requestedEmail =
-    typeof req.body?.email === "string" && req.body.email.includes("@")
-      ? req.body.email.trim()
-      : undefined;
+  if (!res.ok && res.status !== 201 && res.status !== 200) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Microsoft OneDrive API rejected upload (HTTP ${res.status}): ${errText}`);
+  }
 
-  const defaultEmail = provider === "google_drive" ? "user@gmail.com" : "user@outlook.com";
-  const email = requestedEmail || defaultEmail;
-  const displayName =
-    typeof req.body?.displayName === "string" && req.body.displayName.trim().length > 0
-      ? req.body.displayName.trim()
-      : provider === "google_drive"
-      ? "Google SSO User"
-      : "Microsoft SSO User";
-
-  const accountId = `sso_${provider}_${crypto.randomBytes(6).toString("hex")}`;
-  const connectedAt = new Date().toISOString();
-
-  const record: CloudAccountRecord = {
-    provider: provider as any,
-    accountId,
-    email,
-    displayName,
-    connectedAt,
-  };
-
-  session.accounts.set(provider, record);
-
-  res.json({
-    success: true,
-    message: `Authenticated successfully with ${provider === "google_drive" ? "Google" : "Microsoft"} SSO.`,
-    account: {
-      provider,
-      accountId,
-      email,
-      displayName,
-      connectedAt,
-    },
-  });
-});
+  const data = await res.json();
+  return { fileId: data.id, name: data.name || filename };
+}
 
 // 1.6 WebDAV / Nextcloud Credential Connection Endpoint
 app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
@@ -2131,10 +2690,76 @@ app.post("/api/cloud/:provider/disconnect", (req, res) => {
 });
 
 // 5. Remote Backups Listing Endpoint (Session-scoped)
-app.get("/api/cloud/:provider/backups", (req, res) => {
+app.get("/api/cloud/:provider/backups", async (req, res) => {
   const { provider } = req.params;
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
+  const account = session.accounts.get(provider);
+
+  if (provider === "google_drive") {
+    if (!account || !account.accessToken) {
+      return res.json({ provider, backups: [], total: 0 });
+    }
+    try {
+      let token = account.accessToken;
+      if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+        const refreshed = await refreshGoogleAccessToken(account);
+        if (refreshed) token = refreshed;
+      }
+      const gRes = await fetch(
+        "https://www.googleapis.com/drive/v3/files?q=name+contains+'vellumscribe_backup'&fields=files(id,name,size,createdTime,md5Checksum)&orderBy=createdTime+desc",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (gRes.ok) {
+        const data = await gRes.json();
+        const backups = (data.files || []).map((f: any) => ({
+          id: f.id,
+          filename: f.name,
+          size: Number(f.size) || 0,
+          createdAt: f.createdTime || new Date().toISOString(),
+          checksum: f.md5Checksum,
+        }));
+        return res.json({ provider, backups, total: backups.length });
+      }
+    } catch (e) {
+      console.warn("Failed to query Google Drive remote files:", e);
+    }
+  }
+
+  if (provider === "microsoft") {
+    if (!account || !account.accessToken) {
+      return res.json({ provider, backups: [], total: 0 });
+    }
+    try {
+      let token = account.accessToken;
+      if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+        const refreshed = await refreshMicrosoftAccessToken(account);
+        if (refreshed) token = refreshed;
+      }
+      let msRes = await fetch("https://graph.microsoft.com/v1.0/me/drive/special/approot/children", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (msRes.status === 404) {
+        msRes = await fetch("https://graph.microsoft.com/v1.0/me/drive/root:/VellumScribe:/children", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+      if (msRes.ok) {
+        const data = await msRes.json();
+        const backups = (data.value || []).map((f: any) => ({
+          id: f.id,
+          filename: f.name,
+          size: Number(f.size) || 0,
+          createdAt: f.createdDateTime || new Date().toISOString(),
+          checksum: f.file?.hashes?.sha256Hash || f.file?.hashes?.quickXorHash,
+        }));
+        return res.json({ provider, backups, total: backups.length });
+      }
+    } catch (e) {
+      console.warn("Failed to query Microsoft OneDrive remote files:", e);
+    }
+  }
+
   const backups = (session.backups.get(provider) || []).map((b) => ({
     id: b.id,
     filename: b.filename,
@@ -2175,8 +2800,104 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
 
   const account = session.accounts.get(provider);
 
-  // If uploading to real Nextcloud or WebDAV server
-  if (account && (provider === "nextcloud" || provider === "webdav") && account.serverUrl && account.webdavAuth) {
+  // Authenticate and execute real upload to Google Drive
+  if (provider === "google_drive") {
+    if (!account || !account.accessToken) {
+      return res.status(401).json({
+        error: "Google Drive account is not connected. Please authenticate with Google OAuth.",
+      });
+    }
+    let remoteFileId: string;
+    try {
+      const gRes = await uploadToGoogleDrive(account, buffer, filename);
+      remoteFileId = gRes.fileId;
+    } catch (gErr: any) {
+      return res.status(502).json({
+        error: `Google Drive upload failed: ${gErr.message}`,
+      });
+    }
+
+    const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+    const newBackup: CloudBackupRecord = {
+      id: remoteFileId,
+      provider,
+      filename,
+      size: buffer.length,
+      createdAt: new Date().toISOString(),
+      checksum,
+      buffer,
+    };
+
+    let list = session.backups.get(provider) || [];
+    list.unshift(newBackup);
+    if (list.length > MAX_BACKUP_RETENTION) list = list.slice(0, MAX_BACKUP_RETENTION);
+    session.backups.set(provider, list);
+    persistBackupToDisk(sessionId, newBackup);
+
+    return res.json({
+      success: true,
+      backupId: remoteFileId,
+      filename,
+      size: buffer.length,
+      checksum,
+      createdAt: newBackup.createdAt,
+      message: "Backup successfully uploaded to Google Drive.",
+    });
+  }
+
+  // Authenticate and execute real upload to Microsoft OneDrive
+  if (provider === "microsoft") {
+    if (!account || !account.accessToken) {
+      return res.status(401).json({
+        error: "Microsoft OneDrive account is not connected. Please authenticate with Microsoft OAuth.",
+      });
+    }
+    let remoteFileId: string;
+    try {
+      const msRes = await uploadToOneDrive(account, buffer, filename);
+      remoteFileId = msRes.fileId;
+    } catch (msErr: any) {
+      return res.status(502).json({
+        error: `Microsoft OneDrive upload failed: ${msErr.message}`,
+      });
+    }
+
+    const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+    const newBackup: CloudBackupRecord = {
+      id: remoteFileId,
+      provider,
+      filename,
+      size: buffer.length,
+      createdAt: new Date().toISOString(),
+      checksum,
+      buffer,
+    };
+
+    let list = session.backups.get(provider) || [];
+    list.unshift(newBackup);
+    if (list.length > MAX_BACKUP_RETENTION) list = list.slice(0, MAX_BACKUP_RETENTION);
+    session.backups.set(provider, list);
+    persistBackupToDisk(sessionId, newBackup);
+
+    return res.json({
+      success: true,
+      backupId: remoteFileId,
+      filename,
+      size: buffer.length,
+      checksum,
+      createdAt: newBackup.createdAt,
+      message: "Backup successfully uploaded to Microsoft OneDrive.",
+    });
+  }
+
+  // Nextcloud or WebDAV server
+  if (provider === "nextcloud" || provider === "webdav") {
+    if (!account || !account.serverUrl || !account.webdavAuth) {
+      return res.status(401).json({
+        error: `WebDAV account for ${provider} is not connected. Please configure your server URL and credentials.`,
+      });
+    }
+
     try {
       const decryptedAuth = decryptCredential(account.webdavAuth);
       if (!decryptedAuth) {
@@ -2275,8 +2996,14 @@ app.post("/api/cloud/:provider/chunk/init", (req, res) => {
 
 // 8. Resumable Chunked Upload - Upload Chunk
 app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
-  const { uploadId, chunkIndex, chunkBase64 } = req.body;
-  const sessionId = getSessionId(req);
+  const sessionId = getVerifiedSessionId(req);
+  if (!sessionId) {
+    return res.status(401).json({ error: "Unauthorized: Valid signed cloud session required." });
+  }
+
+  const uploadId = req.body?.uploadId || (req.headers["x-upload-id"] as string);
+  const chunkIndex = req.body?.chunkIndex !== undefined ? req.body.chunkIndex : req.headers["x-chunk-index"];
+  const chunkBase64 = req.body?.chunkBase64;
   const chunkSession = chunkSessionsStore.get(uploadId);
 
   if (!chunkSession || chunkSession.sessionId !== sessionId) {
@@ -2284,7 +3011,7 @@ app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
   }
 
   let chunkBuffer: Buffer | null = null;
-  if (Buffer.isBuffer(req.body)) {
+  if (Buffer.isBuffer(req.body) && req.body.length > 0) {
     chunkBuffer = req.body;
   } else if (chunkBase64 && typeof chunkBase64 === "string") {
     chunkBuffer = Buffer.from(chunkBase64, "base64");
@@ -2342,6 +3069,97 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
   }
 
   const account = session.accounts.get(chunkSession.provider);
+
+  // Authenticate and execute real chunked upload commit to Google Drive
+  if (chunkSession.provider === "google_drive") {
+    if (!account || !account.accessToken) {
+      return res.status(401).json({
+        error: "Google Drive account is not connected. Please authenticate with Google OAuth.",
+      });
+    }
+    let remoteFileId: string;
+    try {
+      const gRes = await uploadToGoogleDrive(account, fullBuffer, chunkSession.filename);
+      remoteFileId = gRes.fileId;
+    } catch (gErr: any) {
+      return res.status(502).json({
+        error: `Google Drive upload failed: ${gErr.message}`,
+      });
+    }
+
+    const newBackup: CloudBackupRecord = {
+      id: remoteFileId,
+      provider: chunkSession.provider,
+      filename: chunkSession.filename,
+      size: fullBuffer.length,
+      createdAt: new Date().toISOString(),
+      checksum: calculatedChecksum,
+      buffer: fullBuffer,
+    };
+
+    let list = session.backups.get(chunkSession.provider) || [];
+    list.unshift(newBackup);
+    if (list.length > MAX_BACKUP_RETENTION) list = list.slice(0, MAX_BACKUP_RETENTION);
+    session.backups.set(chunkSession.provider, list);
+    persistBackupToDisk(sessionId, newBackup);
+    chunkSessionsStore.delete(uploadId);
+
+    return res.json({
+      success: true,
+      backupId: remoteFileId,
+      filename: chunkSession.filename,
+      size: fullBuffer.length,
+      checksum: calculatedChecksum,
+      createdAt: newBackup.createdAt,
+      message: "Chunked archive committed successfully to Google Drive.",
+    });
+  }
+
+  // Authenticate and execute real chunked upload commit to Microsoft OneDrive
+  if (chunkSession.provider === "microsoft") {
+    if (!account || !account.accessToken) {
+      return res.status(401).json({
+        error: "Microsoft OneDrive account is not connected. Please authenticate with Microsoft OAuth.",
+      });
+    }
+    let remoteFileId: string;
+    try {
+      const msRes = await uploadToOneDrive(account, fullBuffer, chunkSession.filename);
+      remoteFileId = msRes.fileId;
+    } catch (msErr: any) {
+      return res.status(502).json({
+        error: `Microsoft OneDrive upload failed: ${msErr.message}`,
+      });
+    }
+
+    const newBackup: CloudBackupRecord = {
+      id: remoteFileId,
+      provider: chunkSession.provider,
+      filename: chunkSession.filename,
+      size: fullBuffer.length,
+      createdAt: new Date().toISOString(),
+      checksum: calculatedChecksum,
+      buffer: fullBuffer,
+    };
+
+    let list = session.backups.get(chunkSession.provider) || [];
+    list.unshift(newBackup);
+    if (list.length > MAX_BACKUP_RETENTION) list = list.slice(0, MAX_BACKUP_RETENTION);
+    session.backups.set(chunkSession.provider, list);
+    persistBackupToDisk(sessionId, newBackup);
+    chunkSessionsStore.delete(uploadId);
+
+    return res.json({
+      success: true,
+      backupId: remoteFileId,
+      filename: chunkSession.filename,
+      size: fullBuffer.length,
+      checksum: calculatedChecksum,
+      createdAt: newBackup.createdAt,
+      message: "Chunked archive committed successfully to Microsoft OneDrive.",
+    });
+  }
+
   if (account && (chunkSession.provider === "nextcloud" || chunkSession.provider === "webdav") && account.serverUrl && account.webdavAuth) {
     try {
       const decryptedAuth = decryptCredential(account.webdavAuth);
@@ -2409,10 +3227,11 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
 });
 
 // 10. Restore / Download Backup Archive Endpoint (Session-scoped)
-app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
+app.get("/api/cloud/:provider/restore/:backupId", async (req, res) => {
   const { provider, backupId } = req.params;
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
+  const account = session.accounts.get(provider);
   const list = session.backups.get(provider) || [];
   let backup = list.find((b) => b.id === backupId);
 
@@ -2422,14 +3241,63 @@ app.get("/api/cloud/:provider/restore/:backupId", (req, res) => {
     backup = diskList.find((b) => b.id === backupId && b.provider === provider);
   }
 
-  if (!backup) {
-    return res.status(404).json({ error: "Backup archive not found in your session." });
+  if (backup) {
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Disposition", `attachment; filename="${backup.filename}"`);
+    res.setHeader("Content-Length", backup.buffer.length);
+    return res.send(backup.buffer);
   }
 
-  res.setHeader("Content-Type", "application/octet-stream");
-  res.setHeader("Content-Disposition", `attachment; filename="${backup.filename}"`);
-  res.setHeader("Content-Length", backup.buffer.length);
-  res.send(backup.buffer);
+  // If not found locally, attempt to stream directly from Google Drive or OneDrive
+  if (provider === "google_drive" && account && account.accessToken) {
+    try {
+      let token = account.accessToken;
+      if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+        const refreshed = await refreshGoogleAccessToken(account);
+        if (refreshed) token = refreshed;
+      }
+      const gRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(backupId)}?alt=media`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (gRes.ok) {
+        const arrayBuf = await gRes.arrayBuffer();
+        const buf = Buffer.from(arrayBuf);
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="google_drive_backup_${backupId}.json.gz"`);
+        res.setHeader("Content-Length", buf.length);
+        return res.send(buf);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch restore archive from Google Drive:", e);
+    }
+  }
+
+  if (provider === "microsoft" && account && account.accessToken) {
+    try {
+      let token = account.accessToken;
+      if (account.expiresAt && Date.now() > account.expiresAt - 60000 && account.refreshToken) {
+        const refreshed = await refreshMicrosoftAccessToken(account);
+        if (refreshed) token = refreshed;
+      }
+      const msRes = await fetch(
+        `https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(backupId)}/content`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (msRes.ok) {
+        const arrayBuf = await msRes.arrayBuffer();
+        const buf = Buffer.from(arrayBuf);
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="onedrive_backup_${backupId}.json.gz"`);
+        res.setHeader("Content-Length", buf.length);
+        return res.send(buf);
+      }
+    } catch (e) {
+      console.warn("Failed to fetch restore archive from Microsoft OneDrive:", e);
+    }
+  }
+
+  return res.status(404).json({ error: "Backup archive not found in your session or remote storage." });
 });
 
 // 11. Audio Conversion Endpoint (FFmpeg-powered universal audio transcoder)

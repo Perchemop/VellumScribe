@@ -781,7 +781,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               <div className="flex items-center justify-between">
                 <button
                   id="transcribe-audio-btn"
-                  onClick={handleTranscribeAudio}
+                  onClick={() => handleTranscribeAudio()}
                   disabled={isTranscribing}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 hover:bg-indigo-100 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
                 >

@@ -571,12 +571,27 @@ export class StorageManager {
 
     // Modern V2 / V1 encrypted payload decryption
     if (note.encrypted_payload && note.pin_salt) {
-      const { deriveEncryptionKey, decryptNotePayloadV2, decryptNotePayload } = await import('./cryptoUtils');
+      const { deriveEncryptionKey, decryptNotePayloadV2, decryptNotePayload, migrateLegacyV0NotePayload, encryptNotePayloadV2 } = await import('./cryptoUtils');
       const sessionKey = await deriveEncryptionKey(enteredPin, note.pin_salt);
       if (sessionKey) {
         let decrypted = await decryptNotePayloadV2(note.encrypted_payload, sessionKey);
         if (!decrypted) {
           decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+        }
+        if (!decrypted) {
+          // Check for legacy v0 XOR payload and automatically migrate to AES-256-GCM v2
+          try {
+            const rawParsed = JSON.parse(note.encrypted_payload);
+            if (rawParsed.v === 0) {
+              decrypted = await migrateLegacyV0NotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
+              if (decrypted) {
+                const reEncrypted = await encryptNotePayloadV2(decrypted, sessionKey);
+                SqliteEngine.run('UPDATE notes SET encrypted_payload = ? WHERE id = ?', [reEncrypted, note.id]);
+                note.encrypted_payload = reEncrypted;
+                AppLogger.info('StorageManager', `Migrated note ${note.id} from legacy v0 XOR to AES-256-GCM v2.`);
+              }
+            }
+          } catch {}
         }
         if (decrypted) {
           return { success: true, payload: decrypted, sessionKey };
@@ -631,78 +646,111 @@ export class StorageManager {
     const attachmentReferences = Array.from(allMediaKeys);
 
     // Staged fail-closed media encryption pipeline
-    const stagedEncrypted = new Map<string, Blob>();
-    for (const mediaKey of attachmentReferences) {
-      const rawBlob = await MediaRepository.getBinary(mediaKey);
-      if (rawBlob) {
-        let isAlreadyEncrypted = false;
-        try {
-          const headerText = await rawBlob.slice(0, 50).text();
-          if (headerText.includes('vellum_enc_v1')) isAlreadyEncrypted = true;
-        } catch {}
+    const stagedEncrypted = new Map<string, { blob: Blob; plainChecksum: string; cipherChecksum: string; size: number }>();
+    const rollbackPlaintextBlobs = new Map<string, Blob>();
 
-        if (!isAlreadyEncrypted) {
+    const computeBlobSha256 = async (blob: Blob): Promise<string> => {
+      try {
+        const buf = await blob.arrayBuffer();
+        const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+        return Array.from(new Uint8Array(hashBuf), (b) => b.toString(16).padStart(2, '0')).join('');
+      } catch {
+        return '';
+      }
+    };
+
+    try {
+      for (const mediaKey of attachmentReferences) {
+        const rawBlob = await MediaRepository.getBinary(mediaKey);
+        if (rawBlob) {
+          rollbackPlaintextBlobs.set(mediaKey, rawBlob);
+
+          let isAlreadyEncrypted = false;
           try {
+            const headerText = await rawBlob.slice(0, 50).text();
+            if (headerText.includes('vellum_enc_v1')) isAlreadyEncrypted = true;
+          } catch {}
+
+          if (!isAlreadyEncrypted) {
+            const plainChecksum = await computeBlobSha256(rawBlob);
             const encryptedBlob = await SecureMediaRepository.encryptBlobWithKey(rawBlob, key);
+
             // Verify roundtrip decryption immediately
             const roundTrip = await SecureMediaRepository.decryptBlobWithKey(encryptedBlob, key);
             if (!roundTrip || roundTrip.size !== rawBlob.size) {
               throw new Error(`Integrity verification failed for encrypted attachment: ${mediaKey}`);
             }
-            stagedEncrypted.set(mediaKey, encryptedBlob);
-          } catch (encErr: any) {
-            AppLogger.error('StorageManager', `Attachment encryption failed for ${mediaKey}, aborting lock operation.`, encErr);
-            throw new Error(`Note lock failed: Attachment ${mediaKey} could not be securely encrypted (${encErr?.message || 'Verification failed'}). Note remains unlocked.`);
+            const cipherChecksum = await computeBlobSha256(encryptedBlob);
+            stagedEncrypted.set(mediaKey, {
+              blob: encryptedBlob,
+              plainChecksum,
+              cipherChecksum,
+              size: encryptedBlob.size,
+            });
           }
         }
       }
-    }
 
-    const payload: NotePayloadData = {
-      payload_version: 1,
-      title: lockMode === 'private' ? (currentPayload?.title || note.title) : undefined,
-      body: currentPayload?.body !== undefined ? currentPayload.body : note.body,
-      checklist_items: currentPayload?.checklist_items !== undefined ? currentPayload.checklist_items : note.checklist_items,
-      sketch_data: currentPayload?.sketch_data !== undefined ? currentPayload.sketch_data : note.sketch_data,
-      sketch_media_key: note.sketch_media_key,
-      attachment_references: attachmentReferences,
-      tags: lockMode === 'private' ? (currentPayload?.tags || note.tags) : undefined,
-      protected_metadata: {
+      const payload: NotePayloadData = {
+        payload_version: 1,
+        title: lockMode === 'private' ? (currentPayload?.title || note.title) : undefined,
+        body: currentPayload?.body !== undefined ? currentPayload.body : note.body,
+        checklist_items: currentPayload?.checklist_items !== undefined ? currentPayload.checklist_items : note.checklist_items,
+        sketch_data: currentPayload?.sketch_data !== undefined ? currentPayload.sketch_data : note.sketch_data,
+        sketch_media_key: note.sketch_media_key,
+        attachment_references: attachmentReferences,
+        tags: lockMode === 'private' ? (currentPayload?.tags || note.tags) : undefined,
+        protected_metadata: {
+          security_type: securityType,
+          reminder_at: note.reminder_at,
+          location_name: note.location_name,
+          latitude: note.latitude,
+          longitude: note.longitude,
+        },
+        lock_mode: lockMode,
+      };
+
+      const encryptedPayload = await encryptNotePayloadV2(payload, key);
+
+      // Commit encrypted media blobs to disk
+      for (const [mediaKey, item] of stagedEncrypted.entries()) {
+        await MediaRepository.putBinary(mediaKey, item.blob);
+        SqliteEngine.run(
+          `UPDATE media_files 
+           SET encryption_state = 'encrypted', encryption_version = 1, byte_size = ?, plaintext_checksum = ?, ciphertext_checksum = ? 
+           WHERE media_key = ?`,
+          [item.size, item.plainChecksum, item.cipherChecksum, mediaKey]
+        );
+      }
+
+      // Atomically commit note locking to SQLite
+      return this.updateNote(id, {
+        is_locked: true,
+        lock_mode: lockMode,
         security_type: securityType,
-        reminder_at: note.reminder_at,
-        location_name: note.location_name,
-        latitude: note.latitude,
-        longitude: note.longitude,
-      },
-      lock_mode: lockMode,
-    };
-
-    let encryptedPayload: string;
-    try {
-      encryptedPayload = await encryptNotePayloadV2(payload, key);
-    } catch (payErr: any) {
-      throw new Error(`Note payload encryption failed: ${payErr?.message || 'Cipher error'}. Note remains unlocked.`);
+        pin_hash: hash,
+        pin_salt: salt,
+        encrypted_payload: encryptedPayload,
+        title: lockMode === 'private' ? '🔒 Locked Note' : note.title,
+        body: '',
+        checklist_items: [],
+        sketch_data: undefined,
+        tags: lockMode === 'private' ? [] : note.tags,
+      });
+    } catch (err: any) {
+      AppLogger.error('StorageManager', 'Note lock pipeline failed; executing fail-closed rollback.', err);
+      // Rollback media blobs back to plaintext
+      for (const [mediaKey, origBlob] of rollbackPlaintextBlobs.entries()) {
+        try {
+          await MediaRepository.putBinary(mediaKey, origBlob);
+          SqliteEngine.run(
+            `UPDATE media_files SET encryption_state = 'plaintext', encryption_version = 0, byte_size = ?, plaintext_checksum = NULL, ciphertext_checksum = NULL WHERE media_key = ?`,
+            [origBlob.size, mediaKey]
+          );
+        } catch {}
+      }
+      throw new Error(`Note lock failed: ${err?.message || 'Encryption error'}. Note remains safely unlocked.`);
     }
-
-    // Commit encrypted media blobs to disk
-    for (const [mediaKey, encryptedBlob] of stagedEncrypted.entries()) {
-      await MediaRepository.putBinary(mediaKey, encryptedBlob);
-    }
-
-    // Atomically commit note locking to SQLite
-    return this.updateNote(id, {
-      is_locked: true,
-      lock_mode: lockMode,
-      security_type: securityType,
-      pin_hash: hash,
-      pin_salt: salt,
-      encrypted_payload: encryptedPayload,
-      title: lockMode === 'private' ? '🔒 Locked Note' : note.title,
-      body: '',
-      checklist_items: [],
-      sketch_data: undefined,
-      tags: lockMode === 'private' ? [] : note.tags,
-    });
   }
 
   public static async setNotePinLock(
@@ -726,6 +774,7 @@ export class StorageManager {
 
     // Decrypt any encrypted media binaries back to plaintext if session key is available
     if (verifyResult.sessionKey) {
+      const rollbackEncryptedBlobs = new Map<string, Blob>();
       try {
         const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
         const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
@@ -737,14 +786,37 @@ export class StorageManager {
         if (note.sketch_media_key) allMediaKeys.add(note.sketch_media_key);
 
         const { SecureMediaRepository, MediaRepository } = await import('./MediaRepository');
+        const decryptedBinaries = new Map<string, Blob>();
+
         for (const mediaKey of allMediaKeys) {
-          const decryptedBlob = await SecureMediaRepository.getEncryptedWithKey(mediaKey, verifyResult.sessionKey);
-          if (decryptedBlob) {
-            await MediaRepository.putBinary(mediaKey, decryptedBlob);
+          const encBlob = await MediaRepository.getBinary(mediaKey);
+          if (encBlob) {
+            rollbackEncryptedBlobs.set(mediaKey, encBlob);
+            const decryptedBlob = await SecureMediaRepository.getEncryptedWithKey(mediaKey, verifyResult.sessionKey);
+            if (!decryptedBlob) {
+              throw new Error(`Failed to decrypt attachment binary: ${mediaKey}`);
+            }
+            decryptedBinaries.set(mediaKey, decryptedBlob);
           }
         }
-      } catch (e) {
-        AppLogger.warn('StorageManager', 'Associated media decryption during note unlock had warnings:', e);
+
+        // Commit decrypted plaintext binaries
+        for (const [mediaKey, decBlob] of decryptedBinaries.entries()) {
+          await MediaRepository.putBinary(mediaKey, decBlob);
+          SqliteEngine.run(
+            `UPDATE media_files SET encryption_state = 'plaintext', encryption_version = 0, byte_size = ?, plaintext_checksum = NULL, ciphertext_checksum = NULL WHERE media_key = ?`,
+            [decBlob.size, mediaKey]
+          );
+        }
+      } catch (e: any) {
+        AppLogger.error('StorageManager', 'Associated media decryption during note unlock failed; rolling back', e);
+        const { MediaRepository } = await import('./MediaRepository');
+        for (const [mediaKey, encBlob] of rollbackEncryptedBlobs.entries()) {
+          try {
+            await MediaRepository.putBinary(mediaKey, encBlob);
+          } catch {}
+        }
+        throw new Error(`Failed to unlock note: Attachment decryption error (${e?.message || 'Decryption failed'}). Note remains locked.`);
       }
     }
 
@@ -1365,13 +1437,115 @@ export class StorageManager {
     return CloudBackupCrypto.encryptArchive(json, customPassphrase);
   }
 
-  public static async importCloudBackupArchive(blobOrBuffer: Blob | ArrayBuffer | string, customPassphrase?: string): Promise<{ success: boolean; restoredCount?: number; error?: string }> {
+  public static async importCloudBackupArchive(
+    blobOrBuffer: Blob | ArrayBuffer | string,
+    optionsOrPassphrase?: string | { mode?: 'exact' | 'merge'; customPassphrase?: string; allowLegacyUnencrypted?: boolean }
+  ): Promise<{ success: boolean; restoredCount?: number; error?: string }> {
     try {
-      const decryptedJson = await CloudBackupCrypto.decryptArchive(blobOrBuffer, customPassphrase);
+      const customPassphrase = typeof optionsOrPassphrase === 'string' ? optionsOrPassphrase : optionsOrPassphrase?.customPassphrase;
+      const mode = typeof optionsOrPassphrase === 'object' ? optionsOrPassphrase?.mode || 'merge' : 'merge';
+      const allowLegacy = typeof optionsOrPassphrase === 'object' ? Boolean(optionsOrPassphrase?.allowLegacyUnencrypted) : false;
+
+      const decryptedJson = await CloudBackupCrypto.decryptArchive(blobOrBuffer, {
+        userPassphrase: customPassphrase,
+        allowLegacyUnencrypted: allowLegacy,
+      });
+
+      if (mode === 'exact') {
+        return this.exactRestoreFromDump(decryptedJson);
+      }
       return this.importFullDump(decryptedJson);
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to decrypt and restore cloud backup archive.' };
     }
+  }
+
+  /**
+   * Exact atomic restore: replaces existing database records with backup archive.
+   * Takes a pre-restore binary snapshot and rolls back automatically if verification fails.
+   */
+  public static exactRestoreFromDump(jsonString: string): { success: boolean; error?: string; restoredCount?: number } {
+    const preRollbackBinary = SqliteEngine.exportDatabaseBinary();
+    try {
+      const bundle = JSON.parse(jsonString);
+      const schema = bundle.schema || bundle;
+
+      if (!schema.notes || !Array.isArray(schema.notes)) {
+        return { success: false, error: 'Invalid backup file: Missing notes dataset.' };
+      }
+
+      SqliteEngine.transaction(() => {
+        // Clear existing tables
+        SqliteEngine.run('DELETE FROM events;');
+        SqliteEngine.run('DELETE FROM checklists;');
+        SqliteEngine.run('DELETE FROM note_versions;');
+        SqliteEngine.run('DELETE FROM recordings;');
+        SqliteEngine.run('DELETE FROM transcripts;');
+        SqliteEngine.run('DELETE FROM ocr_scans;');
+        SqliteEngine.run('DELETE FROM media_files;');
+        SqliteEngine.run('DELETE FROM note_tags;');
+        SqliteEngine.run('DELETE FROM notes_fts;');
+        SqliteEngine.run('DELETE FROM notes;');
+
+        if (schema.events && Array.isArray(schema.events)) {
+          for (const evt of schema.events) {
+            SqliteRepository.saveEvent(evt);
+          }
+        }
+        for (const note of schema.notes) {
+          SqliteRepository.saveNote(note);
+        }
+        if (schema.recordings && Array.isArray(schema.recordings)) {
+          for (const rec of schema.recordings) {
+            SqliteRepository.saveRecording(rec);
+          }
+        }
+        if (schema.transcripts && Array.isArray(schema.transcripts)) {
+          for (const tr of schema.transcripts) {
+            SqliteRepository.saveTranscript(tr);
+          }
+        }
+        if (schema.ocr_scans && Array.isArray(schema.ocr_scans)) {
+          for (const scan of schema.ocr_scans) {
+            SqliteRepository.saveOcrScan(scan);
+          }
+        }
+
+        // Rebuild full-text search table
+        SqliteEngine.run('INSERT INTO notes_fts(rowid, title, body, tags) SELECT id, title, body, tags FROM notes;');
+      });
+
+      // Verify PRAGMA integrity
+      const check = SqliteEngine.query<{ integrity_check: string }>('PRAGMA integrity_check;');
+      if (!check || check.length === 0 || check[0].integrity_check !== 'ok') {
+        throw new Error('Database integrity check failed after exact restore.');
+      }
+
+      this.refreshCaches();
+      AppLogger.info('StorageManager', `Exact restore completed successfully: ${schema.notes.length} notes restored.`);
+      return { success: true, restoredCount: schema.notes.length };
+    } catch (e: any) {
+      AppLogger.error('StorageManager', 'Exact restore failed; executing database binary rollback', e);
+      if (preRollbackBinary) {
+        try {
+          SqliteEngine.importDatabaseBinary(preRollbackBinary);
+          this.refreshCaches();
+        } catch (rbErr) {
+          AppLogger.error('StorageManager', 'Critical: Pre-restore binary rollback failed', rbErr);
+        }
+      }
+      return { success: false, error: e?.message || 'Exact restore failed.' };
+    }
+  }
+
+  public static importLegacyUnencryptedBackup(jsonString: string, userConfirmed: boolean): { success: boolean; error?: string; restoredCount?: number } {
+    if (!userConfirmed) {
+      return {
+        success: false,
+        error: 'User confirmation required to import unencrypted legacy backup.',
+      };
+    }
+    return this.importFullDump(jsonString);
   }
 
   public static importFullDump(jsonString: string): { success: boolean; error?: string; restoredCount?: number } {
