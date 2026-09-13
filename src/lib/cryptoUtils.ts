@@ -309,22 +309,38 @@ export async function decryptNotePayload(
         }
       }
     }
-
-    if (parsed.v === 0 && parsed.data) {
-      const ciphertext = fromHex(parsed.data);
-      const encoder = new TextEncoder();
-      const keyBytes = encoder.encode(pin + salt);
-      const decryptedBytes = new Uint8Array(ciphertext.length);
-      for (let i = 0; i < ciphertext.length; i++) {
-        decryptedBytes[i] = ciphertext[i] ^ keyBytes[i % keyBytes.length];
-      }
-      const decoder = new TextDecoder();
-      return JSON.parse(decoder.decode(decryptedBytes));
-    }
   } catch (e) {
     console.error('Failed to decrypt note payload', e);
   }
   return null;
+}
+
+/**
+ * Migration-only importer for legacy v0 XOR payloads.
+ * Decrypts strictly to allow immediate re-encryption into AES-256-GCM v2.
+ * Never called during regular note reading or writing.
+ */
+export async function migrateLegacyV0NotePayload(
+  encryptedPayload: string,
+  pin: string,
+  salt: string
+): Promise<NotePayloadData | null> {
+  try {
+    const parsed = JSON.parse(encryptedPayload);
+    if (parsed.v !== 0 || !parsed.data) return null;
+
+    const ciphertext = fromHex(parsed.data);
+    const encoder = new TextEncoder();
+    const keyBytes = encoder.encode(pin + salt);
+    const decryptedBytes = new Uint8Array(ciphertext.length);
+    for (let i = 0; i < ciphertext.length; i++) {
+      decryptedBytes[i] = ciphertext[i] ^ keyBytes[i % keyBytes.length];
+    }
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(decryptedBytes));
+  } catch {
+    return null;
+  }
 }
 
 export async function encryptBinaryPayloadWithKey(payload: Uint8Array, key: CryptoKey): Promise<{ iv: string; data: string }> {

@@ -33,8 +33,18 @@ export class CloudBackupCrypto {
     if (this.cachedVaultKey) return this.cachedVaultKey;
     try {
       const { AndroidKeystoreManager } = await import('./keystore');
+      const allSecrets = AndroidKeystoreManager.listSecrets();
+      const vaultSecretMeta = allSecrets.find((s) => s.alias === 'client_vault_key');
+
       let key = await AndroidKeystoreManager.getSecret('client_vault_key');
       if (!key) {
+        // If master vault key exists in keystore metadata but decryption failed, FAIL CLOSED
+        if (vaultSecretMeta) {
+          throw new Error(
+            'Device master vault key is registered in secure storage metadata but could not be decrypted. Failing closed to prevent data corruption.'
+          );
+        }
+
         const legacyKey = typeof localStorage !== 'undefined' ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE) : null;
         if (legacyKey && legacyKey.trim()) {
           key = legacyKey.trim();
@@ -53,13 +63,28 @@ export class CloudBackupCrypto {
       }
       this.cachedVaultKey = key;
       return key;
-    } catch {
+    } catch (err: any) {
+      if (err?.message?.includes('Failing closed')) {
+        throw err;
+      }
       return this.getOrCreateClientVaultKey();
     }
   }
 
   public static getOrCreateClientVaultKey(): string {
     if (this.cachedVaultKey) return this.cachedVaultKey;
+    // Check if key was registered in keystore metadata - fail closed if present but unreadable
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('vellumscribe_keystore_metadata_v2') : null;
+      if (raw && raw.includes('"alias":"client_vault_key"')) {
+        throw new Error(
+          'Device master vault key is registered in secure storage metadata but could not be retrieved synchronously. Refusing to create ephemeral key.'
+        );
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('Refusing')) throw e;
+    }
+
     // Volatile in-memory vault key - never stored in localStorage
     if (typeof localStorage !== 'undefined') {
       const legacyKey = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
@@ -214,7 +239,13 @@ export class CloudBackupCrypto {
   /**
    * Decrypts AES-256-GCM envelope and decompresses GZIP archive back to JSON string.
    */
-  public static async decryptArchive(data: Blob | ArrayBuffer | string, userPassphrase?: string): Promise<string> {
+  public static async decryptArchive(
+    data: Blob | ArrayBuffer | string,
+    passphraseOrOptions?: string | { userPassphrase?: string; allowLegacyUnencrypted?: boolean }
+  ): Promise<string> {
+    const userPassphrase = typeof passphraseOrOptions === 'string' ? passphraseOrOptions : passphraseOrOptions?.userPassphrase;
+    const allowLegacy = typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
+
     let rawText = '';
     if (typeof data === 'string') {
       rawText = data;
@@ -232,9 +263,14 @@ export class CloudBackupCrypto {
       throw new Error('Invalid backup archive: Content is not valid JSON or encrypted envelope.');
     }
 
-    // Legacy unencrypted JSON fallback support for pre-v3 exports
+    // Legacy unencrypted JSON fallback support for pre-v3 exports: require explicit migration flag
     if (!envelope.vellumscribe_archive && (envelope.schema || envelope.version)) {
-      AppLogger.warn('CloudBackupCrypto', 'Importing legacy unencrypted backup bundle.');
+      if (!allowLegacy) {
+        throw new Error(
+          'Legacy unencrypted backup detected. Unencrypted backups cannot be restored via encrypted cloud restore. Please use explicit Legacy Unencrypted Import mode.'
+        );
+      }
+      AppLogger.warn('CloudBackupCrypto', 'Importing legacy unencrypted backup bundle via explicit migration mode.');
       return rawText;
     }
 

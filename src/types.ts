@@ -100,6 +100,55 @@ export interface TranscriptRecord {
   created_at: string;
   confidence?: number;
   speaker_count?: number;
+  is_partial?: boolean;
+  completed_segments?: number;
+  total_segments?: number;
+  session_id?: string;
+}
+
+export interface TranscriptionSegment {
+  index: number;
+  startSec: number;
+  endSec: number;
+  startStr: string;
+  endStr: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  text?: string;
+  error?: string;
+}
+
+export interface TranscriptionProgress {
+  percent: number; // 0 to 100
+  status: string; // User-facing status label
+  phase: 'idle' | 'preparing' | 'uploading' | 'transcribing' | 'completed' | 'error' | 'paused';
+  currentSegment?: number;
+  totalSegments?: number;
+  startStr?: string;
+  endStr?: string;
+  partialTranscript?: string;
+  completedSegmentsCount?: number;
+  sessionId?: string;
+  error?: string;
+  canResume?: boolean;
+}
+
+export interface PartialTranscriptionSession {
+  sessionId: string;
+  recordingId?: number | string;
+  mediaKey?: string;
+  audioDurationSeconds: number;
+  totalSegments: number;
+  completedSegments: {
+    index: number;
+    startStr: string;
+    endStr: string;
+    text: string;
+  }[];
+  nextSegmentIndex: number;
+  partialTranscript: string;
+  lastError?: string;
+  status: 'in_progress' | 'paused' | 'failed' | 'completed';
+  updatedAt: string;
 }
 
 export interface OcrScanRecord {

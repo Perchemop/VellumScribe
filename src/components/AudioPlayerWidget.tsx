@@ -366,7 +366,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
 
           {/* AI Transcribe / Re-transcribe action */}
           <button
-            onClick={handleTranscribeWithAi}
+            onClick={() => handleTranscribeWithAi()}
             disabled={isTranscribing}
             title={transcript ? "Re-transcribe recording with AI" : "Transcribe recording to text"}
             className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-medium flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer"
@@ -513,7 +513,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
               </div>
               <button
                 type="button"
-                onClick={handleTranscribeWithAi}
+                onClick={() => handleTranscribeWithAi()}
                 disabled={isTranscribing}
                 className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md text-xs flex items-center gap-1 transition-all disabled:opacity-50 shrink-0 cursor-pointer"
               >

@@ -2,6 +2,8 @@ import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
 import { PrivacyManager } from './privacyManager';
+import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
+import { TranscriptionProgressManager } from './transcriptionProgressManager';
 
 export interface OcrResult {
   ocrText: string;
@@ -12,6 +14,16 @@ export interface OcrResult {
 export interface TranscribeResult {
   transcript: string;
   source?: string;
+  isPartial?: boolean;
+  completedSegments?: number;
+  totalSegments?: number;
+}
+
+export interface TranscribeAudioOptions {
+  onProgress?: (progress: TranscriptionProgress) => void;
+  resumeSession?: PartialTranscriptionSession | null;
+  recordingId?: number | string;
+  signal?: AbortSignal;
 }
 
 export interface MeetingMinutesResult {
@@ -504,14 +516,370 @@ export class GeminiApiService {
   }
 
   /**
-   * Transcribe recorded audio with multi-provider fallback and long-recording chunking
+   * Resumable Multi-Segment Audio Transcription using server session pipeline
+   */
+  private static async transcribeWithResumableSession(
+    audioBlobOrBase64: Blob | string,
+    cleanBase64: string,
+    sanitizedMime: string,
+    originalFileName?: string,
+    options?: TranscribeAudioOptions
+  ): Promise<TranscribeResult> {
+    const sessionKey = options?.recordingId
+      ? String(options.recordingId)
+      : originalFileName || 'current_recording';
+
+    const isBlob = audioBlobOrBase64 instanceof Blob;
+    const isLargeAudio = (isBlob && audioBlobOrBase64.size > 8 * 1024 * 1024) || (!isBlob && cleanBase64.length > 10 * 1024 * 1024);
+
+    let uploadId: string | undefined;
+
+    // 1. If audio is large, chunk upload it first with upload progress
+    if (isLargeAudio) {
+      options?.onProgress?.({
+        percent: 5,
+        status: 'Uploading audio data in optimized chunks...',
+        phase: 'uploading',
+      });
+
+      uploadId = `up_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const headers = await this.getHeaders();
+      headers['Content-Type'] = 'application/json';
+
+      if (isBlob) {
+        const blob = audioBlobOrBase64;
+        const CHUNK_SIZE = 4 * 1024 * 1024;
+        const totalChunks = Math.max(1, Math.ceil(blob.size / CHUNK_SIZE));
+
+        for (let i = 0; i < totalChunks; i++) {
+          if (options?.signal?.aborted) throw new Error('Transcription aborted.');
+
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(blob.size, (i + 1) * CHUNK_SIZE);
+          const slice = blob.slice(start, end);
+
+          const sliceBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const res = reader.result as string;
+              resolve(res.includes(',') ? res.split(',')[1] : res);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(slice);
+          });
+
+          const res = await fetch('/api/audio/chunk-upload', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              uploadId,
+              chunkIndex: i,
+              totalChunks,
+              chunkBase64: sliceBase64,
+              originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+              mimeType: sanitizedMime,
+              assembleOnly: true,
+            }),
+            signal: options?.signal,
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Upload chunk ${i + 1}/${totalChunks} failed`);
+          }
+
+          const uploadPct = Math.round(((i + 1) / totalChunks) * 18);
+          options?.onProgress?.({
+            percent: uploadPct,
+            status: `Uploaded audio chunk ${i + 1} of ${totalChunks} (${Math.round(((i + 1) / totalChunks) * 100)}%)`,
+            phase: 'uploading',
+          });
+        }
+      } else {
+        // Base64 chunk upload
+        const CHUNK_SIZE = 4 * 1024 * 1024;
+        const totalChunks = Math.max(1, Math.ceil(cleanBase64.length / CHUNK_SIZE));
+
+        for (let i = 0; i < totalChunks; i++) {
+          if (options?.signal?.aborted) throw new Error('Transcription aborted.');
+
+          const start = i * CHUNK_SIZE;
+          const end = Math.min(cleanBase64.length, (i + 1) * CHUNK_SIZE);
+          const sliceBase64 = cleanBase64.slice(start, end);
+
+          const res = await fetch('/api/audio/chunk-upload', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              uploadId,
+              chunkIndex: i,
+              totalChunks,
+              chunkBase64: sliceBase64,
+              originalFileName: originalFileName || 'recording.wav',
+              mimeType: sanitizedMime,
+              assembleOnly: true,
+            }),
+            signal: options?.signal,
+          });
+
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error || `Upload chunk ${i + 1}/${totalChunks} failed`);
+          }
+
+          const uploadPct = Math.round(((i + 1) / totalChunks) * 18);
+          options?.onProgress?.({
+            percent: uploadPct,
+            status: `Uploaded audio chunk ${i + 1} of ${totalChunks} (${Math.round(((i + 1) / totalChunks) * 100)}%)`,
+            phase: 'uploading',
+          });
+        }
+      }
+    }
+
+    // 2. Initialize Session
+    options?.onProgress?.({
+      percent: 20,
+      status: 'Analyzing audio characteristics & segment boundaries...',
+      phase: 'preparing',
+    });
+
+    const initHeaders = await this.getHeaders();
+    initHeaders['Content-Type'] = 'application/json';
+
+    const initRes = await fetch('/api/audio/transcribe-session/init', {
+      method: 'POST',
+      headers: initHeaders,
+      body: JSON.stringify({
+        uploadId,
+        audioBase64: uploadId ? undefined : cleanBase64,
+        mimeType: sanitizedMime,
+        originalFileName: originalFileName || 'recording.wav',
+      }),
+      signal: options?.signal,
+    });
+
+    if (!initRes.ok) {
+      const errData = await initRes.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to initialize transcription session.');
+    }
+
+    const initData = await initRes.json();
+    const sessionId: string = initData.sessionId;
+    const totalSegments: number = initData.totalSegments || 1;
+    const serverSegments: any[] = initData.segments || [];
+
+    // Check for prior partial progress to resume
+    const existingSession = options?.resumeSession || TranscriptionProgressManager.getSession(sessionKey);
+    const completedMap = new Map<number, { index: number; startStr: string; endStr: string; text: string }>();
+
+    if (existingSession && existingSession.completedSegments) {
+      existingSession.completedSegments.forEach((seg) => {
+        if (seg.text && seg.text.trim()) {
+          completedMap.set(seg.index, seg);
+        }
+      });
+    }
+
+    // Helper to generate current partial transcript
+    const getPartialTranscript = (): string => {
+      const sorted = Array.from(completedMap.values()).sort((a, b) => a.index - b.index);
+      if (sorted.length === 0) return '';
+      if (sorted.length === 1 && totalSegments === 1) return sorted[0].text;
+      return sorted.map((s) => `### [${s.startStr} - ${s.endStr}]\n${s.text}`).join('\n\n');
+    };
+
+    // Save initial state
+    const currentSessionState: PartialTranscriptionSession = {
+      sessionId,
+      recordingId: options?.recordingId,
+      mediaKey: originalFileName,
+      audioDurationSeconds: initData.durationSec || 0,
+      totalSegments,
+      completedSegments: Array.from(completedMap.values()),
+      nextSegmentIndex: 0,
+      partialTranscript: getPartialTranscript(),
+      status: 'in_progress',
+      updatedAt: new Date().toISOString(),
+    };
+    TranscriptionProgressManager.saveSession(sessionKey, currentSessionState);
+
+    // 3. Process each segment
+    for (let i = 0; i < totalSegments; i++) {
+      if (options?.signal?.aborted) {
+        currentSessionState.status = 'paused';
+        currentSessionState.nextSegmentIndex = i;
+        currentSessionState.partialTranscript = getPartialTranscript();
+        TranscriptionProgressManager.saveSession(sessionKey, currentSessionState);
+        throw new Error('Transcription paused by user.');
+      }
+
+      const segInfo = serverSegments[i] || { startStr: '00:00', endStr: '05:00' };
+
+      // If already completed in resumed session, report and skip
+      if (completedMap.has(i)) {
+        const seg = completedMap.get(i)!;
+        const currentPct = 20 + Math.round(((i + 1) / totalSegments) * 75);
+        options?.onProgress?.({
+          percent: currentPct,
+          status: `Segment ${i + 1} of ${totalSegments} [${seg.startStr} - ${seg.endStr}] already transcribed (restored)`,
+          phase: 'transcribing',
+          currentSegment: i + 1,
+          totalSegments,
+          startStr: seg.startStr,
+          endStr: seg.endStr,
+          partialTranscript: getPartialTranscript(),
+          completedSegmentsCount: completedMap.size,
+          sessionId,
+          canResume: true,
+        });
+        continue;
+      }
+
+      const progressPct = 20 + Math.round((i / totalSegments) * 75);
+      options?.onProgress?.({
+        percent: progressPct,
+        status: `Transcribing segment ${i + 1} of ${totalSegments} [${segInfo.startStr} - ${segInfo.endStr}] with Gemini AI...`,
+        phase: 'transcribing',
+        currentSegment: i + 1,
+        totalSegments,
+        startStr: segInfo.startStr,
+        endStr: segInfo.endStr,
+        partialTranscript: getPartialTranscript(),
+        completedSegmentsCount: completedMap.size,
+        sessionId,
+        canResume: true,
+      });
+
+      try {
+        const segRes = await fetch('/api/audio/transcribe-session/segment', {
+          method: 'POST',
+          headers: initHeaders,
+          body: JSON.stringify({ sessionId, segmentIndex: i }),
+          signal: options?.signal,
+        });
+
+        if (!segRes.ok) {
+          const errData = await segRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Segment ${i + 1} transcription failed.`);
+        }
+
+        const segData = await segRes.json();
+        completedMap.set(i, {
+          index: i,
+          startStr: segData.startStr || segInfo.startStr,
+          endStr: segData.endStr || segInfo.endStr,
+          text: segData.text || '',
+        });
+
+        currentSessionState.completedSegments = Array.from(completedMap.values());
+        currentSessionState.nextSegmentIndex = i + 1;
+        currentSessionState.partialTranscript = getPartialTranscript();
+        currentSessionState.status = 'in_progress';
+        currentSessionState.lastError = undefined;
+        TranscriptionProgressManager.saveSession(sessionKey, currentSessionState);
+
+        const donePct = 20 + Math.round(((i + 1) / totalSegments) * 75);
+        options?.onProgress?.({
+          percent: donePct,
+          status: `Segment ${i + 1} of ${totalSegments} completed [${segInfo.startStr} - ${segInfo.endStr}]`,
+          phase: 'transcribing',
+          currentSegment: i + 1,
+          totalSegments,
+          startStr: segInfo.startStr,
+          endStr: segInfo.endStr,
+          partialTranscript: currentSessionState.partialTranscript,
+          completedSegmentsCount: completedMap.size,
+          sessionId,
+          canResume: true,
+        });
+      } catch (segErr: any) {
+        console.error(`Transcription segment ${i + 1} error:`, segErr);
+        currentSessionState.status = 'failed';
+        currentSessionState.nextSegmentIndex = i;
+        currentSessionState.lastError = segErr?.message || 'Transcription error occurred.';
+        currentSessionState.partialTranscript = getPartialTranscript();
+        TranscriptionProgressManager.saveSession(sessionKey, currentSessionState);
+
+        options?.onProgress?.({
+          percent: progressPct,
+          status: `Transcription interrupted at segment ${i + 1} of ${totalSegments}`,
+          phase: 'error',
+          error: segErr?.message || 'Segment transcription error',
+          currentSegment: i + 1,
+          totalSegments,
+          startStr: segInfo.startStr,
+          endStr: segInfo.endStr,
+          partialTranscript: currentSessionState.partialTranscript,
+          completedSegmentsCount: completedMap.size,
+          sessionId,
+          canResume: true,
+        });
+
+        // Attach session info to error for upstream handlers
+        (segErr as any).session = currentSessionState;
+        (segErr as any).canResume = true;
+        (segErr as any).partialTranscript = currentSessionState.partialTranscript;
+        throw segErr;
+      }
+    }
+
+    // 4. Finalize
+    options?.onProgress?.({
+      percent: 96,
+      status: 'Finalizing and unifying transcript...',
+      phase: 'transcribing',
+    });
+
+    const finRes = await fetch('/api/audio/transcribe-session/finalize', {
+      method: 'POST',
+      headers: initHeaders,
+      body: JSON.stringify({ sessionId }),
+    });
+
+    let finalTranscript = getPartialTranscript();
+    let finalSource = 'gemini-3.5-transcribe (Multi-segment)';
+
+    if (finRes.ok) {
+      const finData = await finRes.json();
+      if (finData.transcript) {
+        finalTranscript = finData.transcript;
+      }
+      if (finData.source) {
+        finalSource = finData.source;
+      }
+    }
+
+    // Mark completed and clear session from storage
+    TranscriptionProgressManager.removeSession(sessionKey);
+
+    options?.onProgress?.({
+      percent: 100,
+      status: 'Transcription complete!',
+      phase: 'completed',
+      totalSegments,
+      completedSegmentsCount: totalSegments,
+      partialTranscript: finalTranscript,
+    });
+
+    return {
+      transcript: finalTranscript,
+      source: finalSource,
+      completedSegments: totalSegments,
+      totalSegments,
+    };
+  }
+
+  /**
+   * Transcribe recorded audio with multi-provider fallback and resumable segment pipeline
    */
   public static async transcribeAudio(
     audioBlobOrBase64: Blob | string,
     mimeType = 'audio/webm',
     sampleDuration = 0,
     liveCapturedText = '',
-    originalFileName?: string
+    originalFileName?: string,
+    options?: TranscribeAudioOptions
   ): Promise<TranscribeResult> {
     const isBlob = audioBlobOrBase64 instanceof Blob;
     let cleanBase64 = '';
@@ -522,6 +890,12 @@ export class GeminiApiService {
     const settings = AiSettingsManager.getSettings();
     const provider = settings.primaryTranscriptionProvider || 'browser_speech';
 
+    options?.onProgress?.({
+      percent: 5,
+      status: 'Preparing audio for transcription...',
+      phase: 'preparing',
+    });
+
     // 1. If liveCapturedText is provided (from active microphone Web Speech API dictation), use it immediately
     if (liveCapturedText && liveCapturedText.trim().length > 0) {
       const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
@@ -530,28 +904,19 @@ export class GeminiApiService {
         sampleDuration,
         liveCapturedText
       );
+      options?.onProgress?.({
+        percent: 100,
+        status: 'Live dictation audio aligned successfully',
+        phase: 'completed',
+        partialTranscript: offlineRes.transcript,
+      });
       return {
         transcript: offlineRes.transcript,
         source: offlineRes.source,
       };
     }
 
-    // 2. If the audio is large (> 8MB Blob or > 10MB base64), use chunked upload to safely bypass proxy limits
-    const isLargeAudio = (isBlob && audioBlobOrBase64.size > 8 * 1024 * 1024) || (!isBlob && cleanBase64.length > 10 * 1024 * 1024);
-    if (isLargeAudio) {
-      try {
-        PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
-        return await this.transcribeLargeAudioChunks(audioBlobOrBase64, sanitizedMime, originalFileName);
-      } catch (chunkErr: any) {
-        console.warn('Chunked audio transcription notice:', chunkErr?.message || chunkErr);
-        // If error occurred online, rethrow so UI can display specific failure rather than silent RMS placeholder
-        if (navigator.onLine) {
-          throw chunkErr;
-        }
-      }
-    }
-
-    // Convert blob to base64 if not large and not already base64
+    // Convert blob to base64 if not already base64
     if (isBlob && !cleanBase64) {
       cleanBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -564,17 +929,24 @@ export class GeminiApiService {
       });
     }
 
-    // 3. Groq Whisper (Opt-in External)
+    // 2. Groq Whisper (Opt-in External)
     if (provider === 'groq_whisper' && settings.groqApiKey) {
       try {
         PrivacyManager.assertNetworkAllowed('Groq Whisper');
+        options?.onProgress?.({
+          percent: 30,
+          status: 'Transcribing with Groq Whisper...',
+          phase: 'transcribing',
+        });
         const res = await fetch('/api/groq/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.groqApiKey}` },
           body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime, apiKey: settings.groqApiKey }),
+          signal: options?.signal,
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.transcript) {
+          options?.onProgress?.({ percent: 100, status: 'Completed', phase: 'completed' });
           return { transcript: data.transcript, source: data.source || 'groq/whisper-large-v3-turbo' };
         }
         throw new Error(data?.error || 'Groq transcription failed');
@@ -583,10 +955,15 @@ export class GeminiApiService {
       }
     }
 
-    // 4. Deepgram (Opt-in External)
+    // 3. Deepgram (Opt-in External)
     if (provider === 'deepgram' && settings.deepgramApiKey) {
       try {
         PrivacyManager.assertNetworkAllowed('Deepgram');
+        options?.onProgress?.({
+          percent: 30,
+          status: 'Transcribing with Deepgram...',
+          phase: 'transcribing',
+        });
         const res = await fetch('/api/deepgram/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -596,9 +973,11 @@ export class GeminiApiService {
             apiKey: settings.deepgramApiKey,
             model: settings.deepgramModel || 'nova-3',
           }),
+          signal: options?.signal,
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.transcript) {
+          options?.onProgress?.({ percent: 100, status: 'Completed', phase: 'completed' });
           return { transcript: data.transcript, source: data.source || 'deepgram/nova-3' };
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
@@ -607,10 +986,15 @@ export class GeminiApiService {
       }
     }
 
-    // 5. Local Whisper (Opt-in Self-Hosted)
+    // 4. Local Whisper (Opt-in Self-Hosted)
     if (provider === 'local_whisper' && settings.localWhisperEndpoint) {
       try {
         PrivacyManager.assertNetworkAllowed('Local Whisper');
+        options?.onProgress?.({
+          percent: 30,
+          status: 'Transcribing with Local Whisper...',
+          phase: 'transcribing',
+        });
         const res = await fetch('/api/local-whisper/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -619,9 +1003,11 @@ export class GeminiApiService {
             mimeType: sanitizedMime,
             endpoint: settings.localWhisperEndpoint,
           }),
+          signal: options?.signal,
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.transcript) {
+          options?.onProgress?.({ percent: 100, status: 'Completed', phase: 'completed' });
           return { transcript: data.transcript, source: 'local_whisper' };
         }
         throw new Error(data?.error || 'Local Whisper server failed');
@@ -630,11 +1016,16 @@ export class GeminiApiService {
       }
     }
 
-    // 6. Direct Google AI Studio SDK (if custom API key is configured and selected)
+    // 5. Direct Google AI Studio SDK (if custom API key is configured and selected)
     const localKey = (settings.googleApiKey || settings.apiKey || '').trim();
     if (provider === 'google' && (NativeBridge.isNative() || localKey)) {
       const prompt = 'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
       try {
+        options?.onProgress?.({
+          percent: 30,
+          status: 'Transcribing via Direct Google AI...',
+          phase: 'transcribing',
+        });
         const directResult = await this.executeDirectGoogleAi(
           [
             { text: prompt },
@@ -648,6 +1039,7 @@ export class GeminiApiService {
           ['gemini-3.5-transcribe', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.6-flash']
         );
         if (directResult.text && directResult.text.trim()) {
+          options?.onProgress?.({ percent: 100, status: 'Completed', phase: 'completed' });
           return {
             transcript: directResult.text,
             source: directResult.model,
@@ -658,39 +1050,42 @@ export class GeminiApiService {
       }
     }
 
-    // 7. High-Accuracy Multi-segment AI Transcription via backend /api/gemini/transcribe
-    // Primary path for uploaded audio recordings and files without live microphone dictation
+    // 6. Resumable Multi-Segment Pipeline via backend (Default, Primary & Resumable)
     try {
       PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
-      const res = await fetch('/api/gemini/transcribe', {
-        method: 'POST',
-        headers: await this.getHeaders(),
-        body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.transcript && data.transcript.trim()) {
-        return {
-          transcript: data.transcript,
-          source: data.source || 'gemini-3.5-transcribe',
-        };
-      }
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-    } catch (proxyErr: any) {
-      console.warn('Server Google transcription notice:', proxyErr?.message || proxyErr);
-      if (navigator.onLine) {
-        throw new Error(proxyErr?.message || 'Audio transcription server unavailable.');
+      return await this.transcribeWithResumableSession(
+        audioBlobOrBase64,
+        cleanBase64,
+        sanitizedMime,
+        originalFileName,
+        options
+      );
+    } catch (sessionErr: any) {
+      console.warn('Resumable session transcription notice:', sessionErr?.message || sessionErr);
+      // If error occurred online or user aborted, rethrow so UI can display specific failure and offer Resume
+      if (navigator.onLine || sessionErr?.name === 'AbortError') {
+        throw sessionErr;
       }
     }
 
-    // 8. Universal Offline Fallback Engine (when strictly offline or network unavailable)
+    // 7. Universal Offline Fallback Engine (when strictly offline or network unavailable)
+    options?.onProgress?.({
+      percent: 85,
+      status: 'Running offline acoustic speech detector...',
+      phase: 'transcribing',
+    });
     const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
       cleanBase64,
       sanitizedMime,
       sampleDuration,
       liveCapturedText
     );
+    options?.onProgress?.({
+      percent: 100,
+      status: 'Offline speech analysis complete',
+      phase: 'completed',
+      partialTranscript: offlineRes.transcript,
+    });
     return {
       transcript: offlineRes.transcript,
       source: offlineRes.source,
