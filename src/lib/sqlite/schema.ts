@@ -196,4 +196,14 @@ export const MIGRATIONS = [
       ALTER TABLE notes ADD COLUMN cloud_save_enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 5,
+    description: 'Add explicit encryption_state, encryption_version, plaintext_checksum, and ciphertext_checksum to media_files table',
+    sql: `
+      ALTER TABLE media_files ADD COLUMN encryption_state TEXT DEFAULT 'plaintext';
+      ALTER TABLE media_files ADD COLUMN encryption_version INTEGER DEFAULT 0;
+      ALTER TABLE media_files ADD COLUMN plaintext_checksum TEXT;
+      ALTER TABLE media_files ADD COLUMN ciphertext_checksum TEXT;
+    `,
+  },
 ];
