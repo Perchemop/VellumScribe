@@ -13,11 +13,13 @@ import {
   Sparkles,
   Smartphone,
   ExternalLink,
+  BookOpen,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { NoteRecord, EventRecord } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { NotebookLMAdapter } from '../lib/notebooklm/adapter';
 
 interface NoteShareModalProps {
   note: NoteRecord;
@@ -25,7 +27,7 @@ interface NoteShareModalProps {
   onClose: () => void;
 }
 
-type ShareFormat = 'share_sheet' | 'markdown' | 'text' | 'qr' | 'json';
+type ShareFormat = 'share_sheet' | 'notebooklm' | 'markdown' | 'text' | 'qr' | 'json';
 
 export const NoteShareModal: React.FC<NoteShareModalProps> = ({
   note,
@@ -74,6 +76,18 @@ type: "${note.note_type || 'text'}"
 ${formattedText}
 `;
   }, [formattedText, note, event]);
+
+  // Generate Google NotebookLM formatted knowledge source
+  const notebooklmText = React.useMemo(() => {
+    return NotebookLMAdapter.formatNoteForNotebookLM({
+      id: note.id,
+      title: note.title || 'Untitled Note',
+      content: formattedText,
+      tags: note.tags,
+      created_at: note.created_at,
+      updated_at: note.updated_at || note.created_at,
+    });
+  }, [note, formattedText]);
 
   // Quick Action: Native Android Share Sheet
   const handleNativeShare = async () => {
@@ -199,6 +213,18 @@ ${formattedText}
           >
             <QrCode className="w-3.5 h-3.5" />
             <span>QR Air-Drop</span>
+          </button>
+
+          <button
+            onClick={() => setActiveFormat('notebooklm')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 shrink-0 ${
+              activeFormat === 'notebooklm'
+                ? 'bg-blue-600 text-white font-semibold shadow-xs'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+            <span>NotebookLM</span>
           </button>
 
           <button
@@ -341,6 +367,72 @@ ${formattedText}
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied Text' : 'Copy QR Payload'}</span>
               </button>
+            </div>
+          )}
+
+          {activeFormat === 'notebooklm' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    Google NotebookLM Knowledge Source
+                  </span>
+                  <a
+                    href="https://notebooklm.google.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Open NotebookLM</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <p className="text-xs text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
+                  Formatted specifically for NotebookLM source ingestion, including metadata headers, date attribution, document IDs, and clean markdown hierarchy.
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={async () => {
+                      await NativeBridge.copyText(notebooklmText);
+                      setCopied(true);
+                      setFeedback('NotebookLM source copied to clipboard! Ready to paste into NotebookLM.');
+                      setTimeout(() => {
+                        setCopied(false);
+                        setFeedback(null);
+                      }, 3000);
+                    }}
+                    className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copied ? 'Copied' : 'Copy NotebookLM Source'}</span>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const fileName = `${(note.title || 'note').replace(/[^a-zA-Z0-9_-]/g, '_')}_notebooklm.md`;
+                      const res = await NativeBridge.shareOrDownloadFile(
+                        fileName,
+                        notebooklmText,
+                        'text/markdown',
+                        `NotebookLM Source: ${note.title || 'Note'}`
+                      );
+                      setFeedback(res.message);
+                      setTimeout(() => setFeedback(null), 3000);
+                    }}
+                    className="py-2 px-3 border border-blue-300 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-800 dark:text-blue-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download .md</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium text-zinc-400">Ingestion Payload Preview</div>
+                <pre className="p-3 bg-zinc-900 text-blue-200 dark:bg-black dark:text-blue-200 rounded-2xl text-xs font-mono overflow-x-auto max-h-56 leading-relaxed">
+                  {notebooklmText}
+                </pre>
+              </div>
             </div>
           )}
 

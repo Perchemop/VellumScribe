@@ -270,10 +270,57 @@ export class TranscriptionRepository {
    */
   public static delete(id: number): void {
     SqliteEngine.transaction(() => {
+      SqliteEngine.run('DELETE FROM transcription_jobs WHERE transcription_id = ?', [id]);
       SqliteEngine.run('DELETE FROM transcription_segments WHERE transcription_id = ?', [id]);
       SqliteEngine.run('DELETE FROM transcription_speakers WHERE transcription_id = ?', [id]);
       SqliteEngine.run('DELETE FROM transcriptions WHERE id = ?', [id]);
     });
+  }
+
+  /**
+   * Durable checkpointing in transcription_jobs table
+   */
+  public static saveJobCheckpoint(job: {
+    id: string;
+    transcription_id: number;
+    recording_id: number;
+    model_id: string;
+    status: string;
+    current_chunk?: number;
+    total_chunks?: number;
+    last_error?: string | null;
+  }): void {
+    const now = Date.now();
+    SqliteEngine.run(
+      `INSERT INTO transcription_jobs (id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         status = excluded.status,
+         current_chunk = excluded.current_chunk,
+         total_chunks = excluded.total_chunks,
+         last_error = excluded.last_error,
+         updated_at = excluded.updated_at`,
+      [
+        job.id,
+        job.transcription_id,
+        job.recording_id,
+        job.model_id,
+        job.status,
+        job.current_chunk || 0,
+        job.total_chunks || 0,
+        job.last_error || null,
+        now,
+      ]
+    );
+  }
+
+  public static getJob(jobId: string): any | null {
+    const rows = SqliteEngine.query<any>(
+      `SELECT id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at
+       FROM transcription_jobs WHERE id = ?`,
+      [jobId]
+    );
+    return rows && rows.length > 0 ? rows[0] : null;
   }
 
   private static mapTranscription(r: any): TranscriptionEntity {

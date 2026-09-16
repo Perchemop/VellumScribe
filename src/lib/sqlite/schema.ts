@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const DB_SCHEMA_VERSION = 6;
+export const DB_SCHEMA_VERSION = 8;
 export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
@@ -193,7 +193,7 @@ export const MIGRATIONS = [
     sql: `
       ALTER TABLE notes ADD COLUMN lock_mode TEXT DEFAULT 'standard';
       ALTER TABLE notes ADD COLUMN security_type TEXT DEFAULT 'pin';
-      ALTER TABLE notes ADD COLUMN cloud_save_enabled INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE notes ADD COLUMN cloud_save_enabled INTEGER NOT NULL DEFAULT 0;
     `,
   },
   {
@@ -259,6 +259,75 @@ export const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_transcriptions_status ON transcriptions(status);
       CREATE INDEX IF NOT EXISTS idx_segments_transcription ON transcription_segments(transcription_id, sequence);
       CREATE INDEX IF NOT EXISTS idx_speakers_transcription ON transcription_speakers(transcription_id);
+    `,
+  },
+  {
+    version: 7,
+    description: 'Durable transcription jobs and chunk checkpointing for crash and process recovery',
+    sql: `
+      CREATE TABLE IF NOT EXISTS transcription_jobs (
+        id TEXT PRIMARY KEY,
+        transcription_id INTEGER NOT NULL,
+        recording_id INTEGER NOT NULL,
+        model_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        current_chunk INTEGER DEFAULT 0,
+        total_chunks INTEGER DEFAULT 0,
+        retry_count INTEGER DEFAULT 0,
+        last_error TEXT,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_transcription_jobs_status ON transcription_jobs(status);
+      CREATE INDEX IF NOT EXISTS idx_transcription_jobs_recording ON transcription_jobs(recording_id);
+    `,
+  },
+  {
+    version: 8,
+    description: 'External Knowledge Adapter: NotebookLM connections, source mapping, and hash synchronization',
+    sql: `
+      CREATE TABLE IF NOT EXISTS notebooklm_connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        backend TEXT NOT NULL DEFAULT 'notebooklm-py',
+        notebook_id TEXT,
+        notebook_url TEXT,
+        status TEXT NOT NULL DEFAULT 'connected',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS notebooklm_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER NOT NULL,
+        local_entity_type TEXT NOT NULL, -- 'note' | 'transcript' | 'summary' | 'action_items'
+        local_entity_id INTEGER NOT NULL,
+        remote_source_id TEXT,
+        content_hash TEXT NOT NULL,
+        sync_status TEXT NOT NULL, -- 'synced' | 'pending' | 'failed' | 'modified'
+        last_synced_at INTEGER,
+        error_code TEXT,
+        FOREIGN KEY(connection_id) REFERENCES notebooklm_connections(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS notebooklm_sync_jobs (
+        id TEXT PRIMARY KEY,
+        connection_id INTEGER NOT NULL,
+        local_entity_type TEXT NOT NULL,
+        local_entity_id INTEGER NOT NULL,
+        status TEXT NOT NULL, -- 'queued' | 'syncing' | 'completed' | 'failed'
+        action TEXT NOT NULL, -- 'create' | 'update' | 'delete'
+        content_payload TEXT,
+        retry_count INTEGER DEFAULT 0,
+        error_message TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(connection_id) REFERENCES notebooklm_connections(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notebooklm_sources_entity ON notebooklm_sources(local_entity_type, local_entity_id);
+      CREATE INDEX IF NOT EXISTS idx_notebooklm_sync_jobs_status ON notebooklm_sync_jobs(status);
     `,
   },
 ];
