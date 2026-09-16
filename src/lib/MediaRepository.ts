@@ -110,6 +110,10 @@ export class MediaRepository {
     }
   }
 
+  static async saveBinary(key: string, blob: Blob, mimeType?: string, noteId?: number): Promise<void> {
+    return this.putBinary(key, blob);
+  }
+
   static async getBinary(key: string, mimeType: string = 'application/octet-stream'): Promise<Blob | null> {
     if (Capacitor.isNativePlatform()) {
       try {

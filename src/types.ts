@@ -91,6 +91,11 @@ export interface RecordingRecord {
   sample_rate?: number;
   bitrate_kbps?: number;
   created_at: string;
+  checksum?: string;
+  duration_ms?: number;
+  mime_type?: string;
+  channels?: number;
+  status?: string;
 }
 
 export interface TranscriptRecord {
@@ -184,3 +189,140 @@ export interface KeystoreSecret {
   hardware_backed: boolean;
   algorithm: 'AES-256-GCM' | 'RSA-4096';
 }
+
+// --- OFFLINE ON-DEVICE AI TRANSCRIPTION SPECIFICATION TYPES ---
+
+export type SpeechModelEngine = 'whisper.cpp' | 'local_whisper' | 'offline_acoustic';
+
+export type SpeechModelProfile = {
+  id: string;
+  displayName: string;
+  engine: SpeechModelEngine;
+  languageMode: 'multilingual' | 'english';
+  quantization?: string;
+  downloadBytes: number | null;
+  minimumRamMb: number | null;
+  recommendedRamMb: number | null;
+  accuracyClass: 'fast' | 'balanced' | 'accurate';
+  installed: boolean;
+  sha256: string;
+  license: string;
+  version?: string;
+  description?: string;
+};
+
+export interface AiCapabilities {
+  availableRamMb: number | null;
+  cpuCores: number | null;
+  architecture: string | null;
+  androidApiLevel: number | null;
+  availableStorageMb: number | null;
+  batteryLevel: number | null;
+  isCharging: boolean | null;
+  recommendedModelId: string;
+}
+
+export type TranscriptionDurableStatus =
+  | 'QUEUED'
+  | 'PREPARING'
+  | 'PREPROCESSING'
+  | 'TRANSCRIBING'
+  | 'MERGING'
+  | 'VALIDATING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCEL_REQUESTED'
+  | 'CANCELLED'
+  | 'WAITING_FOR_MODEL';
+
+export type OfflineAiErrorCode =
+  | 'OFFLINE_AI_MODEL_MISSING'
+  | 'OFFLINE_AI_MODEL_INVALID'
+  | 'OFFLINE_AI_MODEL_CORRUPT'
+  | 'OFFLINE_AI_UNSUPPORTED_DEVICE'
+  | 'OFFLINE_AI_AUDIO_INVALID'
+  | 'OFFLINE_AI_AUDIO_TOO_LARGE'
+  | 'OFFLINE_AI_STORAGE_LOW'
+  | 'OFFLINE_AI_CANCELLED'
+  | 'OFFLINE_AI_ENGINE_FAILURE'
+  | 'OFFLINE_AI_DATABASE_FAILURE'
+  | 'OFFLINE_AI_ENCRYPTION_FAILURE'
+  | 'OFFLINE_AI_UNKNOWN';
+
+export interface TranscriptionEntity {
+  id: number;
+  recording_id: number;
+  engine: string;
+  engine_version?: string;
+  model_id: string;
+  model_checksum?: string;
+  language?: string;
+  status: TranscriptionDurableStatus;
+  text?: string;
+  created_at: number;
+  started_at?: number;
+  completed_at?: number;
+  error_code?: OfflineAiErrorCode | string;
+  error_message?: string;
+}
+
+export interface TranscriptionSegmentRecord {
+  id?: number;
+  transcription_id: number;
+  sequence: number;
+  start_ms: number;
+  end_ms: number;
+  speaker_id?: string | null;
+  text: string;
+  confidence?: number | null; // Never fabricate; null when unavailable
+}
+
+export interface TranscriptionSpeakerRecord {
+  id?: number;
+  transcription_id: number;
+  speaker_id: string;
+  label: string;
+  name?: string | null;
+}
+
+export interface VadSegment {
+  startMs: number;
+  endMs: number;
+  speechProbability?: number | null;
+}
+
+export interface ModelInstallResult {
+  modelId: string;
+  installed: boolean;
+  bytesWritten?: number;
+  checksumVerified?: boolean;
+  error?: string;
+}
+
+export interface TranscriptionJobStatus {
+  jobId: string;
+  recordingId: number;
+  status: TranscriptionDurableStatus;
+  progressPercent: number;
+  currentChunk?: number;
+  totalChunks?: number;
+  phaseLabel: string;
+  error?: string;
+}
+
+export interface StructuredAiActionItem {
+  text: string;
+  owner: string | null;
+  dueDate: string | null;
+  priority: 'low' | 'medium' | 'high' | 'unknown';
+  sourceSegments: number[];
+}
+
+export interface StructuredAiExtraction {
+  summary: string;
+  actionItems: StructuredAiActionItem[];
+  decisions: Array<{ text: string; sourceSegments: number[] }>;
+  risks: Array<{ text: string; sourceSegments: number[] }>;
+  entities: Array<{ name: string; type: string; sourceSegments: number[] }>;
+}
+

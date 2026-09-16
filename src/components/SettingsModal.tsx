@@ -20,27 +20,35 @@ import {
   Radio,
   FileCode,
   Trash2,
+  Mic,
 } from 'lucide-react';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { OfflineAiSettings } from '../pages/settings/OfflineAiSettings';
 
 interface SettingsModalProps {
-  initialTab?: 'ai' | 'backup' | 'security';
+  initialTab?: 'ai' | 'backup' | 'security' | 'offline-ai';
   onClose: () => void;
   onSettingsUpdated?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
-  initialTab = 'ai',
+  initialTab = 'offline-ai',
   onClose,
   onSettingsUpdated,
 }) => {
   useModalBackHandler(true, onClose, 'settings-modal');
-  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security'>(
-    initialTab === 'security' ? 'security' : initialTab === 'backup' ? 'backup' : 'ai'
+  const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security' | 'offline-ai'>(
+    initialTab === 'security'
+      ? 'security'
+      : initialTab === 'backup'
+      ? 'backup'
+      : initialTab === 'ai'
+      ? 'ai'
+      : 'offline-ai'
   );
 
   // AI Settings state
@@ -144,11 +152,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Tab switcher */}
-        <div className="flex items-center border-b border-zinc-100 dark:border-zinc-800/60 px-6 bg-zinc-50/30 dark:bg-[#0e0e12] text-xs">
+        <div className="flex items-center border-b border-zinc-100 dark:border-zinc-800/60 px-6 bg-zinc-50/30 dark:bg-[#0e0e12] text-xs overflow-x-auto">
+          <button
+            id="tab-offline-ai-btn"
+            onClick={() => setActiveTab('offline-ai')}
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'offline-ai'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+            }`}
+          >
+            <Mic className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Offline AI (Whisper)</span>
+          </button>
+
           <button
             id="tab-ai-settings-btn"
             onClick={() => setActiveTab('ai')}
-            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'ai'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
@@ -161,7 +182,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="tab-backup-settings-btn"
             onClick={() => setActiveTab('backup')}
-            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'backup'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
@@ -174,7 +195,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             id="tab-security-settings-btn"
             onClick={() => setActiveTab('security')}
-            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 ${
+            className={`py-3 px-3 font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'security'
                 ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 font-semibold'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
@@ -449,6 +470,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: OFFLINE AI & WHISPER */}
+          {activeTab === 'offline-ai' && (
+            <div className="space-y-4">
+              <OfflineAiSettings />
             </div>
           )}
         </div>

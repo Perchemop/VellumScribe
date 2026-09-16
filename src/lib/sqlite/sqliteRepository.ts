@@ -868,22 +868,41 @@ export class SqliteRepository {
     }));
   }
 
-  public static saveRecording(rec: RecordingRecord): void {
-    SqliteEngine.run(
-      `INSERT OR REPLACE INTO recordings (id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        rec.id,
-        rec.note_id,
-        rec.file_path || null,
-        rec.media_key || null,
-        rec.duration_seconds || 0,
-        rec.file_size || 0,
-        rec.sample_rate || null,
-        rec.bitrate_kbps || null,
-        rec.created_at || new Date().toISOString(),
-      ]
-    );
+  public static saveRecording(rec: RecordingRecord): RecordingRecord {
+    let recordingId = rec.id;
+    if (recordingId && recordingId > 0) {
+      SqliteEngine.run(
+        `INSERT OR REPLACE INTO recordings (id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          recordingId,
+          rec.note_id,
+          rec.file_path || null,
+          rec.media_key || null,
+          rec.duration_seconds || 0,
+          rec.file_size || 0,
+          rec.sample_rate || null,
+          rec.bitrate_kbps || null,
+          rec.created_at || new Date().toISOString(),
+        ]
+      );
+    } else {
+      SqliteEngine.run(
+        `INSERT INTO recordings (note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          rec.note_id,
+          rec.file_path || null,
+          rec.media_key || null,
+          rec.duration_seconds || 0,
+          rec.file_size || 0,
+          rec.sample_rate || null,
+          rec.bitrate_kbps || null,
+          rec.created_at || new Date().toISOString(),
+        ]
+      );
+      recordingId = SqliteEngine.getLastInsertId();
+    }
 
     if (rec.media_key) {
       SqliteEngine.run(
@@ -892,6 +911,8 @@ export class SqliteRepository {
         [rec.media_key, rec.note_id, 'audio', 'audio/webm', rec.file_size || 0, Date.now()]
       );
     }
+
+    return { ...rec, id: recordingId };
   }
 
   public static getAllTranscripts(): TranscriptRecord[] {
@@ -906,19 +927,36 @@ export class SqliteRepository {
     }));
   }
 
-  public static saveTranscript(tr: TranscriptRecord): void {
-    SqliteEngine.run(
-      `INSERT OR REPLACE INTO transcripts (id, recording_id, transcript_text, confidence, speaker_count, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        tr.id,
-        tr.recording_id,
-        tr.transcript_text,
-        tr.confidence || null,
-        tr.speaker_count || null,
-        tr.created_at || new Date().toISOString(),
-      ]
-    );
+  public static saveTranscript(tr: TranscriptRecord): TranscriptRecord {
+    let transcriptId = tr.id;
+    if (transcriptId && transcriptId > 0) {
+      SqliteEngine.run(
+        `INSERT OR REPLACE INTO transcripts (id, recording_id, transcript_text, confidence, speaker_count, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          transcriptId,
+          tr.recording_id,
+          tr.transcript_text,
+          tr.confidence ?? null,
+          tr.speaker_count ?? null,
+          tr.created_at || new Date().toISOString(),
+        ]
+      );
+    } else {
+      SqliteEngine.run(
+        `INSERT INTO transcripts (recording_id, transcript_text, confidence, speaker_count, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          tr.recording_id,
+          tr.transcript_text,
+          tr.confidence ?? null,
+          tr.speaker_count ?? null,
+          tr.created_at || new Date().toISOString(),
+        ]
+      );
+      transcriptId = SqliteEngine.getLastInsertId();
+    }
+    return { ...tr, id: transcriptId };
   }
 
   public static getAllOcrScans(): OcrScanRecord[] {
@@ -934,20 +972,37 @@ export class SqliteRepository {
     }));
   }
 
-  public static saveOcrScan(ocr: OcrScanRecord): void {
-    SqliteEngine.run(
-      `INSERT OR REPLACE INTO ocr_scans (id, note_id, image_path, media_key, ocr_text, confidence, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        ocr.id,
-        ocr.note_id,
-        ocr.image_path || null,
-        ocr.media_key || null,
-        ocr.ocr_text,
-        ocr.confidence || null,
-        ocr.created_at || new Date().toISOString(),
-      ]
-    );
+  public static saveOcrScan(ocr: OcrScanRecord): OcrScanRecord {
+    let ocrId = ocr.id;
+    if (ocrId && ocrId > 0) {
+      SqliteEngine.run(
+        `INSERT OR REPLACE INTO ocr_scans (id, note_id, image_path, media_key, ocr_text, confidence, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ocrId,
+          ocr.note_id,
+          ocr.image_path || null,
+          ocr.media_key || null,
+          ocr.ocr_text,
+          ocr.confidence ?? null,
+          ocr.created_at || new Date().toISOString(),
+        ]
+      );
+    } else {
+      SqliteEngine.run(
+        `INSERT INTO ocr_scans (note_id, image_path, media_key, ocr_text, confidence, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          ocr.note_id,
+          ocr.image_path || null,
+          ocr.media_key || null,
+          ocr.ocr_text,
+          ocr.confidence ?? null,
+          ocr.created_at || new Date().toISOString(),
+        ]
+      );
+      ocrId = SqliteEngine.getLastInsertId();
+    }
 
     if (ocr.media_key) {
       SqliteEngine.run(
@@ -979,6 +1034,8 @@ export class SqliteRepository {
         AppLogger.warn('SqliteRepository', 'Failed to update FTS on OCR scan save', err);
       }
     }
+
+    return { ...ocr, id: ocrId };
   }
 
   // --- DATABASE METRICS, INTEGRITY & ORPHAN DETECTION ---
