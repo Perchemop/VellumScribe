@@ -10,6 +10,8 @@ import {
   Edit2,
   FileText,
   ListTodo,
+  Share2,
+  BookOpen,
 } from 'lucide-react';
 import {
   TranscriptionEntity,
@@ -19,6 +21,7 @@ import {
 } from '../../types';
 import { TranscriptService } from '../../services/TranscriptService';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
+import { NotebookLMAdapter } from '../../lib/notebooklm/adapter';
 
 interface TranscriptViewerProps {
   transcription: TranscriptionEntity;
@@ -39,6 +42,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'segments' | 'raw' | 'ai_insights'>('segments');
   const [copied, setCopied] = useState(false);
+  const [notebookLmExported, setNotebookLmExported] = useState(false);
   const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null);
   const [speakerNameInput, setSpeakerNameInput] = useState('');
   const [structuredExtraction, setStructuredExtraction] = useState<StructuredAiExtraction | null>(null);
@@ -58,6 +62,43 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExportNotebookLM = async () => {
+    const formatted = NotebookLMAdapter.formatTranscriptForNotebookLM({
+      transcriptionId: transcription.id,
+      recordingId: transcription.recording_id,
+      engine: transcription.engine,
+      modelId: transcription.model_id,
+      segments: segments.map((s) => ({
+        sequence: s.sequence,
+        start_ms: s.start_ms,
+        end_ms: s.end_ms,
+        speaker_id: s.speaker_id,
+        text: s.text,
+      })),
+      speakers: speakers.map((spk) => ({
+        speaker_id: spk.speaker_id,
+        label: spk.label,
+        name: spk.name,
+      })),
+      summary: structuredExtraction?.summary,
+      actionItems: structuredExtraction?.actionItems?.map((a) => ({
+        text: a.text,
+        priority: a.priority,
+      })),
+    });
+
+    const bundle = await NotebookLMAdapter.createBundle({
+      title: `Recording_${transcription.recording_id}_Transcript`,
+      sourceType: 'transcript',
+      content: formatted,
+    });
+
+    NotebookLMAdapter.exportBundleToFile(bundle);
+    navigator.clipboard.writeText(formatted);
+    setNotebookLmExported(true);
+    setTimeout(() => setNotebookLmExported(false), 2500);
   };
 
   const handleSaveSpeakerName = (speakerId: string) => {
@@ -127,6 +168,15 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            id="btn-export-notebooklm"
+            onClick={handleExportNotebookLM}
+            title="Export structured markdown source formatted for Google NotebookLM"
+            className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 transition-colors"
+          >
+            {notebookLmExported ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <BookOpen className="w-3.5 h-3.5 text-blue-600" />}
+            {notebookLmExported ? 'Exported & Copied' : 'NotebookLM Export'}
+          </button>
           <button
             id="btn-copy-transcript"
             onClick={handleCopyTranscript}

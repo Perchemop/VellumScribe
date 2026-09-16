@@ -19,12 +19,12 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     engine: 'whisper.cpp',
     languageMode: 'multilingual',
     quantization: 'q5_1',
-    downloadBytes: 32450000, // ~31 MB
+    downloadBytes: 31452000, // ~30 MB
     minimumRamMb: 1024,
     recommendedRamMb: 2048,
     accuracyClass: 'fast',
-    installed: true, // Default light bundled on-device model ready out of the box
-    sha256: 'e090df4a0b3e51a6fa99e2f5b3a4a159f81a7b8e5c1d3f9b2a7e4c6d8a0b2e4f',
+    installed: false,
+    sha256: '313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a',
     license: 'MIT',
     version: '1.5.4',
     description: 'Ultra-fast speech recognition with minimal memory footprint. Ideal for quick memos and low-power devices.',
@@ -35,12 +35,12 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     engine: 'whisper.cpp',
     languageMode: 'multilingual',
     quantization: 'q5_1',
-    downloadBytes: 59800000, // ~57 MB
+    downloadBytes: 57680000, // ~55 MB
     minimumRamMb: 2048,
     recommendedRamMb: 4096,
     accuracyClass: 'balanced',
-    installed: true, // Primary balanced offline model
-    sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+    installed: false,
+    sha256: '41b71457492c10b7b137f8f60bfb72f85e43a91081552a488c037cb97c55127d',
     license: 'MIT',
     version: '1.5.4',
     description: 'Recommended default model. Excellent balance of high accuracy and processing speed for meetings and dictations.',
@@ -51,12 +51,12 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     engine: 'whisper.cpp',
     languageMode: 'multilingual',
     quantization: 'q5_1',
-    downloadBytes: 188000000, // ~179 MB
+    downloadBytes: 182400000, // ~174 MB
     minimumRamMb: 4096,
     recommendedRamMb: 8192,
     accuracyClass: 'accurate',
     installed: false,
-    sha256: '9f8e7d6c5b4a3210fedcba9876543210fedcba9876543210fedcba9876543210',
+    sha256: '36a8d6728c3a1059f0f9b31d87e5ccbe133cf2efb529944f2fb9a7a671ef07c7',
     license: 'MIT',
     version: '1.5.4',
     description: 'High accuracy transcription suitable for complex vocabulary, technical terminology, and multilingual meetings.',
@@ -66,14 +66,13 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
 class OfflineAiWeb implements OfflineAiPlugin {
   private activeJobs: Map<string, TranscriptionJobStatus> = new Map();
   private cancellationTokens: Set<string> = new Set();
-  private installedModelIds: Set<string> = new Set(['whisper-tiny', 'whisper-base']);
+  private installedModelIds: Set<string> = new Set();
 
   constructor() {
     this.loadInstalledModelsState();
   }
 
   private loadInstalledModelsState() {
-    // Check IndexedDB or cache if user marked small installed
     if (typeof indexedDB !== 'undefined') {
       try {
         const req = indexedDB.open('vellumscribe_offline_ai', 1);
@@ -148,7 +147,6 @@ class OfflineAiWeb implements OfflineAiPlugin {
       }
     }
 
-    // Recommend based on device RAM and CPU cores:
     let recommendedModelId = 'whisper-base';
     if (availableRamMb !== null && availableRamMb < 3000) {
       recommendedModelId = 'whisper-tiny';
@@ -178,6 +176,7 @@ class OfflineAiWeb implements OfflineAiPlugin {
   public async installSpeechModel(options: {
     modelId: string;
     source: 'download' | 'localFile';
+    dataBuffer?: ArrayBuffer;
   }): Promise<ModelInstallResult> {
     const model = VERIFIED_SPEECH_MODELS.find((m) => m.id === options.modelId);
     if (!model) {
@@ -197,19 +196,39 @@ class OfflineAiWeb implements OfflineAiPlugin {
       }
     }
 
-    this.installedModelIds.add(options.modelId);
-    await this.persistInstalledModelsState();
+    // If actual binary buffer provided, verify SHA-256
+    if (options.dataBuffer && typeof crypto !== 'undefined' && crypto.subtle) {
+      const hashBuffer = await crypto.subtle.digest('SHA-256', options.dataBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const calculatedSha = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+      if (calculatedSha.toLowerCase() !== model.sha256.toLowerCase()) {
+        return {
+          modelId: options.modelId,
+          installed: false,
+          checksumVerified: false,
+          error: `SHA-256 checksum mismatch. Expected: ${model.sha256}, got: ${calculatedSha}`,
+        };
+      }
+      this.installedModelIds.add(options.modelId);
+      await this.persistInstalledModelsState();
+      return {
+        modelId: options.modelId,
+        installed: true,
+        bytesWritten: options.dataBuffer.byteLength,
+        checksumVerified: true,
+      };
+    }
 
+    // Without a verified binary buffer on web, we do NOT fake an installation
     return {
       modelId: options.modelId,
-      installed: true,
-      bytesWritten: model.downloadBytes || 0,
-      checksumVerified: true,
+      installed: false,
+      checksumVerified: false,
+      error: 'Model installation requires verified model binary artifact. Native on-device storage is required on Android.',
     };
   }
 
   public async deleteSpeechModel(options: { modelId: string }): Promise<void> {
-    // Keep at least whisper-tiny or whisper-base if possible
     this.installedModelIds.delete(options.modelId);
     await this.persistInstalledModelsState();
   }
@@ -235,7 +254,6 @@ class OfflineAiWeb implements OfflineAiPlugin {
     };
     this.activeJobs.set(jobId, jobStatus);
 
-    // Run transcription in durable asynchronous pipeline
     this.executeTranscriptionJob(jobId, recordingIdNum, options.modelId, options.language).catch((err) => {
       AppLogger.error('OfflineAiPlugin', `Job ${jobId} failed`, err);
     });
@@ -269,148 +287,61 @@ class OfflineAiWeb implements OfflineAiPlugin {
     const job = this.activeJobs.get(jobId);
     if (!job) return;
 
-    try {
-      // 1. Check recording exists
-      const rec = RecordingRepository.getById(recordingId);
-      if (!rec) {
-        throw new Error('OFFLINE_AI_AUDIO_INVALID: Recording not found in database.');
-      }
-
-      // Check cancellation
-      if (this.cancellationTokens.has(jobId)) {
-        this.markCancelled(jobId, recordingId);
-        return;
-      }
-
-      // 2. State: PREPARING
-      job.status = 'PREPARING';
-      job.phaseLabel = 'Preparing audio recording...';
-      job.progressPercent = 10;
-
-      // Ensure durable record in SQLite transcriptions table
-      const transcriptionEntity = TranscriptionRepository.saveTranscription({
-        recording_id: recordingId,
-        engine: 'whisper.cpp',
-        engine_version: '1.5.4',
-        model_id: modelId,
-        language: language || 'auto',
-        status: 'PREPARING',
-        started_at: Date.now(),
-      });
-
-      // 3. State: PREPROCESSING & VAD
-      job.status = 'PREPROCESSING';
-      job.phaseLabel = 'Acoustic normalization & Voice Activity Detection...';
-      job.progressPercent = 25;
-      TranscriptionRepository.updateStatus(transcriptionEntity.id, 'PREPROCESSING');
-
-      // Fetch audio data via MediaRepository without any network requests
-      let audioBlob: Blob | null = null;
-      if (rec.media_key) {
-        audioBlob = await MediaRepository.getBinary(rec.media_key);
-      }
-      if (!audioBlob && rec.audio_url) {
-        try {
-          const res = await fetch(rec.audio_url);
-          if (res.ok) audioBlob = await res.blob();
-        } catch {}
-      }
-
-      if (this.cancellationTokens.has(jobId)) {
-        this.markCancelled(jobId, recordingId, transcriptionEntity.id);
-        return;
-      }
-
-      // 4. State: TRANSCRIBING chunks
-      job.status = 'TRANSCRIBING';
-      job.phaseLabel = 'Transcribing speech chunks locally...';
-      job.progressPercent = 40;
-      TranscriptionRepository.updateStatus(transcriptionEntity.id, 'TRANSCRIBING');
-
-      // Perform local speech processing / VAD chunking
-      const durationSeconds = rec.duration_seconds || Math.round((rec.duration_ms || 3000) / 1000);
-      const chunkSizeSec = 20; // 20-second chunking as per specification (15-30s)
-      const totalChunks = Math.max(1, Math.ceil(durationSeconds / chunkSizeSec));
-      job.totalChunks = totalChunks;
-
-      const segments: Array<{
-        sequence: number;
-        start_ms: number;
-        end_ms: number;
-        speaker_id?: string | null;
-        text: string;
-        confidence?: number | null;
-      }> = [];
-
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-        if (this.cancellationTokens.has(jobId)) {
-          this.markCancelled(jobId, recordingId, transcriptionEntity.id);
-          return;
-        }
-
-        job.currentChunk = chunkIdx + 1;
-        job.phaseLabel = `Processing speech: Chunk ${chunkIdx + 1} of ${totalChunks}`;
-        job.progressPercent = 40 + Math.round(((chunkIdx + 1) / totalChunks) * 45);
-
-        const startMs = chunkIdx * chunkSizeSec * 1000;
-        const endMs = Math.min(durationSeconds * 1000, (chunkIdx + 1) * chunkSizeSec * 1000);
-
-        // Natural timestamp calculation
-        const startMin = Math.floor(startMs / 60000);
-        const startSec = Math.floor((startMs % 60000) / 1000);
-        const startStr = `${startMin.toString().padStart(2, '0')}:${startSec.toString().padStart(2, '0')}`;
-
-        // Speaker alternate between Speaker 1 and Speaker 2 for multi-chunk dialogues
-        const speakerId = totalChunks > 1 ? `spk_${(chunkIdx % 2) + 1}` : 'spk_1';
-
-        segments.push({
-          sequence: chunkIdx + 1,
-          start_ms: startMs,
-          end_ms: endMs,
-          speaker_id: speakerId,
-          text: `[${startStr}] Speech segment ${chunkIdx + 1}: On-device speech captured cleanly.`,
-          confidence: null, // Confidence is null as per spec (never fabricated!)
-        });
-
-        // Small yield to prevent blocking UI thread
-        await new Promise((r) => setTimeout(r, 60));
-      }
-
-      // 5. State: MERGING & VALIDATING
-      job.status = 'MERGING';
-      job.phaseLabel = 'Merging and aligning timestamped segments...';
-      job.progressPercent = 90;
-      TranscriptionRepository.updateStatus(transcriptionEntity.id, 'MERGING');
-
-      job.status = 'VALIDATING';
-      job.phaseLabel = 'Validating transcript integrity...';
-      job.progressPercent = 95;
-      TranscriptionRepository.updateStatus(transcriptionEntity.id, 'VALIDATING');
-
-      // 6. Durable Commit in SQLite
-      const fullText = segments.map((s) => s.text).join('\n\n');
-      const speakers = [
-        { speaker_id: 'spk_1', label: 'Speaker 1', name: 'Speaker 1' },
-        ...(totalChunks > 1 ? [{ speaker_id: 'spk_2', label: 'Speaker 2', name: 'Speaker 2' }] : []),
-      ];
-
-      TranscriptionRepository.commitCompletedTranscription(
-        transcriptionEntity.id,
-        fullText,
-        segments,
-        speakers
-      );
-
-      // Complete job
-      job.status = 'COMPLETED';
-      job.progressPercent = 100;
-      job.phaseLabel = 'Transcription completed';
-    } catch (err: any) {
+    // 1. Check recording exists
+    const rec = RecordingRepository.getById(recordingId);
+    if (!rec) {
       job.status = 'FAILED';
-      job.error = err?.message || 'Offline transcription engine error';
-      job.phaseLabel = 'Transcription failed';
-      AppLogger.error('OfflineAiPlugin', `Job ${jobId} failed: ${err?.message}`, err);
+      job.error = 'OFFLINE_AI_AUDIO_INVALID: Recording not found in database.';
+      return;
     }
+
+    // 2. Ensure durable record in SQLite transcriptions table
+    const transcriptionEntity = TranscriptionRepository.saveTranscription({
+      recording_id: recordingId,
+      engine: 'whisper.cpp',
+      engine_version: '1.5.4',
+      model_id: modelId,
+      language: language || 'auto',
+      status: 'PREPARING',
+      started_at: Date.now(),
+    });
+
+    TranscriptionRepository.saveJobCheckpoint({
+      id: jobId,
+      transcription_id: transcriptionEntity.id,
+      recording_id: recordingId,
+      model_id: modelId,
+      status: 'PREPARING',
+      current_chunk: 0,
+      total_chunks: 1,
+    });
+
+    // 3. Web environment honesty check:
+    // Native Whisper engine only executes in the Android native app layer.
+    // If running in browser/web context without native libwhisper.so or compiled WASM runtime,
+    // fail honestly with zero fabricated text.
+    job.status = 'FAILED';
+    const failError = 'OFFLINE_AI_ENGINE_NOT_AVAILABLE: On-device speech recognition requires native Android Whisper runtime or compiled WebAssembly model binary. Zero fabricated text generated.';
+    job.error = failError;
+    job.phaseLabel = 'Native speech engine not available in browser';
+    
+    TranscriptionRepository.updateStatus(
+      transcriptionEntity.id,
+      'FAILED',
+      'OFFLINE_AI_ENGINE_NOT_AVAILABLE',
+      failError
+    );
+
+    TranscriptionRepository.saveJobCheckpoint({
+      id: jobId,
+      transcription_id: transcriptionEntity.id,
+      recording_id: recordingId,
+      model_id: modelId,
+      status: 'FAILED',
+      current_chunk: 0,
+      total_chunks: 1,
+      last_error: failError,
+    });
   }
 
   private markCancelled(jobId: string, recordingId: number, transcriptionId?: number) {
@@ -421,6 +352,14 @@ class OfflineAiWeb implements OfflineAiPlugin {
     }
     if (transcriptionId) {
       TranscriptionRepository.updateStatus(transcriptionId, 'CANCELLED', 'OFFLINE_AI_CANCELLED', 'User cancelled transcription');
+      TranscriptionRepository.saveJobCheckpoint({
+        id: jobId,
+        transcription_id: transcriptionId,
+        recording_id: recordingId,
+        model_id: 'unknown',
+        status: 'CANCELLED',
+        last_error: 'User cancelled transcription',
+      });
     }
     this.cancellationTokens.delete(jobId);
   }
