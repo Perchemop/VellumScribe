@@ -217,10 +217,7 @@ export class StorageManager {
   }
 
   public static addEvent(event: Omit<EventRecord, 'id'>): EventRecord {
-    const events = this.getEvents();
-    const newId = events.length > 0 ? Math.max(...events.map((e) => e.id)) + 1 : 1;
-    const newEvent: EventRecord = { ...event, id: newId };
-    SqliteRepository.saveEvent(newEvent);
+    const newEvent = SqliteRepository.saveEvent({ ...event, id: 0 });
     if (this.eventsCache !== null) {
       this.eventsCache.push(newEvent);
     }
@@ -321,19 +318,16 @@ export class StorageManager {
   }
 
   public static addNote(note: Omit<NoteRecord, 'id'>): NoteRecord {
-    const notes = this.getNotes();
-    const newId = notes.length > 0 ? Math.max(...notes.map((n) => n.id)) + 1 : 101;
-    const newNote: NoteRecord = {
+    const newNote = SqliteRepository.saveNote({
       ...note,
-      id: newId,
+      id: 0,
       status: note.status || 'active',
       note_type: note.note_type || 'text',
       checklist_items: note.checklist_items || [],
       created_at: note.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
       version: 1,
-    };
-    SqliteRepository.saveNote(newNote);
+    });
     if (this.notesCache !== null) {
       this.notesCache = [newNote, ...this.notesCache];
     }
@@ -571,10 +565,25 @@ export class StorageManager {
 
     // Modern V2 / V1 encrypted payload decryption
     if (note.encrypted_payload && note.pin_salt) {
-      const { deriveEncryptionKey, decryptNotePayloadV2, decryptNotePayload, migrateLegacyV0NotePayload, encryptNotePayloadV2 } = await import('./cryptoUtils');
+      const { deriveEncryptionKey, decryptNotePayloadV2, decryptNotePayload, migrateLegacyV0NotePayload, encryptNotePayloadV2, hashPin, LEGACY_PBKDF2_ITERATIONS } = await import('./cryptoUtils');
       const sessionKey = await deriveEncryptionKey(enteredPin, note.pin_salt);
       if (sessionKey) {
         let decrypted = await decryptNotePayloadV2(note.encrypted_payload, sessionKey);
+        if (!decrypted) {
+          // Check for existing note encrypted with 210,000 iterations
+          const legacyKey = await deriveEncryptionKey(enteredPin, note.pin_salt, LEGACY_PBKDF2_ITERATIONS);
+          if (legacyKey) {
+            decrypted = await decryptNotePayloadV2(note.encrypted_payload, legacyKey);
+            if (decrypted) {
+              // Seamlessly upgrade to OWASP 600,000 rounds
+              const { hash } = await hashPin(enteredPin, note.pin_salt);
+              const upgradedPayload = await encryptNotePayloadV2(decrypted, sessionKey);
+              SqliteEngine.run('UPDATE notes SET pin_hash = ?, encrypted_payload = ? WHERE id = ?', [hash, upgradedPayload, note.id]);
+              note.pin_hash = hash;
+              note.encrypted_payload = upgradedPayload;
+            }
+          }
+        }
         if (!decrypted) {
           decrypted = await decryptNotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
         }
@@ -1093,14 +1102,11 @@ export class StorageManager {
   }
 
   public static addRecording(rec: Omit<RecordingRecord, 'id'>): RecordingRecord {
-    const recordings = this.getRecordings();
-    const newId = recordings.length > 0 ? Math.max(...recordings.map((r) => r.id)) + 1 : 201;
-    const newRec: RecordingRecord = {
+    const newRec = SqliteRepository.saveRecording({
       ...rec,
-      id: newId,
+      id: 0,
       created_at: rec.created_at || new Date().toISOString(),
-    };
-    SqliteRepository.saveRecording(newRec);
+    });
     this.refreshCaches();
     return newRec;
   }
@@ -1137,14 +1143,11 @@ export class StorageManager {
   }
 
   public static addTranscript(t: Omit<TranscriptRecord, 'id'>): TranscriptRecord {
-    const transcripts = this.getTranscripts();
-    const newId = transcripts.length > 0 ? Math.max(...transcripts.map((x) => x.id)) + 1 : 301;
-    const newTranscript: TranscriptRecord = {
+    const newTranscript = SqliteRepository.saveTranscript({
       ...t,
-      id: newId,
+      id: 0,
       created_at: t.created_at || new Date().toISOString(),
-    };
-    SqliteRepository.saveTranscript(newTranscript);
+    });
     this.refreshCaches();
     return newTranscript;
   }
@@ -1174,14 +1177,11 @@ export class StorageManager {
   }
 
   public static addOcrScan(scan: Omit<OcrScanRecord, 'id'>): OcrScanRecord {
-    const scans = this.getOcrScans();
-    const newId = scans.length > 0 ? Math.max(...scans.map((s) => s.id)) + 1 : 401;
-    const newScan: OcrScanRecord = {
+    const newScan = SqliteRepository.saveOcrScan({
       ...scan,
-      id: newId,
+      id: 0,
       created_at: scan.created_at || new Date().toISOString(),
-    };
-    SqliteRepository.saveOcrScan(newScan);
+    });
     this.refreshCaches();
     return newScan;
   }

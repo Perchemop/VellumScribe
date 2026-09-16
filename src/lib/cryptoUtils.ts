@@ -6,7 +6,8 @@
 // Salt context separator to ensure verification hash and encryption key derivations never collide
 const VERIFICATION_SALT_PREFIX = 'v1:verify:';
 const ENCRYPTION_SALT_PREFIX = 'v1:encrypt:';
-const PBKDF2_ITERATIONS = 210000;
+export const PBKDF2_ITERATIONS = 600000;
+export const LEGACY_PBKDF2_ITERATIONS = 210000;
 
 export function generateSalt(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
@@ -33,9 +34,9 @@ export function fromHex(hex: string): Uint8Array {
 }
 
 /**
- * Hash a PIN using PBKDF2-HMAC-SHA256 (210,000 rounds) for verification storage.
+ * Hash a PIN using PBKDF2-HMAC-SHA256 (600,000 rounds standard, configurable) for verification storage.
  */
-export async function hashPin(pin: string, salt?: string): Promise<{ hash: string; salt: string }> {
+export async function hashPin(pin: string, salt?: string, iterations = PBKDF2_ITERATIONS): Promise<{ hash: string; salt: string }> {
   const rawSalt = salt ? (salt.startsWith(VERIFICATION_SALT_PREFIX) ? salt.replace(VERIFICATION_SALT_PREFIX, '') : salt) : generateSalt();
   const activeSalt = rawSalt;
 
@@ -54,7 +55,7 @@ export async function hashPin(pin: string, salt?: string): Promise<{ hash: strin
         {
           name: 'PBKDF2',
           salt: encoder.encode(VERIFICATION_SALT_PREFIX + activeSalt),
-          iterations: PBKDF2_ITERATIONS,
+          iterations,
           hash: 'SHA-256',
         },
         keyMaterial,
@@ -70,11 +71,7 @@ export async function hashPin(pin: string, salt?: string): Promise<{ hash: strin
     }
   }
 
-  // No Web Crypto API available at all. Previous versions of this function
-  // silently fell back to a trivial, non-cryptographic hash (a 32-bit rolling
-  // checksum) in this situation, which is fast to brute-force and provided a
-  // false sense of security. We fail loudly instead: a device without
-  // WebCrypto cannot provide the encryption guarantees this feature claims.
+  // No Web Crypto API available at all.
   throw new Error(
     'This device does not support the Web Crypto API, so a security PIN cannot be safely created. ' +
     'Please update your browser/WebView or use an unlocked note.'
@@ -99,13 +96,19 @@ export async function verifyPin(
     return false;
   }
 
-  // Try PBKDF2 verification first
-  const { hash } = await hashPin(enteredPin, storedSalt);
-  if (hash === storedHash) {
+  // 1. Try modern OWASP recommended 600,000 PBKDF2 rounds
+  const { hash: modernHash } = await hashPin(enteredPin, storedSalt, PBKDF2_ITERATIONS);
+  if (modernHash === storedHash) {
     return true;
   }
 
-  // Check legacy un-prefixed SHA-256 fallback verification
+  // 2. Try legacy 210,000 PBKDF2 rounds for existing notes
+  const { hash: legacyHash } = await hashPin(enteredPin, storedSalt, LEGACY_PBKDF2_ITERATIONS);
+  if (legacyHash === storedHash) {
+    return true;
+  }
+
+  // 3. Check legacy un-prefixed SHA-256 fallback verification
   if (typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.digest) {
     try {
       const encoder = new TextEncoder();
@@ -123,7 +126,7 @@ export async function verifyPin(
 /**
  * Derive an AES-256-GCM CryptoKey from the user's PIN and salt.
  */
-export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey | null> {
+export async function deriveAesKey(pin: string, salt: string, iterations = PBKDF2_ITERATIONS): Promise<CryptoKey | null> {
   if (typeof crypto === 'undefined' || !crypto.subtle || !crypto.subtle.importKey || !crypto.subtle.deriveKey) {
     return null;
   }
@@ -141,7 +144,7 @@ export async function deriveAesKey(pin: string, salt: string): Promise<CryptoKey
     {
       name: 'PBKDF2',
       salt: encoder.encode(ENCRYPTION_SALT_PREFIX + salt),
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
