@@ -70,7 +70,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
         // Session-only verification and decryption (non-destructive)
         const result = await StorageManager.verifyAndUnlockNote(note, pin);
         if (!result.success || !result.payload) {
-          setError('Incorrect credential. Please try again.');
+          setError(result.errorMessage || 'Incorrect credential. Please try again.');
           setIsProcessing(false);
           return;
         }

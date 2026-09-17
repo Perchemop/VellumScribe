@@ -551,6 +551,13 @@ export class SqliteEngine {
   }
 
   /**
+   * Execute write/DML statements (alias for run)
+   */
+  public static execute(sql: string, params: any[] = []): void {
+    this.run(sql, params);
+  }
+
+  /**
    * Run multiple operations inside an atomic transaction (supports nesting via SAVEPOINTs)
    */
   public static transaction<T>(action: () => T): T {

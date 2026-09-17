@@ -23,6 +23,7 @@ import {
   HardDrive,
   Pin,
   Copy,
+  RotateCcw,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
@@ -43,6 +44,9 @@ import { AiSettingsManager } from '../lib/aiSettings';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { NativeBridge } from '../lib/nativeBridge';
+import { DraftStore, NoteDraft } from '../lib/DraftStore';
+import { SearchIndexQueue } from '../lib/SearchIndexQueue';
+import { ReminderService } from '../services/ReminderService';
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -99,6 +103,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   // Unlocking protected note in current session
   const [isUnlockedLocally, setIsUnlockedLocally] = useState(!note.is_locked);
   const [activePin, setActivePin] = useState<string | null>(null);
+  const [recoveredDraft, setRecoveredDraft] = useState<NoteDraft | null>(null);
 
   // Attached recordings & scans from local StorageManager
   const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
@@ -109,6 +114,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   );
 
   useEffect(() => {
+    // Check for crash recovery draft newer than saved database version
+    const newerDraft = DraftStore.findNewerDraft(note.id, note.updated_at || note.created_at);
+    if (newerDraft) {
+      setRecoveredDraft(newerDraft);
+    } else {
+      setRecoveredDraft(null);
+    }
+
     setTitle(note.title || '');
     setBody(note.body || '');
     setChecklistItems(note.checklist_items || []);
@@ -183,18 +196,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const handleBodyChange = (newBody: string) => {
     setBody(newBody);
     setSaveStatus('saving');
+    // Volatile draft save for crash recovery
+    DraftStore.write({ noteId: note.id, revision: 1, title, body: newBody, savedAt: Date.now() });
+
     if (note.is_locked && activePin) {
       StorageManager.saveUnlockedNote(note.id, { body: newBody }, activePin).then((updated) => {
         if (updated) {
+          DraftStore.clear(note.id);
           setSaveStatus('saved');
           setTimeout(() => setSaveStatus('stored'), 1800);
           notifyUpdatedDebounced(updated);
         }
       });
     } else {
-      // High-performance field-specific update without full table re-hydration
-      const updated = StorageManager.updateNoteText(note.id, title, newBody);
+      // High-performance field-specific update with skipFts: true to prevent UI stutter
+      const updated = StorageManager.updateNoteText(note.id, title, newBody, true);
+      // Background search index queue handles FTS asynchronously
+      SearchIndexQueue.enqueue(note.id);
       if (updated) {
+        DraftStore.clear(note.id);
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('stored'), 1800);
         notifyUpdatedDebounced(updated);
@@ -205,8 +225,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     setSaveStatus('saving');
-    const updated = StorageManager.updateNoteText(note.id, newTitle, body);
+    DraftStore.write({ noteId: note.id, revision: 1, title: newTitle, body, savedAt: Date.now() });
+    const updated = StorageManager.updateNoteText(note.id, newTitle, body, true);
+    SearchIndexQueue.enqueue(note.id);
     if (updated) {
+      DraftStore.clear(note.id);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('stored'), 1800);
       notifyUpdatedDebounced(updated);
@@ -324,21 +347,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleSetReminder = async (datetime: string) => {
     setReminderAt(datetime);
-    if (datetime) {
-      const scheduledDate = new Date(datetime);
-      if (scheduledDate.getTime() > Date.now()) {
-        await NativeBridge.scheduleNoteReminder(
-          note.id,
-          title || note.title || 'Untitled Note',
-          body || note.body || '',
-          scheduledDate
-        );
-      }
-    } else {
-      await NativeBridge.cancelNoteReminder(note.id);
-    }
     const updated = StorageManager.updateNote(note.id, { reminder_at: datetime || undefined });
-    if (updated) onNoteUpdated(updated);
+    if (updated) {
+      onNoteUpdated(updated);
+      if (datetime) {
+        await ReminderService.scheduleReminder(updated);
+      } else {
+        await ReminderService.cancelReminder(note.id);
+      }
+    }
     setShowReminderPicker(false);
   };
 
@@ -947,6 +964,43 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       {/* Main Unified Note Content Area */}
       <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-12 sm:py-8 custom-minimal-scrollbar">
         <div className="max-w-3xl mx-auto w-full space-y-6">
+          {/* Crash Recovery Banner */}
+          {recoveredDraft && (
+            <div className="p-3.5 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200 shadow-2xs animate-fade-in">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>
+                  Recovered unsaved edits from {new Date(recoveredDraft.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}.
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTitle(recoveredDraft.title);
+                    setBody(recoveredDraft.body);
+                    StorageManager.updateNoteText(note.id, recoveredDraft.title, recoveredDraft.body);
+                    DraftStore.clear(note.id);
+                    setRecoveredDraft(null);
+                  }}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl text-xs shadow-2xs transition-colors"
+                >
+                  Restore
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    DraftStore.clear(note.id);
+                    setRecoveredDraft(null);
+                  }}
+                  className="px-2.5 py-1 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-xs font-medium"
+                >
+                  Discard
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Note Title Input */}
           <input
             id="note-title-input"

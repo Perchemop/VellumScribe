@@ -33,6 +33,8 @@ import {
   markOnboardingCompleted,
 } from './components/FirstTimeUserGuideModal';
 import { AppLogo } from './components/AppLogo';
+import { SyncStatus } from './components/SyncStatus';
+import { ReminderService } from './services/ReminderService';
 
 export default function App() {
   const {
@@ -51,6 +53,7 @@ export default function App() {
     toastMessage,
     toastAction,
     dismissToast,
+    isOnline,
   } = useApp();
 
   // Local UI Navigation & modal states
@@ -90,6 +93,9 @@ export default function App() {
         })
         .catch(() => {});
     }
+
+    // Native OS & Web reminder reconciliation
+    ReminderService.reconcileReminders(notes).catch((e) => console.warn('Reminder reconciliation', e));
   }, []);
 
   // Active Note Reminder Notification Watcher (In-app alerts + Web Notification API)
@@ -350,6 +356,8 @@ export default function App() {
 
             {/* Right Action Icons */}
             <div className="flex items-center gap-1.5 sm:gap-2">
+              <SyncStatus isOnline={isOnline} />
+
               {/* Quick Note Button on Desktop */}
               <div className="hidden sm:block">
                 <button

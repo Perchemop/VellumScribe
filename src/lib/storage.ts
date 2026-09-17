@@ -358,8 +358,8 @@ export class StorageManager {
    * Fast field-specific updater for editor typing.
    * Updates only title and/or body in-place without triggering full relational joins.
    */
-  public static updateNoteText(id: number, title?: string, body?: string): NoteRecord | null {
-    const updated = SqliteRepository.updateNoteText(id, title, body);
+  public static updateNoteText(id: number, title?: string, body?: string, skipFts = false): NoteRecord | null {
+    const updated = SqliteRepository.updateNoteText(id, title, body, skipFts);
     if (updated && this.notesCache) {
       const idx = this.notesCache.findIndex((n) => n.id === id);
       if (idx !== -1) {
@@ -551,7 +551,19 @@ export class StorageManager {
   public static async verifyAndUnlockNote(
     note: NoteRecord,
     enteredPin: string
-  ): Promise<{ success: boolean; payload?: NotePayloadData; sessionKey?: CryptoKey }> {
+  ): Promise<{ success: boolean; payload?: NotePayloadData; sessionKey?: CryptoKey; lockedOutSeconds?: number; errorMessage?: string }> {
+    const { PinRateLimiter } = await import('./cryptoUtils');
+    
+    // Check rate limiting / lockout
+    const lockout = PinRateLimiter.checkLockout(note.id);
+    if (lockout.isLocked) {
+      return {
+        success: false,
+        lockedOutSeconds: lockout.remainingSeconds,
+        errorMessage: `PIN entry locked due to consecutive failed attempts. Please wait ${lockout.remainingSeconds}s.`,
+      };
+    }
+
     const isMatch = await verifyPin(
       enteredPin,
       note.pin_hash,
@@ -560,7 +572,36 @@ export class StorageManager {
     );
 
     if (!isMatch) {
-      return { success: false };
+      const fail = PinRateLimiter.recordFailure(note.id);
+      let errorMsg = 'Incorrect PIN.';
+      if (fail.lockSeconds > 0) {
+        errorMsg = `Incorrect PIN. Note locked for ${fail.lockSeconds} seconds.`;
+      }
+      return { success: false, lockedOutSeconds: fail.lockSeconds, errorMessage: errorMsg };
+    }
+
+    // Success: clear rate limiter
+    PinRateLimiter.recordSuccess(note.id);
+
+    // Automatic migration of legacy plaintext lock_pin to PBKDF2 hash & salt
+    if (note.lock_pin) {
+      try {
+        const { hashPin, generateSalt } = await import('./cryptoUtils');
+        const salt = generateSalt();
+        const { hash } = await hashPin(enteredPin, salt);
+        SqliteEngine.transaction(() => {
+          SqliteEngine.run(
+            'UPDATE notes SET lock_pin = NULL, pin_hash = ?, pin_salt = ? WHERE id = ?',
+            [hash, salt, note.id]
+          );
+        });
+        note.lock_pin = undefined;
+        note.pin_hash = hash;
+        note.pin_salt = salt;
+        AppLogger.info('StorageManager', `Migrated legacy plaintext PIN on note ${note.id} to PBKDF2 salt/hash.`);
+      } catch (e) {
+        AppLogger.warn('StorageManager', 'Failed to migrate legacy plaintext PIN', e);
+      }
     }
 
     // Modern V2 / V1 encrypted payload decryption

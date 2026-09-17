@@ -374,4 +374,49 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
   }
 }
 
+/**
+ * In-memory attempt throttling and lockout to prevent brute-force attacks on PIN-protected notes.
+ */
+export class PinRateLimiter {
+  private static failedAttempts: Map<string, { count: number; lockUntilMs: number }> = new Map();
+
+  public static checkLockout(targetId: number | string): { isLocked: boolean; remainingSeconds: number } {
+    const key = String(targetId);
+    const state = this.failedAttempts.get(key);
+    if (!state) return { isLocked: false, remainingSeconds: 0 };
+    const now = Date.now();
+    if (state.lockUntilMs > now) {
+      return { isLocked: true, remainingSeconds: Math.ceil((state.lockUntilMs - now) / 1000) };
+    }
+    return { isLocked: false, remainingSeconds: 0 };
+  }
+
+  public static recordFailure(targetId: number | string): { count: number; lockSeconds: number } {
+    const key = String(targetId);
+    const now = Date.now();
+    const current = this.failedAttempts.get(key) || { count: 0, lockUntilMs: 0 };
+    current.count += 1;
+
+    let lockSeconds = 0;
+    if (current.count >= 10) {
+      lockSeconds = 300; // 5-minute lockout
+    } else if (current.count >= 5) {
+      lockSeconds = 30; // 30-second lockout
+    }
+
+    current.lockUntilMs = lockSeconds > 0 ? now + lockSeconds * 1000 : 0;
+    this.failedAttempts.set(key, current);
+    return { count: current.count, lockSeconds };
+  }
+
+  public static recordSuccess(targetId: number | string): void {
+    this.failedAttempts.delete(String(targetId));
+  }
+
+  public static resetAll(): void {
+    this.failedAttempts.clear();
+  }
+}
+
 export { deriveAesKey as deriveEncryptionKey };
+
