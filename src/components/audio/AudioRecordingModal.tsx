@@ -90,30 +90,35 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       setIsPaused(false);
 
       // Trigger offline transcription automatically per spec
-      setTranscribing(true);
-      const aiManager = OfflineAiManager.getInstance();
-      const { jobId } = await aiManager.transcribeRecording(result.recording.id);
-      setActiveJobId(jobId);
+      if (result.recording) {
+        setTranscribing(true);
+        const aiManager = OfflineAiManager.getInstance();
+        const { jobId } = await aiManager.transcribeRecording(result.recording.id);
+        setActiveJobId(jobId);
 
-      // Poll progress truthfully
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await aiManager.getTranscriptionStatus(jobId);
-          setJobStatus(status);
+        // Poll progress truthfully
+        const pollInterval = setInterval(async () => {
+          try {
+            const status = await aiManager.getTranscriptionStatus(jobId);
+            setJobStatus(status);
 
-          if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+            if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+              clearInterval(pollInterval);
+              setTranscribing(false);
+              onRecordingComplete(result);
+              onClose();
+            }
+          } catch (pollErr) {
             clearInterval(pollInterval);
             setTranscribing(false);
             onRecordingComplete(result);
             onClose();
           }
-        } catch (pollErr) {
-          clearInterval(pollInterval);
-          setTranscribing(false);
-          onRecordingComplete(result);
-          onClose();
-        }
-      }, 300);
+        }, 300);
+      } else {
+        onRecordingComplete(result);
+        onClose();
+      }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to stop and save recording.');
       setIsRecording(false);
