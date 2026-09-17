@@ -40,13 +40,14 @@ export const OfflineAiSettings: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     const mgr = OfflineAiManager.getInstance();
-    const [caps, modelList] = await Promise.all([
+    const [caps, modelList, storageData] = await Promise.all([
       mgr.getDeviceCapabilities(),
       mgr.listSpeechModels(),
+      mgr.getStorageBreakdown(),
     ]);
     setCapabilities(caps);
     setModels(modelList);
-    setStorage(mgr.getStorageBreakdown());
+    setStorage(storageData);
     setLoading(false);
   };
 
@@ -78,9 +79,10 @@ export const OfflineAiSettings: React.FC = () => {
     }
   };
 
-  const handleCleanTemporary = () => {
+  const handleCleanTemporary = async () => {
     OfflineAiManager.getInstance().cleanTemporaryFiles();
-    setStorage(OfflineAiManager.getInstance().getStorageBreakdown());
+    const freshStorage = await OfflineAiManager.getInstance().getStorageBreakdown();
+    setStorage(freshStorage);
     setActionFeedback('Temporary transcription cache cleaned.');
   };
 
@@ -97,7 +99,11 @@ export const OfflineAiSettings: React.FC = () => {
       {/* 1. Offline AI Status Header (Section 28) */}
       <div
         id="offline-ai-status-card"
-        className="p-5 rounded-2xl bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50"
+        className={`p-5 rounded-2xl border ${
+          capabilities?.isNativeEngineAvailable
+            ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
+            : 'bg-stone-50 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800'
+        }`}
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -107,37 +113,47 @@ export const OfflineAiSettings: React.FC = () => {
             <div>
               <h3 className="font-semibold text-stone-900 dark:text-stone-100 flex items-center gap-2">
                 On-Device Speech Recognition
-                <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white font-medium">
-                  100% Offline
-                </span>
+                {capabilities?.isNativeEngineAvailable ? (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-600 text-white font-medium">
+                    Native Android Active
+                  </span>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-300 font-medium">
+                    Android APK Target
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-stone-600 dark:text-stone-400">
-                Audio stays on your device. Zero cloud dependency, no network access, no API keys needed.
+                {capabilities?.isNativeEngineAvailable
+                  ? 'Audio stays on your device. Zero cloud dependency, native whisper.cpp execution.'
+                  : 'Native C++ whisper engine is compiled in the Android build. In web browser preview, offline transcription fails honestly without fabricating text.'}
               </p>
             </div>
           </div>
-          <span className="flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+          <span className="flex items-center gap-1 text-xs text-stone-600 dark:text-stone-400 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            Ready
+            {capabilities?.isNativeEngineAvailable ? 'Native Engine Ready' : 'Architecture Configured'}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2 border-t border-emerald-200/60 dark:border-emerald-800/40">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs pt-2 border-t border-stone-200 dark:border-stone-800">
           <div>
             <span className="text-stone-500 dark:text-stone-400 block">Speech Engine</span>
-            <strong className="text-stone-900 dark:text-stone-100">whisper.cpp (FOSS)</strong>
+            <strong className="text-stone-900 dark:text-stone-100">whisper.cpp (NDK/FOSS)</strong>
           </div>
           <div>
-            <span className="text-stone-500 dark:text-stone-400 block">Active Model</span>
-            <strong className="text-stone-900 dark:text-stone-100">Whisper Base</strong>
+            <span className="text-stone-500 dark:text-stone-400 block">Runtime Target</span>
+            <strong className="text-stone-900 dark:text-stone-100">
+              {capabilities?.isNativeEngineAvailable ? 'Android JNI' : 'Android App Container'}
+            </strong>
           </div>
           <div>
-            <span className="text-stone-500 dark:text-stone-400 block">Network</span>
-            <strong className="text-stone-900 dark:text-stone-100">Airplane Mode Safe</strong>
+            <span className="text-stone-500 dark:text-stone-400 block">Network Policy</span>
+            <strong className="text-stone-900 dark:text-stone-100">Zero Fabricated Transcripts</strong>
           </div>
           <div>
-            <span className="text-stone-500 dark:text-stone-400 block">Cloud AI</span>
-            <strong className="text-stone-900 dark:text-stone-100">Optional Opt-In</strong>
+            <span className="text-stone-500 dark:text-stone-400 block">Checkpointing</span>
+            <strong className="text-stone-900 dark:text-stone-100">Durable SQLite</strong>
           </div>
         </div>
       </div>

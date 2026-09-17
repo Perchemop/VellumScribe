@@ -4,13 +4,29 @@
         <!-- Exclude secrets and credential stores from Android Cloud Backup -->
         <exclude domain="sharedpref" path="device_backup_credentials.xml" />
         <exclude domain="sharedpref" path="vellum_secure_prefs.xml" />
+        <exclude domain="sharedpref" path="offline_ai_secrets.xml" />
         <exclude domain="root" path="keystore/" />
-        <include domain="database" path="vellumscribe_relational_v3.sqlite" />
+
+        <!-- Exclude large AI models from 25MB cloud quota -->
+        <exclude domain="file" path="models/" />
+        <exclude domain="file" path="speech_models/" />
+        <exclude domain="file" path="temp/" />
+        <exclude domain="file" path="audio_chunks/" />
+        <exclude domain="file" path="chunk_cache/" />
+
+        <!-- Include databases and user notes -->
+        <include domain="database" path="." />
         <include domain="file" path="storage/" />
+        <include domain="file" path="notes/" />
     </cloud-backup>
     <device-transfer>
+        <!-- In direct device-to-device migration, transfer user data safely -->
         <exclude domain="sharedpref" path="device_backup_credentials.xml" />
-        <include domain="database" path="vellumscribe_relational_v3.sqlite" />
+        <exclude domain="sharedpref" path="offline_ai_secrets.xml" />
+        <exclude domain="file" path="temp/" />
+        <exclude domain="file" path="audio_chunks/" />
+        <include domain="database" path="." />
         <include domain="file" path="storage/" />
+        <include domain="file" path="notes/" />
     </device-transfer>
 </data-extraction-rules>

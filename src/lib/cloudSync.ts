@@ -1,6 +1,7 @@
 import { CloudAccount, CloudStorageProvider, SyncTelemetry } from '../types';
 import { StorageManager } from './storage';
 import { PrivacyManager } from './privacyManager';
+import { SqliteEngine } from './sqlite/sqliteEngine';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -54,8 +55,65 @@ export class CloudSyncEngine {
 
   public static getSyncQueue(): QueuedSyncItem[] {
     try {
+      if (SqliteEngine.isReady()) {
+        const rows = SqliteEngine.query<{
+          id: string;
+          providers_json: string;
+          reason: string | null;
+          filename: string | null;
+          staged_storage_key: string | null;
+          checksum: string | null;
+          attempts: number;
+          status: string;
+          last_error: string | null;
+          queued_at: number;
+        }>('SELECT * FROM cloud_sync_queue ORDER BY queued_at ASC');
+
+        if (rows && rows.length > 0) {
+          return rows.map((r) => ({
+            id: r.id,
+            queuedAt: new Date(r.queued_at).toISOString(),
+            attempts: r.attempts,
+            lastError: r.last_error || r.reason || 'Queued for retry',
+            providers: JSON.parse(r.providers_json || '[]'),
+            snapshotId: r.id,
+            checksum: r.checksum || undefined,
+            filename: r.filename || undefined,
+            stagedStorageKey: r.staged_storage_key || undefined,
+          }));
+        }
+      }
+
+      // Legacy fallback and initial migration from localStorage
       const raw = localStorage.getItem(this.QUEUE_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      if (raw) {
+        const legacy: QueuedSyncItem[] = JSON.parse(raw);
+        if (Array.isArray(legacy) && legacy.length > 0 && SqliteEngine.isReady()) {
+          for (const item of legacy) {
+            SqliteEngine.run(
+              `INSERT OR REPLACE INTO cloud_sync_queue 
+               (id, providers_json, reason, filename, staged_storage_key, checksum, attempts, status, last_error, queued_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                item.id,
+                JSON.stringify(item.providers || []),
+                item.lastError || null,
+                item.filename || null,
+                item.stagedStorageKey || null,
+                item.checksum || null,
+                item.attempts || 0,
+                'pending',
+                item.lastError || null,
+                new Date(item.queuedAt || Date.now()).getTime(),
+                Date.now(),
+              ]
+            );
+          }
+          localStorage.removeItem(this.QUEUE_STORAGE_KEY);
+        }
+        return legacy || [];
+      }
+      return [];
     } catch {
       return [];
     }
@@ -67,7 +125,6 @@ export class CloudSyncEngine {
     stagedBlob?: Blob,
     meta?: { filename?: string; checksum?: string }
   ): QueuedSyncItem {
-    const queue = this.getSyncQueue();
     const activeProviders = providers && providers.length > 0
       ? providers
       : this.getAccounts().map((a) => a.provider);
@@ -101,8 +158,37 @@ export class CloudSyncEngine {
       stagedStorageKey: stagedKey,
     };
 
-    queue.push(item);
-    localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    try {
+      if (SqliteEngine.isReady()) {
+        SqliteEngine.run(
+          `INSERT OR REPLACE INTO cloud_sync_queue 
+           (id, providers_json, reason, filename, staged_storage_key, checksum, attempts, status, last_error, queued_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.id,
+            JSON.stringify(item.providers),
+            reason || null,
+            item.filename || null,
+            item.stagedStorageKey || null,
+            item.checksum || null,
+            0,
+            'pending',
+            item.lastError || null,
+            Date.now(),
+            Date.now(),
+          ]
+        );
+      } else {
+        const queue = this.getSyncQueue();
+        queue.push(item);
+        localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+      }
+    } catch {
+      const queue = this.getSyncQueue();
+      queue.push(item);
+      localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
+    }
+
     return item;
   }
 
@@ -115,6 +201,11 @@ export class CloudSyncEngine {
         });
       }
     }
+    try {
+      if (SqliteEngine.isReady()) {
+        SqliteEngine.run('DELETE FROM cloud_sync_queue');
+      }
+    } catch {}
     localStorage.removeItem(this.QUEUE_STORAGE_KEY);
   }
 
@@ -126,6 +217,11 @@ export class CloudSyncEngine {
         MediaRepository.deleteBinary(item.stagedStorageKey!).catch(() => {});
       });
     }
+    try {
+      if (SqliteEngine.isReady()) {
+        SqliteEngine.run('DELETE FROM cloud_sync_queue WHERE id = ?', [id]);
+      }
+    } catch {}
     const filtered = queue.filter((item) => item.id !== id);
     localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(filtered));
   }
@@ -172,13 +268,27 @@ export class CloudSyncEngine {
             failedCount++;
             item.attempts++;
             item.lastError = 'Sync failed during queue execution';
-            localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.getSyncQueue()));
+            try {
+              if (SqliteEngine.isReady()) {
+                SqliteEngine.run(
+                  'UPDATE cloud_sync_queue SET attempts = attempts + 1, last_error = ?, status = ?, updated_at = ? WHERE id = ?',
+                  [item.lastError, 'failed', Date.now(), item.id]
+                );
+              }
+            } catch {}
           }
         } catch (e: any) {
           failedCount++;
           item.attempts++;
           item.lastError = e?.message || 'Network exception';
-          localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(this.getSyncQueue()));
+          try {
+            if (SqliteEngine.isReady()) {
+              SqliteEngine.run(
+                'UPDATE cloud_sync_queue SET attempts = attempts + 1, last_error = ?, status = ?, updated_at = ? WHERE id = ?',
+                [item.lastError, 'failed', Date.now(), item.id]
+              );
+            }
+          } catch {}
           break; // Stop further queue attempts if network error occurs
         }
       }

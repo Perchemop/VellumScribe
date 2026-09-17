@@ -221,6 +221,10 @@ export class SqliteEngine {
     isRecovered: false,
   };
 
+  public static isReady(): boolean {
+    return this.isInitialized && this.db !== null;
+  }
+
   public static getRecoveryState(): RecoveryState {
     return { ...this.recoveryState };
   }

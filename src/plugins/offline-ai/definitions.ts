@@ -1,9 +1,17 @@
+import { PluginListenerHandle } from '@capacitor/core';
 import {
   AiCapabilities,
   SpeechModelProfile,
   ModelInstallResult,
   TranscriptionJobStatus,
 } from '../../types';
+
+export interface ModelDownloadProgressEvent {
+  modelId: string;
+  bytesDownloaded: number;
+  totalBytes: number;
+  percent: number;
+}
 
 export interface OfflineAiPlugin {
   getCapabilities(): Promise<AiCapabilities>;
@@ -14,6 +22,10 @@ export interface OfflineAiPlugin {
     modelId: string;
     source: 'download' | 'localFile';
   }): Promise<ModelInstallResult>;
+
+  cancelModelDownload(options: {
+    modelId: string;
+  }): Promise<void>;
 
   deleteSpeechModel(options: {
     modelId: string;
@@ -32,4 +44,9 @@ export interface OfflineAiPlugin {
   cancelTranscription(options: {
     jobId: string;
   }): Promise<void>;
+
+  addListener(
+    eventName: 'modelDownloadProgress',
+    listenerFunc: (event: ModelDownloadProgressEvent) => void
+  ): Promise<PluginListenerHandle>;
 }
