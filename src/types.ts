@@ -327,3 +327,29 @@ export interface StructuredAiExtraction {
   entities: Array<{ name: string; type: string; sourceSegments: number[] }>;
 }
 
+export type Result<T> =
+  | { ok: true; value: T }
+  | { ok: false; code: string; message: string; cause?: unknown };
+
+export interface AiAction {
+  type: 'create_note' | 'update_note' | 'create_checklist' | 'create_reminder' | 'search_notes' | 'delete_note';
+  description: string;
+  requiresConfirmation?: boolean;
+  payload: any;
+}
+
+export interface AiCommandResult {
+  intent:
+    | 'create_note'
+    | 'update_note'
+    | 'create_task'
+    | 'create_reminder'
+    | 'summarize'
+    | 'search'
+    | 'unknown';
+  confidence: number;
+  actions: AiAction[];
+  clarification?: string;
+}
+
+

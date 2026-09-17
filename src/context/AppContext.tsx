@@ -218,7 +218,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     StorageManager.trashNote(id);
     setNotes(StorageManager.getNotes());
     if (selectedNoteId === id) setSelectedNoteId(null);
-    showToast('Note moved to Trash.');
+    showToast('Note moved to Trash.', {
+      label: 'Undo',
+      onClick: () => {
+        StorageManager.restoreNote(id);
+        setNotes(StorageManager.getNotes());
+        setSelectedNoteId(id);
+      },
+    });
   }, [selectedNoteId, showToast]);
 
   const restoreNote = useCallback((id: number) => {

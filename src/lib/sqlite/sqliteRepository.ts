@@ -378,7 +378,7 @@ export class SqliteRepository {
    * Fast field-specific updater for editor typing.
    * Updates only title and/or body in-place without expensive checklist or tag recalculation.
    */
-  public static updateNoteText(id: number, title?: string, body?: string): NoteRecord | null {
+  public static updateNoteText(id: number, title?: string, body?: string, skipFts = false): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
 
@@ -392,7 +392,7 @@ export class SqliteRepository {
         [newTitle, newBody, now, id]
       );
 
-      if (!existing.is_locked) {
+      if (!existing.is_locked && !skipFts) {
         try {
           const chkText = (existing.checklist_items || []).map((c) => c.text).join(' ');
           const tagText = (existing.tags || []).join(' ');
@@ -418,6 +418,35 @@ export class SqliteRepository {
       body: newBody,
       updated_at: now,
     };
+  }
+
+  /**
+   * Batch reindexes note IDs into SQLite FTS
+   */
+  public static reindexNotes(ids: number[]): void {
+    if (!ids || ids.length === 0) return;
+    SqliteEngine.transaction(() => {
+      for (const id of ids) {
+        const note = this.getNoteById(id);
+        if (!note || note.is_locked) continue;
+        try {
+          const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
+          const tagText = (note.tags || []).join(' ');
+          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+            'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
+            [id]
+          );
+          const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
+          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
+          SqliteEngine.run(
+            'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
+            [id, note.title || '', note.body || '', chkText, ocrText, tagText]
+          );
+        } catch (err) {
+          AppLogger.warn('SqliteRepository', `Failed to reindex note ${id} in FTS`, err);
+        }
+      }
+    });
   }
 
   public static deleteNote(id: number): void {
