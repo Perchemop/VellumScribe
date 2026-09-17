@@ -15,7 +15,7 @@ export interface NotebookLMConnection {
 export interface NotebookLMSource {
   id: number;
   connection_id: number;
-  local_entity_type: 'note' | 'transcript' | 'summary' | 'bundle';
+  local_entity_type: 'note' | 'transcript' | 'summary' | 'action_items' | 'bundle';
   local_entity_id: number;
   remote_source_id?: string | null;
   content_hash: string;
@@ -230,7 +230,329 @@ ${note.content || '(Empty content)'}
   }
 
   /**
-   * Record a synchronized source in SQLite
+   * Upsert a NotebookLM source mapping in SQLite (P1-03)
+   */
+  public static upsertSourceMapping(params: {
+    connectionId: number;
+    entityType: 'note' | 'transcript' | 'summary' | 'action_items' | 'bundle';
+    entityId: number;
+    contentHash: string;
+    remoteSourceId?: string | null;
+    status: 'synced' | 'pending' | 'failed' | 'modified';
+    errorCode?: string | null;
+  }): NotebookLMSource {
+    const now = Date.now();
+    const existing = SqliteEngine.query<NotebookLMSource>(
+      `SELECT * FROM notebooklm_sources 
+       WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
+      [params.connectionId, params.entityType, params.entityId]
+    );
+
+    if (existing && existing.length > 0) {
+      const existingId = existing[0].id;
+      SqliteEngine.run(
+        `UPDATE notebooklm_sources 
+         SET remote_source_id = COALESCE(?, remote_source_id),
+             content_hash = ?,
+             sync_status = ?,
+             last_synced_at = ?,
+             error_code = ?
+         WHERE id = ?`,
+        [
+          params.remoteSourceId || null,
+          params.contentHash,
+          params.status,
+          now,
+          params.errorCode || null,
+          existingId,
+        ]
+      );
+      return {
+        id: existingId,
+        connection_id: params.connectionId,
+        local_entity_type: params.entityType,
+        local_entity_id: params.entityId,
+        remote_source_id: params.remoteSourceId || existing[0].remote_source_id,
+        content_hash: params.contentHash,
+        sync_status: params.status,
+        last_synced_at: now,
+        error_code: params.errorCode || null,
+      };
+    } else {
+      SqliteEngine.run(
+        `INSERT INTO notebooklm_sources (connection_id, local_entity_type, local_entity_id, remote_source_id, content_hash, sync_status, last_synced_at, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          params.connectionId,
+          params.entityType,
+          params.entityId,
+          params.remoteSourceId || null,
+          params.contentHash,
+          params.status,
+          now,
+          params.errorCode || null,
+        ]
+      );
+      const id = SqliteEngine.getLastInsertId();
+      return {
+        id,
+        connection_id: params.connectionId,
+        local_entity_type: params.entityType,
+        local_entity_id: params.entityId,
+        remote_source_id: params.remoteSourceId || null,
+        content_hash: params.contentHash,
+        sync_status: params.status,
+        last_synced_at: now,
+        error_code: params.errorCode || null,
+      };
+    }
+  }
+
+  /**
+   * Get existing source mapping for entity
+   */
+  public static getSourceMapping(
+    connectionId: number,
+    entityType: string,
+    entityId: number
+  ): NotebookLMSource | null {
+    const rows = SqliteEngine.query<NotebookLMSource>(
+      `SELECT * FROM notebooklm_sources 
+       WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
+      [connectionId, entityType, entityId]
+    );
+    return rows.length > 0 ? rows[0] : null;
+  }
+
+  /**
+   * List all sources mapped to a connection
+   */
+  public static listSourcesForConnection(connectionId: number): NotebookLMSource[] {
+    return SqliteEngine.query<NotebookLMSource>(
+      `SELECT * FROM notebooklm_sources WHERE connection_id = ? ORDER BY id DESC`,
+      [connectionId]
+    );
+  }
+
+  /**
+   * Real NotebookLM Transport: validate connection (P1-01)
+   */
+  public static async validateConnection(connection: NotebookLMConnection): Promise<boolean> {
+    try {
+      const res = await fetch('/api/notebooklm/validate-notebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notebookUrl: connection.notebook_url,
+          notebookId: connection.notebook_id,
+        }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      return !!data.valid;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Real NotebookLM Transport: upload document source (P1-01)
+   */
+  public static async uploadSource(params: {
+    connection: NotebookLMConnection;
+    title: string;
+    content: string;
+    sourceType?: string;
+    metadata?: Record<string, any>;
+  }): Promise<{ remoteSourceId: string; contentHash: string; syncedAt: number }> {
+    const res = await fetch('/api/notebooklm/upload-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notebookId: params.connection.notebook_id,
+        title: params.title,
+        content: params.content,
+        sourceType: params.sourceType || 'note',
+        metadata: params.metadata || {},
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Upload to NotebookLM failed' }));
+      throw new Error(err.error || `HTTP ${res.status}: Upload failed`);
+    }
+
+    const data = await res.json();
+    return {
+      remoteSourceId: data.remoteSourceId,
+      contentHash: data.contentHash,
+      syncedAt: data.syncedAt || Date.now(),
+    };
+  }
+
+  /**
+   * Real NotebookLM Transport: delete remote source (P1-01)
+   */
+  public static async deleteRemoteSource(remoteSourceId: string): Promise<boolean> {
+    const res = await fetch('/api/notebooklm/delete-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remoteSourceId }),
+    });
+    return res.ok;
+  }
+
+  /**
+   * Enqueue a durable sync job in SQLite (P1-04)
+   */
+  public static enqueueSyncJob(params: {
+    connectionId: number;
+    entityType: 'note' | 'transcript' | 'summary' | 'action_items' | 'bundle';
+    entityId: number;
+    action: 'create' | 'update' | 'delete';
+    contentPayload?: string;
+  }): string {
+    const jobId = `nlm_job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const now = Date.now();
+
+    SqliteEngine.run(
+      `INSERT INTO notebooklm_sync_jobs 
+       (id, connection_id, local_entity_type, local_entity_id, status, action, content_payload, retry_count, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        jobId,
+        params.connectionId,
+        params.entityType,
+        params.entityId,
+        'queued',
+        params.action,
+        params.contentPayload || null,
+        0,
+        now,
+        now,
+      ]
+    );
+
+    AppLogger.info('NotebookLMAdapter', `Enqueued durable NotebookLM sync job: ${jobId}`);
+    return jobId;
+  }
+
+  /**
+   * Process a durable sync job with retry handling (P1-04)
+   */
+  public static async processSyncJob(jobId: string): Promise<boolean> {
+    const jobs = SqliteEngine.query<any>(
+      `SELECT * FROM notebooklm_sync_jobs WHERE id = ?`,
+      [jobId]
+    );
+    if (!jobs || jobs.length === 0) return false;
+
+    const job = jobs[0];
+    const connections = this.listConnections().filter((c) => c.id === job.connection_id);
+    if (connections.length === 0) {
+      SqliteEngine.run(
+        `UPDATE notebooklm_sync_jobs SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?`,
+        ['Connection not found', Date.now(), jobId]
+      );
+      return false;
+    }
+
+    const connection = connections[0];
+
+    // Mark syncing
+    SqliteEngine.run(
+      `UPDATE notebooklm_sync_jobs SET status = 'syncing', updated_at = ? WHERE id = ?`,
+      [Date.now(), jobId]
+    );
+
+    try {
+      if (job.action === 'create' || job.action === 'update') {
+        const payload = job.content_payload || '';
+        const title = `${job.local_entity_type.toUpperCase()} #${job.local_entity_id}`;
+        
+        const uploadResult = await this.uploadSource({
+          connection,
+          title,
+          content: payload,
+          sourceType: job.local_entity_type,
+        });
+
+        // Upsert source mapping
+        this.upsertSourceMapping({
+          connectionId: job.connection_id,
+          entityType: job.local_entity_type,
+          entityId: job.local_entity_id,
+          contentHash: uploadResult.contentHash,
+          remoteSourceId: uploadResult.remoteSourceId,
+          status: 'synced',
+        });
+
+        SqliteEngine.run(
+          `UPDATE notebooklm_sync_jobs SET status = 'completed', error_message = NULL, updated_at = ? WHERE id = ?`,
+          [Date.now(), jobId]
+        );
+        return true;
+      } else if (job.action === 'delete') {
+        const existingMapping = this.getSourceMapping(job.connection_id, job.local_entity_type, job.local_entity_id);
+        if (existingMapping && existingMapping.remote_source_id) {
+          await this.deleteRemoteSource(existingMapping.remote_source_id);
+        }
+        SqliteEngine.run(
+          `DELETE FROM notebooklm_sources WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
+          [job.connection_id, job.local_entity_type, job.local_entity_id]
+        );
+        SqliteEngine.run(
+          `UPDATE notebooklm_sync_jobs SET status = 'completed', error_message = NULL, updated_at = ? WHERE id = ?`,
+          [Date.now(), jobId]
+        );
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      const errMsg = err?.message || 'Sync failed';
+      const newRetries = (job.retry_count || 0) + 1;
+      SqliteEngine.run(
+        `UPDATE notebooklm_sync_jobs 
+         SET status = ?, error_message = ?, retry_count = ?, updated_at = ? 
+         WHERE id = ?`,
+        [newRetries >= 3 ? 'failed' : 'queued', errMsg, newRetries, Date.now(), jobId]
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Process all pending durable sync jobs in queue (P1-04)
+   */
+  public static async processAllPendingJobs(): Promise<{ succeeded: number; failed: number }> {
+    const pending = SqliteEngine.query<{ id: string }>(
+      `SELECT id FROM notebooklm_sync_jobs WHERE status IN ('queued', 'failed') AND retry_count < 3 ORDER BY created_at ASC LIMIT 10`
+    );
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const item of pending) {
+      const ok = await this.processSyncJob(item.id);
+      if (ok) succeeded++;
+      else failed++;
+    }
+
+    return { succeeded, failed };
+  }
+
+  /**
+   * List recent NotebookLM sync jobs
+   */
+  public static listSyncJobs(limit = 20): any[] {
+    return SqliteEngine.query(
+      `SELECT * FROM notebooklm_sync_jobs ORDER BY created_at DESC LIMIT ?`,
+      [limit]
+    );
+  }
+
+  /**
+   * Record a synchronized source in SQLite (legacy alias)
    */
   public static recordSourceSync(params: {
     connectionId: number;
@@ -240,20 +562,14 @@ ${note.content || '(Empty content)'}
     remoteSourceId?: string | null;
     status: 'synced' | 'pending' | 'failed' | 'modified';
   }): void {
-    const now = Date.now();
-    SqliteEngine.run(
-      `INSERT INTO notebooklm_sources (connection_id, local_entity_type, local_entity_id, remote_source_id, content_hash, sync_status, last_synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        params.connectionId,
-        params.entityType,
-        params.entityId,
-        params.remoteSourceId || null,
-        params.contentHash,
-        params.status,
-        now,
-      ]
-    );
+    this.upsertSourceMapping({
+      connectionId: params.connectionId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      contentHash: params.contentHash,
+      remoteSourceId: params.remoteSourceId,
+      status: params.status,
+    });
   }
 
   /**

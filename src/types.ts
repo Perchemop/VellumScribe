@@ -220,6 +220,7 @@ export interface AiCapabilities {
   batteryLevel: number | null;
   isCharging: boolean | null;
   recommendedModelId: string;
+  isNativeEngineAvailable?: boolean;
 }
 
 export type TranscriptionDurableStatus =

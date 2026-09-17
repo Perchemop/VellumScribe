@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const DB_SCHEMA_VERSION = 8;
+export const DB_SCHEMA_VERSION = 9;
 export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
@@ -328,6 +328,43 @@ export const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_notebooklm_sources_entity ON notebooklm_sources(local_entity_type, local_entity_id);
       CREATE INDEX IF NOT EXISTS idx_notebooklm_sync_jobs_status ON notebooklm_sync_jobs(status);
+    `,
+  },
+  {
+    version: 9,
+    description: 'Durable transcription chunk checkpoints and SQLite cloud sync queue',
+    sql: `
+      CREATE TABLE IF NOT EXISTS transcription_chunk_checkpoints (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT NOT NULL,
+        chunk_index INTEGER NOT NULL,
+        start_ms INTEGER NOT NULL,
+        end_ms INTEGER NOT NULL,
+        status TEXT NOT NULL, -- 'pending' | 'completed' | 'failed'
+        transcript_text TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(job_id) REFERENCES transcription_jobs(id) ON DELETE CASCADE
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_chunk_checkpoints_job_chunk ON transcription_chunk_checkpoints(job_id, chunk_index);
+      CREATE INDEX IF NOT EXISTS idx_chunk_checkpoints_job ON transcription_chunk_checkpoints(job_id);
+
+      CREATE TABLE IF NOT EXISTS cloud_sync_queue (
+        id TEXT PRIMARY KEY,
+        providers_json TEXT NOT NULL,
+        reason TEXT,
+        filename TEXT,
+        staged_storage_key TEXT,
+        checksum TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'in_progress' | 'failed'
+        last_error TEXT,
+        queued_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cloud_sync_queue_status ON cloud_sync_queue(status, queued_at);
     `,
   },
 ];

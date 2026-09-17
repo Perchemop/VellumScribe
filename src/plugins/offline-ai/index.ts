@@ -1,4 +1,4 @@
-import { registerPlugin } from '@capacitor/core';
+import { registerPlugin, WebPlugin } from '@capacitor/core';
 import { OfflineAiPlugin } from './definitions';
 import {
   AiCapabilities,
@@ -63,12 +63,13 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
   },
 ];
 
-class OfflineAiWeb implements OfflineAiPlugin {
+class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
   private activeJobs: Map<string, TranscriptionJobStatus> = new Map();
   private cancellationTokens: Set<string> = new Set();
   private installedModelIds: Set<string> = new Set();
 
   constructor() {
+    super();
     this.loadInstalledModelsState();
   }
 
@@ -124,11 +125,11 @@ class OfflineAiWeb implements OfflineAiPlugin {
     let isCharging: boolean | null = null;
 
     if (typeof navigator !== 'undefined') {
-      if ('hardwareConcurrency' in navigator) {
-        cpuCores = navigator.hardwareConcurrency || null;
+      if ('hardwareConcurrency' in navigator && typeof navigator.hardwareConcurrency === 'number') {
+        cpuCores = navigator.hardwareConcurrency;
       }
-      if ('deviceMemory' in (navigator as any)) {
-        availableRamMb = ((navigator as any).deviceMemory || 4) * 1024;
+      if ('deviceMemory' in (navigator as any) && typeof (navigator as any).deviceMemory === 'number') {
+        availableRamMb = Math.round((navigator as any).deviceMemory * 1024);
       }
       if (navigator.storage && navigator.storage.estimate) {
         try {
@@ -150,19 +151,20 @@ class OfflineAiWeb implements OfflineAiPlugin {
     let recommendedModelId = 'whisper-base';
     if (availableRamMb !== null && availableRamMb < 3000) {
       recommendedModelId = 'whisper-tiny';
-    } else if (availableRamMb !== null && availableRamMb >= 6000 && (cpuCores || 4) >= 8) {
+    } else if (availableRamMb !== null && availableRamMb >= 6000 && (cpuCores || 0) >= 8) {
       recommendedModelId = 'whisper-small';
     }
 
     return {
       availableRamMb,
       cpuCores,
-      architecture: typeof navigator !== 'undefined' ? (navigator as any).platform || 'arm64' : 'arm64',
-      androidApiLevel: 34,
+      architecture: typeof navigator !== 'undefined' ? (navigator as any).userAgentData?.platform || navigator.platform || null : null,
+      androidApiLevel: null, // Web browser environment is not Android OS
       availableStorageMb,
       batteryLevel,
       isCharging,
       recommendedModelId,
+      isNativeEngineAvailable: false,
     };
   }
 
@@ -226,6 +228,15 @@ class OfflineAiWeb implements OfflineAiPlugin {
       checksumVerified: false,
       error: 'Model installation requires verified model binary artifact. Native on-device storage is required on Android.',
     };
+  }
+
+  public async cancelModelDownload(options: { modelId: string }): Promise<void> {
+    this.notifyListeners('modelDownloadProgress', {
+      modelId: options.modelId,
+      bytesDownloaded: 0,
+      totalBytes: 0,
+      percent: 0,
+    });
   }
 
   public async deleteSpeechModel(options: { modelId: string }): Promise<void> {

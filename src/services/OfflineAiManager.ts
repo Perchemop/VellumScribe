@@ -33,7 +33,7 @@ export class OfflineAiManager {
   }
 
   /**
-   * Detect device AI capabilities
+   * Detect device AI capabilities with real metrics (no simulated fallbacks)
    */
   public async getDeviceCapabilities(): Promise<AiCapabilities> {
     try {
@@ -41,14 +41,15 @@ export class OfflineAiManager {
     } catch (e) {
       AppLogger.warn('OfflineAiManager', 'Could not query capabilities plugin', e);
       return {
-        availableRamMb: 4096,
-        cpuCores: 8,
-        architecture: 'arm64',
-        androidApiLevel: 34,
-        availableStorageMb: 20000,
-        batteryLevel: 90,
-        isCharging: true,
+        availableRamMb: null,
+        cpuCores: null,
+        architecture: null,
+        androidApiLevel: null,
+        availableStorageMb: null,
+        batteryLevel: null,
+        isCharging: null,
         recommendedModelId: 'whisper-base',
+        isNativeEngineAvailable: false,
       };
     }
   }
@@ -111,6 +112,13 @@ export class OfflineAiManager {
   }
 
   /**
+   * Cancel in-progress speech model download (P1-10)
+   */
+  public async cancelModelDownload(modelId: string): Promise<void> {
+    await OfflineAi.cancelModelDownload({ modelId });
+  }
+
+  /**
    * Delete speech model
    */
   public async deleteModel(modelId: string): Promise<void> {
@@ -141,16 +149,18 @@ export class OfflineAiManager {
     if (
       caps.batteryLevel !== null &&
       caps.batteryLevel < 15 &&
-      !caps.isCharging &&
+      caps.isCharging === false &&
       recording.duration_seconds > 600
     ) {
       AppLogger.warn('OfflineAiManager', `Battery low (${caps.batteryLevel}%), long transcription.`);
     }
 
+    const selectedLanguage = options?.language && options.language.trim().length > 0 ? options.language.trim() : 'auto';
+
     return await OfflineAi.startTranscription({
       recordingId,
       modelId: targetModelId,
-      language: options?.language,
+      language: selectedLanguage,
     });
   }
 
@@ -169,20 +179,63 @@ export class OfflineAiManager {
   }
 
   /**
-   * Recover any interrupted transcription jobs after app restart
+   * Recover any interrupted transcription jobs after app restart or process death.
+   * Leverages durable chunk checkpoints to restore partial transcripts.
    */
   public async recoverInterruptedJobs(): Promise<number> {
     try {
       const incomplete = TranscriptionRepository.getIncompleteJobs();
       let recoveredCount = 0;
       for (const job of incomplete) {
-        AppLogger.info('OfflineAiManager', `Recovering incomplete transcription #${job.id}`);
-        // Mark failed or re-queue for recovery
+        AppLogger.info('OfflineAiManager', `Inspecting interrupted transcription #${job.id}`);
+
+        // Check if there are durable chunk checkpoints saved
+        if (SqliteEngine.isReady()) {
+          try {
+            const checkpoints = SqliteEngine.query<{
+              sequence: number;
+              text: string | null;
+            }>(
+              'SELECT sequence, text FROM transcription_segments WHERE transcription_id = ? ORDER BY sequence ASC',
+              [job.id]
+            );
+
+            if (checkpoints && checkpoints.length > 0) {
+              const partialText = checkpoints
+                .map((c) => c.text || '')
+                .filter((t) => t.trim().length > 0)
+                .join(' ');
+
+              if (partialText.trim().length > 0) {
+                // Restore partial transcript
+                TranscriptionRepository.saveTranscription({
+                  id: job.id,
+                  recording_id: job.recording_id,
+                  engine: 'whisper.cpp',
+                  model_id: job.model_id,
+                  status: 'COMPLETED',
+                  text: partialText,
+                  completed_at: Date.now(),
+                });
+                AppLogger.info(
+                  'OfflineAiManager',
+                  `Recovered partial transcript from ${checkpoints.length} chunk checkpoints for job #${job.id}`
+                );
+                recoveredCount++;
+                continue;
+              }
+            }
+          } catch (cpErr) {
+            AppLogger.warn('OfflineAiManager', 'Could not read checkpoints during recovery', cpErr);
+          }
+        }
+
+        // If no checkpoints found, mark failed cleanly with explanation
         TranscriptionRepository.updateStatus(
           job.id,
           'FAILED',
           'OFFLINE_AI_UNKNOWN',
-          'Interrupted by process termination. You can safely retry.'
+          'Interrupted by system process termination. You can safely restart transcription.'
         );
         recoveredCount++;
       }
@@ -194,9 +247,9 @@ export class OfflineAiManager {
   }
 
   /**
-   * Offline Storage Management breakdown
+   * Dynamic Offline Storage Accounting (P2-01)
    */
-  public getStorageBreakdown(): StorageBreakdown {
+  public async getStorageBreakdown(): Promise<StorageBreakdown> {
     try {
       // 1. Recordings storage
       const recRows = SqliteEngine.query<{ total: number }>('SELECT SUM(file_size) as total FROM recordings');
@@ -208,8 +261,18 @@ export class OfflineAiManager {
       );
       const transcriptsBytes = transRows[0]?.total || 0;
 
-      // 3. Models storage (approximate installed size)
-      const modelsBytes = 32450000 + 59800000; // default installed tiny & base
+      // 3. Dynamic models storage
+      let modelsBytes = 0;
+      try {
+        const models = await this.listSpeechModels();
+        for (const m of models) {
+          if (m.installed) {
+            modelsBytes += m.downloadBytes || 0;
+          }
+        }
+      } catch {
+        modelsBytes = 0;
+      }
 
       return {
         modelsBytes,
@@ -219,10 +282,10 @@ export class OfflineAiManager {
       };
     } catch {
       return {
-        modelsBytes: 92250000,
+        modelsBytes: 0,
         recordingsBytes: 0,
         transcriptsBytes: 0,
-        totalBytes: 92250000,
+        totalBytes: 0,
       };
     }
   }

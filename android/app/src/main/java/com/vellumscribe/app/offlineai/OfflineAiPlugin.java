@@ -1,5 +1,10 @@
 package com.vellumscribe.app.offlineai;
 
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
 import android.util.Log;
 import androidx.work.Data;
 import androidx.work.ExistingWorkPolicy;
@@ -18,35 +23,93 @@ import com.vellumscribe.app.offlineai.whisper.WhisperEngine;
 import com.vellumscribe.app.offlineai.workers.TranscriptionWorker;
 
 import java.io.File;
-import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "OfflineAi")
 public class OfflineAiPlugin extends Plugin {
     private static final String TAG = "OfflineAiPlugin";
     private ModelManager modelManager;
+    private ExecutorService downloadExecutor;
+    private final Map<String, AtomicBoolean> activeDownloads = new ConcurrentHashMap<>();
 
     @Override
     public void load() {
         super.load();
         modelManager = new ModelManager(getContext());
+        downloadExecutor = Executors.newFixedThreadPool(2);
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (downloadExecutor != null) {
+            downloadExecutor.shutdownNow();
+        }
+        super.handleOnDestroy();
     }
 
     @PluginMethod
     public void getCapabilities(PluginCall call) {
         JSObject ret = new JSObject();
-        Runtime runtime = Runtime.getRuntime();
-        long maxMemoryMb = runtime.maxMemory() / (1024 * 1024);
-        int cores = runtime.availableProcessors();
 
-        ret.put("availableRamMb", maxMemoryMb);
+        // 1. Real RAM via ActivityManager
+        long totalRamMb = 0;
+        long availRamMb = 0;
+        try {
+            ActivityManager actManager = (ActivityManager) getContext().getSystemService(Context.ACTIVITY_SERVICE);
+            if (actManager != null) {
+                ActivityManager.MemoryInfo memInfo = new ActivityManager.MemoryInfo();
+                actManager.getMemoryInfo(memInfo);
+                totalRamMb = memInfo.totalMem / (1024 * 1024);
+                availRamMb = memInfo.availMem / (1024 * 1024);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed reading memory info", e);
+        }
+
+        int cores = Runtime.getRuntime().availableProcessors();
+        long freeStorageMb = getContext().getFilesDir().getFreeSpace() / (1024 * 1024);
+
+        // 2. Real Battery status via BatteryManager
+        Integer batteryLevel = null;
+        Boolean isCharging = null;
+        try {
+            Intent batteryIntent = getContext().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (batteryIntent != null) {
+                int rawLevel = batteryIntent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int scale = batteryIntent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+                int status = batteryIntent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+                if (rawLevel >= 0 && scale > 0) {
+                    batteryLevel = (int) ((rawLevel / (float) scale) * 100);
+                }
+                isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed reading battery status", e);
+        }
+
+        boolean nativeEngineReady = WhisperEngine.isNativeLibraryAvailable();
+
+        ret.put("availableRamMb", availRamMb > 0 ? availRamMb : null);
+        ret.put("totalRamMb", totalRamMb > 0 ? totalRamMb : null);
         ret.put("cpuCores", cores);
         ret.put("architecture", System.getProperty("os.arch"));
         ret.put("androidApiLevel", android.os.Build.VERSION.SDK_INT);
-        ret.put("availableStorageMb", getContext().getFilesDir().getFreeSpace() / (1024 * 1024));
-        ret.put("batteryLevel", null);
-        ret.put("isCharging", null);
-        ret.put("isNativeEngineAvailable", WhisperEngine.isNativeLibraryAvailable());
-        ret.put("recommendedModelId", maxMemoryMb < 3000 ? "whisper-tiny" : "whisper-base");
+        ret.put("availableStorageMb", freeStorageMb);
+        ret.put("batteryLevel", batteryLevel);
+        ret.put("isCharging", isCharging);
+        ret.put("isNativeEngineAvailable", nativeEngineReady);
+
+        String recommended = "whisper-base";
+        if (availRamMb > 0 && availRamMb < 3000) {
+            recommended = "whisper-tiny";
+        } else if (availRamMb >= 6000 && cores >= 8) {
+            recommended = "whisper-small";
+        }
+        ret.put("recommendedModelId", recommended);
 
         call.resolve(ret);
     }
@@ -55,44 +118,45 @@ public class OfflineAiPlugin extends Plugin {
     public void listSpeechModels(PluginCall call) {
         JSArray arr = new JSArray();
 
-        JSObject tiny = new JSObject();
-        tiny.put("id", "whisper-tiny");
-        tiny.put("displayName", "Whisper Tiny (Quantized Q5_1)");
-        tiny.put("engine", "whisper.cpp");
-        tiny.put("languageMode", "multilingual");
-        tiny.put("quantization", "q5_1");
-        tiny.put("downloadBytes", 31452000);
-        tiny.put("accuracyClass", "fast");
-        tiny.put("installed", modelManager.isModelInstalled("whisper-tiny"));
-        tiny.put("sha256", "313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a");
-        tiny.put("license", "MIT");
-        arr.put(tiny);
+        for (Map.Entry<String, ModelManager.ModelMeta> entry : ModelManager.VERIFIED_MODELS.entrySet()) {
+            String key = entry.getKey();
+            ModelManager.ModelMeta meta = entry.getValue();
 
-        JSObject base = new JSObject();
-        base.put("id", "whisper-base");
-        base.put("displayName", "Whisper Base (Quantized Q5_1)");
-        base.put("engine", "whisper.cpp");
-        base.put("languageMode", "multilingual");
-        base.put("quantization", "q5_1");
-        base.put("downloadBytes", 57680000);
-        base.put("accuracyClass", "balanced");
-        base.put("installed", modelManager.isModelInstalled("whisper-base"));
-        base.put("sha256", "41b71457492c10b7b137f8f60bfb72f85e43a91081552a488c037cb97c55127d");
-        base.put("license", "MIT");
-        arr.put(base);
+            JSObject item = new JSObject();
+            item.put("id", meta.id);
+            item.put("filename", meta.filename);
+            item.put("downloadUrl", meta.downloadUrl);
+            item.put("engine", "whisper.cpp");
+            item.put("languageMode", "multilingual");
+            item.put("quantization", "q5_1");
+            item.put("downloadBytes", meta.expectedBytes);
+            item.put("installed", modelManager.isModelInstalled(meta.id));
+            item.put("installedSizeBytes", modelManager.getModelStorageSize(meta.id));
+            item.put("sha256", meta.expectedSha256);
+            item.put("license", "MIT");
 
-        JSObject small = new JSObject();
-        small.put("id", "whisper-small");
-        small.put("displayName", "Whisper Small (Quantized Q5_1)");
-        small.put("engine", "whisper.cpp");
-        small.put("languageMode", "multilingual");
-        small.put("quantization", "q5_1");
-        small.put("downloadBytes", 182400000);
-        small.put("accuracyClass", "accurate");
-        small.put("installed", modelManager.isModelInstalled("whisper-small"));
-        small.put("sha256", "36a8d6728c3a1059f0f9b31d87e5ccbe133cf2efb529944f2fb9a7a671ef07c7");
-        small.put("license", "MIT");
-        arr.put(small);
+            if ("whisper-tiny".equals(meta.id)) {
+                item.put("displayName", "Whisper Tiny (Quantized Q5_1)");
+                item.put("accuracyClass", "fast");
+                item.put("minimumRamMb", 1024);
+                item.put("recommendedRamMb", 2048);
+                item.put("description", "Ultra-fast speech recognition with minimal memory footprint. Ideal for quick memos and low-power devices.");
+            } else if ("whisper-base".equals(meta.id)) {
+                item.put("displayName", "Whisper Base (Quantized Q5_1)");
+                item.put("accuracyClass", "balanced");
+                item.put("minimumRamMb", 2048);
+                item.put("recommendedRamMb", 4096);
+                item.put("description", "Recommended default model. Excellent balance of high accuracy and processing speed for meetings and dictations.");
+            } else if ("whisper-small".equals(meta.id)) {
+                item.put("displayName", "Whisper Small (Quantized Q5_1)");
+                item.put("accuracyClass", "accurate");
+                item.put("minimumRamMb", 4096);
+                item.put("recommendedRamMb", 8192);
+                item.put("description", "High accuracy transcription suitable for complex vocabulary, technical terminology, and multilingual meetings.");
+            }
+
+            arr.put(item);
+        }
 
         JSObject res = new JSObject();
         res.put("models", arr);
@@ -118,7 +182,6 @@ public class OfflineAiPlugin extends Plugin {
             return;
         }
 
-        // Verify if already installed and valid
         if (modelManager.isModelInstalled(modelId)) {
             JSObject ret = new JSObject();
             ret.put("modelId", modelId);
@@ -128,12 +191,70 @@ public class OfflineAiPlugin extends Plugin {
             return;
         }
 
-        JSObject ret = new JSObject();
-        ret.put("modelId", modelId);
-        ret.put("installed", false);
-        ret.put("checksumVerified", false);
-        ret.put("error", "Model file not present on storage. Download or bundle model artifact before installation.");
-        call.resolve(ret);
+        // Check disk space before starting
+        long freeMb = getContext().getFilesDir().getFreeSpace() / (1024 * 1024);
+        long requiredMb = (meta.expectedBytes / (1024 * 1024)) + 50;
+        if (freeMb < requiredMb) {
+            JSObject ret = new JSObject();
+            ret.put("modelId", modelId);
+            ret.put("installed", false);
+            ret.put("error", "Insufficient storage: " + requiredMb + " MB required, " + freeMb + " MB available.");
+            call.resolve(ret);
+            return;
+        }
+
+        AtomicBoolean cancelToken = new AtomicBoolean(false);
+        activeDownloads.put(modelId, cancelToken);
+
+        downloadExecutor.execute(() -> {
+            try {
+                ModelManager.DownloadResult result = modelManager.downloadAndInstallModel(
+                    modelId,
+                    (bytesDownloaded, totalBytes, percent) -> {
+                        JSObject progressObj = new JSObject();
+                        progressObj.put("modelId", modelId);
+                        progressObj.put("bytesDownloaded", bytesDownloaded);
+                        progressObj.put("totalBytes", totalBytes);
+                        progressObj.put("percent", percent);
+                        notifyListeners("modelDownloadProgress", progressObj);
+                    },
+                    cancelToken
+                );
+
+                activeDownloads.remove(modelId);
+
+                JSObject ret = new JSObject();
+                ret.put("modelId", modelId);
+                ret.put("installed", result.success);
+                ret.put("checksumVerified", result.checksumVerified);
+                ret.put("bytesWritten", result.bytesWritten);
+                if (result.errorMessage != null) {
+                    ret.put("error", result.errorMessage);
+                }
+                call.resolve(ret);
+            } catch (Exception e) {
+                activeDownloads.remove(modelId);
+                Log.e(TAG, "Download execution failed for " + modelId, e);
+                JSObject ret = new JSObject();
+                ret.put("modelId", modelId);
+                ret.put("installed", false);
+                ret.put("error", "Download failed: " + e.getMessage());
+                call.resolve(ret);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void cancelModelDownload(PluginCall call) {
+        String modelId = call.getString("modelId");
+        if (modelId != null) {
+            AtomicBoolean token = activeDownloads.get(modelId);
+            if (token != null) {
+                token.set(true);
+                activeDownloads.remove(modelId);
+            }
+        }
+        call.resolve();
     }
 
     @PluginMethod
@@ -146,14 +267,28 @@ public class OfflineAiPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void getModelStorageUsage(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("totalBytes", modelManager.getTotalModelsStorageSize());
+        JSObject perModel = new JSObject();
+        for (String id : ModelManager.VERIFIED_MODELS.keySet()) {
+            perModel.put(id, modelManager.getModelStorageSize(id));
+        }
+        ret.put("models", perModel);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void startTranscription(PluginCall call) {
         String recordingId = call.getString("recordingId");
         String modelId = call.getString("modelId", "whisper-base");
+        String language = call.getString("language", "auto"); // Propagate language parameter!
         String audioPath = call.getString("audioPath");
         long durationMs = call.getInt("durationMs", 30000);
+        int startChunk = call.getInt("startChunk", 1); // Resume support!
 
         if (!modelManager.isModelInstalled(modelId)) {
-            call.reject("OFFLINE_AI_MODEL_MISSING: Model is not installed on device.");
+            call.reject("OFFLINE_AI_MODEL_MISSING: Model '" + modelId + "' is not installed on device.");
             return;
         }
 
@@ -163,8 +298,10 @@ public class OfflineAiPlugin extends Plugin {
             .putString(TranscriptionWorker.KEY_JOB_ID, jobId)
             .putLong(TranscriptionWorker.KEY_RECORDING_ID, Long.parseLong(recordingId != null ? recordingId : "0"))
             .putString(TranscriptionWorker.KEY_MODEL_ID, modelId)
+            .putString(TranscriptionWorker.KEY_LANGUAGE, language != null ? language : "auto")
             .putString(TranscriptionWorker.KEY_AUDIO_PATH, audioPath != null ? audioPath : "")
             .putLong(TranscriptionWorker.KEY_DURATION_MS, durationMs)
+            .putInt(TranscriptionWorker.KEY_START_CHUNK, startChunk)
             .build();
 
         OneTimeWorkRequest workRequest = new OneTimeWorkRequest.Builder(TranscriptionWorker.class)
@@ -206,19 +343,25 @@ public class OfflineAiPlugin extends Plugin {
                     ret.put("progressPercent", 100);
                     ret.put("phaseLabel", "Complete");
                     ret.put("transcript", info.getOutputData().getString("transcript"));
+                    ret.put("totalChunks", info.getOutputData().getInt("total_chunks", 1));
                 } else if (state == WorkInfo.State.FAILED) {
                     ret.put("status", "FAILED");
                     ret.put("progressPercent", 0);
                     ret.put("phaseLabel", "Failed");
                     ret.put("error", info.getOutputData().getString("error_message"));
+                    ret.put("lastCompletedChunk", info.getOutputData().getInt("last_completed_chunk", 0));
                 } else if (state == WorkInfo.State.CANCELLED) {
                     ret.put("status", "CANCELLED");
                     ret.put("phaseLabel", "Cancelled");
                 } else if (state == WorkInfo.State.RUNNING) {
                     int progress = info.getProgress().getInt("progress", 50);
+                    int currentChunk = info.getProgress().getInt("current_chunk", 0);
+                    int totalChunks = info.getProgress().getInt("total_chunks", 0);
                     ret.put("status", "TRANSCRIBING");
                     ret.put("progressPercent", progress);
-                    ret.put("phaseLabel", "Transcribing speech...");
+                    ret.put("currentChunk", currentChunk);
+                    ret.put("totalChunks", totalChunks);
+                    ret.put("phaseLabel", "Transcribing speech: chunk " + currentChunk + " of " + totalChunks);
                 } else {
                     ret.put("status", "QUEUED");
                     ret.put("progressPercent", 5);
