@@ -110,11 +110,6 @@ export default function App() {
 
     const notifiedKey = 'vellumscribe_notified_reminders';
     const checkReminders = () => {
-      // Pause reminder processing when app/tab is hidden or backgrounded
-      if (typeof document !== 'undefined' && document.hidden) {
-        return;
-      }
-
       try {
         const notified: string[] = JSON.parse(sessionStorage.getItem(notifiedKey) || '[]');
         const now = Date.now();
@@ -126,13 +121,17 @@ export default function App() {
           notified.push(String(note.id));
           sessionStorage.setItem(notifiedKey, JSON.stringify(notified));
 
-          // 1. In-app toast notification with quick jump
-          showToast(`Reminder: ${note.title || 'Untitled Note'}`, {
-            label: 'View',
-            onClick: () => setSelectedNoteId(note.id),
-          });
+          const isForeground = typeof document === 'undefined' || !document.hidden;
 
-          // 2. Web browser notification if granted
+          // 1. In-app toast notification with quick jump (when foregrounded)
+          if (isForeground) {
+            showToast(`Reminder: ${note.title || 'Untitled Note'}`, {
+              label: 'View',
+              onClick: () => setSelectedNoteId(note.id),
+            });
+          }
+
+          // 2. Web browser notification if granted (even when tab is backgrounded)
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               new Notification(`Reminder: ${note.title || 'Untitled Note'}`, {

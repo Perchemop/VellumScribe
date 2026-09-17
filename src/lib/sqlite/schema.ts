@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const DB_SCHEMA_VERSION = 9;
+export const DB_SCHEMA_VERSION = 10;
 export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
@@ -365,6 +365,50 @@ export const MIGRATIONS = [
       );
 
       CREATE INDEX IF NOT EXISTS idx_cloud_sync_queue_status ON cloud_sync_queue(status, queued_at);
+    `,
+  },
+  {
+    version: 10,
+    description: 'Durable FTS search index jobs, AI data provenance, and media file metadata',
+    sql: `
+      CREATE TABLE IF NOT EXISTS search_index_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        note_id INTEGER NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'processing' | 'completed' | 'failed'
+        attempts INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_search_index_jobs_status ON search_index_jobs(status, updated_at);
+
+      CREATE TABLE IF NOT EXISTS ai_provenance (
+        id TEXT PRIMARY KEY,
+        target_entity_type TEXT NOT NULL, -- 'note' | 'checklist' | 'transcript' | 'summary'
+        target_entity_id INTEGER NOT NULL,
+        source_entity_type TEXT,
+        source_entity_id INTEGER,
+        model_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        prompt_hash TEXT,
+        generated_at INTEGER NOT NULL,
+        metadata_json TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ai_provenance_target ON ai_provenance(target_entity_type, target_entity_id);
+
+      CREATE TABLE IF NOT EXISTS media_files (
+        media_key TEXT PRIMARY KEY,
+        note_id INTEGER,
+        file_path TEXT,
+        mime_type TEXT NOT NULL,
+        byte_size INTEGER NOT NULL,
+        checksum TEXT,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_media_files_note ON media_files(note_id);
     `,
   },
 ];

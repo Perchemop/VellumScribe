@@ -1,0 +1,85 @@
+import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { AppLogger } from '../lib/logger';
+
+export interface AiProvenanceRecord {
+  id: string;
+  target_entity_type: 'note' | 'checklist' | 'transcript' | 'summary';
+  target_entity_id: number;
+  source_entity_type?: string;
+  source_entity_id?: number;
+  model_id: string;
+  provider: string;
+  prompt_hash?: string;
+  generated_at: number;
+  metadata?: Record<string, any>;
+}
+
+export class AiProvenanceService {
+  /**
+   * Records provenance for any AI-generated artifact in the SQLite database
+   */
+  public static recordProvenance(data: Omit<AiProvenanceRecord, 'id' | 'generated_at'>): void {
+    try {
+      const id = `prov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const now = Date.now();
+      const metadataJson = data.metadata ? JSON.stringify(data.metadata) : null;
+
+      SqliteEngine.run(
+        `INSERT OR REPLACE INTO ai_provenance 
+          (id, target_entity_type, target_entity_id, source_entity_type, source_entity_id, model_id, provider, prompt_hash, generated_at, metadata_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          data.target_entity_type,
+          data.target_entity_id,
+          data.source_entity_type || null,
+          data.source_entity_id || null,
+          data.model_id,
+          data.provider,
+          data.prompt_hash || null,
+          now,
+          metadataJson,
+        ]
+      );
+      AppLogger.debug('AiProvenanceService', `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`);
+    } catch (e) {
+      AppLogger.warn('AiProvenanceService', 'Failed to record AI provenance', e);
+    }
+  }
+
+  /**
+   * Retrieves provenance records for a given entity
+   */
+  public static getProvenance(targetEntityType: string, targetEntityId: number): AiProvenanceRecord | null {
+    try {
+      const rows = SqliteEngine.query<any>(
+        `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`,
+        [targetEntityType, targetEntityId]
+      );
+      if (!rows || rows.length === 0) return null;
+
+      const r = rows[0];
+      let metadata: Record<string, any> | undefined;
+      if (r.metadata_json) {
+        try {
+          metadata = JSON.parse(r.metadata_json);
+        } catch {}
+      }
+
+      return {
+        id: r.id,
+        target_entity_type: r.target_entity_type,
+        target_entity_id: r.target_entity_id,
+        source_entity_type: r.source_entity_type || undefined,
+        source_entity_id: r.source_entity_id || undefined,
+        model_id: r.model_id,
+        provider: r.provider,
+        prompt_hash: r.prompt_hash || undefined,
+        generated_at: r.generated_at,
+        metadata,
+      };
+    } catch {
+      return null;
+    }
+  }
+}

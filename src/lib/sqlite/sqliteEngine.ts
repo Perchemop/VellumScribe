@@ -215,6 +215,7 @@ export class SqliteEngine {
   private static initPromise: Promise<void> | null = null;
   private static saveTimeout: any = null;
   private static isDirty = false;
+  private static durabilityStatus: 'saved' | 'saving' | 'pending' | 'failed' = 'saved';
   private static transactionDepth = 0;
   private static recoveryState: RecoveryState = {
     hasError: false,
@@ -653,6 +654,7 @@ export class SqliteEngine {
    */
   public static scheduleSave(): void {
     this.isDirty = true;
+    this.durabilityStatus = 'pending';
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
     }
@@ -665,6 +667,13 @@ export class SqliteEngine {
 
   public static markDirty(): void {
     this.scheduleSave();
+  }
+
+  /**
+   * Current durability status of the SQLite database
+   */
+  public static getDurabilityStatus(): 'saved' | 'saving' | 'pending' | 'failed' {
+    return this.durabilityStatus;
   }
 
   /**
@@ -702,13 +711,15 @@ export class SqliteEngine {
   public static async flush(): Promise<void> {
     if (!this.db || !this.isDirty) return;
     this.cancelPendingSave();
+    this.durabilityStatus = 'saving';
 
     try {
       const binary = this.db.export();
       await idbStorage.saveBinary(binary);
 
-      if (Capacitor.isNativePlatform()) {
-        // 1. Back up current.sqlite to previous.sqlite if current exists
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+        // Native platform stores data directly via filesystem / SQLite adapter;
+        // save periodic backup checkpoint safely
         try {
           const currentFile = await Filesystem.readFile({
             path: NATIVE_DB_PATH,
@@ -726,7 +737,6 @@ export class SqliteEngine {
           // No current file to back up yet
         }
 
-        // 2. Persist new database binary to current.sqlite
         const base64 = uint8ArrayToBase64(binary);
         await Filesystem.writeFile({
           path: NATIVE_DB_PATH,
@@ -737,8 +747,10 @@ export class SqliteEngine {
       }
 
       this.isDirty = false;
+      this.durabilityStatus = 'saved';
       AppLogger.debug('SqliteEngine', 'Flushed SQLite binary to persistent storage successfully');
     } catch (e) {
+      this.durabilityStatus = 'failed';
       AppLogger.error('SqliteEngine', 'Failed to flush SQLite binary to storage', e);
       throw e;
     }
@@ -779,6 +791,13 @@ export class SqliteEngine {
     await this.runMigrations();
     await this.flushToStorage();
     AppLogger.info('SqliteEngine', 'Successfully imported new SQLite database binary.');
+  }
+
+  /**
+   * Quick boolean integrity check
+   */
+  public static verifyIntegrity(): boolean {
+    return this.checkIntegrity().status === 'ok';
   }
 
   /**

@@ -19,7 +19,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { AudioRecorderManager } from '../lib/audioRecorder';
+import { AudioRecordingManager } from '../services/AudioRecordingManager';
 import { GeminiApiService } from '../lib/geminiService';
 import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';
@@ -81,7 +81,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     }
   };
 
-  const recorderRef = useRef<AudioRecorderManager | null>(null);
+  const recorderRef = useRef<AudioRecordingManager | null>(null);
   const timerRef = useRef<number | null>(null);
   const audioElemRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -100,7 +100,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
   };
 
   useEffect(() => {
-    recorderRef.current = new AudioRecorderManager();
+    recorderRef.current = new AudioRecordingManager();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       revokeActiveBlobUrl();

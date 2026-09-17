@@ -5,6 +5,7 @@ export interface SyncStatusProps {
   isOnline: boolean;
   pendingCount?: number;
   isSyncing?: boolean;
+  durabilityStatus?: 'saved' | 'saving' | 'pending' | 'failed';
   error?: string | null;
   onRetry?: () => void;
   className?: string;
@@ -14,10 +15,23 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
   isOnline,
   pendingCount = 0,
   isSyncing = false,
+  durabilityStatus = 'saved',
   error = null,
   onRetry,
   className = '',
 }) => {
+  if (durabilityStatus === 'saving') {
+    return (
+      <div
+        title="Persisting transaction to SQLite..."
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/50 ${className}`}
+      >
+        <RefreshCw className="w-3 h-3 animate-spin text-indigo-600 dark:text-indigo-400 shrink-0" />
+        <span>Saving...</span>
+      </div>
+    );
+  }
+
   if (isSyncing) {
     return (
       <div
