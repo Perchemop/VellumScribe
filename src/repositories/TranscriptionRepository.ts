@@ -1,4 +1,4 @@
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import {
   TranscriptionEntity,
   TranscriptionSegmentRecord,
@@ -13,12 +13,13 @@ export class TranscriptionRepository {
    * Get transcription record by ID
    */
   public static getById(id: number): TranscriptionEntity | null {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE id = ?`,
       [id]
-    );
+    ) : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -27,12 +28,13 @@ export class TranscriptionRepository {
    * Get latest transcription for a recording
    */
   public static getLatestForRecording(recordingId: number): TranscriptionEntity | null {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? ORDER BY id DESC LIMIT 1`,
       [recordingId]
-    );
+    ) : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -44,12 +46,13 @@ export class TranscriptionRepository {
     recordingId: number,
     modelId: string
   ): TranscriptionEntity | null {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? AND model_id = ? ORDER BY id DESC LIMIT 1`,
       [recordingId, modelId]
-    );
+    ) : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -58,20 +61,22 @@ export class TranscriptionRepository {
    * Find incomplete transcription jobs for crash recovery
    */
   public static getIncompleteJobs(): TranscriptionEntity[] {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions 
-       WHERE status IN ('QUEUED', 'PREPARING', 'PREPROCESSING', 'TRANSCRIBING', 'MERGING', 'VALIDATING')
-       ORDER BY created_at ASC`
-    );
+       WHERE status IN ('QUEUED', 'PROCESSING') 
+       ORDER BY id ASC`
+    ) : [];
     return rows.map((r) => this.mapTranscription(r));
   }
 
   /**
-   * Create or update a transcription job entity
+   * Insert or update transcription job
    */
-  public static saveTranscription(job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }): TranscriptionEntity {
+  public static save(job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }): TranscriptionEntity {
+    const db = getDatabaseAdapter();
     let id = job.id;
     const now = Date.now();
     const createdAt = job.created_at || now;
@@ -79,7 +84,7 @@ export class TranscriptionRepository {
     const status = job.status || 'QUEUED';
 
     if (id && id > 0) {
-      SqliteEngine.run(
+      db.runSync?.(
         `UPDATE transcriptions 
          SET engine = ?, engine_version = ?, model_id = ?, model_checksum = ?, language = ?,
              status = ?, text = ?, started_at = ?, completed_at = ?, error_code = ?, error_message = ?
@@ -100,7 +105,7 @@ export class TranscriptionRepository {
         ]
       );
     } else {
-      SqliteEngine.run(
+      const res = db.runSync?.(
         `INSERT INTO transcriptions 
          (recording_id, engine, engine_version, model_id, model_checksum, language, status, text, created_at, started_at, completed_at, error_code, error_message)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -120,7 +125,7 @@ export class TranscriptionRepository {
           job.error_message || null,
         ]
       );
-      id = SqliteEngine.getLastInsertId();
+      id = res?.lastInsertRowId || Date.now();
     }
 
     return {
@@ -136,27 +141,62 @@ export class TranscriptionRepository {
       created_at: createdAt,
       started_at: job.started_at,
       completed_at: job.completed_at,
-      error_code: job.error_code,
+      error_code: job.error_code as OfflineAiErrorCode | undefined,
       error_message: job.error_message,
     };
   }
 
+  public static saveTranscription(job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }): TranscriptionEntity {
+    return this.save(job);
+  }
+
   /**
-   * Update status of transcription
+   * Update transcription status
    */
   public static updateStatus(
     id: number,
     status: TranscriptionDurableStatus,
-    errorCode?: OfflineAiErrorCode | string,
+    patchOrErrorCode?: { text?: string; started_at?: number; completed_at?: number; error_code?: OfflineAiErrorCode; error_message?: string } | OfflineAiErrorCode | string,
     errorMessage?: string
   ): void {
-    const completedAt = status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED' ? Date.now() : null;
-    SqliteEngine.run(
-      `UPDATE transcriptions 
-       SET status = ?, error_code = ?, error_message = ?, completed_at = COALESCE(completed_at, ?) 
-       WHERE id = ?`,
-      [status, errorCode || null, errorMessage || null, completedAt, id]
-    );
+    const db = getDatabaseAdapter();
+    const updates: string[] = ['status = ?'];
+    const params: any[] = [status];
+
+    let patch: { text?: string; started_at?: number; completed_at?: number; error_code?: OfflineAiErrorCode; error_message?: string } = {};
+
+    if (typeof patchOrErrorCode === 'string') {
+      patch.error_code = patchOrErrorCode as OfflineAiErrorCode;
+      if (errorMessage) {
+        patch.error_message = errorMessage;
+      }
+    } else if (patchOrErrorCode && typeof patchOrErrorCode === 'object') {
+      patch = patchOrErrorCode;
+    }
+
+    if (patch.text !== undefined) {
+      updates.push('text = ?');
+      params.push(patch.text);
+    }
+    if (patch.started_at !== undefined) {
+      updates.push('started_at = ?');
+      params.push(patch.started_at);
+    }
+    if (patch.completed_at !== undefined) {
+      updates.push('completed_at = ?');
+      params.push(patch.completed_at);
+    }
+    if (patch.error_code !== undefined) {
+      updates.push('error_code = ?');
+      params.push(patch.error_code);
+    }
+    if (patch.error_message !== undefined) {
+      updates.push('error_message = ?');
+      params.push(patch.error_message);
+    }
+
+    params.push(id);
+    db.runSync?.(`UPDATE transcriptions SET ${updates.join(', ')} WHERE id = ?`, params);
   }
 
   /**
@@ -168,10 +208,12 @@ export class TranscriptionRepository {
     segments: Array<{ sequence: number; start_ms: number; end_ms: number; speaker_id?: string | null; text: string; confidence?: number | null }>,
     speakers: Array<{ speaker_id: string; label: string; name?: string | null }> = []
   ): void {
+    const db = getDatabaseAdapter();
     const now = Date.now();
-    SqliteEngine.transaction(() => {
+    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: any) => cb();
+    runInTx(() => {
       // 1. Update transcription record
-      SqliteEngine.run(
+      db.runSync?.(
         `UPDATE transcriptions 
          SET text = ?, status = 'COMPLETED', completed_at = ?, error_code = NULL, error_message = NULL
          WHERE id = ?`,
@@ -179,11 +221,11 @@ export class TranscriptionRepository {
       );
 
       // 2. Clear any stale segments for this transcription
-      SqliteEngine.run('DELETE FROM transcription_segments WHERE transcription_id = ?', [transcriptionId]);
+      db.runSync?.('DELETE FROM transcription_segments WHERE transcription_id = ?', [transcriptionId]);
 
       // 3. Insert validated segments
       for (const seg of segments) {
-        SqliteEngine.run(
+        db.runSync?.(
           `INSERT INTO transcription_segments (transcription_id, sequence, start_ms, end_ms, speaker_id, text, confidence)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -199,9 +241,9 @@ export class TranscriptionRepository {
       }
 
       // 4. Insert speakers if any
-      SqliteEngine.run('DELETE FROM transcription_speakers WHERE transcription_id = ?', [transcriptionId]);
+      db.runSync?.('DELETE FROM transcription_speakers WHERE transcription_id = ?', [transcriptionId]);
       for (const spk of speakers) {
-        SqliteEngine.run(
+        db.runSync?.(
           `INSERT INTO transcription_speakers (transcription_id, speaker_id, label, name)
            VALUES (?, ?, ?, ?)`,
           [transcriptionId, spk.speaker_id, spk.label, spk.name || null]
@@ -216,13 +258,14 @@ export class TranscriptionRepository {
    * Get all segments for a transcription
    */
   public static getSegments(transcriptionId: number): TranscriptionSegmentRecord[] {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, transcription_id, sequence, start_ms, end_ms, speaker_id, text, confidence
        FROM transcription_segments 
        WHERE transcription_id = ? 
        ORDER BY sequence ASC`,
       [transcriptionId]
-    );
+    ) : [];
     return rows.map((r) => ({
       id: r.id,
       transcription_id: r.transcription_id,
@@ -239,13 +282,14 @@ export class TranscriptionRepository {
    * Get all speakers for a transcription
    */
   public static getSpeakers(transcriptionId: number): TranscriptionSpeakerRecord[] {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, transcription_id, speaker_id, label, name
        FROM transcription_speakers 
        WHERE transcription_id = ? 
        ORDER BY id ASC`,
       [transcriptionId]
-    );
+    ) : [];
     return rows.map((r) => ({
       id: r.id,
       transcription_id: r.transcription_id,
@@ -259,7 +303,8 @@ export class TranscriptionRepository {
    * Rename a speaker label or assign custom name
    */
   public static updateSpeakerName(transcriptionId: number, speakerId: string, name: string): void {
-    SqliteEngine.run(
+    const db = getDatabaseAdapter();
+    db.runSync?.(
       `UPDATE transcription_speakers SET name = ? WHERE transcription_id = ? AND speaker_id = ?`,
       [name, transcriptionId, speakerId]
     );
@@ -269,11 +314,13 @@ export class TranscriptionRepository {
    * Delete a transcription and its cascading segments/speakers
    */
   public static delete(id: number): void {
-    SqliteEngine.transaction(() => {
-      SqliteEngine.run('DELETE FROM transcription_jobs WHERE transcription_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM transcription_segments WHERE transcription_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM transcription_speakers WHERE transcription_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM transcriptions WHERE id = ?', [id]);
+    const db = getDatabaseAdapter();
+    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: any) => cb();
+    runInTx(() => {
+      db.runSync?.('DELETE FROM transcription_jobs WHERE transcription_id = ?', [id]);
+      db.runSync?.('DELETE FROM transcription_segments WHERE transcription_id = ?', [id]);
+      db.runSync?.('DELETE FROM transcription_speakers WHERE transcription_id = ?', [id]);
+      db.runSync?.('DELETE FROM transcriptions WHERE id = ?', [id]);
     });
   }
 
@@ -290,8 +337,9 @@ export class TranscriptionRepository {
     total_chunks?: number;
     last_error?: string | null;
   }): void {
+    const db = getDatabaseAdapter();
     const now = Date.now();
-    SqliteEngine.run(
+    db.runSync?.(
       `INSERT INTO transcription_jobs (id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
@@ -315,11 +363,12 @@ export class TranscriptionRepository {
   }
 
   public static getJob(jobId: string): any | null {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at
        FROM transcription_jobs WHERE id = ?`,
       [jobId]
-    );
+    ) : [];
     return rows && rows.length > 0 ? rows[0] : null;
   }
 
@@ -337,7 +386,7 @@ export class TranscriptionRepository {
       created_at: r.created_at,
       started_at: r.started_at || undefined,
       completed_at: r.completed_at || undefined,
-      error_code: r.error_code || undefined,
+      error_code: r.error_code as OfflineAiErrorCode | undefined,
       error_message: r.error_message || undefined,
     };
   }

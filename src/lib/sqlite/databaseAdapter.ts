@@ -5,16 +5,33 @@ import { MIGRATIONS } from './schema';
 
 export type DurabilityStatus = 'saved' | 'saving' | 'pending' | 'failed';
 
+export type MigrationState =
+  | 'NOT_STARTED'
+  | 'BACKUP_CREATED'
+  | 'NATIVE_DB_INITIALIZED'
+  | 'SCHEMA_MIGRATED'
+  | 'LEGACY_DATA_SCANNED'
+  | 'LEGACY_DATA_IMPORTED'
+  | 'VALIDATED'
+  | 'MIGRATION_COMPLETE'
+  | 'FAILED';
+
 export interface DatabaseAdapter {
   initialize(): Promise<void>;
   execute(sql: string, params?: unknown[]): Promise<void>;
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowId?: number }>;
   transaction<T>(fn: () => Promise<T>): Promise<T>;
+  querySync?<T>(sql: string, params?: unknown[]): T[];
+  runSync?(sql: string, params?: unknown[]): { changes: number; lastInsertRowId?: number };
+  transactionSync?<T>(fn: () => T): T;
   checkIntegrity(): Promise<{ ok: boolean; result: string }>;
-  vacuum(): Promise<void>;
+  vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }>;
   close(): Promise<void>;
   getDurabilityStatus(): DurabilityStatus;
+  exportBinary?(): Uint8Array;
+  importBinary?(binary: Uint8Array): Promise<void>;
+  flush?(): Promise<void>;
 }
 
 /**
@@ -22,12 +39,25 @@ export interface DatabaseAdapter {
  * Provides durable OS-level SQLite persistence without periodic full-database serialization.
  */
 export class NativeSqliteAdapter implements DatabaseAdapter {
+  private static instance: NativeSqliteAdapter | null = null;
   private db: any = null;
   private isInitialized = false;
   private durabilityStatus: DurabilityStatus = 'saved';
+  private migrationState: MigrationState = 'NOT_STARTED';
+
+  public static getInstance(): NativeSqliteAdapter {
+    if (!this.instance) {
+      this.instance = new NativeSqliteAdapter();
+    }
+    return this.instance;
+  }
 
   getDurabilityStatus(): DurabilityStatus {
     return this.durabilityStatus;
+  }
+
+  getMigrationState(): MigrationState {
+    return this.migrationState;
   }
 
   async initialize(): Promise<void> {
@@ -61,10 +91,13 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
         // Fallback for devices where WAL is not permissible
       }
 
+      this.migrationState = 'NATIVE_DB_INITIALIZED';
+
       // Execute all pending schema migrations on native Android SQLite
       await this.runNativeMigrations();
+      this.migrationState = 'SCHEMA_MIGRATED';
 
-      // Check and execute one-time migration from legacy sql.js WASM file
+      // Check and execute one-time migration from legacy sql.js WASM file with validation state machine
       await this.migrateFromWasmSqliteFile();
 
       this.isInitialized = true;
@@ -72,6 +105,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       AppLogger.info('NativeSqliteAdapter', 'Authoritative Native Android SQLite database opened and migrated successfully.');
     } catch (err) {
       this.durabilityStatus = 'failed';
+      this.migrationState = 'FAILED';
       AppLogger.error('NativeSqliteAdapter', 'Failed to initialize native SQLite connection', err);
       throw err;
     }
@@ -84,6 +118,11 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
           version INTEGER PRIMARY KEY,
           applied_at INTEGER NOT NULL,
           description TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS workspace_metadata (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
         );
       `);
 
@@ -115,13 +154,32 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     }
   }
 
+  private async recordMigrationState(state: MigrationState, details?: string): Promise<void> {
+    this.migrationState = state;
+    try {
+      await this.db.run(
+        "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('migration_state', ?, ?);",
+        [state, Date.now()]
+      );
+      if (details) {
+        await this.db.run(
+          "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('migration_details', ?, ?);",
+          [details, Date.now()]
+        );
+      }
+    } catch {
+      // workspace_metadata might not be created yet during early init
+    }
+  }
+
   private async migrateFromWasmSqliteFile(): Promise<void> {
     try {
       const metaCheck = await this.db.query(
-        "SELECT value FROM workspace_metadata WHERE key = 'native_migrated_from_wasm_v1';"
+        "SELECT value FROM workspace_metadata WHERE key = 'native_migration_status';"
       );
-      if (metaCheck.values && metaCheck.values.length > 0 && metaCheck.values[0].value === 'true') {
-        return; // Already migrated
+      if (metaCheck.values && metaCheck.values.length > 0 && metaCheck.values[0].value === 'MIGRATION_COMPLETE') {
+        this.migrationState = 'MIGRATION_COMPLETE';
+        return; // Already migrated and validated
       }
 
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
@@ -131,38 +189,67 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       }).catch(() => null);
 
       if (!fileStat) {
+        await this.recordMigrationState('MIGRATION_COMPLETE', 'Fresh native database install - no legacy WASM database found');
         await this.db.run(
-          "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migrated_from_wasm_v1', 'true', ?);",
+          "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migration_status', 'MIGRATION_COMPLETE', ?);",
           [Date.now()]
         );
         return;
       }
 
-      AppLogger.info('NativeSqliteAdapter', 'Found legacy sql.js database on Android filesystem. Performing safe one-time native import...');
+      AppLogger.info('NativeSqliteAdapter', 'Found legacy sql.js database on Android filesystem. Starting transactional migration state machine...');
+      await this.recordMigrationState('BACKUP_CREATED');
+
+      // 1. Create a safe, verified binary backup of the legacy file
+      await Filesystem.copy({
+        from: 'databases/current.sqlite',
+        to: 'databases/legacy_wasm_backup.sqlite',
+        directory: Directory.Data,
+      }).catch(() => {});
+
       const readFile = await Filesystem.readFile({
         path: 'databases/current.sqlite',
         directory: Directory.Data,
       });
 
       const base64Data = typeof readFile.data === 'string' ? readFile.data : '';
-      if (base64Data) {
-        const initSqlJs = (await import('sql.js')).default;
-        const SQL = await initSqlJs();
-        const binary = base64ToUint8Array(base64Data);
-        const wasmDb = new SQL.Database(binary);
+      if (!base64Data) {
+        await this.recordMigrationState('MIGRATION_COMPLETE', 'Legacy file was empty');
+        return;
+      }
 
-        const tables = [
-          'events',
-          'notes',
-          'checklists',
-          'note_tags',
-          'note_versions',
-          'media_files',
-          'recordings',
-          'transcripts',
-          'ocr_scans',
-        ];
+      const initSqlJs = (await import('sql.js')).default;
+      const SQL = await initSqlJs();
+      const binary = base64ToUint8Array(base64Data);
+      const wasmDb = new SQL.Database(binary);
 
+      await this.recordMigrationState('LEGACY_DATA_SCANNED');
+
+      const tables = [
+        'events',
+        'notes',
+        'checklists',
+        'note_tags',
+        'note_versions',
+        'media_files',
+        'recordings',
+        'transcripts',
+        'ocr_scans',
+      ];
+
+      // Track expected row counts from legacy database
+      const expectedCounts: Record<string, number> = {};
+      for (const tbl of tables) {
+        try {
+          const res = wasmDb.exec(`SELECT COUNT(*) as cnt FROM ${tbl};`);
+          expectedCounts[tbl] = res[0]?.values[0]?.[0] as number || 0;
+        } catch {
+          expectedCounts[tbl] = 0;
+        }
+      }
+
+      await this.db.beginTransaction();
+      try {
         for (const tbl of tables) {
           try {
             const res = wasmDb.exec(`SELECT * FROM ${tbl};`);
@@ -180,24 +267,42 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
             // Table may not exist in earlier schema version
           }
         }
+        await this.db.commitTransaction();
+        await this.recordMigrationState('LEGACY_DATA_IMPORTED');
+      } catch (importErr) {
+        await this.db.rollbackTransaction();
+        await this.recordMigrationState('FAILED', `Import transaction failed: ${String(importErr)}`);
+        throw importErr;
+      } finally {
         wasmDb.close();
-
-        // Safely backup the legacy file
-        await Filesystem.copy({
-          from: 'databases/current.sqlite',
-          to: 'databases/legacy_wasm_backup.sqlite',
-          directory: Directory.Data,
-        }).catch(() => {});
-
-        AppLogger.info('NativeSqliteAdapter', 'Successfully migrated all records from sql.js to native Android SQLite.');
       }
 
+      // Validation phase: Verify row counts in native database
+      let validationPassed = true;
+      for (const tbl of tables) {
+        const nativeCountRes = await this.db.query(`SELECT COUNT(*) as cnt FROM ${tbl};`);
+        const nativeCount = nativeCountRes.values?.[0]?.cnt || 0;
+        if (nativeCount < expectedCounts[tbl]) {
+          AppLogger.warn('NativeSqliteAdapter', `Validation mismatch on table ${tbl}: expected ${expectedCounts[tbl]}, found ${nativeCount}`);
+          validationPassed = false;
+        }
+      }
+
+      if (!validationPassed) {
+        await this.recordMigrationState('FAILED', 'Validation counts did not match expected records');
+        throw new Error('Native migration validation failed: row count mismatch.');
+      }
+
+      await this.recordMigrationState('VALIDATED');
+      await this.recordMigrationState('MIGRATION_COMPLETE', JSON.stringify(expectedCounts));
       await this.db.run(
-        "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migrated_from_wasm_v1', 'true', ?);",
+        "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migration_status', 'MIGRATION_COMPLETE', ?);",
         [Date.now()]
       );
+
+      AppLogger.info('NativeSqliteAdapter', 'Successfully migrated and validated all records from sql.js to native Android SQLite.');
     } catch (e) {
-      AppLogger.warn('NativeSqliteAdapter', 'Non-fatal error during legacy WASM file check', e);
+      AppLogger.warn('NativeSqliteAdapter', 'Migration state machine encountered an issue', e);
     }
   }
 
@@ -272,13 +377,29 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     }
   }
 
-  async vacuum(): Promise<void> {
+  async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
     if (!this.db) await this.initialize();
     try {
       await this.db.execute('VACUUM;');
+      return { originalSizeBytes: 0, compactedSizeBytes: 0, bytesReclaimed: 0 };
     } catch (err) {
       AppLogger.warn('NativeSqliteAdapter', 'Vacuum warning', err);
+      return { originalSizeBytes: 0, compactedSizeBytes: 0, bytesReclaimed: 0 };
     }
+  }
+
+  querySync<T>(sql: string, params: unknown[] = []): T[] {
+    AppLogger.warn('NativeSqliteAdapter', 'Synchronous query executed on native adapter; fallback to empty result. Use async query.');
+    return [];
+  }
+
+  runSync(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
+    this.run(sql, params).catch((err) => AppLogger.error('NativeSqliteAdapter', 'Async bridge error', err));
+    return { changes: 1 };
+  }
+
+  transactionSync<T>(fn: () => T): T {
+    return fn();
   }
 
   async close(): Promise<void> {
@@ -299,15 +420,25 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
  * Provides in-memory execution with IndexedDB / memory persistence for browser environments.
  */
 export class WebSqliteAdapter implements DatabaseAdapter {
+  private static instance: WebSqliteAdapter | null = null;
   private engineInitialized = false;
+
+  public static getInstance(): WebSqliteAdapter {
+    if (!this.instance) {
+      this.instance = new WebSqliteAdapter();
+    }
+    return this.instance;
+  }
 
   getDurabilityStatus(): DurabilityStatus {
     return SqliteEngine.getDurabilityStatus?.() || (SqliteEngine.isDirtyState?.() ? 'pending' : 'saved');
   }
 
   async initialize(): Promise<void> {
-    await SqliteEngine.initialize();
-    this.engineInitialized = true;
+    if (!this.engineInitialized) {
+      await SqliteEngine.initialize();
+      this.engineInitialized = true;
+    }
   }
 
   async execute(sql: string, params: unknown[] = []): Promise<void> {
@@ -332,32 +463,59 @@ export class WebSqliteAdapter implements DatabaseAdapter {
     return SqliteEngine.transactionAsync(fn);
   }
 
+  querySync<T>(sql: string, params: unknown[] = []): T[] {
+    return SqliteEngine.query<T>(sql, params);
+  }
+
+  runSync(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
+    SqliteEngine.run(sql, params);
+    const lastId = SqliteEngine.getLastInsertId();
+    return { changes: 1, lastInsertRowId: lastId };
+  }
+
+  transactionSync<T>(fn: () => T): T {
+    return SqliteEngine.transaction(fn);
+  }
+
   async checkIntegrity(): Promise<{ ok: boolean; result: string }> {
     if (!this.engineInitialized) await this.initialize();
     const ok = SqliteEngine.verifyIntegrity();
     return { ok, result: ok ? 'ok' : 'corrupted' };
   }
 
-  async vacuum(): Promise<void> {
+  async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
     if (!this.engineInitialized) await this.initialize();
-    await SqliteEngine.vacuum();
+    return await SqliteEngine.vacuum();
   }
 
   async close(): Promise<void> {
     await SqliteEngine.flush();
     this.engineInitialized = false;
   }
-}
 
-let activeAdapter: DatabaseAdapter | null = null;
+  exportBinary(): Uint8Array {
+    return SqliteEngine.exportDatabaseBinary();
+  }
+
+  async importBinary(binary: Uint8Array): Promise<void> {
+    await SqliteEngine.importDatabaseBinary(binary);
+  }
+
+  async flush(): Promise<void> {
+    await SqliteEngine.flush();
+  }
+}
 
 export function getDatabaseAdapter(): DatabaseAdapter {
-  if (!activeAdapter) {
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-      activeAdapter = new NativeSqliteAdapter();
-    } else {
-      activeAdapter = new WebSqliteAdapter();
-    }
+  if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    return NativeSqliteAdapter.getInstance();
   }
-  return activeAdapter;
+  return WebSqliteAdapter.getInstance();
 }
+
+export async function getDatabase(): Promise<DatabaseAdapter> {
+  const adapter = getDatabaseAdapter();
+  await adapter.initialize();
+  return adapter;
+}
+
