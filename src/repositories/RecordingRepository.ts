@@ -1,4 +1,4 @@
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { RecordingRecord } from '../types';
 import { AppLogger } from '../lib/logger';
 
@@ -7,12 +7,13 @@ export class RecordingRepository {
    * Get recording by ID
    */
   public static getById(id: number): RecordingRecord | null {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE id = ?`,
       [id]
-    );
+    ) : [];
     if (!rows || rows.length === 0) return null;
     return this.mapRow(rows[0]);
   }
@@ -21,12 +22,13 @@ export class RecordingRepository {
    * Get all recordings for a given note ID
    */
   public static getByNoteId(noteId: number): RecordingRecord[] {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE note_id = ? ORDER BY id DESC`,
       [noteId]
-    );
+    ) : [];
     return rows.map((r) => this.mapRow(r));
   }
 
@@ -34,11 +36,12 @@ export class RecordingRepository {
    * Get all recordings across workspace
    */
   public static getAll(): RecordingRecord[] {
-    const rows = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const rows = db.querySync ? db.querySync<any>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings ORDER BY id DESC`
-    );
+    ) : [];
     return rows.map((r) => this.mapRow(r));
   }
 
@@ -46,6 +49,7 @@ export class RecordingRepository {
    * Save or insert recording with strict schema conformance
    */
   public static save(recording: Partial<RecordingRecord> & { note_id: number; file_path: string }): RecordingRecord {
+    const db = getDatabaseAdapter();
     let recordingId = recording.id;
     const createdAt = recording.created_at || new Date().toISOString();
     const durationMs = recording.duration_ms ?? (recording.duration_seconds ? recording.duration_seconds * 1000 : 0);
@@ -56,7 +60,7 @@ export class RecordingRepository {
     const status = recording.status || 'ready';
 
     if (recordingId && recordingId > 0) {
-      SqliteEngine.run(
+      db.runSync?.(
         `INSERT OR REPLACE INTO recordings 
          (id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at, checksum, duration_ms, mime_type, channels, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -78,7 +82,7 @@ export class RecordingRepository {
         ]
       );
     } else {
-      SqliteEngine.run(
+      const res = db.runSync?.(
         `INSERT INTO recordings 
          (note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at, checksum, duration_ms, mime_type, channels, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -98,12 +102,12 @@ export class RecordingRepository {
           status,
         ]
       );
-      recordingId = SqliteEngine.getLastInsertId();
+      recordingId = res?.lastInsertRowId || Date.now();
     }
 
     if (recording.media_key) {
       try {
-        SqliteEngine.run(
+        db.runSync?.(
           `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [recording.media_key, recording.note_id, 'audio', mimeType, recording.file_size || 0, Date.now()]
@@ -135,14 +139,16 @@ export class RecordingRepository {
    * Update recording status safely
    */
   public static updateStatus(id: number, status: string): void {
-    SqliteEngine.run('UPDATE recordings SET status = ? WHERE id = ?', [status, id]);
+    const db = getDatabaseAdapter();
+    db.runSync?.('UPDATE recordings SET status = ? WHERE id = ?', [status, id]);
   }
 
   /**
    * Delete a recording
    */
   public static delete(id: number): void {
-    SqliteEngine.run('DELETE FROM recordings WHERE id = ?', [id]);
+    const db = getDatabaseAdapter();
+    db.runSync?.('DELETE FROM recordings WHERE id = ?', [id]);
   }
 
   private static mapRow(r: any): RecordingRecord {
