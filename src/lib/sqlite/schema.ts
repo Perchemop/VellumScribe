@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const DB_SCHEMA_VERSION = 10;
+export const DB_SCHEMA_VERSION = 11;
 export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
@@ -409,6 +409,82 @@ export const MIGRATIONS = [
       );
 
       CREATE INDEX IF NOT EXISTS idx_media_files_note ON media_files(note_id);
+    `,
+  },
+  {
+    version: 11,
+    description: 'Item changes log, AI operations audit in SQLite, note revisions, sync conflicts, and local snapshots',
+    sql: `
+      CREATE TABLE IF NOT EXISTS item_changes (
+        id TEXT PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        changed_at INTEGER NOT NULL,
+        payload_hash TEXT NOT NULL,
+        sync_state TEXT NOT NULL DEFAULT 'pending'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_item_changes_state ON item_changes(sync_state, changed_at);
+      CREATE INDEX IF NOT EXISTS idx_item_changes_entity ON item_changes(entity_type, entity_id);
+
+      CREATE TABLE IF NOT EXISTS ai_operations (
+        id TEXT PRIMARY KEY,
+        operation TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        input_characters INTEGER NOT NULL,
+        output_characters INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ai_operations_created ON ai_operations(created_at DESC);
+
+      ALTER TABLE cloud_sync_queue ADD COLUMN next_attempt_at INTEGER;
+      ALTER TABLE cloud_sync_queue ADD COLUMN error_code TEXT;
+
+      CREATE TABLE IF NOT EXISTS note_revisions (
+        id TEXT PRIMARY KEY,
+        note_id INTEGER NOT NULL,
+        version_number INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        reason TEXT,
+        source TEXT,
+        content_hash TEXT NOT NULL,
+        FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_note_revisions_note ON note_revisions(note_id, version_number DESC);
+
+      CREATE TABLE IF NOT EXISTS sync_conflicts (
+        id TEXT PRIMARY KEY,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        local_version_id TEXT NOT NULL,
+        remote_version_id TEXT NOT NULL,
+        local_payload TEXT NOT NULL,
+        remote_payload TEXT NOT NULL,
+        detected_at INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open'
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sync_conflicts_status ON sync_conflicts(status);
+
+      CREATE TABLE IF NOT EXISTS local_snapshots (
+        id TEXT PRIMARY KEY,
+        snapshot_type TEXT NOT NULL,
+        notes_count INTEGER NOT NULL,
+        events_count INTEGER NOT NULL,
+        payload_blob TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_local_snapshots_type ON local_snapshots(snapshot_type, created_at DESC);
     `,
   },
 ];

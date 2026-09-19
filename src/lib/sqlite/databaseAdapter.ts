@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { AppLogger } from '../logger';
-import { SqliteEngine } from './sqliteEngine';
+import { SqliteEngine, base64ToUint8Array } from './sqliteEngine';
+import { MIGRATIONS } from './schema';
 
 export type DurabilityStatus = 'saved' | 'saving' | 'pending' | 'failed';
 
@@ -46,7 +47,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
           'vellumscribe',
           false,
           'no-encryption',
-          10,
+          11,
           false
         );
       }
@@ -60,13 +61,143 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
         // Fallback for devices where WAL is not permissible
       }
 
+      // Execute all pending schema migrations on native Android SQLite
+      await this.runNativeMigrations();
+
+      // Check and execute one-time migration from legacy sql.js WASM file
+      await this.migrateFromWasmSqliteFile();
+
       this.isInitialized = true;
       this.durabilityStatus = 'saved';
-      AppLogger.info('NativeSqliteAdapter', 'Authoritative Native Android SQLite database opened successfully.');
+      AppLogger.info('NativeSqliteAdapter', 'Authoritative Native Android SQLite database opened and migrated successfully.');
     } catch (err) {
       this.durabilityStatus = 'failed';
       AppLogger.error('NativeSqliteAdapter', 'Failed to initialize native SQLite connection', err);
       throw err;
+    }
+  }
+
+  private async runNativeMigrations(): Promise<void> {
+    try {
+      await this.db.execute(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at INTEGER NOT NULL,
+          description TEXT NOT NULL
+        );
+      `);
+
+      const appliedRes = await this.db.query('SELECT version FROM schema_migrations ORDER BY version ASC;');
+      const appliedSet = new Set<number>((appliedRes.values || []).map((r: any) => r.version));
+
+      for (const mig of MIGRATIONS) {
+        if (!appliedSet.has(mig.version)) {
+          AppLogger.info('NativeSqliteAdapter', `Applying native SQLite migration v${mig.version}: ${mig.description}`);
+          await this.db.beginTransaction();
+          try {
+            await this.db.execute(mig.sql);
+            await this.db.run(
+              'INSERT INTO schema_migrations (version, applied_at, description) VALUES (?, ?, ?);',
+              [mig.version, Date.now(), mig.description]
+            );
+            await this.db.execute(`PRAGMA user_version = ${mig.version};`);
+            await this.db.commitTransaction();
+          } catch (migErr) {
+            await this.db.rollbackTransaction();
+            AppLogger.error('NativeSqliteAdapter', `Failed migration v${mig.version}`, migErr);
+            throw migErr;
+          }
+        }
+      }
+    } catch (err) {
+      AppLogger.error('NativeSqliteAdapter', 'Native migration execution error', err);
+      throw err;
+    }
+  }
+
+  private async migrateFromWasmSqliteFile(): Promise<void> {
+    try {
+      const metaCheck = await this.db.query(
+        "SELECT value FROM workspace_metadata WHERE key = 'native_migrated_from_wasm_v1';"
+      );
+      if (metaCheck.values && metaCheck.values.length > 0 && metaCheck.values[0].value === 'true') {
+        return; // Already migrated
+      }
+
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const fileStat = await Filesystem.stat({
+        path: 'databases/current.sqlite',
+        directory: Directory.Data,
+      }).catch(() => null);
+
+      if (!fileStat) {
+        await this.db.run(
+          "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migrated_from_wasm_v1', 'true', ?);",
+          [Date.now()]
+        );
+        return;
+      }
+
+      AppLogger.info('NativeSqliteAdapter', 'Found legacy sql.js database on Android filesystem. Performing safe one-time native import...');
+      const readFile = await Filesystem.readFile({
+        path: 'databases/current.sqlite',
+        directory: Directory.Data,
+      });
+
+      const base64Data = typeof readFile.data === 'string' ? readFile.data : '';
+      if (base64Data) {
+        const initSqlJs = (await import('sql.js')).default;
+        const SQL = await initSqlJs();
+        const binary = base64ToUint8Array(base64Data);
+        const wasmDb = new SQL.Database(binary);
+
+        const tables = [
+          'events',
+          'notes',
+          'checklists',
+          'note_tags',
+          'note_versions',
+          'media_files',
+          'recordings',
+          'transcripts',
+          'ocr_scans',
+        ];
+
+        for (const tbl of tables) {
+          try {
+            const res = wasmDb.exec(`SELECT * FROM ${tbl};`);
+            if (res.length > 0 && res[0].columns && res[0].values) {
+              const cols = res[0].columns;
+              const placeholders = cols.map(() => '?').join(', ');
+              for (const row of res[0].values) {
+                await this.db.run(
+                  `INSERT OR IGNORE INTO ${tbl} (${cols.join(', ')}) VALUES (${placeholders});`,
+                  row
+                );
+              }
+            }
+          } catch {
+            // Table may not exist in earlier schema version
+          }
+        }
+        wasmDb.close();
+
+        // Safely backup the legacy file
+        await Filesystem.copy({
+          from: 'databases/current.sqlite',
+          to: 'databases/legacy_wasm_backup.sqlite',
+          directory: Directory.Data,
+        }).catch(() => {});
+
+        AppLogger.info('NativeSqliteAdapter', 'Successfully migrated all records from sql.js to native Android SQLite.');
+      }
+
+      await this.db.run(
+        "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('native_migrated_from_wasm_v1', 'true', ?);",
+        [Date.now()]
+      );
+    } catch (e) {
+      AppLogger.warn('NativeSqliteAdapter', 'Non-fatal error during legacy WASM file check', e);
     }
   }
 
@@ -198,7 +329,7 @@ export class WebSqliteAdapter implements DatabaseAdapter {
 
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
     if (!this.engineInitialized) await this.initialize();
-    return SqliteEngine.transaction(() => fn());
+    return SqliteEngine.transactionAsync(fn);
   }
 
   async checkIntegrity(): Promise<{ ok: boolean; result: string }> {
