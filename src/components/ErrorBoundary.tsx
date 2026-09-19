@@ -1,9 +1,12 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Database } from 'lucide-react';
+import { AppLogger } from '../lib/logger';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  fallbackRender?: (error: Error, reset: () => void) => ReactNode;
+  onReset?: () => void;
 }
 
 interface State {
@@ -24,9 +27,18 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary caught error]:', error, errorInfo);
+    AppLogger.error('ErrorBoundary', 'Caught component crash in ErrorBoundary', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
     this.setState({ errorInfo });
   }
+
+  public reset = () => {
+    this.props.onReset?.();
+    this.setState({ hasError: false, error: null, errorInfo: null });
+  };
 
   private handleReload = () => {
     window.location.reload();
@@ -43,6 +55,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallbackRender && this.state.error) {
+        return this.props.fallbackRender(this.state.error, this.reset);
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }

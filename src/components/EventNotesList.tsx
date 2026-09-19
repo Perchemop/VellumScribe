@@ -34,6 +34,7 @@ import { useModalBackHandler } from '../lib/modalBackStack';
 import { AiCommandBar } from './AiCommandBar';
 import { AiAction } from '../types';
 import { ReminderService } from '../services/ReminderService';
+import { VirtualizedNotesList } from './VirtualizedNotesList';
 
 interface EventNotesListProps {
   events: EventRecord[];
@@ -326,6 +327,281 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         onRefresh();
       }
     }
+  };
+
+  const renderNoteCard = (note: NoteRecord) => {
+    const isSelectedInBatch = selectedNoteIds.includes(note.id);
+    const isActiveEditor = selectedNoteId === note.id;
+    const recordingsCount = recordingsCountMap.get(note.id) || 0;
+    const ocrScansCount = ocrScansCountMap.get(note.id) || 0;
+    const isChecklist = note.note_type === 'checklist';
+    const isSketch = note.note_type === 'sketch';
+    const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
+    const totalItems = (note.checklist_items || []).length;
+    const isPrivateLocked = note.is_locked && note.lock_mode === 'private';
+    const displayTitle = isPrivateLocked ? '🔒 Locked Note' : (note.title || 'Untitled Note');
+    const displayBody = isPrivateLocked
+      ? 'Private content'
+      : note.is_locked
+      ? '•••••••• Protected Note Content'
+      : note.body.replace(/[#*`_]/g, '').slice(0, 120);
+
+    return (
+      <div
+        key={note.id}
+        id={`note-item-${note.id}`}
+        role="button"
+        tabIndex={0}
+        aria-label={`Note: ${displayTitle}`}
+        onClick={(e) => {
+          if (isSelectionMode || selectedNoteIds.length > 0) {
+            handleToggleNoteSelect(note.id, e);
+          } else {
+            onSelectNote(note.id);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (isSelectionMode || selectedNoteIds.length > 0) {
+              handleToggleNoteSelect(note.id);
+            } else {
+              onSelectNote(note.id);
+            }
+          }
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          handleToggleNoteSelect(note.id, e);
+        }}
+        className={`p-3.5 rounded-2xl cursor-pointer transition-all relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
+          isSelectedInBatch
+            ? 'bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-900 dark:border-zinc-100 shadow-md ring-1 ring-zinc-400'
+            : isActiveEditor
+            ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
+            : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
+        }`}
+      >
+        {/* Selection Checkbox */}
+        {(isSelectionMode || selectedNoteIds.length > 0) && (
+          <div
+            role="checkbox"
+            tabIndex={0}
+            aria-checked={isSelectedInBatch}
+            aria-label={`Select note ${displayTitle}`}
+            onClick={(e) => handleToggleNoteSelect(note.id, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleToggleNoteSelect(note.id);
+              }
+            }}
+            className="absolute top-3 right-3 z-10 p-1 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-400"
+          >
+            {isSelectedInBatch ? (
+              <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
+            ) : (
+              <Circle className="w-5 h-5 text-zinc-400 hover:text-zinc-700" />
+            )}
+          </div>
+        )}
+
+        {/* Title & Status Icons */}
+        <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {note.color && !isPrivateLocked && (
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: note.color }}
+                title="Color Tag"
+              />
+            )}
+            {isChecklist && <CheckSquare className="w-4 h-4 text-zinc-500 shrink-0" />}
+            {isSketch && <PenTool className="w-4 h-4 text-amber-500 shrink-0" />}
+            {note.is_locked && <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+            <h4
+              className={`text-xs truncate ${
+                isActiveEditor || isSelectedInBatch
+                  ? 'font-semibold text-zinc-950 dark:text-zinc-50'
+                  : 'font-medium text-zinc-800 dark:text-zinc-200'
+              }`}
+            >
+              {displayTitle}
+            </h4>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {note.is_pinned && (
+              <Pin className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 fill-current" />
+            )}
+          </div>
+        </div>
+
+        {/* Body or Checklist summary */}
+        {isChecklist && totalItems > 0 && !note.is_locked ? (
+          <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2.5">
+            <span>{completedItems} of {totalItems} items checked</span>
+            <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
+              <div
+                className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all"
+                style={{ width: `${(completedItems / totalItems) * 100}%` }}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className={`text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
+            {displayBody}
+          </p>
+        )}
+
+        {/* Subdued Metadata & Badges */}
+        <div className="flex items-center justify-between text-xs text-zinc-400 pt-1.5 border-t border-zinc-100/80 dark:border-zinc-850">
+          <div className="flex flex-wrap items-center gap-2">
+            {!isPrivateLocked && note.reminder_at && (
+              <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <Bell className="w-3 h-3" />
+                <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+              </span>
+            )}
+
+            {!isPrivateLocked && note.location_name && (
+              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <MapPin className="w-3 h-3" />
+                <span className="truncate max-w-[70px]">{note.location_name}</span>
+              </span>
+            )}
+
+            {recordingsCount > 0 && (
+              <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${recordingsCount} audio recordings`}>
+                <Mic className="w-3 h-3" />
+                {recordingsCount}
+              </span>
+            )}
+
+            {ocrScansCount > 0 && (
+              <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${ocrScansCount} scanned documents`}>
+                <Camera className="w-3 h-3" />
+                {ocrScansCount}
+              </span>
+            )}
+
+            {(note.sketch_data || note.sketch_media_key) && (
+              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
+                <PenTool className="w-3 h-3" />
+              </span>
+            )}
+          </div>
+
+          {/* Right side actions for Trash / Archive / Date */}
+          <div className="flex items-center gap-1">
+            {activeTab === 'trash' && (
+              <>
+                <button
+                  onClick={(e) => handleRestoreNote(e, note.id)}
+                  title="Restore Note"
+                  aria-label="Restore Note"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-emerald-600 p-1 rounded-lg transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => handlePermanentDelete(e, note.id)}
+                  title="Delete Permanently"
+                  aria-label="Delete Permanently"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-rose-600 p-1 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+
+            {activeTab === 'archived' && (
+              <button
+                onClick={(e) => handleUnarchiveNote(e, note.id)}
+                title="Restore Note (Unarchive)"
+                aria-label="Restore Note (Unarchive)"
+                className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 p-1 rounded-lg transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {activeTab !== 'trash' && activeTab !== 'archived' && (
+              <>
+                <button
+                  id={`quick-pin-btn-${note.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    StorageManager.togglePinNote(note.id);
+                    onRefresh();
+                  }}
+                  title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+                  aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+                  className={`min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded-lg transition-colors ${
+                    note.is_pinned
+                      ? 'text-zinc-900 dark:text-zinc-100'
+                      : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
+                  }`}
+                >
+                  <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
+                </button>
+                <button
+                  id={`quick-duplicate-btn-${note.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const dup = StorageManager.duplicateNote(note.id);
+                    if (dup) {
+                      onSelectNote(dup.id);
+                      onRefresh();
+                    }
+                  }}
+                  title="Duplicate Note"
+                  aria-label="Duplicate Note"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  id={`quick-share-btn-${note.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShareNoteTarget(note);
+                  }}
+                  title="Share & Export Note"
+                  aria-label="Share & Export Note"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    StorageManager.archiveNote(note.id);
+                    if (selectedNoteId === note.id) {
+                      onSelectNote(0);
+                    }
+                    onRefresh();
+                  }}
+                  title="Archive Note (Hide from active notes)"
+                  aria-label="Archive Note (Hide from active notes)"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+
+            <span className="text-zinc-400 dark:text-zinc-500 pl-1">
+              {new Date(note.updated_at || note.created_at).toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -627,288 +903,17 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
       {/* Notes List / Grid */}
       <div className="flex-1 overflow-y-auto px-3 pb-6 custom-minimal-scrollbar">
         {filteredNotes.length > 0 ? (
-          <div
-            className={
-              viewLayout === 'grid'
-                ? 'grid grid-cols-2 gap-2.5'
-                : 'space-y-2'
-            }
-          >
-            {filteredNotes.map((note) => {
-              const isSelectedInBatch = selectedNoteIds.includes(note.id);
-              const isActiveEditor = selectedNoteId === note.id;
-              const recordingsCount = recordingsCountMap.get(note.id) || 0;
-              const ocrScansCount = ocrScansCountMap.get(note.id) || 0;
-              const isChecklist = note.note_type === 'checklist';
-              const isSketch = note.note_type === 'sketch';
-              const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
-              const totalItems = (note.checklist_items || []).length;
-              const isPrivateLocked = note.is_locked && note.lock_mode === 'private';
-              const displayTitle = isPrivateLocked ? '🔒 Locked Note' : (note.title || 'Untitled Note');
-              const displayBody = isPrivateLocked
-                ? 'Private content'
-                : note.is_locked
-                ? '•••••••• Protected Note Content'
-                : note.body.replace(/[#*`_]/g, '').slice(0, 120);
-
-              return (
-                <div
-                  key={note.id}
-                  id={`note-item-${note.id}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Note: ${displayTitle}`}
-                  onClick={(e) => {
-                    if (isSelectionMode || selectedNoteIds.length > 0) {
-                      handleToggleNoteSelect(note.id, e);
-                    } else {
-                      onSelectNote(note.id);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      if (isSelectionMode || selectedNoteIds.length > 0) {
-                        handleToggleNoteSelect(note.id);
-                      } else {
-                        onSelectNote(note.id);
-                      }
-                    }
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    handleToggleNoteSelect(note.id, e);
-                  }}
-                  className={`p-3.5 rounded-2xl cursor-pointer transition-all relative overflow-hidden group focus:outline-none focus:ring-2 focus:ring-zinc-400 ${
-                    isSelectedInBatch
-                      ? 'bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-900 dark:border-zinc-100 shadow-md ring-1 ring-zinc-400'
-                      : isActiveEditor
-                      ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
-                      : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
-                  }`}
-                >
-                  {/* Selection Checkbox (always visible when in selection mode, or on card hover) */}
-                  {(isSelectionMode || selectedNoteIds.length > 0) && (
-                    <div
-                      role="checkbox"
-                      tabIndex={0}
-                      aria-checked={isSelectedInBatch}
-                      aria-label={`Select note ${displayTitle}`}
-                      onClick={(e) => handleToggleNoteSelect(note.id, e)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleToggleNoteSelect(note.id);
-                        }
-                      }}
-                      className="absolute top-3 right-3 z-10 p-1 rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-zinc-400"
-                    >
-                      {isSelectedInBatch ? (
-                        <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-zinc-400 hover:text-zinc-700" />
-                      )}
-                    </div>
-                  )}
-
-                  {/* Title & Status Icons */}
-                  <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {note.color && !isPrivateLocked && (
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: note.color }}
-                          title="Color Tag"
-                        />
-                      )}
-                      {isChecklist && <CheckSquare className="w-4 h-4 text-zinc-500 shrink-0" />}
-                      {isSketch && <PenTool className="w-4 h-4 text-amber-500 shrink-0" />}
-                      {note.is_locked && <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                      <h4
-                        className={`text-xs truncate ${
-                          isActiveEditor || isSelectedInBatch
-                            ? 'font-semibold text-zinc-950 dark:text-zinc-50'
-                            : 'font-medium text-zinc-800 dark:text-zinc-200'
-                        }`}
-                      >
-                        {displayTitle}
-                      </h4>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      {note.is_pinned && (
-                        <Pin className="w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 fill-current" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Body or Checklist summary */}
-                  {isChecklist && totalItems > 0 && !note.is_locked ? (
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2.5">
-                      <span>{completedItems} of {totalItems} items checked</span>
-                      <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all"
-                          style={{ width: `${(completedItems / totalItems) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className={`text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
-                      {displayBody}
-                    </p>
-                  )}
-
-                  {/* Subdued Metadata & Badges */}
-                  <div className="flex items-center justify-between text-xs text-zinc-400 pt-1.5 border-t border-zinc-100/80 dark:border-zinc-850">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!isPrivateLocked && note.reminder_at && (
-                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                          <Bell className="w-3 h-3" />
-                          <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
-                        </span>
-                      )}
-
-                      {!isPrivateLocked && note.location_name && (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                          <MapPin className="w-3 h-3" />
-                          <span className="truncate max-w-[70px]">{note.location_name}</span>
-                        </span>
-                      )}
-
-                      {recordingsCount > 0 && (
-                        <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${recordingsCount} audio recordings`}>
-                          <Mic className="w-3 h-3" />
-                          {recordingsCount}
-                        </span>
-                      )}
-
-                      {ocrScansCount > 0 && (
-                        <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${ocrScansCount} scanned documents`}>
-                          <Camera className="w-3 h-3" />
-                          {ocrScansCount}
-                        </span>
-                      )}
-
-                      {(note.sketch_data || note.sketch_media_key) && (
-                        <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
-                          <PenTool className="w-3 h-3" />
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Right side actions for Trash / Archive / Date */}
-                    <div className="flex items-center gap-1">
-                      {activeTab === 'trash' && (
-                        <>
-                          <button
-                            onClick={(e) => handleRestoreNote(e, note.id)}
-                            title="Restore Note"
-                            aria-label="Restore Note"
-                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-emerald-600 p-1 rounded-lg transition-colors"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handlePermanentDelete(e, note.id)}
-                            title="Delete Permanently"
-                            aria-label="Delete Permanently"
-                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-rose-600 p-1 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-
-                      {activeTab === 'archived' && (
-                        <button
-                          onClick={(e) => handleUnarchiveNote(e, note.id)}
-                          title="Restore Note (Unarchive)"
-                          aria-label="Restore Note (Unarchive)"
-                          className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-50 p-1 rounded-lg transition-colors"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-
-                      {activeTab !== 'trash' && activeTab !== 'archived' && (
-                        <>
-                          <button
-                            id={`quick-pin-btn-${note.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              StorageManager.togglePinNote(note.id);
-                              onRefresh();
-                            }}
-                            title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
-                            aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
-                            className={`min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded-lg transition-colors ${
-                              note.is_pinned
-                                ? 'text-zinc-900 dark:text-zinc-100'
-                                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
-                            }`}
-                          >
-                            <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
-                          </button>
-                          <button
-                            id={`quick-duplicate-btn-${note.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const dup = StorageManager.duplicateNote(note.id);
-                              if (dup) {
-                                onSelectNote(dup.id);
-                                onRefresh();
-                              }
-                            }}
-                            title="Duplicate Note"
-                            aria-label="Duplicate Note"
-                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            id={`quick-share-btn-${note.id}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShareNoteTarget(note);
-                            }}
-                            title="Share & Export Note"
-                            aria-label="Share & Export Note"
-                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              StorageManager.archiveNote(note.id);
-                              if (selectedNoteId === note.id) {
-                                onSelectNote(0);
-                              }
-                              onRefresh();
-                            }}
-                            title="Archive Note (Hide from active notes)"
-                            aria-label="Archive Note (Hide from active notes)"
-                            className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-
-                      <span className="text-zinc-400 dark:text-zinc-500 pl-1">
-                        {new Date(note.updated_at || note.created_at).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          viewLayout === 'grid' ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              {filteredNotes.map((note) => renderNoteCard(note))}
+            </div>
+          ) : (
+            <VirtualizedNotesList
+              notes={filteredNotes}
+              renderNote={renderNoteCard}
+              itemHeight={140}
+            />
+          )
         ) : (
           <div className="p-10 text-center text-zinc-400 space-y-2">
             <FileText className="w-7 h-7 mx-auto mb-1 opacity-40 stroke-[1.2]" />
