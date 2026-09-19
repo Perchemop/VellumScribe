@@ -1,6 +1,7 @@
 import { AiAction, AiCommandResult } from '../types';
 import { AppLogger } from '../lib/logger';
 import { AiSettingsManager } from '../lib/aiSettings';
+import { AiProvenanceService } from './AiProvenanceService';
 
 export interface AiAuditLogEntry {
   id: string;
@@ -34,6 +35,17 @@ export class AiCommandService {
       // Keep up to 100 recent metadata logs
       if (list.length > 100) list.length = 100;
       localStorage.setItem(AI_AUDIT_LOG_KEY, JSON.stringify(list));
+
+      // Also persist to SQLite ai_operations table for durable auditing
+      AiProvenanceService.recordAiOperation({
+        operation: entry.operation,
+        provider: entry.provider,
+        model: entry.model,
+        durationMs: entry.durationMs,
+        inputCharacters: entry.inputCharacters,
+        outputCharacters: entry.outputCharacters,
+        status: entry.status,
+      });
     } catch (e) {
       AppLogger.warn('AiCommandService', 'Failed to save AI audit entry', e);
     }

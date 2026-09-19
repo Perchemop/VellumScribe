@@ -9,6 +9,10 @@ import {
   TranscriptRecord,
   OcrScanRecord,
   DocumentVersion,
+  ItemChangeRecord,
+  NoteRevisionRecord,
+  SyncConflictRecord,
+  LocalSnapshotRecord,
 } from '../../types';
 
 export interface SqliteStats {
@@ -32,7 +36,9 @@ export interface SearchOptions {
   status?: 'active' | 'archived' | 'trash';
   eventId?: number;
   includeLocked?: boolean;
-  filterType?: 'all' | 'text' | 'checklist' | 'sketch';
+  filterType?: 'all' | 'text' | 'checklist' | 'sketch' | 'audio' | 'scan';
+  hasReminder?: boolean;
+  hasAttachments?: boolean;
   dateFrom?: string;
   dateTo?: string;
   limit?: number;
@@ -365,6 +371,8 @@ export class SqliteRepository {
         );
       }
 
+      this.recordItemChange('note', noteId, isExisting ? 'update' : 'create', note.version || 1, note);
+
       return {
         ...note,
         id: noteId,
@@ -451,6 +459,7 @@ export class SqliteRepository {
 
   public static deleteNote(id: number): void {
     SqliteEngine.transaction(() => {
+      this.recordItemChange('note', id, 'delete', 1, { id });
       SqliteEngine.run('DELETE FROM notes WHERE id = ?', [id]);
       SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?', [id]);
       SqliteEngine.run('DELETE FROM checklists WHERE note_id = ?', [id]);
@@ -477,6 +486,8 @@ export class SqliteRepository {
       eventId,
       includeLocked = false,
       filterType = 'all',
+      hasReminder,
+      hasAttachments,
       dateFrom,
       dateTo,
       limit = 50,
@@ -507,9 +518,21 @@ export class SqliteRepository {
       params.push(tag);
     }
 
-    if (filterType && filterType !== 'all') {
+    if (filterType === 'audio') {
+      whereClause += ' AND EXISTS (SELECT 1 FROM recordings rec WHERE rec.note_id = n.id)';
+    } else if (filterType === 'scan') {
+      whereClause += ' AND EXISTS (SELECT 1 FROM ocr_scans ocr WHERE ocr.note_id = n.id)';
+    } else if (filterType && filterType !== 'all') {
       whereClause += ' AND n.note_type = ?';
       params.push(filterType);
+    }
+
+    if (hasReminder) {
+      whereClause += ' AND n.reminder_at IS NOT NULL';
+    }
+
+    if (hasAttachments) {
+      whereClause += ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
     }
 
     if (dateFrom) {
@@ -746,6 +769,7 @@ export class SqliteRepository {
   public static saveEvent(evt: EventRecord): EventRecord {
     return SqliteEngine.transaction(() => {
       let eventId = evt.id;
+      const isExisting = Boolean(eventId && eventId > 0);
       if (eventId && eventId > 0) {
         // Must use UPDATE rather than INSERT OR REPLACE.
         // SQLite's REPLACE delete-then-insert semantics triggers FOREIGN KEY ON DELETE SET NULL on notes.event_id!
@@ -781,12 +805,14 @@ export class SqliteRepository {
         );
         eventId = SqliteEngine.getLastInsertId();
       }
+      this.recordItemChange('event', eventId, isExisting ? 'update' : 'create', 1, evt);
       return { ...evt, id: eventId };
     });
   }
 
   public static deleteEvent(id: number): void {
     SqliteEngine.transaction(() => {
+      this.recordItemChange('event', id, 'delete', 1, { id });
       SqliteEngine.run('DELETE FROM events WHERE id = ?', [id]);
       SqliteEngine.run('UPDATE notes SET event_id = 0 WHERE event_id = ?', [id]);
     });
@@ -1127,5 +1153,128 @@ export class SqliteRepository {
 
   public static removeOrphanMediaRecord(mediaKey: string): void {
     SqliteEngine.run('DELETE FROM media_files WHERE media_key = ?', [mediaKey]);
+  }
+
+  // --- ITEM CHANGES (OFFLINE-FIRST DELTAS) ---
+
+  public static recordItemChange(
+    entityType: 'note' | 'event' | 'recording' | 'checklist' | 'media',
+    entityId: string | number,
+    operation: 'create' | 'update' | 'delete',
+    version: number,
+    payload: any
+  ): void {
+    try {
+      const id = `chg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      let hash = 0;
+      for (let i = 0; i < payloadStr.length; i++) {
+        hash = ((hash << 5) - hash) + payloadStr.charCodeAt(i);
+        hash |= 0;
+      }
+      const payloadHash = Math.abs(hash).toString(16);
+
+      SqliteEngine.run(
+        `INSERT INTO item_changes (id, entity_type, entity_id, operation, version, changed_at, payload_hash, sync_state)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending');`,
+        [id, entityType, String(entityId), operation, version, Date.now(), payloadHash]
+      );
+    } catch {
+      // Table may not yet exist in early initialization
+    }
+  }
+
+  public static getItemChanges(limit = 100): ItemChangeRecord[] {
+    try {
+      return SqliteEngine.query<ItemChangeRecord>(
+        `SELECT * FROM item_changes ORDER BY changed_at DESC LIMIT ?;`,
+        [limit]
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  // --- NOTE REVISIONS (P0-06) ---
+
+  public static saveNoteRevision(revision: NoteRevisionRecord): void {
+    try {
+      SqliteEngine.run(
+        `INSERT OR REPLACE INTO note_revisions (id, note_id, version_number, title, body, created_at, reason, source, content_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          revision.id,
+          revision.note_id,
+          revision.version_number,
+          revision.title,
+          revision.body,
+          revision.created_at,
+          revision.reason || null,
+          revision.source || null,
+          revision.content_hash,
+        ]
+      );
+    } catch (e) {
+      AppLogger.warn('SqliteRepository', 'Failed to save note revision', e);
+    }
+  }
+
+  public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
+    try {
+      return SqliteEngine.query<NoteRevisionRecord>(
+        `SELECT * FROM note_revisions WHERE note_id = ? ORDER BY version_number DESC;`,
+        [noteId]
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  // --- SYNC CONFLICTS (P1-02) ---
+
+  public static getSyncConflicts(status = 'open'): SyncConflictRecord[] {
+    try {
+      return SqliteEngine.query<SyncConflictRecord>(
+        `SELECT * FROM sync_conflicts WHERE status = ? ORDER BY detected_at DESC;`,
+        [status]
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  public static resolveSyncConflict(id: string): void {
+    try {
+      SqliteEngine.run(
+        `UPDATE sync_conflicts SET status = 'resolved' WHERE id = ?;`,
+        [id]
+      );
+    } catch (e) {
+      AppLogger.warn('SqliteRepository', 'Failed to resolve sync conflict', e);
+    }
+  }
+
+  // --- LOCAL SNAPSHOTS (P1-05) ---
+
+  public static saveLocalSnapshot(snapshot: LocalSnapshotRecord): void {
+    try {
+      SqliteEngine.run(
+        `INSERT INTO local_snapshots (id, snapshot_type, notes_count, events_count, payload_blob, created_at)
+         VALUES (?, ?, ?, ?, ?, ?);`,
+        [snapshot.id, snapshot.snapshot_type, snapshot.notes_count, snapshot.events_count, snapshot.payload_blob, snapshot.created_at]
+      );
+    } catch (e) {
+      AppLogger.warn('SqliteRepository', 'Failed to save local snapshot', e);
+    }
+  }
+
+  public static getLocalSnapshots(): LocalSnapshotRecord[] {
+    try {
+      return SqliteEngine.query<LocalSnapshotRecord>(
+        `SELECT * FROM local_snapshots ORDER BY created_at DESC;`
+      );
+    } catch {
+      return [];
+    }
   }
 }

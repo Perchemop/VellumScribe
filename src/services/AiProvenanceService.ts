@@ -82,4 +82,49 @@ export class AiProvenanceService {
       return null;
     }
   }
+
+  /**
+   * Log an AI operation in the durable SQLite ai_operations table
+   */
+  public static recordAiOperation(data: {
+    operation: string;
+    provider: string;
+    model: string;
+    durationMs: number;
+    inputCharacters: number;
+    outputCharacters: number;
+    status: 'success' | 'error';
+  }): void {
+    try {
+      const id = `aiop_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      SqliteEngine.run(
+        `INSERT INTO ai_operations (id, operation, provider, model, duration_ms, input_characters, output_characters, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          id,
+          data.operation,
+          data.provider,
+          data.model,
+          data.durationMs,
+          data.inputCharacters,
+          data.outputCharacters,
+          data.status,
+          Date.now(),
+        ]
+      );
+    } catch (e) {
+      AppLogger.warn('AiProvenanceService', 'Failed to log AI operation to SQLite', e);
+    }
+  }
+
+  public static getAiOperations(limit = 50): any[] {
+    try {
+      return SqliteEngine.query(
+        `SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`,
+        [limit]
+      );
+    } catch {
+      return [];
+    }
+  }
 }

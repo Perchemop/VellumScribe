@@ -55,6 +55,19 @@ export class VersionControlManager {
     };
 
     SqliteRepository.saveNoteVersion(newVersion);
+
+    SqliteRepository.saveNoteRevision({
+      id: newVersion.id || `rev_${note.id}_${Date.now()}`,
+      note_id: note.id,
+      version_number: nextVersionNum,
+      title: note.title || 'Untitled',
+      body: note.body || '',
+      created_at: Date.now(),
+      reason: summary,
+      source: author,
+      content_hash: checksum || '',
+    });
+
     return newVersion;
   }
 

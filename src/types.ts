@@ -352,4 +352,60 @@ export interface AiCommandResult {
   clarification?: string;
 }
 
+export interface ItemChangeRecord {
+  id: string;
+  entity_type: 'note' | 'event' | 'recording' | 'checklist' | 'media';
+  entity_id: string;
+  operation: 'create' | 'update' | 'delete';
+  version: number;
+  changed_at: number;
+  payload_hash: string;
+  sync_state: 'pending' | 'syncing' | 'synced' | 'failed';
+}
+
+export interface AiOperationRecord {
+  id: string;
+  operation: string;
+  provider: string;
+  model: string;
+  duration_ms: number;
+  input_characters: number;
+  output_characters: number;
+  status: 'success' | 'error';
+  created_at: number;
+}
+
+export interface NoteRevisionRecord {
+  id: string;
+  note_id: number;
+  version_number: number;
+  title: string;
+  body: string;
+  created_at: number;
+  reason?: string;
+  source?: string;
+  content_hash: string;
+}
+
+export interface SyncConflictRecord {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  local_version_id: string;
+  remote_version_id: string;
+  local_payload: string;
+  remote_payload: string;
+  detected_at: number;
+  status: 'open' | 'resolved' | 'ignored';
+}
+
+export interface LocalSnapshotRecord {
+  id: string;
+  snapshot_type: 'latest' | 'yesterday' | '7days' | '4weeks' | 'manual';
+  notes_count: number;
+  events_count: number;
+  payload_blob: string;
+  created_at: number;
+}
+
 

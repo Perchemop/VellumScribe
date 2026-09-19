@@ -603,6 +603,51 @@ export class SqliteEngine {
     }
   }
 
+  /**
+   * Run async operations inside an atomic transaction (supports nesting via SAVEPOINTs)
+   */
+  public static async transactionAsync<T>(action: () => Promise<T>): Promise<T> {
+    const db = this.getDb();
+    const isRoot = this.transactionDepth === 0;
+    const savepointName = `sp_${this.transactionDepth}`;
+
+    if (isRoot) {
+      db.run('BEGIN TRANSACTION;');
+    } else {
+      db.run(`SAVEPOINT ${savepointName};`);
+    }
+    this.transactionDepth++;
+
+    try {
+      const result = await action();
+      this.transactionDepth--;
+      if (isRoot) {
+        db.run('COMMIT;');
+        this.markDirty();
+      } else {
+        db.run(`RELEASE SAVEPOINT ${savepointName};`);
+      }
+      return result;
+    } catch (e) {
+      this.transactionDepth--;
+      if (isRoot) {
+        try {
+          db.run('ROLLBACK;');
+        } catch {
+          // ignore rollback error
+        }
+        AppLogger.error('SqliteEngine', 'Async transaction rolled back due to error', e);
+      } else {
+        try {
+          db.run(`ROLLBACK TO SAVEPOINT ${savepointName};`);
+        } catch {
+          // ignore savepoint rollback error
+        }
+      }
+      throw e;
+    }
+  }
+
   private static lifecycleHooksAttached = false;
 
   private static setupLifecycleHooks(): void {
