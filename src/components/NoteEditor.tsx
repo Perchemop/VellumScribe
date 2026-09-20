@@ -47,6 +47,14 @@ import { NativeBridge } from '../lib/nativeBridge';
 import { DraftStore, NoteDraft } from '../lib/DraftStore';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
 import { ReminderService } from '../services/ReminderService';
+import { AiProvenanceBadge } from './AiProvenanceBadge';
+import { CloudAiConsentModal } from './CloudAiConsentModal';
+import { ModalLoadingFallback } from './ModalLoadingFallback';
+import { ModalErrorFallback } from './ModalErrorFallback';
+import { AudioRecordingModal } from './audio/AudioRecordingModal';
+import { ErrorBoundary } from './ErrorBoundary';
+import { PrivacyManager } from '../lib/privacyManager';
+import { AiProvenanceService } from '../services/AiProvenanceService';
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -98,6 +106,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
+  const [showAudioStudioModal, setShowAudioStudioModal] = useState(false);
+  const [pendingAiAction, setPendingAiAction] = useState<(() => void) | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
 
   // Unlocking protected note in current session
@@ -404,14 +415,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     const updated = StorageManager.updateNote(note.id, { body: newBody });
     if (updated) {
       VersionControlManager.saveVersionSnapshot(updated, 'Gemini AI', 'Applied AI Summary synthesis');
+      AiProvenanceService.recordProvenance({
+        target_entity_type: 'note',
+        target_entity_id: note.id,
+        model_id: 'gemini-2.5-flash',
+        provider: 'Google Gemini',
+        metadata: { action: 'summary_applied', mode, length: summaryText.length },
+      });
       onNoteUpdated(updated);
     }
     setAiNotice('AI Summary successfully applied to note!');
     setTimeout(() => setAiNotice(null), 4000);
   };
 
-  // Quick One-Click AI Summarization / Meeting Minutes with Google Gemini API
-  const handleGenerateMeetingMinutes = async () => {
+  const executeGenerateMeetingMinutes = async () => {
     setIsGeneratingMinutes(true);
     setAiNotice(null);
     try {
@@ -440,6 +457,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       const updated = StorageManager.updateNote(note.id, { body: newBody });
       if (updated) {
         VersionControlManager.saveVersionSnapshot(updated, 'Gemini AI', `Appended AI summary (${res.source || 'Gemini 3.7 Flash'})`);
+        AiProvenanceService.recordProvenance({
+          target_entity_type: 'note',
+          target_entity_id: note.id,
+          model_id: res.source || 'gemini-2.5-flash',
+          provider: 'Google Gemini',
+          metadata: { action: 'meeting_minutes_appended' },
+        });
         onNoteUpdated(updated);
       }
       setAiNotice('AI Summary successfully generated and appended!');
@@ -457,6 +481,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     } finally {
       setIsGeneratingMinutes(false);
     }
+  };
+
+  // Quick One-Click AI Summarization / Meeting Minutes with Google Gemini API
+  const handleGenerateMeetingMinutes = () => {
+    if (!PrivacyManager.hasCloudAiConsent()) {
+      setPendingAiAction(() => executeGenerateMeetingMinutes);
+      setShowCloudAiConsentModal(true);
+      return;
+    }
+    executeGenerateMeetingMinutes();
+  };
+
+  const handleOpenAiSummaryModal = () => {
+    if (!PrivacyManager.hasCloudAiConsent()) {
+      setPendingAiAction(() => () => setShowAiSummaryModal(true));
+      setShowCloudAiConsentModal(true);
+      return;
+    }
+    setShowAiSummaryModal(true);
   };
 
   const handleRecordingSaved = (_rec: RecordingRecord, transcript?: TranscriptRecord) => {
@@ -585,6 +628,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               </option>
             ))}
           </select>
+
+          <AiProvenanceBadge entityType="note" entityId={note.id} className="shrink-0" />
         </div>
 
         {/* Right: Independent Tooling & Creation Actions */}
@@ -631,7 +676,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <button
             id="open-ai-summary-btn"
             aria-label="Generate AI Summary with Google Gemini"
-            onClick={() => setShowAiSummaryModal(true)}
+            onClick={handleOpenAiSummaryModal}
             title="Generate AI Summary with Google Gemini (Executive, Action Items, Outline)"
             className="flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
           >
@@ -656,20 +701,31 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </button>
 
           {/* Voice Memo Recording */}
-          <button
-            id="open-audio-recorder-btn"
-            aria-label="Record Voice Memo"
-            onClick={() => setShowAudioRecorder((prev) => !prev)}
-            title="Record Voice Memo"
-            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              showAudioRecorder
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
-            }`}
-          >
-            <Mic className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Voice</span>
-          </button>
+          <div className="flex items-center">
+            <button
+              id="open-audio-recorder-btn"
+              aria-label="Record Voice Memo"
+              onClick={() => setShowAudioRecorder((prev) => !prev)}
+              title="Record Voice Memo (Inline)"
+              className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                showAudioRecorder
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                  : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Voice</span>
+            </button>
+            <button
+              id="open-audio-studio-modal-btn"
+              aria-label="Open Whisper Transcription Studio Modal"
+              onClick={() => setShowAudioStudioModal(true)}
+              title="Open Offline Whisper Voice Studio Modal"
+              className="p-1.5 text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-md transition-colors"
+            >
+              <Sparkles className="w-3 h-3" />
+            </button>
+          </div>
 
           {/* OCR Document Scan */}
           <button
@@ -1213,11 +1269,24 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Sketch Canvas Modal */}
       {showSketchModal && (
-        <SketchCanvasModal
-          initialDataUrl={sketchData}
-          onSave={handleSketchSaved}
-          onClose={() => setShowSketchModal(false)}
-        />
+        <ErrorBoundary
+          fallbackRender={(error, reset) => (
+            <ModalErrorFallback
+              title="Sketch Canvas Error"
+              message={error?.message || 'Failed to render sketch canvas.'}
+              onClose={() => {
+                setShowSketchModal(false);
+                reset();
+              }}
+            />
+          )}
+        >
+          <SketchCanvasModal
+            initialDataUrl={sketchData}
+            onSave={handleSketchSaved}
+            onClose={() => setShowSketchModal(false)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Note Security Lock Modal */}
@@ -1243,10 +1312,74 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* OCR Scanner Modal */}
       {showOcrScanner && (
-        <OcrScannerModal
-          noteId={note.id}
-          onOcrExtracted={handleOcrExtracted}
-          onClose={() => setShowOcrScanner(false)}
+        <ErrorBoundary
+          fallbackRender={(error, reset) => (
+            <ModalErrorFallback
+              title="OCR Scanner Error"
+              message={error?.message || 'Failed to initialize camera or optical character recognition.'}
+              onClose={() => {
+                setShowOcrScanner(false);
+                reset();
+              }}
+            />
+          )}
+        >
+          <OcrScannerModal
+            noteId={note.id}
+            onOcrExtracted={handleOcrExtracted}
+            onClose={() => setShowOcrScanner(false)}
+          />
+        </ErrorBoundary>
+      )}
+
+      {/* Offline Whisper Voice Studio Modal */}
+      {showAudioStudioModal && (
+        <ErrorBoundary
+          fallbackRender={(error, reset) => (
+            <ModalErrorFallback
+              title="Voice Studio Hardware Error"
+              message={error?.message || 'Failed to initialize microphone or offline Whisper speech model.'}
+              onClose={() => {
+                setShowAudioStudioModal(false);
+                reset();
+              }}
+            />
+          )}
+        >
+          <AudioRecordingModal
+            noteId={note.id}
+            isOpen={showAudioStudioModal}
+            onClose={() => setShowAudioStudioModal(false)}
+            onRecordingComplete={(res) => {
+              if (res.recording) {
+                handleRecordingSaved(res.recording);
+              } else {
+                setRecordings(StorageManager.getRecordingsForNote(note.id));
+              }
+              setShowAudioStudioModal(false);
+            }}
+          />
+        </ErrorBoundary>
+      )}
+
+      {/* Cloud AI Consent Verification Modal */}
+      {showCloudAiConsentModal && (
+        <CloudAiConsentModal
+          providerName="Google Gemini API"
+          operationDescription="Summarization and automated meeting synthesis using Gemini 2.5 Flash"
+          isOpen={showCloudAiConsentModal}
+          onConfirm={() => {
+            setShowCloudAiConsentModal(false);
+            if (pendingAiAction) {
+              const action = pendingAiAction;
+              setPendingAiAction(null);
+              action();
+            }
+          }}
+          onCancel={() => {
+            setShowCloudAiConsentModal(false);
+            setPendingAiAction(null);
+          }}
         />
       )}
 
@@ -1267,6 +1400,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             // Settings updated
           }}
         />
+      )}
+
+      {/* Background AI Synthesis Loading Overlay */}
+      {isGeneratingMinutes && (
+        <ModalLoadingFallback label="Synthesizing meeting minutes and action items with Gemini AI…" />
       )}
     </div>
   );

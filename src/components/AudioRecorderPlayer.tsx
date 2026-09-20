@@ -19,7 +19,7 @@ import {
   Maximize2,
   Minimize2,
 } from 'lucide-react';
-import { AudioRecordingManager } from '../services/AudioRecordingManager';
+import { AudioRecordingManager } from '../lib/audioRecorder';
 import { GeminiApiService } from '../lib/geminiService';
 import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';

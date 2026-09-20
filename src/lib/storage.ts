@@ -21,9 +21,12 @@ import {
   SqliteStats,
   SearchOptions,
   SearchResult,
+} from './sqlite/sqliteRepository';
+import {
+  NoteRepository,
   NotesPageOptions,
   NotesPageResult,
-} from './sqlite/sqliteRepository';
+} from '../repositories/NoteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
 import { AppLogger } from './logger';
 import { ImportSafetyPipeline } from './importSafety';
@@ -270,6 +273,14 @@ export class StorageManager {
   }
 
   // --- NOTES CRUD ---
+  /**
+   * Thread asynchronous paginated note queries through NoteRepository
+   * for responsive list rendering, background queries, and FTS search.
+   */
+  public static async getNotesPage(options: NotesPageOptions): Promise<NotesPageResult> {
+    return NoteRepository.list(options);
+  }
+
   public static getNotes(): NoteRecord[] {
     if (this.notesCache !== null) {
       return this.notesCache;
@@ -523,27 +534,6 @@ export class StorageManager {
       AppLogger.warn('StorageManager', 'SQLite searchWithCount fallback', e);
       const notes = this.searchNotes(options);
       return { notes, totalCount: notes.length };
-    }
-  }
-
-  public static getNotesPage(options: NotesPageOptions = {}): NotesPageResult {
-    try {
-      return SqliteRepository.getNotesPage(options);
-    } catch (e) {
-      AppLogger.warn('StorageManager', 'SQLite getNotesPage fallback', e);
-      const all = this.getActiveNotes();
-      const page = options.page || 1;
-      const pageSize = options.pageSize || 50;
-      const totalPages = Math.ceil(all.length / pageSize) || 1;
-      const offset = (page - 1) * pageSize;
-      return {
-        notes: all.slice(offset, offset + pageSize),
-        totalCount: all.length,
-        page,
-        pageSize,
-        totalPages,
-        hasMore: page < totalPages,
-      };
     }
   }
 
@@ -1299,12 +1289,15 @@ export class StorageManager {
       // 1. Auto-prune old versions (keep latest 10 versions per note)
       const versionsPruned = SqliteRepository.pruneAllVersions(10);
 
-      // 2. Clean orphan media keys & files
+      // 2. Auto-prune item_changes sync audit log (keep latest 5000 changes or 30 days)
+      SqliteRepository.pruneItemChanges();
+
+      // 3. Clean orphan media keys & files
       const orphanKeys = SqliteRepository.findOrphanMediaKeys();
       orphanKeys.forEach((k) => SqliteRepository.removeOrphanMediaRecord(k));
       const mediaRes = await this.cleanOrphanedMedia();
 
-      // 3. Compact database if size exceeds 512KB
+      // 4. Compact database if size exceeds 512KB
       const stats = this.getSqliteStats();
       if (stats.databaseSizeBytes > 512 * 1024) {
         await this.vacuumDatabase();

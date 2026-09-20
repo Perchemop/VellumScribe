@@ -1,5 +1,6 @@
 import { SqliteEngine } from './sqliteEngine';
 import { AppLogger } from '../logger';
+import { generatePrefixedId } from '../uuid';
 import { CURRENT_SCHEMA_VERSION } from './schema';
 import {
   NoteRecord,
@@ -1165,7 +1166,7 @@ export class SqliteRepository {
     payload: any
   ): void {
     try {
-      const id = `chg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const id = generatePrefixedId(`chg_${Date.now()}`);
       const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
       let hash = 0;
       for (let i = 0; i < payloadStr.length; i++) {
@@ -1192,6 +1193,27 @@ export class SqliteRepository {
       );
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Prunes offline sync change records older than maxAgeMs,
+   * while enforcing a maximum retention ceiling of maxRows.
+   */
+  public static pruneItemChanges(maxAgeMs = 30 * 24 * 60 * 60 * 1000, maxRows = 5000): number {
+    try {
+      const cutoff = Date.now() - maxAgeMs;
+      SqliteEngine.run(`DELETE FROM item_changes WHERE changed_at < ?;`, [cutoff]);
+      SqliteEngine.run(
+        `DELETE FROM item_changes WHERE id NOT IN (
+           SELECT id FROM item_changes ORDER BY changed_at DESC LIMIT ?
+         );`,
+        [maxRows]
+      );
+      return 1;
+    } catch (e) {
+      AppLogger.warn('SqliteRepository', 'Failed to prune item_changes', e);
+      return 0;
     }
   }
 

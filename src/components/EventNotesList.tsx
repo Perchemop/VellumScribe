@@ -35,6 +35,8 @@ import { AiCommandBar } from './AiCommandBar';
 import { AiAction } from '../types';
 import { ReminderService } from '../services/ReminderService';
 import { VirtualizedNotesList } from './VirtualizedNotesList';
+import { AppLogger } from '../lib/logger';
+import { NotesPageResult } from '../repositories/NoteRepository';
 
 interface EventNotesListProps {
   events: EventRecord[];
@@ -84,6 +86,18 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
     }, 180);
     return () => clearTimeout(handler);
   }, [searchQuery]);
+
+  // Paginated database retrieval via NoteRepository gateway
+  const [_notesPage, setNotesPage] = useState<NotesPageResult | null>(null);
+  useEffect(() => {
+    StorageManager.getNotesPage({
+      eventId: selectedEventId || undefined,
+      searchQuery: debouncedQuery,
+      limit: 50,
+    })
+      .then(setNotesPage)
+      .catch((e) => AppLogger.error('EventNotesList', 'Failed to load notes page', e));
+  }, [selectedEventId, debouncedQuery, notes]);
 
   // Pre-aggregate counts for recordings and OCR scans to avoid N+1 scans in note render loops
   const recordingsCountMap = useMemo(() => {
