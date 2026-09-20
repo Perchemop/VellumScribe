@@ -16,6 +16,7 @@ import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { TranscriptService } from '../../services/TranscriptService';
 import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
+import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -184,46 +185,18 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
 
         {/* Dynamic State View */}
         {transcribing ? (
-          /* Durable Progress View */
-          <div className="py-6 space-y-4 text-center">
-            <div className="relative inline-flex items-center justify-center">
-              <RefreshCw className="w-12 h-12 text-emerald-600 animate-spin" />
-              <Sparkles className="w-5 h-5 text-emerald-500 absolute" />
-            </div>
-
-            <div className="space-y-1">
-              <h4 className="font-semibold text-sm text-stone-900 dark:text-stone-100">
-                {jobStatus?.phaseLabel || 'Transcribing speech chunks locally...'}
-              </h4>
-              <p className="text-xs text-stone-500">
-                Model: Whisper Base • Zero cloud transmission
-              </p>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-stone-100 dark:bg-stone-800 h-2.5 rounded-full overflow-hidden border border-stone-200/50 dark:border-stone-700/50">
-              <div
-                className="bg-emerald-600 h-full transition-all duration-300 rounded-full"
-                style={{ width: `${jobStatus?.progressPercent || 20}%` }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] text-stone-400 px-1">
-              <span>{jobStatus?.progressPercent || 20}% Complete</span>
-              {jobStatus?.totalChunks && (
-                <span>
-                  Chunk {jobStatus.currentChunk || 1} of {jobStatus.totalChunks}
-                </span>
-              )}
-            </div>
-
-            <button
-              id="btn-cancel-transcription"
-              onClick={handleCancelTranscription}
-              className="px-4 py-1.5 rounded-xl border border-stone-300 dark:border-stone-700 text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-            >
-              Cancel Transcription
-            </button>
+          <div className="py-4">
+            <TranscriptionProgressCard
+              progress={{
+                phase: 'transcribing',
+                percent: jobStatus?.progressPercent || 25,
+                currentSegment: jobStatus?.currentChunk || 1,
+                totalSegments: jobStatus?.totalChunks || 1,
+                completedSegmentsCount: Math.max(0, (jobStatus?.currentChunk || 1) - 1),
+                status: jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
+              }}
+              onCancel={handleCancelTranscription}
+            />
           </div>
         ) : (
           /* Active Recording View */
@@ -286,3 +259,5 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     </div>
   );
 };
+
+export default AudioRecordingModal;

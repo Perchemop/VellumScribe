@@ -21,6 +21,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:orphans": "node scripts/check-orphaned-files.mjs",
     "verify": "npm run typecheck && npm run test"
   },
   "dependencies": {
@@ -51,6 +52,7 @@
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
@@ -58,10 +60,15 @@
     "@types/react-window": "^2.0.0",
     "autoprefixer": "^10.5.5",
     "esbuild": "^0.28.2",
+    "eslint": "^10.11.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.23.13",
-    "typescript": "~7.0.2",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.70.0",
     "vite": "^8.2.2",
     "vitest": "^5.0.0"
   }

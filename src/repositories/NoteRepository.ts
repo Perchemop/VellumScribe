@@ -2,7 +2,6 @@ import { NoteRecord, ChecklistItem } from '../types';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { SqliteRepository, SearchOptions, SearchResult } from '../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../lib/logger';
-import { generateUUID } from '../lib/uuid';
 
 export interface CreateNoteInput {
   title?: string;
@@ -57,7 +56,7 @@ export class NoteRepository {
   public static async getById(id: number): Promise<NoteRecord | null> {
     try {
       const db = getDatabaseAdapter();
-      const rows = await db.query<any>('SELECT * FROM notes WHERE id = ?;', [id]);
+      const rows = await db.query<Record<string, unknown>>('SELECT * FROM notes WHERE id = ?;', [id]);
       if (!rows || rows.length === 0) return null;
       return SqliteRepository.getNoteById(id);
     } catch (e) {

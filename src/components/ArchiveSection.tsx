@@ -14,10 +14,13 @@ import {
   ArrowRight,
   Shield,
   Layers,
+  LayoutGrid,
+  List as ListIcon,
 } from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { VirtualizedNotesList } from './VirtualizedNotesList';
 
 interface ArchiveSectionProps {
   notes: NoteRecord[];
@@ -34,6 +37,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   // Filter for archived notes only
   const archivedNotes = useMemo(() => {
@@ -143,6 +147,35 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
 
           {archivedNotes.length > 0 && (
             <div className="flex items-center gap-2">
+              <div className="flex items-center p-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl border border-zinc-200/80 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('grid')}
+                  aria-label="Grid view"
+                  title="Grid view"
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-zinc-750 text-zinc-900 dark:text-zinc-100 shadow-2xs'
+                      : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  aria-label="List view"
+                  title="List view"
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-zinc-750 text-zinc-900 dark:text-zinc-100 shadow-2xs'
+                      : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <ListIcon className="w-4 h-4" />
+                </button>
+              </div>
+
               <button
                 id="unarchive-all-btn"
                 type="button"
@@ -230,6 +263,88 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
         ) : filteredNotes.length === 0 ? (
           <div className="py-12 text-center text-xs text-zinc-400">
             No archived notes match your search.
+          </div>
+        ) : viewMode === 'list' || filteredNotes.length > 30 ? (
+          <div className="min-h-[400px]">
+            <VirtualizedNotesList
+              notes={filteredNotes}
+              itemHeight={136}
+              renderNote={(note) => {
+                const event = events.find((e) => e.id === note.event_id);
+                const previewText = note.body
+                  ? note.body
+                      .replace(/[#*`_~[\]()-]/g, ' ')
+                      .replace(/\s+/g, ' ')
+                      .trim()
+                      .slice(0, 140)
+                  : 'Empty note';
+
+                return (
+                  <div
+                    key={note.id}
+                    id={`archived-note-card-${note.id}`}
+                    onClick={() => onSelectNote(note.id)}
+                    className="group relative p-3.5 bg-zinc-50/70 hover:bg-white dark:bg-[#121215] dark:hover:bg-[#16161a] border border-zinc-200/70 dark:border-zinc-800/80 rounded-2xl shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-[128px]"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {note.note_type === 'checklist' ? (
+                            <CheckSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          ) : note.note_type === 'sketch' ? (
+                            <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                          )}
+                          <h4 className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 truncate">
+                            {note.title || 'Untitled Note'}
+                          </h4>
+                        </div>
+
+                        {event && (
+                          <span className="shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
+                            {event.title}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                        {previewText}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2">
+                      <span className="text-[11px] text-zinc-400">
+                        {formatArchivedDate(note.archived_at || note.updated_at)}
+                      </span>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => handleUnarchive(note.id, e)}
+                          aria-label="Restore to active notes"
+                          title="Restore to active notes"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 min-h-[32px] bg-white dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3 text-zinc-500" />
+                          <span>Restore</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handlePermanentDelete(note.id, note.title, e)}
+                          aria-label="Delete note permanently"
+                          title="Delete permanently"
+                          className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }}
+            />
           </div>
         ) : (
           /* Grid of Archived Notes */
