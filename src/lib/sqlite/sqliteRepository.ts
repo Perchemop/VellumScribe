@@ -1,4 +1,4 @@
-import { SqliteEngine } from './sqliteEngine';
+import { getDatabaseAdapter } from './databaseAdapter';
 import { AppLogger } from '../logger';
 import { generatePrefixedId } from '../uuid';
 import { CURRENT_SCHEMA_VERSION } from './schema';
@@ -74,6 +74,42 @@ export interface NotesPageResult {
 }
 
 export class SqliteRepository {
+  private static get db() {
+    return getDatabaseAdapter();
+  }
+
+  private static query<T>(sql: string, params: unknown[] = []): T[] {
+    const adapter = this.db;
+    if (adapter.querySync) {
+      return adapter.querySync<T>(sql, params);
+    }
+    return [];
+  }
+
+  private static run(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
+    const adapter = this.db;
+    if (adapter.runSync) {
+      return adapter.runSync(sql, params);
+    }
+    adapter.run(sql, params).catch((e) => AppLogger.warn("SqliteRepository", "Async run error", e));
+    return { changes: 1 };
+  }
+
+  private static transaction<T>(fn: () => T): T {
+    const adapter = this.db;
+    if (adapter.transactionSync) {
+      return adapter.transactionSync(fn);
+    }
+    return fn();
+  }
+
+  private static getLastInsertId(): number {
+    const adapter = this.db;
+    if (adapter.getLastInsertId) {
+      return adapter.getLastInsertId();
+    }
+    return 0;
+  }
   /**
    * Efficient batch hydrator for note items (checklists and tags)
    * Prevents full database loading and eliminates N+1 query overhead
@@ -84,7 +120,7 @@ export class SqliteRepository {
     const placeholders = noteIds.map(() => '?').join(',');
 
     // Fetch checklists only for this batch
-    const chkRows = SqliteEngine.query<any>(
+    const chkRows = this.query<any>(
       `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
       noteIds
     );
@@ -99,7 +135,7 @@ export class SqliteRepository {
     }
 
     // Fetch tags only for this batch
-    const tagRows = SqliteEngine.query<any>(
+    const tagRows = this.query<any>(
       `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
       noteIds
     );
@@ -143,7 +179,7 @@ export class SqliteRepository {
   // --- NOTES CRUD ---
 
   public static getAllNotes(): NoteRecord[] {
-    const rawNotes = SqliteEngine.query<any>(`
+    const rawNotes = this.query<any>(`
       SELECT n.*, e.title as event_title, e.color as event_color
       FROM notes n
       LEFT JOIN events e ON n.event_id = e.id
@@ -153,18 +189,18 @@ export class SqliteRepository {
   }
 
   public static getNoteById(id: number): NoteRecord | null {
-    const rawNotes = SqliteEngine.query<any>('SELECT * FROM notes WHERE id = ?', [id]);
+    const rawNotes = this.query<any>('SELECT * FROM notes WHERE id = ?', [id]);
     if (rawNotes.length === 0) return null;
     const populated = this.populateNotesBatch(rawNotes);
     return populated.length > 0 ? populated[0] : null;
   }
 
   public static saveNote(note: NoteRecord): NoteRecord {
-    return SqliteEngine.transaction(() => {
+    return this.transaction(() => {
       let noteId = note.id;
       const isExisting =
         noteId && noteId > 0
-          ? SqliteEngine.query<{ id: number }>('SELECT id FROM notes WHERE id = ?', [noteId]).length > 0
+          ? this.query<{ id: number }>('SELECT id FROM notes WHERE id = ?', [noteId]).length > 0
           : false;
 
       const now = new Date().toISOString();
@@ -172,7 +208,7 @@ export class SqliteRepository {
       const updatedAt = note.updated_at || now;
 
       if (isExisting) {
-        SqliteEngine.run(
+        this.run(
           `UPDATE notes SET
             event_id = ?, title = ?, body = ?, note_type = ?, color = ?,
             is_pinned = ?, is_locked = ?, lock_mode = ?, security_type = ?, cloud_save_enabled = ?,
@@ -209,7 +245,7 @@ export class SqliteRepository {
         );
       } else {
         if (noteId && noteId > 0) {
-          SqliteEngine.run(
+          this.run(
             `INSERT INTO notes (
               id, event_id, title, body, note_type, color, is_pinned, is_locked,
               lock_mode, security_type, cloud_save_enabled,
@@ -246,7 +282,7 @@ export class SqliteRepository {
             ]
           );
         } else {
-          SqliteEngine.run(
+          this.run(
             `INSERT INTO notes (
               event_id, title, body, note_type, color, is_pinned, is_locked,
               lock_mode, security_type, cloud_save_enabled,
@@ -281,12 +317,12 @@ export class SqliteRepository {
               updatedAt,
             ]
           );
-          noteId = SqliteEngine.getLastInsertId();
+          noteId = this.getLastInsertId();
         }
       }
 
       // 2. Targeted Checklists differential synchronization
-      const existingChecklists = SqliteEngine.query<{ id: string; text: string; completed: number; position: number }>(
+      const existingChecklists = this.query<{ id: string; text: string; completed: number; position: number }>(
         'SELECT id, text, completed, position FROM checklists WHERE note_id = ?',
         [noteId]
       );
@@ -303,13 +339,13 @@ export class SqliteRepository {
 
           if (existing) {
             if (existing.text !== item.text || existing.completed !== completedNum || existing.position !== i) {
-              SqliteEngine.run(
+              this.run(
                 'UPDATE checklists SET text = ?, completed = ?, position = ? WHERE id = ? AND note_id = ?',
                 [item.text, completedNum, i, chkId, noteId]
               );
             }
           } else {
-            SqliteEngine.run(
+            this.run(
               'INSERT INTO checklists (id, note_id, text, completed, position) VALUES (?, ?, ?, ?, ?)',
               [chkId, noteId, item.text, completedNum, i]
             );
@@ -319,12 +355,12 @@ export class SqliteRepository {
       // Delete removed checklists
       for (const chk of existingChecklists) {
         if (!incomingChkIds.has(chk.id)) {
-          SqliteEngine.run('DELETE FROM checklists WHERE id = ? AND note_id = ?', [chk.id, noteId]);
+          this.run('DELETE FROM checklists WHERE id = ? AND note_id = ?', [chk.id, noteId]);
         }
       }
 
       // 3. Targeted Tags differential synchronization
-      const existingTags = SqliteEngine.query<{ tag_name: string }>(
+      const existingTags = this.query<{ tag_name: string }>(
         'SELECT tag_name FROM note_tags WHERE note_id = ?',
         [noteId]
       ).map((t) => t.tag_name);
@@ -333,28 +369,28 @@ export class SqliteRepository {
 
       for (const tag of incomingTagSet) {
         if (!existingTagSet.has(tag)) {
-          SqliteEngine.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tag]);
-          SqliteEngine.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [noteId, tag]);
+          this.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tag]);
+          this.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [noteId, tag]);
         }
       }
       for (const tag of existingTagSet) {
         if (!incomingTagSet.has(tag)) {
-          SqliteEngine.run('DELETE FROM note_tags WHERE note_id = ? AND tag_name = ?', [noteId, tag]);
+          this.run('DELETE FROM note_tags WHERE note_id = ? AND tag_name = ?', [noteId, tag]);
         }
       }
 
       // 4. Synchronize FTS table notes_fts
       try {
-        SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [noteId]);
+        this.run('DELETE FROM notes_fts WHERE note_id = ?;', [noteId]);
         if (!note.is_locked) {
           const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
           const tagText = Array.from(incomingTagSet).join(' ');
-          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+          const ocrRows = this.query<{ ocr_text: string }>(
             'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
             [noteId]
           );
           const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
-          SqliteEngine.run(
+          this.run(
             'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
             [noteId, note.title || '', note.body || '', chkText, ocrText, tagText]
           );
@@ -365,7 +401,7 @@ export class SqliteRepository {
 
       // 5. Record media association if sketch key present
       if (note.sketch_media_key) {
-        SqliteEngine.run(
+        this.run(
           `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [note.sketch_media_key, noteId, 'sketch', 'image/png', 0, Date.now()]
@@ -395,8 +431,8 @@ export class SqliteRepository {
     const newBody = body !== undefined ? body : existing.body;
     const now = new Date().toISOString();
 
-    SqliteEngine.transaction(() => {
-      SqliteEngine.run(
+    this.transaction(() => {
+      this.run(
         'UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?',
         [newTitle, newBody, now, id]
       );
@@ -405,13 +441,13 @@ export class SqliteRepository {
         try {
           const chkText = (existing.checklist_items || []).map((c) => c.text).join(' ');
           const tagText = (existing.tags || []).join(' ');
-          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+          const ocrRows = this.query<{ ocr_text: string }>(
             'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
             [id]
           );
           const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
-          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
-          SqliteEngine.run(
+          this.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
+          this.run(
             'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
             [id, newTitle, newBody, chkText, ocrText, tagText]
           );
@@ -434,20 +470,20 @@ export class SqliteRepository {
    */
   public static reindexNotes(ids: number[]): void {
     if (!ids || ids.length === 0) return;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         const note = this.getNoteById(id);
         if (!note || note.is_locked) continue;
         try {
           const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
           const tagText = (note.tags || []).join(' ');
-          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+          const ocrRows = this.query<{ ocr_text: string }>(
             'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
             [id]
           );
           const ocrText = ocrRows.map((o) => o.ocr_text).join(' ');
-          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
-          SqliteEngine.run(
+          this.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
+          this.run(
             'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
             [id, note.title || '', note.body || '', chkText, ocrText, tagText]
           );
@@ -459,16 +495,16 @@ export class SqliteRepository {
   }
 
   public static deleteNote(id: number): void {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       this.recordItemChange('note', id, 'delete', 1, { id });
-      SqliteEngine.run('DELETE FROM notes WHERE id = ?', [id]);
-      SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM checklists WHERE note_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM note_tags WHERE note_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM note_versions WHERE note_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM recordings WHERE note_id = ?', [id]);
-      SqliteEngine.run('DELETE FROM ocr_scans WHERE note_id = ?', [id]);
-      SqliteEngine.run('UPDATE media_files SET note_id = NULL WHERE note_id = ?', [id]);
+      this.run('DELETE FROM notes WHERE id = ?', [id]);
+      this.run('DELETE FROM notes_fts WHERE note_id = ?', [id]);
+      this.run('DELETE FROM checklists WHERE note_id = ?', [id]);
+      this.run('DELETE FROM note_tags WHERE note_id = ?', [id]);
+      this.run('DELETE FROM note_versions WHERE note_id = ?', [id]);
+      this.run('DELETE FROM recordings WHERE note_id = ?', [id]);
+      this.run('DELETE FROM ocr_scans WHERE note_id = ?', [id]);
+      this.run('UPDATE media_files SET note_id = NULL WHERE note_id = ?', [id]);
     });
   }
 
@@ -569,7 +605,7 @@ export class SqliteRepository {
             LEFT JOIN note_tags nt ON n.id = nt.note_id
             WHERE notes_fts MATCH ? AND ${whereClause}
           `;
-          const countRes = SqliteEngine.query<{ cnt: number }>(countSql, [ftsExpression, ...params]);
+          const countRes = this.query<{ cnt: number }>(countSql, [ftsExpression, ...params]);
           const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
 
           const matchSql = `
@@ -582,7 +618,7 @@ export class SqliteRepository {
             ORDER BY n.is_pinned DESC, n.updated_at DESC
             LIMIT ? OFFSET ?
           `;
-          const rows = SqliteEngine.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          const rows = this.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
           return {
             notes: this.populateNotesBatch(rows),
             totalCount,
@@ -610,7 +646,7 @@ export class SqliteRepository {
         LEFT JOIN note_tags nt ON n.id = nt.note_id
         WHERE ${whereClause} ${likeWhere}
       `;
-      const countRes = SqliteEngine.query<{ cnt: number }>(countSql, likeParams);
+      const countRes = this.query<{ cnt: number }>(countSql, likeParams);
       const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
 
       const fallbackSql = `
@@ -622,7 +658,7 @@ export class SqliteRepository {
         ORDER BY n.is_pinned DESC, n.updated_at DESC
         LIMIT ? OFFSET ?
       `;
-      const rows = SqliteEngine.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      const rows = this.query<any>(fallbackSql, [...likeParams, limit, offset]);
       return {
         notes: this.populateNotesBatch(rows),
         totalCount,
@@ -637,7 +673,7 @@ export class SqliteRepository {
       LEFT JOIN note_tags nt ON n.id = nt.note_id
       WHERE ${whereClause}
     `;
-    const countRes = SqliteEngine.query<{ cnt: number }>(countSql, params);
+    const countRes = this.query<{ cnt: number }>(countSql, params);
     const totalCount = countRes.length > 0 ? Number(countRes[0].cnt) : 0;
 
     const sql = `
@@ -649,7 +685,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = SqliteEngine.query<any>(sql, [...params, limit, offset]);
+    const rows = this.query<any>(sql, [...params, limit, offset]);
     return {
       notes: this.populateNotesBatch(rows),
       totalCount,
@@ -721,7 +757,7 @@ export class SqliteRepository {
       where += ' AND (n.is_locked = 0 OR n.is_locked IS NULL)';
     }
 
-    const countRes = SqliteEngine.query<{ cnt: number }>(
+    const countRes = this.query<{ cnt: number }>(
       `SELECT COUNT(*) as cnt FROM notes n WHERE ${where}`,
       params
     );
@@ -739,7 +775,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, ${safeSortCol} ${safeDirection}
       LIMIT ? OFFSET ?
     `;
-    const rows = SqliteEngine.query<any>(sql, [...params, pageSize, offset]);
+    const rows = this.query<any>(sql, [...params, pageSize, offset]);
     const notes = this.populateNotesBatch(rows);
 
     return {
@@ -755,7 +791,7 @@ export class SqliteRepository {
   // --- EVENTS / NOTEBOOKS CRUD ---
 
   public static getAllEvents(): EventRecord[] {
-    const rawEvents = SqliteEngine.query<any>('SELECT * FROM events ORDER BY event_date DESC, created_at DESC');
+    const rawEvents = this.query<any>('SELECT * FROM events ORDER BY event_date DESC, created_at DESC');
     return rawEvents.map((r) => ({
       id: r.id,
       title: r.title,
@@ -768,13 +804,13 @@ export class SqliteRepository {
   }
 
   public static saveEvent(evt: EventRecord): EventRecord {
-    return SqliteEngine.transaction(() => {
+    return this.transaction(() => {
       let eventId = evt.id;
       const isExisting = Boolean(eventId && eventId > 0);
       if (eventId && eventId > 0) {
         // Must use UPDATE rather than INSERT OR REPLACE.
         // SQLite's REPLACE delete-then-insert semantics triggers FOREIGN KEY ON DELETE SET NULL on notes.event_id!
-        SqliteEngine.run(
+        this.run(
           `UPDATE events
            SET title = ?, event_date = ?, description = ?, location = ?, category = ?, color = ?, updated_at = ?
            WHERE id = ?`,
@@ -790,7 +826,7 @@ export class SqliteRepository {
           ]
         );
       } else {
-        SqliteEngine.run(
+        this.run(
           `INSERT INTO events (title, event_date, description, location, category, color, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -804,7 +840,7 @@ export class SqliteRepository {
             Date.now(),
           ]
         );
-        eventId = SqliteEngine.getLastInsertId();
+        eventId = this.getLastInsertId();
       }
       this.recordItemChange('event', eventId, isExisting ? 'update' : 'create', 1, evt);
       return { ...evt, id: eventId };
@@ -812,17 +848,17 @@ export class SqliteRepository {
   }
 
   public static deleteEvent(id: number): void {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       this.recordItemChange('event', id, 'delete', 1, { id });
-      SqliteEngine.run('DELETE FROM events WHERE id = ?', [id]);
-      SqliteEngine.run('UPDATE notes SET event_id = 0 WHERE event_id = ?', [id]);
+      this.run('DELETE FROM events WHERE id = ?', [id]);
+      this.run('UPDATE notes SET event_id = 0 WHERE event_id = ?', [id]);
     });
   }
 
   // --- VERSION CONTROL & RETENTION POLICY ---
 
   public static getNoteVersions(noteId: number): DocumentVersion[] {
-    const rows = SqliteEngine.query<any>(
+    const rows = this.query<any>(
       'SELECT * FROM note_versions WHERE note_id = ? ORDER BY version_number DESC',
       [noteId]
     );
@@ -842,13 +878,13 @@ export class SqliteRepository {
   }
 
   public static saveNoteVersion(version: DocumentVersion, maxVersionsPerNote = 50): void {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       const noteId = version.note_id || version.document_id || 0;
       const verNum = version.version_number || version.version_id || Date.now();
       const verId = version.id || `ver_${noteId}_${verNum}`;
 
       // Deduplication: Check if latest version has identical body
-      const latest = SqliteEngine.query<any>(
+      const latest = this.query<any>(
         'SELECT body FROM note_versions WHERE note_id = ? ORDER BY version_number DESC LIMIT 1',
         [noteId]
       );
@@ -856,7 +892,7 @@ export class SqliteRepository {
         return; // Skip creating redundant identical snapshot
       }
 
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO note_versions (id, note_id, version_number, title, body, author, change_summary, checksum, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -873,14 +909,14 @@ export class SqliteRepository {
       );
 
       // Enforce retention policy: Prune older versions beyond max limit
-      const versions = SqliteEngine.query<{ id: string }>(
+      const versions = this.query<{ id: string }>(
         'SELECT id FROM note_versions WHERE note_id = ? ORDER BY version_number DESC',
         [noteId]
       );
       if (versions.length > maxVersionsPerNote) {
         const toDelete = versions.slice(maxVersionsPerNote);
         for (const item of toDelete) {
-          SqliteEngine.run('DELETE FROM note_versions WHERE id = ?', [item.id]);
+          this.run('DELETE FROM note_versions WHERE id = ?', [item.id]);
         }
       }
     });
@@ -888,17 +924,17 @@ export class SqliteRepository {
 
   public static pruneAllVersions(keepCount = 5): number {
     let pruned = 0;
-    SqliteEngine.transaction(() => {
-      const noteIds = SqliteEngine.query<{ id: number }>('SELECT id FROM notes');
+    this.transaction(() => {
+      const noteIds = this.query<{ id: number }>('SELECT id FROM notes');
       for (const n of noteIds) {
-        const versions = SqliteEngine.query<{ id: string }>(
+        const versions = this.query<{ id: string }>(
           'SELECT id FROM note_versions WHERE note_id = ? ORDER BY version_number DESC',
           [n.id]
         );
         if (versions.length > keepCount) {
           const toDelete = versions.slice(keepCount);
           for (const item of toDelete) {
-            SqliteEngine.run('DELETE FROM note_versions WHERE id = ?', [item.id]);
+            this.run('DELETE FROM note_versions WHERE id = ?', [item.id]);
             pruned++;
           }
         }
@@ -910,7 +946,7 @@ export class SqliteRepository {
   // --- RECORDINGS, TRANSCRIPTS & OCR ---
 
   public static getAllRecordings(): RecordingRecord[] {
-    const rows = SqliteEngine.query<any>('SELECT * FROM recordings ORDER BY created_at DESC');
+    const rows = this.query<any>('SELECT * FROM recordings ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -927,7 +963,7 @@ export class SqliteRepository {
   public static saveRecording(rec: RecordingRecord): RecordingRecord {
     let recordingId = rec.id;
     if (recordingId && recordingId > 0) {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO recordings (id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -943,7 +979,7 @@ export class SqliteRepository {
         ]
       );
     } else {
-      SqliteEngine.run(
+      this.run(
         `INSERT INTO recordings (note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -957,11 +993,11 @@ export class SqliteRepository {
           rec.created_at || new Date().toISOString(),
         ]
       );
-      recordingId = SqliteEngine.getLastInsertId();
+      recordingId = this.getLastInsertId();
     }
 
     if (rec.media_key) {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [rec.media_key, rec.note_id, 'audio', 'audio/webm', rec.file_size || 0, Date.now()]
@@ -972,7 +1008,7 @@ export class SqliteRepository {
   }
 
   public static getAllTranscripts(): TranscriptRecord[] {
-    const rows = SqliteEngine.query<any>('SELECT * FROM transcripts ORDER BY created_at DESC');
+    const rows = this.query<any>('SELECT * FROM transcripts ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       recording_id: r.recording_id,
@@ -986,7 +1022,7 @@ export class SqliteRepository {
   public static saveTranscript(tr: TranscriptRecord): TranscriptRecord {
     let transcriptId = tr.id;
     if (transcriptId && transcriptId > 0) {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO transcripts (id, recording_id, transcript_text, confidence, speaker_count, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
@@ -999,7 +1035,7 @@ export class SqliteRepository {
         ]
       );
     } else {
-      SqliteEngine.run(
+      this.run(
         `INSERT INTO transcripts (recording_id, transcript_text, confidence, speaker_count, created_at)
          VALUES (?, ?, ?, ?, ?)`,
         [
@@ -1010,13 +1046,13 @@ export class SqliteRepository {
           tr.created_at || new Date().toISOString(),
         ]
       );
-      transcriptId = SqliteEngine.getLastInsertId();
+      transcriptId = this.getLastInsertId();
     }
     return { ...tr, id: transcriptId };
   }
 
   public static getAllOcrScans(): OcrScanRecord[] {
-    const rows = SqliteEngine.query<any>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
+    const rows = this.query<any>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -1031,7 +1067,7 @@ export class SqliteRepository {
   public static saveOcrScan(ocr: OcrScanRecord): OcrScanRecord {
     let ocrId = ocr.id;
     if (ocrId && ocrId > 0) {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO ocr_scans (id, note_id, image_path, media_key, ocr_text, confidence, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -1045,7 +1081,7 @@ export class SqliteRepository {
         ]
       );
     } else {
-      SqliteEngine.run(
+      this.run(
         `INSERT INTO ocr_scans (note_id, image_path, media_key, ocr_text, confidence, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
@@ -1057,11 +1093,11 @@ export class SqliteRepository {
           ocr.created_at || new Date().toISOString(),
         ]
       );
-      ocrId = SqliteEngine.getLastInsertId();
+      ocrId = this.getLastInsertId();
     }
 
     if (ocr.media_key) {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [ocr.media_key, ocr.note_id, 'ocr_image', 'image/jpeg', 0, Date.now()]
@@ -1075,13 +1111,13 @@ export class SqliteRepository {
         if (note && !note.is_locked) {
           const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
           const tagText = (note.tags || []).join(' ');
-          const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
+          const ocrRows = this.query<{ ocr_text: string }>(
             'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
             [ocr.note_id]
           );
           const allOcr = ocrRows.map((o) => o.ocr_text).join(' ');
-          SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [ocr.note_id]);
-          SqliteEngine.run(
+          this.run('DELETE FROM notes_fts WHERE note_id = ?;', [ocr.note_id]);
+          this.run(
             'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
             [ocr.note_id, note.title || '', note.body || '', chkText, allOcr, tagText]
           );
@@ -1097,18 +1133,18 @@ export class SqliteRepository {
   // --- DATABASE METRICS, INTEGRITY & ORPHAN DETECTION ---
 
   public static getDatabaseStats(): SqliteStats {
-    const notesCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM notes')[0]?.c || 0;
-    const eventsCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM events')[0]?.c || 0;
-    const checklistsCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM checklists')[0]?.c || 0;
-    const versionsCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM note_versions')[0]?.c || 0;
-    const mediaFilesCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM media_files')[0]?.c || 0;
-    const recordingsCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM recordings')[0]?.c || 0;
-    const transcriptsCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM transcripts')[0]?.c || 0;
-    const ocrScansCount = SqliteEngine.query<{ c: number }>('SELECT COUNT(*) as c FROM ocr_scans')[0]?.c || 0;
+    const notesCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM notes')[0]?.c || 0;
+    const eventsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM events')[0]?.c || 0;
+    const checklistsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM checklists')[0]?.c || 0;
+    const versionsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM note_versions')[0]?.c || 0;
+    const mediaFilesCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM media_files')[0]?.c || 0;
+    const recordingsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM recordings')[0]?.c || 0;
+    const transcriptsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM transcripts')[0]?.c || 0;
+    const ocrScansCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM ocr_scans')[0]?.c || 0;
 
     let binarySize = 0;
     try {
-      const binary = SqliteEngine.exportDatabaseBinary();
+      const binary = (this.db.exportBinary ? this.db.exportBinary() : new Uint8Array());
       binarySize = binary.byteLength;
     } catch {
       // ignore
@@ -1116,13 +1152,13 @@ export class SqliteRepository {
 
     let activeVersion = CURRENT_SCHEMA_VERSION;
     try {
-      const vRes = SqliteEngine.query<{ version: number }>('SELECT MAX(version) as version FROM schema_migrations');
+      const vRes = this.query<{ version: number }>('SELECT MAX(version) as version FROM schema_migrations');
       if (vRes.length > 0 && typeof vRes[0].version === 'number' && vRes[0].version > 0) {
         activeVersion = vRes[0].version;
       }
     } catch {}
 
-    const integrity = SqliteEngine.checkIntegrity();
+    const integrity = (this.db.checkIntegritySync ? this.db.checkIntegritySync() : true);
 
     return {
       notesCount,
@@ -1135,13 +1171,13 @@ export class SqliteRepository {
       ocrScansCount,
       databaseSizeBytes: binarySize,
       schemaVersion: activeVersion,
-      integrityStatus: integrity.status,
+      integrityStatus: integrity ? 'ok' : 'corrupted',
     };
   }
 
   public static findOrphanMediaKeys(): string[] {
-    const mediaRows = SqliteEngine.query<{ media_key: string; note_id: number | null }>('SELECT media_key, note_id FROM media_files');
-    const existingNotes = new Set(SqliteEngine.query<{ id: number }>('SELECT id FROM notes').map((n) => n.id));
+    const mediaRows = this.query<{ media_key: string; note_id: number | null }>('SELECT media_key, note_id FROM media_files');
+    const existingNotes = new Set(this.query<{ id: number }>('SELECT id FROM notes').map((n) => n.id));
 
     const orphans: string[] = [];
     for (const m of mediaRows) {
@@ -1153,7 +1189,7 @@ export class SqliteRepository {
   }
 
   public static removeOrphanMediaRecord(mediaKey: string): void {
-    SqliteEngine.run('DELETE FROM media_files WHERE media_key = ?', [mediaKey]);
+    this.run('DELETE FROM media_files WHERE media_key = ?', [mediaKey]);
   }
 
   // --- ITEM CHANGES (OFFLINE-FIRST DELTAS) ---
@@ -1175,7 +1211,7 @@ export class SqliteRepository {
       }
       const payloadHash = Math.abs(hash).toString(16);
 
-      SqliteEngine.run(
+      this.run(
         `INSERT INTO item_changes (id, entity_type, entity_id, operation, version, changed_at, payload_hash, sync_state)
          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending');`,
         [id, entityType, String(entityId), operation, version, Date.now(), payloadHash]
@@ -1187,7 +1223,7 @@ export class SqliteRepository {
 
   public static getItemChanges(limit = 100): ItemChangeRecord[] {
     try {
-      return SqliteEngine.query<ItemChangeRecord>(
+      return this.query<ItemChangeRecord>(
         `SELECT * FROM item_changes ORDER BY changed_at DESC LIMIT ?;`,
         [limit]
       );
@@ -1203,8 +1239,8 @@ export class SqliteRepository {
   public static pruneItemChanges(maxAgeMs = 30 * 24 * 60 * 60 * 1000, maxRows = 5000): number {
     try {
       const cutoff = Date.now() - maxAgeMs;
-      SqliteEngine.run(`DELETE FROM item_changes WHERE changed_at < ?;`, [cutoff]);
-      SqliteEngine.run(
+      this.run(`DELETE FROM item_changes WHERE changed_at < ?;`, [cutoff]);
+      this.run(
         `DELETE FROM item_changes WHERE id NOT IN (
            SELECT id FROM item_changes ORDER BY changed_at DESC LIMIT ?
          );`,
@@ -1221,7 +1257,7 @@ export class SqliteRepository {
 
   public static saveNoteRevision(revision: NoteRevisionRecord): void {
     try {
-      SqliteEngine.run(
+      this.run(
         `INSERT OR REPLACE INTO note_revisions (id, note_id, version_number, title, body, created_at, reason, source, content_hash)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
@@ -1243,7 +1279,7 @@ export class SqliteRepository {
 
   public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
     try {
-      return SqliteEngine.query<NoteRevisionRecord>(
+      return this.query<NoteRevisionRecord>(
         `SELECT * FROM note_revisions WHERE note_id = ? ORDER BY version_number DESC;`,
         [noteId]
       );
@@ -1256,7 +1292,7 @@ export class SqliteRepository {
 
   public static getSyncConflicts(status = 'open'): SyncConflictRecord[] {
     try {
-      return SqliteEngine.query<SyncConflictRecord>(
+      return this.query<SyncConflictRecord>(
         `SELECT * FROM sync_conflicts WHERE status = ? ORDER BY detected_at DESC;`,
         [status]
       );
@@ -1267,7 +1303,7 @@ export class SqliteRepository {
 
   public static resolveSyncConflict(id: string): void {
     try {
-      SqliteEngine.run(
+      this.run(
         `UPDATE sync_conflicts SET status = 'resolved' WHERE id = ?;`,
         [id]
       );
@@ -1280,7 +1316,7 @@ export class SqliteRepository {
 
   public static saveLocalSnapshot(snapshot: LocalSnapshotRecord): void {
     try {
-      SqliteEngine.run(
+      this.run(
         `INSERT INTO local_snapshots (id, snapshot_type, notes_count, events_count, payload_blob, created_at)
          VALUES (?, ?, ?, ?, ?, ?);`,
         [snapshot.id, snapshot.snapshot_type, snapshot.notes_count, snapshot.events_count, snapshot.payload_blob, snapshot.created_at]
@@ -1292,7 +1328,7 @@ export class SqliteRepository {
 
   public static getLocalSnapshots(): LocalSnapshotRecord[] {
     try {
-      return SqliteEngine.query<LocalSnapshotRecord>(
+      return this.query<LocalSnapshotRecord>(
         `SELECT * FROM local_snapshots ORDER BY created_at DESC;`
       );
     } catch {

@@ -2,7 +2,7 @@
  * VellumScribe Relational SQLite Schema & Versioned Migrations
  */
 
-export const DB_SCHEMA_VERSION = 11;
+export const DB_SCHEMA_VERSION = 12;
 export const CURRENT_SCHEMA_VERSION = DB_SCHEMA_VERSION;
 
 export const SCHEMA_V1 = `
@@ -485,6 +485,41 @@ export const MIGRATIONS = [
       );
 
       CREATE INDEX IF NOT EXISTS idx_local_snapshots_type ON local_snapshots(snapshot_type, created_at DESC);
+    `,
+  },
+  {
+    version: 12,
+    description: 'Durable search index job recovery fields, AI mutations log, and unified capture inbox',
+    sql: `
+      ALTER TABLE search_index_jobs ADD COLUMN next_attempt_at INTEGER;
+      ALTER TABLE search_index_jobs ADD COLUMN locked_at INTEGER;
+
+      CREATE TABLE IF NOT EXISTS ai_mutations (
+        operation_id TEXT PRIMARY KEY,
+        note_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        created_revision_id TEXT,
+        diff_summary TEXT,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_ai_mutations_note ON ai_mutations(note_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS capture_inbox (
+        id TEXT PRIMARY KEY,
+        input_type TEXT NOT NULL,
+        raw_content TEXT,
+        source TEXT,
+        proposal_json TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        note_id INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_capture_inbox_status ON capture_inbox(status, created_at DESC);
     `,
   },
 ];
