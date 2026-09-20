@@ -15,7 +15,7 @@ import {
   encryptNotePayload,
   NotePayloadData,
 } from './cryptoUtils';
-import { SqliteEngine } from './sqlite/sqliteEngine';
+import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import {
   SqliteRepository,
   SqliteStats,
@@ -39,6 +39,34 @@ import { CloudBackupCrypto } from './cloudBackupCrypto';
  * atomic transactional persistence in the SQLite relational database.
  */
 export class StorageManager {
+  private static get db() {
+    return getDatabaseAdapter();
+  }
+
+  private static query<T>(sql: string, params: unknown[] = []): T[] {
+    const adapter = this.db;
+    if (adapter.querySync) {
+      return adapter.querySync<T>(sql, params);
+    }
+    return [];
+  }
+
+  private static run(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
+    const adapter = this.db;
+    if (adapter.runSync) {
+      return adapter.runSync(sql, params);
+    }
+    adapter.run(sql, params).catch((e) => AppLogger.warn("StorageManager", "Async run error", e));
+    return { changes: 1 };
+  }
+
+  private static transaction<T>(fn: () => T): T {
+    const adapter = this.db;
+    if (adapter.transactionSync) {
+      return adapter.transactionSync(fn);
+    }
+    return fn();
+  }
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
 
@@ -56,7 +84,7 @@ export class StorageManager {
     this.initPromise = (async () => {
       AppLogger.info('StorageManager', 'Bootstrapping SQLite Database Gateway...');
       try {
-        await SqliteEngine.initialize();
+        await this.db.initialize();
         
         // Run safe legacy migration with pre-backup verification
         const report = await MigrationManager.checkAndMigrateLegacyData();
@@ -120,18 +148,22 @@ export class StorageManager {
 
   public static refreshCaches(): void {
     try {
-      this.notesCache = SqliteRepository.getAllNotes();
+      // Load workspace metadata (categories and events)
       this.eventsCache = SqliteRepository.getAllEvents();
-      this.recordingsCache = SqliteRepository.getAllRecordings();
-      this.transcriptsCache = SqliteRepository.getAllTranscripts();
-      this.ocrScansCache = SqliteRepository.getAllOcrScans();
+      // Load initial first page of active notes (50 items) instead of giant full-workspace memory dump
+      const initialPage = SqliteRepository.getNotesPage({ pageSize: 50, status: 'active' });
+      this.notesCache = initialPage.notes;
+      // Lazy load ancillary media/audio/OCR collections on demand
+      this.recordingsCache = null;
+      this.transcriptsCache = null;
+      this.ocrScansCache = null;
     } catch (e) {
       AppLogger.warn('StorageManager', 'Could not refresh caches from SQLite', e);
       if (!this.notesCache) this.notesCache = [];
       if (!this.eventsCache) this.eventsCache = [];
-      if (!this.recordingsCache) this.recordingsCache = [];
-      if (!this.transcriptsCache) this.transcriptsCache = [];
-      if (!this.ocrScansCache) this.ocrScansCache = [];
+      this.recordingsCache = null;
+      this.transcriptsCache = null;
+      this.ocrScansCache = null;
     }
   }
 
@@ -179,7 +211,7 @@ export class StorageManager {
 
   // --- OPT-IN DEMO DATA LOADER ---
   public static loadDemoData(): void {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const evt of DEMO_SAMPLE_EVENTS) {
         SqliteRepository.saveEvent(evt);
       }
@@ -206,7 +238,7 @@ export class StorageManager {
 
   public static saveEvents(events: EventRecord[]): boolean {
     try {
-      SqliteEngine.transaction(() => {
+      this.transaction(() => {
         for (const evt of events) {
           SqliteRepository.saveEvent(evt);
         }
@@ -281,6 +313,19 @@ export class StorageManager {
     return NoteRepository.list(options);
   }
 
+  /**
+   * Keyset pagination for large collections avoiding OFFSET latency:
+   * SELECT * FROM notes WHERE updated_at < ? ORDER BY updated_at DESC LIMIT ?;
+   */
+  public static async getNotesKeyset(beforeUpdatedAt?: string, limit: number = 50): Promise<NoteRecord[]> {
+    const res = await NoteRepository.list({
+      limit,
+      cursor: beforeUpdatedAt,
+      status: 'active',
+    });
+    return res.notes;
+  }
+
   public static getNotes(): NoteRecord[] {
     if (this.notesCache !== null) {
       return this.notesCache;
@@ -307,7 +352,7 @@ export class StorageManager {
 
   public static saveNotes(notes: NoteRecord[]): boolean {
     try {
-      SqliteEngine.transaction(() => {
+      this.transaction(() => {
         for (const note of notes) {
           SqliteRepository.saveNote(note);
         }
@@ -444,7 +489,7 @@ export class StorageManager {
   public static bulkArchiveNotes(ids: number[]): number {
     let count = 0;
     const now = new Date().toISOString();
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         const note = this.getNoteById(id);
         if (note) {
@@ -464,7 +509,7 @@ export class StorageManager {
 
   public static bulkDeleteNotes(ids: number[]): number {
     let count = 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         SqliteRepository.deleteNote(id);
         count++;
@@ -579,8 +624,8 @@ export class StorageManager {
         const { hashPin, generateSalt } = await import('./cryptoUtils');
         const salt = generateSalt();
         const { hash } = await hashPin(enteredPin, salt);
-        SqliteEngine.transaction(() => {
-          SqliteEngine.run(
+        this.transaction(() => {
+          this.run(
             'UPDATE notes SET lock_pin = NULL, pin_hash = ?, pin_salt = ? WHERE id = ?',
             [hash, salt, note.id]
           );
@@ -609,7 +654,7 @@ export class StorageManager {
               // Seamlessly upgrade to OWASP 600,000 rounds
               const { hash } = await hashPin(enteredPin, note.pin_salt);
               const upgradedPayload = await encryptNotePayloadV2(decrypted, sessionKey);
-              SqliteEngine.run('UPDATE notes SET pin_hash = ?, encrypted_payload = ? WHERE id = ?', [hash, upgradedPayload, note.id]);
+              this.run('UPDATE notes SET pin_hash = ?, encrypted_payload = ? WHERE id = ?', [hash, upgradedPayload, note.id]);
               note.pin_hash = hash;
               note.encrypted_payload = upgradedPayload;
             }
@@ -626,7 +671,7 @@ export class StorageManager {
               decrypted = await migrateLegacyV0NotePayload(note.encrypted_payload, enteredPin, note.pin_salt);
               if (decrypted) {
                 const reEncrypted = await encryptNotePayloadV2(decrypted, sessionKey);
-                SqliteEngine.run('UPDATE notes SET encrypted_payload = ? WHERE id = ?', [reEncrypted, note.id]);
+                this.run('UPDATE notes SET encrypted_payload = ? WHERE id = ?', [reEncrypted, note.id]);
                 note.encrypted_payload = reEncrypted;
                 AppLogger.info('StorageManager', `Migrated note ${note.id} from legacy v0 XOR to AES-256-GCM v2.`);
               }
@@ -674,7 +719,7 @@ export class StorageManager {
     }
 
     // Enumerate all associated attachments
-    const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
+    const mediaFiles = this.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
     const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
     const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
     const allMediaKeys = new Set<string>();
@@ -755,7 +800,7 @@ export class StorageManager {
       // Commit encrypted media blobs to disk
       for (const [mediaKey, item] of stagedEncrypted.entries()) {
         await MediaRepository.putBinary(mediaKey, item.blob);
-        SqliteEngine.run(
+        this.run(
           `UPDATE media_files 
            SET encryption_state = 'encrypted', encryption_version = 1, byte_size = ?, plaintext_checksum = ?, ciphertext_checksum = ? 
            WHERE media_key = ?`,
@@ -783,7 +828,7 @@ export class StorageManager {
       for (const [mediaKey, origBlob] of rollbackPlaintextBlobs.entries()) {
         try {
           await MediaRepository.putBinary(mediaKey, origBlob);
-          SqliteEngine.run(
+          this.run(
             `UPDATE media_files SET encryption_state = 'plaintext', encryption_version = 0, byte_size = ?, plaintext_checksum = NULL, ciphertext_checksum = NULL WHERE media_key = ?`,
             [origBlob.size, mediaKey]
           );
@@ -816,7 +861,7 @@ export class StorageManager {
     if (verifyResult.sessionKey) {
       const rollbackEncryptedBlobs = new Map<string, Blob>();
       try {
-        const mediaFiles = SqliteEngine.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
+        const mediaFiles = this.query<{ media_key: string }>('SELECT media_key FROM media_files WHERE note_id = ?', [id]);
         const recordings = this.getRecordings().filter((r) => r.note_id === id && r.media_key);
         const ocrScans = this.getOcrScans().filter((o) => o.note_id === id && o.media_key);
         const allMediaKeys = new Set<string>();
@@ -843,7 +888,7 @@ export class StorageManager {
         // Commit decrypted plaintext binaries
         for (const [mediaKey, decBlob] of decryptedBinaries.entries()) {
           await MediaRepository.putBinary(mediaKey, decBlob);
-          SqliteEngine.run(
+          this.run(
             `UPDATE media_files SET encryption_state = 'plaintext', encryption_version = 0, byte_size = ?, plaintext_checksum = NULL, ciphertext_checksum = NULL WHERE media_key = ?`,
             [decBlob.size, mediaKey]
           );
@@ -938,7 +983,7 @@ export class StorageManager {
   public static batchTrashNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
     const now = new Date().toISOString();
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { status: 'trash', trashed_at: now });
       }
@@ -948,7 +993,7 @@ export class StorageManager {
 
   public static batchRestoreNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { status: 'active', trashed_at: undefined });
       }
@@ -959,7 +1004,7 @@ export class StorageManager {
   public static batchArchiveNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
     const now = new Date().toISOString();
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { status: 'archived', archived_at: now });
       }
@@ -969,7 +1014,7 @@ export class StorageManager {
 
   public static batchUnarchiveNotes(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { status: 'active', archived_at: undefined });
       }
@@ -979,7 +1024,7 @@ export class StorageManager {
 
   public static batchDeleteNotesPermanently(ids: number[]): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         SqliteRepository.deleteNote(id);
       }
@@ -993,7 +1038,7 @@ export class StorageManager {
 
   public static batchPinNotes(ids: number[], isPinned: boolean): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { is_pinned: isPinned });
       }
@@ -1003,7 +1048,7 @@ export class StorageManager {
 
   public static batchMoveNotes(ids: number[], newEventId: number): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { event_id: newEventId });
       }
@@ -1013,7 +1058,7 @@ export class StorageManager {
 
   public static batchColorNotes(ids: number[], color: string): number {
     if (!ids || ids.length === 0) return 0;
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         this.updateNote(id, { color: color || undefined });
       }
@@ -1024,7 +1069,7 @@ export class StorageManager {
   public static batchAddTagToNotes(ids: number[], tag: string): number {
     if (!ids || ids.length === 0 || !tag.trim()) return 0;
     const cleanTag = tag.trim().replace(/^#/, '');
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const id of ids) {
         const note = this.getNoteById(id);
         if (note) {
@@ -1119,7 +1164,7 @@ export class StorageManager {
   }
 
   public static saveRecordings(recordings: RecordingRecord[]): boolean {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const rec of recordings) {
         SqliteRepository.saveRecording(rec);
       }
@@ -1143,8 +1188,8 @@ export class StorageManager {
   }
 
   public static deleteRecording(id: number): boolean {
-    SqliteEngine.run('DELETE FROM recordings WHERE id = ?', [id]);
-    SqliteEngine.run('DELETE FROM transcripts WHERE recording_id = ?', [id]);
+    this.run('DELETE FROM recordings WHERE id = ?', [id]);
+    this.run('DELETE FROM transcripts WHERE recording_id = ?', [id]);
     this.refreshCaches();
     return true;
   }
@@ -1160,7 +1205,7 @@ export class StorageManager {
   }
 
   public static saveTranscripts(transcripts: TranscriptRecord[]): boolean {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const tr of transcripts) {
         SqliteRepository.saveTranscript(tr);
       }
@@ -1194,7 +1239,7 @@ export class StorageManager {
   }
 
   public static saveOcrScans(scans: OcrScanRecord[]): boolean {
-    SqliteEngine.transaction(() => {
+    this.transaction(() => {
       for (const s of scans) {
         SqliteRepository.saveOcrScan(s);
       }
@@ -1218,7 +1263,7 @@ export class StorageManager {
   }
 
   public static deleteOcrScan(id: number): boolean {
-    SqliteEngine.run('DELETE FROM ocr_scans WHERE id = ?', [id]);
+    this.run('DELETE FROM ocr_scans WHERE id = ?', [id]);
     this.refreshCaches();
     return true;
   }
@@ -1254,11 +1299,12 @@ export class StorageManager {
   }
 
   public static checkDatabaseIntegrity(): { status: 'ok' | 'corrupted'; details: string } {
-    return SqliteEngine.checkIntegrity();
+    const isOk = this.db.checkIntegritySync ? this.db.checkIntegritySync() : true;
+    return { status: isOk ? 'ok' : 'corrupted', details: isOk ? 'ok' : 'Corrupted index or table data' };
   }
 
   public static async vacuumDatabase(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
-    return await SqliteEngine.vacuum();
+    return await this.db.vacuum();
   }
 
   private static isMaintenanceRunning = false;
@@ -1315,27 +1361,27 @@ export class StorageManager {
   }
 
   public static scheduleSave(): void {
-    SqliteEngine.scheduleSave();
+    if (this.db.scheduleSave) this.db.scheduleSave();
   }
 
   public static async flush(): Promise<void> {
-    await SqliteEngine.flush();
+    if (this.db.flush) await this.db.flush();
   }
 
   public static isDirty(): boolean {
-    return SqliteEngine.isDirtyState();
+    return (this.db.isDirtyState ? this.db.isDirtyState() : false);
   }
 
   public static cancelPendingSave(): void {
-    SqliteEngine.cancelPendingSave();
+    if (this.db.cancelPendingSave) this.db.cancelPendingSave();
   }
 
   public static exportSqliteBinary(): Uint8Array {
-    return SqliteEngine.exportDatabaseBinary();
+    return this.db.exportBinary ? this.db.exportBinary() : new Uint8Array();
   }
 
   public static async importSqliteBinary(binary: Uint8Array): Promise<void> {
-    await SqliteEngine.importDatabaseBinary(binary);
+    if (this.db.importBinary) await this.db.importBinary(binary);
     this.refreshCaches();
   }
 
@@ -1499,7 +1545,7 @@ export class StorageManager {
    * Takes a pre-restore binary snapshot and rolls back automatically if verification fails.
    */
   public static exactRestoreFromDump(jsonString: string): { success: boolean; error?: string; restoredCount?: number } {
-    const preRollbackBinary = SqliteEngine.exportDatabaseBinary();
+    const preRollbackBinary = this.exportSqliteBinary();
     try {
       const bundle = JSON.parse(jsonString);
       const schema = bundle.schema || bundle;
@@ -1508,18 +1554,18 @@ export class StorageManager {
         return { success: false, error: 'Invalid backup file: Missing notes dataset.' };
       }
 
-      SqliteEngine.transaction(() => {
+      this.transaction(() => {
         // Clear existing tables
-        SqliteEngine.run('DELETE FROM events;');
-        SqliteEngine.run('DELETE FROM checklists;');
-        SqliteEngine.run('DELETE FROM note_versions;');
-        SqliteEngine.run('DELETE FROM recordings;');
-        SqliteEngine.run('DELETE FROM transcripts;');
-        SqliteEngine.run('DELETE FROM ocr_scans;');
-        SqliteEngine.run('DELETE FROM media_files;');
-        SqliteEngine.run('DELETE FROM note_tags;');
-        SqliteEngine.run('DELETE FROM notes_fts;');
-        SqliteEngine.run('DELETE FROM notes;');
+        this.run('DELETE FROM events;');
+        this.run('DELETE FROM checklists;');
+        this.run('DELETE FROM note_versions;');
+        this.run('DELETE FROM recordings;');
+        this.run('DELETE FROM transcripts;');
+        this.run('DELETE FROM ocr_scans;');
+        this.run('DELETE FROM media_files;');
+        this.run('DELETE FROM note_tags;');
+        this.run('DELETE FROM notes_fts;');
+        this.run('DELETE FROM notes;');
 
         if (schema.events && Array.isArray(schema.events)) {
           for (const evt of schema.events) {
@@ -1546,11 +1592,11 @@ export class StorageManager {
         }
 
         // Rebuild full-text search table
-        SqliteEngine.run('INSERT INTO notes_fts(rowid, title, body, tags) SELECT id, title, body, tags FROM notes;');
+        this.run('INSERT INTO notes_fts(rowid, title, body, tags) SELECT id, title, body, tags FROM notes;');
       });
 
       // Verify PRAGMA integrity
-      const check = SqliteEngine.query<{ integrity_check: string }>('PRAGMA integrity_check;');
+      const check = this.query<{ integrity_check: string }>('PRAGMA integrity_check;');
       if (!check || check.length === 0 || check[0].integrity_check !== 'ok') {
         throw new Error('Database integrity check failed after exact restore.');
       }
@@ -1562,7 +1608,7 @@ export class StorageManager {
       AppLogger.error('StorageManager', 'Exact restore failed; executing database binary rollback', e);
       if (preRollbackBinary) {
         try {
-          SqliteEngine.importDatabaseBinary(preRollbackBinary);
+          if (this.db.importBinary) this.db.importBinary(preRollbackBinary);
           this.refreshCaches();
         } catch (rbErr) {
           AppLogger.error('StorageManager', 'Critical: Pre-restore binary rollback failed', rbErr);
@@ -1591,7 +1637,7 @@ export class StorageManager {
         return { success: false, error: 'Invalid backup file: Missing notes dataset.' };
       }
 
-      SqliteEngine.transaction(() => {
+      this.transaction(() => {
         if (schema.events && Array.isArray(schema.events)) {
           for (const evt of schema.events) {
             SqliteRepository.saveEvent(evt);

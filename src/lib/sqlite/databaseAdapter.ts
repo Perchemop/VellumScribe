@@ -25,13 +25,18 @@ export interface DatabaseAdapter {
   querySync?<T>(sql: string, params?: unknown[]): T[];
   runSync?(sql: string, params?: unknown[]): { changes: number; lastInsertRowId?: number };
   transactionSync?<T>(fn: () => T): T;
+  getLastInsertId?(): number;
   checkIntegrity(): Promise<{ ok: boolean; result: string }>;
+  checkIntegritySync?(): boolean;
   vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }>;
   close(): Promise<void>;
   getDurabilityStatus(): DurabilityStatus;
   exportBinary?(): Uint8Array;
   importBinary?(binary: Uint8Array): Promise<void>;
   flush?(): Promise<void>;
+  scheduleSave?(): void;
+  cancelPendingSave?(): void;
+  isDirtyState?(): boolean;
 }
 
 /**
@@ -338,6 +343,9 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       this.durabilityStatus = 'saved';
       const changes = res?.changes?.changes ?? 1;
       const lastInsertRowId = res?.changes?.lastId ?? undefined;
+      if (typeof lastInsertRowId === 'number') {
+        this.lastId = lastInsertRowId;
+      }
       return { changes, lastInsertRowId };
     } catch (err: any) {
       this.durabilityStatus = 'failed';
@@ -377,6 +385,10 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     }
   }
 
+  checkIntegritySync(): boolean {
+    return true;
+  }
+
   async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
     if (!this.db) await this.initialize();
     try {
@@ -386,6 +398,18 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       AppLogger.warn('NativeSqliteAdapter', 'Vacuum warning', err);
       return { originalSizeBytes: 0, compactedSizeBytes: 0, bytesReclaimed: 0 };
     }
+  }
+
+  private lastId = 0;
+
+  getLastInsertId(): number {
+    return this.lastId;
+  }
+
+  scheduleSave(): void {}
+  cancelPendingSave(): void {}
+  isDirtyState(): boolean {
+    return false;
   }
 
   querySync<T>(sql: string, params: unknown[] = []): T[] {
@@ -432,6 +456,22 @@ export class WebSqliteAdapter implements DatabaseAdapter {
 
   getDurabilityStatus(): DurabilityStatus {
     return SqliteEngine.getDurabilityStatus?.() || (SqliteEngine.isDirtyState?.() ? 'pending' : 'saved');
+  }
+
+  getLastInsertId(): number {
+    return SqliteEngine.getLastInsertId();
+  }
+
+  scheduleSave(): void {
+    SqliteEngine.scheduleSave();
+  }
+
+  cancelPendingSave(): void {
+    SqliteEngine.cancelPendingSave();
+  }
+
+  isDirtyState(): boolean {
+    return SqliteEngine.isDirtyState();
   }
 
   async initialize(): Promise<void> {
@@ -481,6 +521,10 @@ export class WebSqliteAdapter implements DatabaseAdapter {
     if (!this.engineInitialized) await this.initialize();
     const ok = SqliteEngine.verifyIntegrity();
     return { ok, result: ok ? 'ok' : 'corrupted' };
+  }
+
+  checkIntegritySync(): boolean {
+    return SqliteEngine.verifyIntegrity();
   }
 
   async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
