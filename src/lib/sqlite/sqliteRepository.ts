@@ -1290,6 +1290,28 @@ export class SqliteRepository {
 
   // --- SYNC CONFLICTS (P1-02) ---
 
+  public static recordSyncConflict(conflict: Omit<SyncConflictRecord, 'id' | 'detected_at' | 'status'> & { id?: string; detected_at?: number; status?: 'open' | 'resolved' | 'ignored' }): SyncConflictRecord {
+    const id = conflict.id || `cnf_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const detected_at = conflict.detected_at || Date.now();
+    const status = conflict.status || 'open';
+    const rec: SyncConflictRecord = {
+      ...conflict,
+      id,
+      detected_at,
+      status,
+    };
+    try {
+      this.run(
+        `INSERT OR REPLACE INTO sync_conflicts (id, entity_type, entity_id, local_version_id, remote_version_id, local_payload, remote_payload, detected_at, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [rec.id, rec.entity_type, rec.entity_id, rec.local_version_id, rec.remote_version_id, rec.local_payload, rec.remote_payload, rec.detected_at, rec.status]
+      );
+    } catch (e) {
+      AppLogger.warn('SqliteRepository', 'Failed to record sync conflict', e);
+    }
+    return rec;
+  }
+
   public static getSyncConflicts(status = 'open'): SyncConflictRecord[] {
     try {
       return this.query<SyncConflictRecord>(

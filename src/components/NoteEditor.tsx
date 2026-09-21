@@ -36,6 +36,7 @@ import { OcrScannerModal } from './OcrScannerModal';
 import { ChecklistEditor } from './ChecklistEditor';
 import { SketchCanvasModal } from './SketchCanvasModal';
 import { NoteSecurityModal } from './NoteSecurityModal';
+import { NoteRevisionsModal } from './NoteRevisionsModal';
 import { NoteShareModal } from './NoteShareModal';
 import { SettingsModal } from './SettingsModal';
 import { AiSummaryModal } from './AiSummaryModal';
@@ -103,6 +104,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showSketchModal, setShowSketchModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showRevisionsModal, setShowRevisionsModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
@@ -833,6 +835,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <Share2 className="w-3.5 h-3.5" />
           </button>
 
+          {/* Revision History */}
+          <button
+            id="note-editor-history-btn"
+            aria-label="View Revision History"
+            onClick={() => setShowRevisionsModal(true)}
+            title="View Revision History & Restorations"
+            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+          >
+            <Clock className="w-3.5 h-3.5" />
+          </button>
+
           {/* App & AI Settings */}
           <button
             id="note-editor-settings-btn"
@@ -1398,6 +1411,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           onClose={() => setShowSettingsModal(false)}
           onSettingsUpdated={() => {
             // Settings updated
+          }}
+        />
+      )}
+
+      {/* Note Revision History Modal */}
+      {showRevisionsModal && (
+        <NoteRevisionsModal
+          note={note}
+          onClose={() => setShowRevisionsModal(false)}
+          onRestore={(restored) => {
+            setTitle(restored.title || '');
+            setBody(restored.body || '');
+            onNoteUpdated(restored);
           }}
         />
       )}

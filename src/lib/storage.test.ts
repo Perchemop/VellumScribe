@@ -81,6 +81,86 @@ describe('StorageManager notes', () => {
     expect(note.body).toBe('Hello world');
   });
 
+  it('updates an existing note and returns the updated record, or null if not found', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note = StorageManager.addNote(makeNote(event.id, { title: 'Initial Title', body: 'Initial Body' }));
+
+    const updated = StorageManager.updateNote(note.id, { title: 'Updated Title' });
+    expect(updated).not.toBeNull();
+    expect(updated?.title).toBe('Updated Title');
+    expect(updated?.body).toBe('Initial Body');
+
+    const fetched = StorageManager.getNoteById(note.id);
+    expect(fetched?.title).toBe('Updated Title');
+
+    const nonExistent = StorageManager.updateNote(999999, { title: 'Ghost' });
+    expect(nonExistent).toBeNull();
+  });
+
+  it('detects sync conflicts when expectedVersion does not match, and records conflict', () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note = StorageManager.addNote(makeNote(event.id, { title: 'Versioned Note' }));
+    expect(note.version).toBe(1);
+
+    // Update with correct expectedVersion succeeds and bumps to version 2
+    const firstUpdate = StorageManager.updateNote(note.id, { title: 'Version 2' }, 1);
+    expect(firstUpdate).not.toBeNull();
+    expect(firstUpdate?.version).toBe(2);
+
+    // Stale update with expectedVersion 1 fails due to conflict
+    const staleUpdate = StorageManager.updateNote(note.id, { title: 'Stale Attempt' }, 1);
+    expect(staleUpdate).toBeNull();
+
+    // Verify conflict is logged in sync_conflicts
+    const conflicts = StorageManager.getSyncConflicts('open');
+    expect(conflicts.length).toBeGreaterThan(0);
+    const conflict = conflicts.find((c) => c.entity_id === String(note.id));
+    expect(conflict).toBeDefined();
+    expect(conflict?.local_version_id).toBe('2');
+    expect(conflict?.remote_version_id).toBe('1');
+
+    // Resolve conflict
+    if (conflict) {
+      StorageManager.resolveSyncConflict(conflict.id);
+      const remaining = StorageManager.getSyncConflicts('open');
+      expect(remaining.find((c) => c.id === conflict.id)).toBeUndefined();
+    }
+  });
+
+  it('records and restores note revisions', async () => {
+    const event = StorageManager.addEvent(makeEvent());
+    const note = StorageManager.addNote(makeNote(event.id, { title: 'Revision 1 Title', body: 'Revision 1 Body' }));
+
+    // Update note to create a second version
+    StorageManager.updateNote(note.id, { title: 'Revision 2 Title', body: 'Revision 2 Body' });
+
+    // Save a revision record
+    const revId = `rev_${note.id}_test`;
+    const rev = {
+      id: revId,
+      note_id: note.id,
+      version_number: 1,
+      title: 'Revision 1 Title',
+      body: 'Revision 1 Body',
+      created_at: Date.now() - 1000,
+      reason: 'Initial revision',
+      source: 'Test',
+      content_hash: 'hash123',
+    };
+    const { SqliteRepository } = await import('./sqlite/sqliteRepository');
+    SqliteRepository.saveNoteRevision(rev);
+
+    const revisions = StorageManager.getNoteRevisions(note.id);
+    expect(revisions.length).toBeGreaterThan(0);
+    expect(revisions[0].title).toBe('Revision 1 Title');
+
+    // Now restore
+    const restored = StorageManager.restoreNoteRevision(note.id, revId);
+    expect(restored).not.toBeNull();
+    expect(restored?.title).toBe('Revision 1 Title');
+    expect(restored?.body).toBe('Revision 1 Body');
+  });
+
   it('archive / unarchive round-trips status', () => {
     const event = StorageManager.addEvent(makeEvent());
     const note = StorageManager.addNote(makeNote(event.id));
@@ -206,6 +286,16 @@ describe('StorageManager note operations & batch processing', () => {
     expect(res.originalSizeBytes).toBeGreaterThan(0);
     expect(res.compactedSizeBytes).toBeGreaterThan(0);
     expect(typeof res.bytesReclaimed).toBe('number');
+  });
+
+  it('getNotes() returns notes beyond the initial page size', async () => {
+    const event = StorageManager.addEvent(makeEvent({ title: 'Pagination Test' }));
+    for (let i = 0; i < 75; i++) {
+      StorageManager.addNote(makeNote(event.id, { title: `Note ${i}`, body: `Content ${i}` }));
+    }
+    // Simulate a fresh session load
+    StorageManager.refreshCaches();
+    expect(StorageManager.getNotes().length).toBeGreaterThanOrEqual(75);
   });
 });
 
