@@ -19,5 +19,6 @@ jobs:
         node-version: '20.x'
     - run: npm ci
     - run: npm run typecheck
+    - run: npm run check:orphans
     - run: npm run test
     - run: npm run build

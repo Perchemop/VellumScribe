@@ -4,6 +4,8 @@ import {
   RecordingRecord,
   TranscriptRecord,
   OcrScanRecord,
+  SyncConflictRecord,
+  NoteRevisionRecord,
 } from '../types';
 import {
   DEMO_SAMPLE_EVENTS,
@@ -73,6 +75,7 @@ export class StorageManager {
   // In-memory cache layer for instant synchronous React rendering
   private static eventsCache: EventRecord[] | null = null;
   private static notesCache: NoteRecord[] | null = null;
+  private static notesCacheFullyHydrated = false;
   private static recordingsCache: RecordingRecord[] | null = null;
   private static transcriptsCache: TranscriptRecord[] | null = null;
   private static ocrScansCache: OcrScanRecord[] | null = null;
@@ -153,6 +156,7 @@ export class StorageManager {
       // Load initial first page of active notes (50 items) instead of giant full-workspace memory dump
       const initialPage = SqliteRepository.getNotesPage({ pageSize: 50, status: 'active' });
       this.notesCache = initialPage.notes;
+      this.notesCacheFullyHydrated = false;
       // Lazy load ancillary media/audio/OCR collections on demand
       this.recordingsCache = null;
       this.transcriptsCache = null;
@@ -161,6 +165,7 @@ export class StorageManager {
       AppLogger.warn('StorageManager', 'Could not refresh caches from SQLite', e);
       if (!this.notesCache) this.notesCache = [];
       if (!this.eventsCache) this.eventsCache = [];
+      this.notesCacheFullyHydrated = false;
       this.recordingsCache = null;
       this.transcriptsCache = null;
       this.ocrScansCache = null;
@@ -327,13 +332,15 @@ export class StorageManager {
   }
 
   public static getNotes(): NoteRecord[] {
-    if (this.notesCache !== null) {
+    if (this.notesCache !== null && this.notesCacheFullyHydrated) {
       return this.notesCache;
     }
     try {
       this.notesCache = SqliteRepository.getAllNotes();
-    } catch {
-      this.notesCache = [];
+      this.notesCacheFullyHydrated = true;
+    } catch (e) {
+      AppLogger.error('StorageManager', 'Failed to hydrate full notes cache', e);
+      this.notesCache = this.notesCache ?? [];
     }
     return this.notesCache;
   }
@@ -358,6 +365,7 @@ export class StorageManager {
         }
       });
       this.notesCache = notes;
+      this.notesCacheFullyHydrated = true;
       return true;
     } catch (e) {
       AppLogger.error('StorageManager', 'Failed to batch save notes to SQLite', e);
@@ -390,12 +398,28 @@ export class StorageManager {
     return newNote;
   }
 
-  public static updateNote(id: number, updates: Partial<NoteRecord>): NoteRecord | null {
+  public static updateNote(id: number, updates: Partial<NoteRecord>, expectedVersion?: number): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
+
+    if (expectedVersion !== undefined && existing.version !== undefined && existing.version !== expectedVersion) {
+      SqliteRepository.recordSyncConflict({
+        entity_type: 'note',
+        entity_id: String(id),
+        local_version_id: String(existing.version),
+        remote_version_id: String(expectedVersion),
+        local_payload: JSON.stringify(existing),
+        remote_payload: JSON.stringify(updates),
+      });
+      AppLogger.warn('StorageManager', `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`);
+      return null;
+    }
+
+    const nextVersion = (existing.version || 1) + 1;
     const updated: NoteRecord = {
       ...existing,
       ...updates,
+      version: nextVersion,
       updated_at: updates.updated_at || new Date().toISOString(),
     };
     SqliteRepository.saveNote(updated);
@@ -408,6 +432,43 @@ export class StorageManager {
       }
     }
     return updated;
+  }
+
+  public static getSyncConflicts(status: 'open' | 'resolved' | 'ignored' = 'open'): SyncConflictRecord[] {
+    return SqliteRepository.getSyncConflicts(status);
+  }
+
+  public static resolveSyncConflict(id: string): void {
+    SqliteRepository.resolveSyncConflict(id);
+  }
+
+  public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
+    return SqliteRepository.getNoteRevisions(noteId);
+  }
+
+  public static restoreNoteRevision(noteId: number, revisionId: string): NoteRecord | null {
+    const revisions = SqliteRepository.getNoteRevisions(noteId);
+    const target = revisions.find((r) => r.id === revisionId);
+    if (!target) return null;
+
+    const restored = this.updateNote(noteId, {
+      title: target.title,
+      body: target.body,
+    });
+    if (restored) {
+      SqliteRepository.saveNoteRevision({
+        id: `rev_${noteId}_${Date.now()}`,
+        note_id: noteId,
+        version_number: restored.version || 1,
+        title: target.title,
+        body: target.body,
+        created_at: Date.now(),
+        reason: `Restored to revision #${target.version_number}`,
+        source: 'Revision History',
+        content_hash: target.content_hash,
+      });
+    }
+    return restored;
   }
 
   /**

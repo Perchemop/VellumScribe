@@ -125,6 +125,37 @@ async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Pr
 }
 
 /**
+ * Record entity modification in the item_changes table matching the v11 schema.
+ */
+async function recordItemChange(
+  db: DatabaseAdapter,
+  entityType: string,
+  entityId: string | number,
+  operation: 'create' | 'update' | 'delete',
+  version: number,
+  payload: unknown
+): Promise<void> {
+  try {
+    const id = `chg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
+    let hash = 0;
+    for (let i = 0; i < payloadStr.length; i++) {
+      hash = ((hash << 5) - hash) + payloadStr.charCodeAt(i);
+      hash |= 0;
+    }
+    const payloadHash = Math.abs(hash).toString(16);
+
+    await db.run(
+      `INSERT INTO item_changes (id, entity_type, entity_id, operation, version, changed_at, payload_hash, sync_state)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [id, entityType, String(entityId), operation, version, Date.now(), payloadHash]
+    );
+  } catch (e) {
+    AppLogger.warn('NoteRepository', 'Failed to record item change', e);
+  }
+}
+
+/**
  * Genuinely Asynchronous NoteRepository operating over the authoritative DatabaseAdapter.
  * Executes all SQL statements directly on the adapter without synchronous wrapper delegations.
  */
@@ -308,26 +339,15 @@ export class NoteRepository implements INoteRepository {
       }
 
       // Insert FTS
+      await db.run('DELETE FROM notes_fts WHERE note_id = ?;', [noteId]);
+      const checklistText = (input.checklist_items || []).map((c) => c.text).join(' ');
       await db.run(
-        'INSERT OR REPLACE INTO notes_fts (note_id, title, body, tags, ocr_content) VALUES (?, ?, ?, ?, ?)',
-        [noteId, input.title || '', input.body || '', (input.tags || []).join(' '), '']
+        'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?)',
+        [noteId, input.title || '', input.body || '', checklistText, '', (input.tags || []).join(' ')]
       );
 
       // Record item change for sync
-      await db.run(
-        `INSERT INTO item_changes (entity_type, entity_id, change_type, changed_at, summary)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['note', String(noteId), 'create', now, input.title || 'Untitled note created']
-      );
-
-      // Record mutation for AI audit trail
-      try {
-        await db.run(
-          `INSERT INTO ai_mutations (id, entity_type, entity_id, operation, payload, created_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [`mut_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, 'note', String(noteId), 'create', JSON.stringify({ title: input.title }), now]
-        );
-      } catch {}
+      await recordItemChange(db, 'note', noteId, 'create', 1, input);
 
       const createdNote = await NoteRepository.getById(noteId);
       if (!createdNote) throw new Error(`Failed to retrieve newly created note ${noteId}`);
@@ -450,18 +470,16 @@ export class NoteRepository implements INoteRepository {
       }
 
       // Update FTS
+      await db.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
       const finalTags = patch.tags !== undefined ? patch.tags : existing.tags;
+      const checklistText = (patch.checklist_items !== undefined ? patch.checklist_items : (existing.checklist_items || [])).map((c) => c.text).join(' ');
       await db.run(
-        'INSERT OR REPLACE INTO notes_fts (note_id, title, body, tags, ocr_content) VALUES (?, ?, ?, ?, ?)',
-        [id, mergedTitle, mergedBody, (finalTags || []).join(' '), '']
+        'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?)',
+        [id, mergedTitle, mergedBody, checklistText, '', (finalTags || []).join(' ')]
       );
 
       // Record item change for sync
-      await db.run(
-        `INSERT INTO item_changes (entity_type, entity_id, change_type, changed_at, summary)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['note', String(id), 'update', now, `Updated note: ${mergedTitle}`]
-      );
+      await recordItemChange(db, 'note', id, 'update', nextVersion, patch);
 
       const updatedNote = await NoteRepository.getById(id);
       if (!updatedNote) throw new Error(`Note ${id} could not be retrieved after update`);
@@ -480,11 +498,8 @@ export class NoteRepository implements INoteRepository {
       await db.run('DELETE FROM recordings WHERE note_id = ?;', [id]);
       await db.run('DELETE FROM ocr_scans WHERE note_id = ?;', [id]);
       await db.run('UPDATE media_files SET note_id = NULL WHERE note_id = ?;', [id]);
-      await db.run(
-        `INSERT INTO item_changes (entity_type, entity_id, change_type, changed_at, summary)
-         VALUES (?, ?, ?, ?, ?)`,
-        ['note', String(id), 'delete', new Date().toISOString(), `Deleted note #${id}`]
-      );
+      // Record item change for sync
+      await recordItemChange(db, 'note', id, 'delete', 0, { id });
     });
   }
 
