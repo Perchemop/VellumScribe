@@ -1393,8 +1393,9 @@ export class StorageManager {
     try {
       AppLogger.info('StorageManager', 'Running scheduled automatic storage & version maintenance...');
 
-      // 1. Auto-prune old versions (keep latest 10 versions per note)
+      // 1. Auto-prune old versions & revisions (keep latest 10 versions/revisions per note)
       const versionsPruned = SqliteRepository.pruneAllVersions(10);
+      const revisionsPruned = SqliteRepository.pruneNoteRevisions(10);
 
       // 2. Auto-prune item_changes sync audit log (keep latest 5000 changes or 30 days)
       SqliteRepository.pruneItemChanges();
@@ -1411,8 +1412,8 @@ export class StorageManager {
       }
 
       localStorage.setItem(LAST_MAINTENANCE_KEY, now.toString());
-      AppLogger.info('StorageManager', `Automated maintenance complete. Pruned ${versionsPruned} versions, cleaned ${orphanKeys.length + mediaRes.cleanedCount} orphan entries.`);
-      return { didRun: true, versionsPruned, orphansCleaned: orphanKeys.length + mediaRes.cleanedCount };
+      AppLogger.info('StorageManager', `Automated maintenance complete. Pruned ${versionsPruned} versions & ${revisionsPruned} revisions, cleaned ${orphanKeys.length + mediaRes.cleanedCount} orphan entries.`);
+      return { didRun: true, versionsPruned: versionsPruned + revisionsPruned, orphansCleaned: orphanKeys.length + mediaRes.cleanedCount };
     } catch (err) {
       AppLogger.warn('StorageManager', 'Automated maintenance encountered non-fatal issue', err);
       return { didRun: false, versionsPruned: 0, orphansCleaned: 0 };
