@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import {
   Sparkles,
   Mic,
@@ -32,9 +32,7 @@ import { VersionControlManager } from '../lib/versionControl';
 import { GeminiApiService } from '../lib/geminiService';
 import { AudioRecorderPlayer } from './AudioRecorderPlayer';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
-import { OcrScannerModal } from './OcrScannerModal';
 import { ChecklistEditor } from './ChecklistEditor';
-import { SketchCanvasModal } from './SketchCanvasModal';
 import { NoteSecurityModal } from './NoteSecurityModal';
 import { NoteRevisionsModal } from './NoteRevisionsModal';
 import { NoteShareModal } from './NoteShareModal';
@@ -52,10 +50,20 @@ import { AiProvenanceBadge } from './AiProvenanceBadge';
 import { CloudAiConsentModal } from './CloudAiConsentModal';
 import { ModalLoadingFallback } from './ModalLoadingFallback';
 import { ModalErrorFallback } from './ModalErrorFallback';
-import { AudioRecordingModal } from './audio/AudioRecordingModal';
 import { ErrorBoundary } from './ErrorBoundary';
 import { PrivacyManager } from '../lib/privacyManager';
 import { AiProvenanceService } from '../services/AiProvenanceService';
+
+// Code-split heavy multimodal studio dialogs (Sketch Canvas, OCR Camera Scanner, Voice Studio)
+const SketchCanvasModal = lazy(() =>
+  import('./SketchCanvasModal').then((m) => ({ default: m.SketchCanvasModal }))
+);
+const OcrScannerModal = lazy(() =>
+  import('./OcrScannerModal').then((m) => ({ default: m.OcrScannerModal }))
+);
+const AudioRecordingModal = lazy(() =>
+  import('./audio/AudioRecordingModal').then((m) => ({ default: m.AudioRecordingModal }))
+);
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -1294,11 +1302,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             />
           )}
         >
-          <SketchCanvasModal
-            initialDataUrl={sketchData}
-            onSave={handleSketchSaved}
-            onClose={() => setShowSketchModal(false)}
-          />
+          <Suspense fallback={<ModalLoadingFallback label="Loading sketch canvas studio…" />}>
+            <SketchCanvasModal
+              initialDataUrl={sketchData}
+              onSave={handleSketchSaved}
+              onClose={() => setShowSketchModal(false)}
+            />
+          </Suspense>
         </ErrorBoundary>
       )}
 
@@ -1337,11 +1347,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             />
           )}
         >
-          <OcrScannerModal
-            noteId={note.id}
-            onOcrExtracted={handleOcrExtracted}
-            onClose={() => setShowOcrScanner(false)}
-          />
+          <Suspense fallback={<ModalLoadingFallback label="Initializing document scanner…" />}>
+            <OcrScannerModal
+              noteId={note.id}
+              onOcrExtracted={handleOcrExtracted}
+              onClose={() => setShowOcrScanner(false)}
+            />
+          </Suspense>
         </ErrorBoundary>
       )}
 
@@ -1359,19 +1371,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             />
           )}
         >
-          <AudioRecordingModal
-            noteId={note.id}
-            isOpen={showAudioStudioModal}
-            onClose={() => setShowAudioStudioModal(false)}
-            onRecordingComplete={(res) => {
-              if (res.recording) {
-                handleRecordingSaved(res.recording);
-              } else {
-                setRecordings(StorageManager.getRecordingsForNote(note.id));
-              }
-              setShowAudioStudioModal(false);
-            }}
-          />
+          <Suspense fallback={<ModalLoadingFallback label="Loading offline speech studio…" />}>
+            <AudioRecordingModal
+              noteId={note.id}
+              isOpen={showAudioStudioModal}
+              onClose={() => setShowAudioStudioModal(false)}
+              onRecordingComplete={(res) => {
+                if (res.recording) {
+                  handleRecordingSaved(res.recording);
+                } else {
+                  setRecordings(StorageManager.getRecordingsForNote(note.id));
+                }
+                setShowAudioStudioModal(false);
+              }}
+            />
+          </Suspense>
         </ErrorBoundary>
       )}
 
@@ -1417,15 +1431,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* Note Revision History Modal */}
       {showRevisionsModal && (
-        <NoteRevisionsModal
-          note={note}
-          onClose={() => setShowRevisionsModal(false)}
-          onRestore={(restored) => {
-            setTitle(restored.title || '');
-            setBody(restored.body || '');
-            onNoteUpdated(restored);
-          }}
-        />
+        <ErrorBoundary
+          fallbackRender={(error, reset) => (
+            <ModalErrorFallback
+              title="Revision History Error"
+              message={error?.message || 'Failed to load revision history.'}
+              onClose={() => {
+                setShowRevisionsModal(false);
+                reset();
+              }}
+            />
+          )}
+        >
+          <NoteRevisionsModal
+            note={note}
+            onClose={() => setShowRevisionsModal(false)}
+            onRestore={(restored) => {
+              setTitle(restored.title || '');
+              setBody(restored.body || '');
+              onNoteUpdated(restored);
+            }}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Background AI Synthesis Loading Overlay */}

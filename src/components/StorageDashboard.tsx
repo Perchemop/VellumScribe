@@ -78,10 +78,10 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
   };
 
   const handlePruneVersions = () => {
-    const pruned = StorageManager.getSqliteStats().versionsCount > 0;
     const count = SqliteRepository.pruneAllVersions(5);
+    const revCount = SqliteRepository.pruneNoteRevisions(5);
     refreshDashboard();
-    setFeedbackMessage(`Version history pruned: Removed ${count} redundant snapshots.`);
+    setFeedbackMessage(`Version history pruned: Removed ${count + revCount} redundant snapshots.`);
     setTimeout(() => setFeedbackMessage(null), 3500);
   };
 

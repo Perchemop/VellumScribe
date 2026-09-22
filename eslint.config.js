@@ -26,9 +26,19 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'warn',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-empty': 'warn',
+      'no-useless-assignment': 'warn',
+      'prefer-const': 'warn',
+      'no-useless-escape': 'warn',
+      '@typescript-eslint/no-require-imports': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/purity': 'warn',
+      '@typescript-eslint/no-empty-object-type': 'warn',
+      'preserve-caught-error': 'warn',
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'android/**', 'scripts/**', 'data/**', 'database/**'],
   }
 );

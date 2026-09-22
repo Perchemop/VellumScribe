@@ -72,6 +72,8 @@ export class VersionControlManager {
   }
 
   public static pruneOldVersions(keepPerNote = 5): number {
-    return SqliteRepository.pruneAllVersions(keepPerNote);
+    const versions = SqliteRepository.pruneAllVersions(keepPerNote);
+    const revisions = SqliteRepository.pruneNoteRevisions(keepPerNote);
+    return versions + revisions;
   }
 }

@@ -113,18 +113,20 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
               id="revisions-create-snapshot-btn"
               onClick={handleSaveCurrentSnapshot}
               disabled={isSavingSnapshot}
+              aria-label="Save snapshot of note now"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors disabled:opacity-50"
               title="Save snapshot of note now"
             >
-              <PlusCircle className="w-3.5 h-3.5" />
+              <PlusCircle className="w-3.5 h-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Save Snapshot</span>
             </button>
             <button
               id="revisions-modal-close-btn"
               onClick={onClose}
+              aria-label="Close revision history"
               className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           </div>
         </div>

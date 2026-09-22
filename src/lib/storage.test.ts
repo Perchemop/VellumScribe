@@ -159,6 +159,27 @@ describe('StorageManager notes', () => {
     expect(restored).not.toBeNull();
     expect(restored?.title).toBe('Revision 1 Title');
     expect(restored?.body).toBe('Revision 1 Body');
+
+    // Add extra revisions to test pruning
+    const countBefore = StorageManager.getNoteRevisions(note.id).length;
+    for (let i = 0; i < 5; i++) {
+      SqliteRepository.saveNoteRevision({
+        id: `rev_${note.id}_extra_${i}`,
+        note_id: note.id,
+        version_number: 10 + i,
+        title: `Revision ${i}`,
+        body: `Body ${i}`,
+        created_at: Date.now() + i + 10,
+        reason: `Auto ${i}`,
+        source: 'Test',
+        content_hash: `hash${i}`,
+      });
+    }
+    const totalCount = countBefore + 5;
+    expect(StorageManager.getNoteRevisions(note.id).length).toBe(totalCount);
+    const prunedCount = SqliteRepository.pruneNoteRevisions(3);
+    expect(prunedCount).toBe(totalCount - 3);
+    expect(StorageManager.getNoteRevisions(note.id).length).toBe(3);
   });
 
   it('archive / unarchive round-trips status', () => {

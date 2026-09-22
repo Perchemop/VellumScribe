@@ -943,6 +943,26 @@ export class SqliteRepository {
     return pruned;
   }
 
+  public static pruneNoteRevisions(keepCount = 10): number {
+    let pruned = 0;
+    this.transaction(() => {
+      const noteIds = this.query<{ id: number }>('SELECT id FROM notes');
+      for (const n of noteIds) {
+        const revisions = this.query<{ id: string }>(
+          'SELECT id FROM note_revisions WHERE note_id = ? ORDER BY version_number DESC',
+          [n.id]
+        );
+        if (revisions.length > keepCount) {
+          for (const item of revisions.slice(keepCount)) {
+            this.run('DELETE FROM note_revisions WHERE id = ?', [item.id]);
+            pruned++;
+          }
+        }
+      }
+    });
+    return pruned;
+  }
+
   // --- RECORDINGS, TRANSCRIPTS & OCR ---
 
   public static getAllRecordings(): RecordingRecord[] {
