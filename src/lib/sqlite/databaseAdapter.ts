@@ -306,8 +306,13 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       );
 
       AppLogger.info('NativeSqliteAdapter', 'Successfully migrated and validated all records from sql.js to native Android SQLite.');
-    } catch (e) {
-      AppLogger.warn('NativeSqliteAdapter', 'Migration state machine encountered an issue', e);
+    } catch (e: any) {
+      AppLogger.error('NativeSqliteAdapter', 'Migration state machine encountered an issue', e);
+      await this.recordMigrationState(
+        'FAILED',
+        e instanceof Error ? e.message : String(e)
+      );
+      throw e;
     }
   }
 

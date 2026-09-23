@@ -1,4 +1,4 @@
-import { SqliteEngine } from '../sqlite/sqliteEngine';
+import { getDatabaseAdapter } from '../sqlite/databaseAdapter';
 import { AppLogger } from '../logger';
 
 export interface NotebookLMConnection {
@@ -183,20 +183,29 @@ ${note.content || '(Empty content)'}
     status?: 'connected' | 'disconnected' | 'pending';
   }): NotebookLMConnection {
     const now = Date.now();
-    SqliteEngine.run(
-      `INSERT INTO notebooklm_connections (name, backend, notebook_id, notebook_url, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        conn.name,
-        conn.backend || 'notebooklm-py',
-        conn.notebook_id || null,
-        conn.notebook_url || null,
-        conn.status || 'connected',
-        now,
-        now,
-      ]
-    );
-    const id = SqliteEngine.getLastInsertId();
+    const db = getDatabaseAdapter();
+    const sql = `INSERT INTO notebooklm_connections (name, backend, notebook_id, notebook_url, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    const params = [
+      conn.name,
+      conn.backend || 'notebooklm-py',
+      conn.notebook_id || null,
+      conn.notebook_url || null,
+      conn.status || 'connected',
+      now,
+      now,
+    ];
+
+    let id = 0;
+    if (db.runSync) {
+      const res = db.runSync(sql, params);
+      id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
+    } else {
+      db.run(sql, params).then((res) => {
+        id = res.lastInsertRowId || 0;
+      }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async saveConnection failed', e));
+    }
+
     return {
       id,
       name: conn.name,
@@ -213,10 +222,10 @@ ${note.content || '(Empty content)'}
    * List all configured NotebookLM connections
    */
   public static listConnections(): NotebookLMConnection[] {
-    const rows = SqliteEngine.query<any>(
-      `SELECT id, name, backend, notebook_id, notebook_url, status, created_at, updated_at
-       FROM notebooklm_connections ORDER BY id ASC`
-    );
+    const db = getDatabaseAdapter();
+    const sql = `SELECT id, name, backend, notebook_id, notebook_url, status, created_at, updated_at
+       FROM notebooklm_connections ORDER BY id ASC`;
+    const rows = db.querySync ? db.querySync<any>(sql) : [];
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -242,31 +251,38 @@ ${note.content || '(Empty content)'}
     errorCode?: string | null;
   }): NotebookLMSource {
     const now = Date.now();
-    const existing = SqliteEngine.query<NotebookLMSource>(
-      `SELECT * FROM notebooklm_sources 
-       WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
-      [params.connectionId, params.entityType, params.entityId]
-    );
+    const db = getDatabaseAdapter();
+    const existing = db.querySync
+      ? db.querySync<NotebookLMSource>(
+          `SELECT * FROM notebooklm_sources 
+           WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
+          [params.connectionId, params.entityType, params.entityId]
+        )
+      : [];
 
     if (existing && existing.length > 0) {
       const existingId = existing[0].id;
-      SqliteEngine.run(
-        `UPDATE notebooklm_sources 
+      const sql = `UPDATE notebooklm_sources 
          SET remote_source_id = COALESCE(?, remote_source_id),
              content_hash = ?,
              sync_status = ?,
              last_synced_at = ?,
              error_code = ?
-         WHERE id = ?`,
-        [
-          params.remoteSourceId || null,
-          params.contentHash,
-          params.status,
-          now,
-          params.errorCode || null,
-          existingId,
-        ]
-      );
+         WHERE id = ?`;
+      const updateParams = [
+        params.remoteSourceId || null,
+        params.contentHash,
+        params.status,
+        now,
+        params.errorCode || null,
+        existingId,
+      ];
+      if (db.runSync) {
+        db.runSync(sql, updateParams);
+      } else {
+        db.run(sql, updateParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async update source failed', e));
+      }
+
       return {
         id: existingId,
         connection_id: params.connectionId,
@@ -279,21 +295,29 @@ ${note.content || '(Empty content)'}
         error_code: params.errorCode || null,
       };
     } else {
-      SqliteEngine.run(
-        `INSERT INTO notebooklm_sources (connection_id, local_entity_type, local_entity_id, remote_source_id, content_hash, sync_status, last_synced_at, error_code)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          params.connectionId,
-          params.entityType,
-          params.entityId,
-          params.remoteSourceId || null,
-          params.contentHash,
-          params.status,
-          now,
-          params.errorCode || null,
-        ]
-      );
-      const id = SqliteEngine.getLastInsertId();
+      const sql = `INSERT INTO notebooklm_sources (connection_id, local_entity_type, local_entity_id, remote_source_id, content_hash, sync_status, last_synced_at, error_code)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+      const insertParams = [
+        params.connectionId,
+        params.entityType,
+        params.entityId,
+        params.remoteSourceId || null,
+        params.contentHash,
+        params.status,
+        now,
+        params.errorCode || null,
+      ];
+
+      let id = 0;
+      if (db.runSync) {
+        const res = db.runSync(sql, insertParams);
+        id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
+      } else {
+        db.run(sql, insertParams).then((res) => {
+          id = res.lastInsertRowId || 0;
+        }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async insert source failed', e));
+      }
+
       return {
         id,
         connection_id: params.connectionId,
@@ -316,11 +340,12 @@ ${note.content || '(Empty content)'}
     entityType: string,
     entityId: number
   ): NotebookLMSource | null {
-    const rows = SqliteEngine.query<NotebookLMSource>(
-      `SELECT * FROM notebooklm_sources 
-       WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
-      [connectionId, entityType, entityId]
-    );
+    const db = getDatabaseAdapter();
+    const sql = `SELECT * FROM notebooklm_sources 
+       WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`;
+    const rows = db.querySync
+      ? db.querySync<NotebookLMSource>(sql, [connectionId, entityType, entityId])
+      : [];
     return rows.length > 0 ? rows[0] : null;
   }
 
@@ -328,10 +353,9 @@ ${note.content || '(Empty content)'}
    * List all sources mapped to a connection
    */
   public static listSourcesForConnection(connectionId: number): NotebookLMSource[] {
-    return SqliteEngine.query<NotebookLMSource>(
-      `SELECT * FROM notebooklm_sources WHERE connection_id = ? ORDER BY id DESC`,
-      [connectionId]
-    );
+    const db = getDatabaseAdapter();
+    const sql = `SELECT * FROM notebooklm_sources WHERE connection_id = ? ORDER BY id DESC`;
+    return db.querySync ? db.querySync<NotebookLMSource>(sql, [connectionId]) : [];
   }
 
   /**
@@ -414,24 +438,29 @@ ${note.content || '(Empty content)'}
   }): string {
     const jobId = `nlm_job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const now = Date.now();
+    const db = getDatabaseAdapter();
 
-    SqliteEngine.run(
-      `INSERT INTO notebooklm_sync_jobs 
+    const sql = `INSERT INTO notebooklm_sync_jobs 
        (id, connection_id, local_entity_type, local_entity_id, status, action, content_payload, retry_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        jobId,
-        params.connectionId,
-        params.entityType,
-        params.entityId,
-        'queued',
-        params.action,
-        params.contentPayload || null,
-        0,
-        now,
-        now,
-      ]
-    );
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const sqlParams = [
+      jobId,
+      params.connectionId,
+      params.entityType,
+      params.entityId,
+      'queued',
+      params.action,
+      params.contentPayload || null,
+      0,
+      now,
+      now,
+    ];
+
+    if (db.runSync) {
+      db.runSync(sql, sqlParams);
+    } else {
+      db.run(sql, sqlParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async enqueueSyncJob failed', e));
+    }
 
     AppLogger.info('NotebookLMAdapter', `Enqueued durable NotebookLM sync job: ${jobId}`);
     return jobId;
@@ -441,7 +470,8 @@ ${note.content || '(Empty content)'}
    * Process a durable sync job with retry handling (P1-04)
    */
   public static async processSyncJob(jobId: string): Promise<boolean> {
-    const jobs = SqliteEngine.query<any>(
+    const db = getDatabaseAdapter();
+    const jobs = await db.query<any>(
       `SELECT * FROM notebooklm_sync_jobs WHERE id = ?`,
       [jobId]
     );
@@ -450,7 +480,7 @@ ${note.content || '(Empty content)'}
     const job = jobs[0];
     const connections = this.listConnections().filter((c) => c.id === job.connection_id);
     if (connections.length === 0) {
-      SqliteEngine.run(
+      await db.run(
         `UPDATE notebooklm_sync_jobs SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?`,
         ['Connection not found', Date.now(), jobId]
       );
@@ -460,7 +490,7 @@ ${note.content || '(Empty content)'}
     const connection = connections[0];
 
     // Mark syncing
-    SqliteEngine.run(
+    await db.run(
       `UPDATE notebooklm_sync_jobs SET status = 'syncing', updated_at = ? WHERE id = ?`,
       [Date.now(), jobId]
     );
@@ -487,7 +517,7 @@ ${note.content || '(Empty content)'}
           status: 'synced',
         });
 
-        SqliteEngine.run(
+        await db.run(
           `UPDATE notebooklm_sync_jobs SET status = 'completed', error_message = NULL, updated_at = ? WHERE id = ?`,
           [Date.now(), jobId]
         );
@@ -497,11 +527,11 @@ ${note.content || '(Empty content)'}
         if (existingMapping && existingMapping.remote_source_id) {
           await this.deleteRemoteSource(existingMapping.remote_source_id);
         }
-        SqliteEngine.run(
+        await db.run(
           `DELETE FROM notebooklm_sources WHERE connection_id = ? AND local_entity_type = ? AND local_entity_id = ?`,
           [job.connection_id, job.local_entity_type, job.local_entity_id]
         );
-        SqliteEngine.run(
+        await db.run(
           `UPDATE notebooklm_sync_jobs SET status = 'completed', error_message = NULL, updated_at = ? WHERE id = ?`,
           [Date.now(), jobId]
         );
@@ -511,7 +541,7 @@ ${note.content || '(Empty content)'}
     } catch (err: any) {
       const errMsg = err?.message || 'Sync failed';
       const newRetries = (job.retry_count || 0) + 1;
-      SqliteEngine.run(
+      await db.run(
         `UPDATE notebooklm_sync_jobs 
          SET status = ?, error_message = ?, retry_count = ?, updated_at = ? 
          WHERE id = ?`,
@@ -525,7 +555,8 @@ ${note.content || '(Empty content)'}
    * Process all pending durable sync jobs in queue (P1-04)
    */
   public static async processAllPendingJobs(): Promise<{ succeeded: number; failed: number }> {
-    const pending = SqliteEngine.query<{ id: string }>(
+    const db = getDatabaseAdapter();
+    const pending = await db.query<{ id: string }>(
       `SELECT id FROM notebooklm_sync_jobs WHERE status IN ('queued', 'failed') AND retry_count < 3 ORDER BY created_at ASC LIMIT 10`
     );
 
@@ -545,10 +576,9 @@ ${note.content || '(Empty content)'}
    * List recent NotebookLM sync jobs
    */
   public static listSyncJobs(limit = 20): any[] {
-    return SqliteEngine.query(
-      `SELECT * FROM notebooklm_sync_jobs ORDER BY created_at DESC LIMIT ?`,
-      [limit]
-    );
+    const db = getDatabaseAdapter();
+    const sql = `SELECT * FROM notebooklm_sync_jobs ORDER BY created_at DESC LIMIT ?`;
+    return db.querySync ? db.querySync(sql, [limit]) : [];
   }
 
   /**

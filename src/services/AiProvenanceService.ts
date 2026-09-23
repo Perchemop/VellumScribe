@@ -1,4 +1,4 @@
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { AppLogger } from '../lib/logger';
 
 export interface AiProvenanceRecord {
@@ -23,24 +23,29 @@ export class AiProvenanceService {
       const id = `prov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const now = Date.now();
       const metadataJson = data.metadata ? JSON.stringify(data.metadata) : null;
+      const db = getDatabaseAdapter();
 
-      SqliteEngine.run(
-        `INSERT OR REPLACE INTO ai_provenance 
+      const sql = `INSERT OR REPLACE INTO ai_provenance 
           (id, target_entity_type, target_entity_id, source_entity_type, source_entity_id, model_id, provider, prompt_hash, generated_at, metadata_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          data.target_entity_type,
-          data.target_entity_id,
-          data.source_entity_type || null,
-          data.source_entity_id || null,
-          data.model_id,
-          data.provider,
-          data.prompt_hash || null,
-          now,
-          metadataJson,
-        ]
-      );
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      const params = [
+        id,
+        data.target_entity_type,
+        data.target_entity_id,
+        data.source_entity_type || null,
+        data.source_entity_id || null,
+        data.model_id,
+        data.provider,
+        data.prompt_hash || null,
+        now,
+        metadataJson,
+      ];
+
+      if (db.runSync) {
+        db.runSync(sql, params);
+      } else {
+        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordProvenance failed', err));
+      }
       AppLogger.debug('AiProvenanceService', `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`);
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to record AI provenance', e);
@@ -52,10 +57,48 @@ export class AiProvenanceService {
    */
   public static getProvenance(targetEntityType: string, targetEntityId: number): AiProvenanceRecord | null {
     try {
-      const rows = SqliteEngine.query<any>(
-        `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`,
-        [targetEntityType, targetEntityId]
-      );
+      const db = getDatabaseAdapter();
+      const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
+      const params = [targetEntityType, targetEntityId];
+
+      const rows = db.querySync ? db.querySync<any>(sql, params) : [];
+      if (!rows || rows.length === 0) return null;
+
+      const r = rows[0];
+      let metadata: Record<string, any> | undefined;
+      if (r.metadata_json) {
+        try {
+          metadata = JSON.parse(r.metadata_json);
+        } catch {}
+      }
+
+      return {
+        id: r.id,
+        target_entity_type: r.target_entity_type,
+        target_entity_id: r.target_entity_id,
+        source_entity_type: r.source_entity_type || undefined,
+        source_entity_id: r.source_entity_id || undefined,
+        model_id: r.model_id,
+        provider: r.provider,
+        prompt_hash: r.prompt_hash || undefined,
+        generated_at: r.generated_at,
+        metadata,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Async variant to retrieve provenance records for a given entity
+   */
+  public static async getProvenanceAsync(targetEntityType: string, targetEntityId: number): Promise<AiProvenanceRecord | null> {
+    try {
+      const db = getDatabaseAdapter();
+      const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
+      const params = [targetEntityType, targetEntityId];
+
+      const rows = await db.query<any>(sql, params);
       if (!rows || rows.length === 0) return null;
 
       const r = rows[0];
@@ -97,21 +140,26 @@ export class AiProvenanceService {
   }): void {
     try {
       const id = `aiop_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      SqliteEngine.run(
-        `INSERT INTO ai_operations (id, operation, provider, model, duration_ms, input_characters, output_characters, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [
-          id,
-          data.operation,
-          data.provider,
-          data.model,
-          data.durationMs,
-          data.inputCharacters,
-          data.outputCharacters,
-          data.status,
-          Date.now(),
-        ]
-      );
+      const db = getDatabaseAdapter();
+      const sql = `INSERT INTO ai_operations (id, operation, provider, model, duration_ms, input_characters, output_characters, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`;
+      const params = [
+        id,
+        data.operation,
+        data.provider,
+        data.model,
+        data.durationMs,
+        data.inputCharacters,
+        data.outputCharacters,
+        data.status,
+        Date.now(),
+      ];
+
+      if (db.runSync) {
+        db.runSync(sql, params);
+      } else {
+        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordAiOperation failed', err));
+      }
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to log AI operation to SQLite', e);
     }
@@ -119,10 +167,21 @@ export class AiProvenanceService {
 
   public static getAiOperations(limit = 50): any[] {
     try {
-      return SqliteEngine.query(
-        `SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`,
-        [limit]
-      );
+      const db = getDatabaseAdapter();
+      const sql = `SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`;
+      if (db.querySync) {
+        return db.querySync(sql, [limit]);
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
+  public static async getAiOperationsAsync(limit = 50): Promise<any[]> {
+    try {
+      const db = getDatabaseAdapter();
+      return await db.query(`SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`, [limit]);
     } catch {
       return [];
     }
