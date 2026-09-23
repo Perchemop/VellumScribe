@@ -19,6 +19,8 @@ import { OcrScanRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
+import { CloudAiConsentModal } from './CloudAiConsentModal';
+import { PrivacyManager, CloudAiConsentRequiredError } from '../lib/privacyManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface OcrScannerModalProps {
@@ -43,6 +45,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
   const [ocrStatus, setOcrStatus] = useState<string | null>(null);
   const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [hasKeyError, setHasKeyError] = useState(false);
+  const [isQuotaError, setIsQuotaError] = useState(false);
+  const [showConsentModal, setShowConsentModal] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -170,20 +174,47 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
 
   const handleRunOcr = async () => {
     if (!selectedImage) return;
+
+    if (!PrivacyManager.hasCloudAiConsent()) {
+      setShowConsentModal(true);
+      return;
+    }
+
     setIsProcessing(true);
     setHasKeyError(false);
+    setIsQuotaError(false);
     setOcrStatus('Extracting handwritten text with Gemini AI...');
     try {
       const res = await GeminiApiService.scanHandwrittenNote(selectedImage, 'image/jpeg');
       setOcrText(res.ocrText);
       setOcrStatus(`Extracted via ${res.source || 'Gemini AI'}`);
       setHasKeyError(false);
+      setIsQuotaError(false);
     } catch (err: any) {
       console.error('OCR scan failed', err);
+      if (err instanceof CloudAiConsentRequiredError) {
+        setOcrStatus('Privacy consent required before sending image to Cloud AI.');
+        setShowConsentModal(true);
+        return;
+      }
       const msg = err.message || 'Failed to connect';
-      setOcrStatus(`Extraction error: ${msg}`);
-      if (msg.includes('key') || msg.includes('quota') || msg.includes('permission')) {
+      const isQuota =
+        msg.includes('RESOURCE_EXHAUSTED') ||
+        msg.includes('resource_exhausted') ||
+        msg.includes('quota') ||
+        msg.includes('rate limit') ||
+        msg.includes('429');
+
+      if (isQuota) {
+        setIsQuotaError(true);
         setHasKeyError(true);
+        setOcrStatus('Google Gemini quota limit reached. Please provide a custom API key or try again in a few moments.');
+      } else {
+        setIsQuotaError(false);
+        setOcrStatus(`Extraction error: ${msg}`);
+        if (msg.includes('key') || msg.includes('permission') || msg.includes('unauthorized') || msg.includes('403')) {
+          setHasKeyError(true);
+        }
       }
     } finally {
       setIsProcessing(false);
@@ -425,10 +456,10 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                 {hasKeyError && (
                   <button
                     onClick={() => setShowAiKeyModal(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs"
+                    className="flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold transition-colors shadow-2xs animate-pulse"
                   >
-                    <Key className="w-3 h-3" />
-                    <span>Set Key</span>
+                    <Key className="w-3.5 h-3.5" />
+                    <span>{isQuotaError ? 'Add AI Key (Quota Full)' : 'Set AI Key'}</span>
                   </button>
                 )}
                 <button
@@ -494,7 +525,30 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
           onSuccess={() => {
             setShowAiKeyModal(false);
             setHasKeyError(false);
+            setIsQuotaError(false);
             handleRunOcr();
+          }}
+          title={isQuotaError ? 'Google Gemini Quota Limit Reached' : 'AI Provider & Intelligence Backend'}
+          description={
+            isQuotaError
+              ? 'The free shared Gemini API quota has been exhausted. You can add your own free Gemini API key from Google AI Studio to continue unlimited OCR scanning.'
+              : undefined
+          }
+        />
+      )}
+
+      {showConsentModal && (
+        <CloudAiConsentModal
+          providerName="Google Gemini AI"
+          operationDescription="Handwriting and Printed Document Optical Character Recognition (OCR) using Gemini Flash Vision"
+          isOpen={showConsentModal}
+          onConfirm={() => {
+            setShowConsentModal(false);
+            handleRunOcr();
+          }}
+          onCancel={() => {
+            setShowConsentModal(false);
+            setOcrStatus('OCR scanning cancelled: Cloud AI consent declined.');
           }}
         />
       )}

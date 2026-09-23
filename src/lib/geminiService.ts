@@ -1,7 +1,7 @@
 import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
-import { PrivacyManager } from './privacyManager';
+import { PrivacyManager, CloudAiConsentRequiredError } from './privacyManager';
 import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
 
@@ -391,6 +391,7 @@ export class GeminiApiService {
 
     // Server proxy fallback
     try {
+      PrivacyManager.assertCloudAiConsent('Gemini OCR');
       PrivacyManager.assertNetworkAllowed('Gemini OCR');
       const res = await fetch('/api/gemini/ocr', {
         method: 'POST',
@@ -1082,6 +1083,7 @@ export class GeminiApiService {
 
     // 6. Resumable Multi-Segment Pipeline via backend (Default, Primary & Resumable)
     try {
+      PrivacyManager.assertCloudAiConsent('Google Audio Transcription');
       PrivacyManager.assertNetworkAllowed('Google Audio Transcription');
       return await this.transcribeWithResumableSession(
         audioBlobOrBase64,
@@ -1270,6 +1272,7 @@ Formatting Directives:
 
     // Server proxy fallback for Google AI Studio
     try {
+      PrivacyManager.assertCloudAiConsent('Google AI Studio Summary');
       PrivacyManager.assertNetworkAllowed('Google AI Studio Summary');
       const res = await fetch('/api/gemini/summary', {
         method: 'POST',
