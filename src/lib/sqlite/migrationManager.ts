@@ -1,4 +1,4 @@
-import { SqliteEngine } from './sqliteEngine';
+import { getDatabaseAdapter } from './databaseAdapter';
 import { AppLogger } from '../logger';
 import { EventRecord, NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../../types';
 
@@ -26,13 +26,15 @@ export interface MigrationReport {
 
 export class MigrationManager {
   /**
-   * Checks if legacy localStorage data exists and hasn't been migrated into SQLite yet
+   * Checks if legacy localStorage data exists and hasn't been migrated into SQLite yet.
+   * Uses DatabaseAdapter (NativeSqliteAdapter on Android, WebSqliteAdapter on Web).
    */
   public static async checkAndMigrateLegacyData(): Promise<MigrationReport | null> {
-    await SqliteEngine.initialize();
+    const db = getDatabaseAdapter();
+    await db.initialize();
 
     // Check if migration has already been executed in SQLite
-    const metaCheck = SqliteEngine.query(
+    const metaCheck = await db.query<{ value: string }>(
       'SELECT value FROM workspace_metadata WHERE key = ?',
       ['legacy_migration_v1_completed']
     );
@@ -42,8 +44,8 @@ export class MigrationManager {
     }
 
     // Check if SQLite already contains user notes
-    const existingNotesCount = SqliteEngine.query('SELECT COUNT(*) as count FROM notes');
-    const existingEventsCount = SqliteEngine.query('SELECT COUNT(*) as count FROM events');
+    const existingNotesCount = await db.query<{ count: number }>('SELECT COUNT(*) as count FROM notes');
+    const existingEventsCount = await db.query<{ count: number }>('SELECT COUNT(*) as count FROM events');
     const hasExistingSqliteData = (existingNotesCount[0]?.count || 0) > 0 || (existingEventsCount[0]?.count || 0) > 0;
 
     // Read legacy localStorage items
@@ -55,7 +57,7 @@ export class MigrationManager {
 
     if (!rawEvents && !rawNotes) {
       // Mark as complete so we don't check again on clean workspaces
-      SqliteEngine.run(
+      await db.run(
         'INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES (?, ?, ?)',
         ['legacy_migration_v1_completed', 'true', Date.now()]
       );
@@ -80,7 +82,7 @@ export class MigrationManager {
     }
 
     if (events.length === 0 && notes.length === 0) {
-      SqliteEngine.run(
+      await db.run(
         'INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES (?, ?, ?)',
         ['legacy_migration_v1_completed', 'true', Date.now()]
       );
@@ -108,12 +110,12 @@ export class MigrationManager {
     let migratedTags = 0;
     let migratedVersions = 0;
 
-    // 2. Perform Atomic Migration inside SQLite Transaction
+    // 2. Perform Atomic Migration inside SQLite Transaction via DatabaseAdapter
     try {
-      SqliteEngine.transaction(() => {
+      await db.transaction(async () => {
         // Migrate Events
         for (const evt of events) {
-          SqliteEngine.run(
+          await db.run(
             `INSERT OR REPLACE INTO events (id, title, event_date, description, location, category, color, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -132,7 +134,7 @@ export class MigrationManager {
 
         // Migrate Notes & Relational Sub-entities
         for (const note of notes) {
-          SqliteEngine.run(
+          await db.run(
             `INSERT OR REPLACE INTO notes (
                id, event_id, title, body, note_type, color, is_pinned, is_locked,
                pin_hash, pin_salt, encrypted_payload, status, archived_at, trashed_at,
@@ -169,7 +171,7 @@ export class MigrationManager {
           if (note.checklist_items && Array.isArray(note.checklist_items)) {
             for (let i = 0; i < note.checklist_items.length; i++) {
               const item = note.checklist_items[i];
-              SqliteEngine.run(
+              await db.run(
                 `INSERT OR REPLACE INTO checklists (id, note_id, text, completed, position)
                  VALUES (?, ?, ?, ?, ?)`,
                 [item.id || `chk_${note.id}_${i}`, note.id, item.text || '', item.completed ? 1 : 0, i]
@@ -183,8 +185,8 @@ export class MigrationManager {
             for (const tag of note.tags) {
               const trimmed = tag.trim();
               if (trimmed) {
-                SqliteEngine.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [trimmed]);
-                SqliteEngine.run(`INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)`, [note.id, trimmed]);
+                await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [trimmed]);
+                await db.run(`INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)`, [note.id, trimmed]);
                 migratedTags++;
               }
             }
@@ -193,7 +195,7 @@ export class MigrationManager {
 
         // Migrate Recordings
         for (const rec of recordings) {
-          SqliteEngine.run(
+          await db.run(
             `INSERT OR REPLACE INTO recordings (id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -212,7 +214,7 @@ export class MigrationManager {
 
         // Migrate Transcripts
         for (const tr of transcripts) {
-          SqliteEngine.run(
+          await db.run(
             `INSERT OR REPLACE INTO transcripts (id, recording_id, transcript_text, confidence, speaker_count, created_at)
              VALUES (?, ?, ?, ?, ?, ?)`,
             [
@@ -228,7 +230,7 @@ export class MigrationManager {
 
         // Migrate OCR scans
         for (const ocr of ocrScans) {
-          SqliteEngine.run(
+          await db.run(
             `INSERT OR REPLACE INTO ocr_scans (id, note_id, image_path, media_key, ocr_text, confidence, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
@@ -244,14 +246,16 @@ export class MigrationManager {
         }
 
         // Mark completion in SQLite metadata
-        SqliteEngine.run(
+        await db.run(
           `INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES (?, ?, ?)`,
           ['legacy_migration_v1_completed', 'true', Date.now()]
         );
       });
 
-      await SqliteEngine.flushToStorage();
-      AppLogger.info('MigrationManager', 'SQLite migration successfully committed.');
+      if (db.flush) {
+        await db.flush();
+      }
+      AppLogger.info('MigrationManager', 'SQLite migration successfully committed via DatabaseAdapter.');
 
       const report: MigrationReport = {
         migratedEvents: events.length,

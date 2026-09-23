@@ -1,6 +1,6 @@
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { RecordingRepository } from '../repositories/RecordingRepository';
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { SearchIndexQueue } from '../lib/SearchIndexQueue';
 import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import {
   TranscriptionEntity,
@@ -65,25 +65,9 @@ export class TranscriptService {
   public static indexTranscriptInFts(noteId: number, transcriptText: string): void {
     if (!noteId || !transcriptText) return;
     try {
-      const note = SqliteRepository.getNoteById(noteId);
-      if (note && !note.is_locked) {
-        const chkText = (note.checklist_items || []).map((c) => c.text).join(' ');
-        const tagText = (note.tags || []).join(' ');
-        const ocrRows = SqliteEngine.query<{ ocr_text: string }>(
-          'SELECT ocr_text FROM ocr_scans WHERE note_id = ?',
-          [noteId]
-        );
-        const allOcr = ocrRows.map((o) => o.ocr_text).join(' ');
-        const combinedBody = `${note.body || ''}\n\n[Transcript]:\n${transcriptText}`;
-
-        SqliteEngine.run('DELETE FROM notes_fts WHERE note_id = ?;', [noteId]);
-        SqliteEngine.run(
-          'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?);',
-          [noteId, note.title || '', combinedBody, chkText, allOcr, tagText]
-        );
-      }
+      SearchIndexQueue.enqueue(noteId);
     } catch (err) {
-      AppLogger.warn('TranscriptService', 'Could not refresh FTS index for transcript', err);
+      AppLogger.warn('TranscriptService', 'Could not enqueue note for FTS indexing', err);
     }
   }
 

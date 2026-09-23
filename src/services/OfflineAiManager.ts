@@ -13,7 +13,7 @@ import { RecordingRepository } from '../repositories/RecordingRepository';
 import { AiResultValidator } from './AiResultValidator';
 import { TranscriptService } from './TranscriptService';
 import { AppLogger } from '../lib/logger';
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
+import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 
 export interface StorageBreakdown {
   modelsBytes: number;
@@ -190,44 +190,43 @@ export class OfflineAiManager {
         AppLogger.info('OfflineAiManager', `Inspecting interrupted transcription #${job.id}`);
 
         // Check if there are durable chunk checkpoints saved
-        if (SqliteEngine.isReady()) {
-          try {
-            const checkpoints = SqliteEngine.query<{
-              sequence: number;
-              text: string | null;
-            }>(
-              'SELECT sequence, text FROM transcription_segments WHERE transcription_id = ? ORDER BY sequence ASC',
-              [job.id]
-            );
+        try {
+          const db = getDatabaseAdapter();
+          const checkpoints = await db.query<{
+            sequence: number;
+            text: string | null;
+          }>(
+            'SELECT sequence, text FROM transcription_segments WHERE transcription_id = ? ORDER BY sequence ASC',
+            [job.id]
+          );
 
-            if (checkpoints && checkpoints.length > 0) {
-              const partialText = checkpoints
-                .map((c) => c.text || '')
-                .filter((t) => t.trim().length > 0)
-                .join(' ');
+          if (checkpoints && checkpoints.length > 0) {
+            const partialText = checkpoints
+              .map((c) => c.text || '')
+              .filter((t) => t.trim().length > 0)
+              .join(' ');
 
-              if (partialText.trim().length > 0) {
-                // Restore partial transcript
-                TranscriptionRepository.saveTranscription({
-                  id: job.id,
-                  recording_id: job.recording_id,
-                  engine: 'whisper.cpp',
-                  model_id: job.model_id,
-                  status: 'COMPLETED',
-                  text: partialText,
-                  completed_at: Date.now(),
-                });
-                AppLogger.info(
-                  'OfflineAiManager',
-                  `Recovered partial transcript from ${checkpoints.length} chunk checkpoints for job #${job.id}`
-                );
-                recoveredCount++;
-                continue;
-              }
+            if (partialText.trim().length > 0) {
+              // Restore partial transcript
+              TranscriptionRepository.saveTranscription({
+                id: job.id,
+                recording_id: job.recording_id,
+                engine: 'whisper.cpp',
+                model_id: job.model_id,
+                status: 'COMPLETED',
+                text: partialText,
+                completed_at: Date.now(),
+              });
+              AppLogger.info(
+                'OfflineAiManager',
+                `Recovered partial transcript from ${checkpoints.length} chunk checkpoints for job #${job.id}`
+              );
+              recoveredCount++;
+              continue;
             }
-          } catch (cpErr) {
-            AppLogger.warn('OfflineAiManager', 'Could not read checkpoints during recovery', cpErr);
           }
+        } catch (cpErr) {
+          AppLogger.warn('OfflineAiManager', 'Could not read checkpoints during recovery', cpErr);
         }
 
         // If no checkpoints found, mark failed cleanly with explanation
@@ -251,12 +250,13 @@ export class OfflineAiManager {
    */
   public async getStorageBreakdown(): Promise<StorageBreakdown> {
     try {
+      const db = getDatabaseAdapter();
       // 1. Recordings storage
-      const recRows = SqliteEngine.query<{ total: number }>('SELECT SUM(file_size) as total FROM recordings');
+      const recRows = await db.query<{ total: number }>('SELECT SUM(file_size) as total FROM recordings');
       const recordingsBytes = recRows[0]?.total || 0;
 
       // 2. Transcripts storage
-      const transRows = SqliteEngine.query<{ total: number }>(
+      const transRows = await db.query<{ total: number }>(
         'SELECT SUM(LENGTH(text)) as total FROM transcriptions'
       );
       const transcriptsBytes = transRows[0]?.total || 0;
