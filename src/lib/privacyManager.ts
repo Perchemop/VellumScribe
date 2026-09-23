@@ -65,6 +65,16 @@ export class PrivacyManager {
   }
 
   /**
+   * Validates if Cloud AI external requests have user consent.
+   * Throws CloudAiConsentRequiredError if warning is enabled and consent has not been granted.
+   */
+  public static assertCloudAiConsent(operationName: string): void {
+    if (!this.hasCloudAiConsent()) {
+      throw new CloudAiConsentRequiredError(operationName);
+    }
+  }
+
+  /**
    * Validates if an external network request is allowed.
    * Throws an error if Private Offline Mode is enabled.
    */
@@ -73,5 +83,14 @@ export class PrivacyManager {
       AppLogger.warn('PrivacyManager', `Blocked network request to "${targetService}" because Private Offline Mode is ACTIVE.`);
       throw new Error(`Network access blocked: Private Offline Mode is enabled. Disable it in Settings -> Privacy & Offline to connect to ${targetService}.`);
     }
+  }
+}
+
+export class CloudAiConsentRequiredError extends Error {
+  public readonly operationName: string;
+  constructor(operationName: string) {
+    super(`Cloud AI consent required for ${operationName}`);
+    this.name = 'CloudAiConsentRequiredError';
+    this.operationName = operationName;
   }
 }
