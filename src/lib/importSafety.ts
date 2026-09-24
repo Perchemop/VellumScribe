@@ -1,5 +1,5 @@
 import { StorageManager } from './storage';
-import { SqliteEngine } from './sqlite/sqliteEngine';
+import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { AppLogger } from './logger';
 import { EventRecord, NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../types';
@@ -181,9 +181,11 @@ export class ImportSafetyPipeline {
 
     // 3. Execute Transactional Import
     const { events, notes, recordings, transcripts, ocrScans } = preview.payload;
+    const db = getDatabaseAdapter();
+    await db.initialize();
 
     try {
-      SqliteEngine.transaction(() => {
+      await db.transaction(async () => {
         // Import events first
         if (Array.isArray(events)) {
           for (const ev of events) {
@@ -225,14 +227,16 @@ export class ImportSafetyPipeline {
         }
       });
 
-      // Stage 6: Database Integrity Check
-      const integrity = SqliteEngine.checkIntegrity();
-      if (integrity.status !== 'ok') {
-        throw new Error(`Database integrity failure after import: ${integrity.details}`);
+      // Stage 6: Database Integrity Check via DatabaseAdapter
+      const integrity = await db.checkIntegrity();
+      if (!integrity.ok) {
+        throw new Error(`Database integrity failure after import: ${integrity.result}`);
       }
 
-      // Flush to disk/IndexedDB
-      await SqliteEngine.flush();
+      // Flush to disk/IndexedDB if supported
+      if (db.flush) {
+        await db.flush();
+      }
       StorageManager.refreshCaches();
 
       AppLogger.info('ImportSafetyPipeline', `Successfully imported ${notes.length} notes with full integrity verification.`);
@@ -249,7 +253,9 @@ export class ImportSafetyPipeline {
       try {
         if (safetySnapshot) {
           StorageManager.importFullDump(safetySnapshot);
-          await SqliteEngine.flush();
+          if (db.flush) {
+            await db.flush();
+          }
           StorageManager.refreshCaches();
         }
       } catch (rollbackErr) {

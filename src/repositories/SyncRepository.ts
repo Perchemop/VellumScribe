@@ -70,6 +70,59 @@ export class SyncRepository {
     }
   }
 
+  public static enqueueSync(item: {
+    id: string;
+    providers: CloudStorageProvider[];
+    reason?: string;
+    filename?: string;
+    stagedStorageKey?: string;
+    checksum?: string;
+    lastError?: string;
+  }): void {
+    const db = getDatabaseAdapter();
+    const now = Date.now();
+    if (db.runSync) {
+      db.runSync(
+        `INSERT OR REPLACE INTO cloud_sync_queue 
+         (id, providers_json, reason, filename, staged_storage_key, checksum, attempts, status, last_error, queued_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.id,
+          JSON.stringify(item.providers),
+          item.reason || null,
+          item.filename || null,
+          item.stagedStorageKey || null,
+          item.checksum || null,
+          0,
+          'pending',
+          item.lastError || null,
+          now,
+          now,
+        ]
+      );
+    } else {
+      this.enqueue(item).catch(() => {});
+    }
+  }
+
+  public static removeSync(id: string): void {
+    const db = getDatabaseAdapter();
+    if (db.runSync) {
+      db.runSync('DELETE FROM cloud_sync_queue WHERE id = ?', [id]);
+    } else {
+      this.remove(id).catch(() => {});
+    }
+  }
+
+  public static clearQueueSync(): void {
+    const db = getDatabaseAdapter();
+    if (db.runSync) {
+      db.runSync('DELETE FROM cloud_sync_queue');
+    } else {
+      this.clearQueue().catch(() => {});
+    }
+  }
+
   public static async enqueue(item: {
     id: string;
     providers: CloudStorageProvider[];

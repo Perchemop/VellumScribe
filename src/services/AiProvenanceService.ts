@@ -1,5 +1,6 @@
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { AppLogger } from '../lib/logger';
+import { generatePrefixedId } from '../lib/uuid';
 
 export interface AiProvenanceRecord {
   id: string;
@@ -20,7 +21,7 @@ export class AiProvenanceService {
    */
   public static recordProvenance(data: Omit<AiProvenanceRecord, 'id' | 'generated_at'>): void {
     try {
-      const id = `prov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const id = generatePrefixedId('prov');
       const now = Date.now();
       const metadataJson = data.metadata ? JSON.stringify(data.metadata) : null;
       const db = getDatabaseAdapter();
@@ -139,7 +140,7 @@ export class AiProvenanceService {
     status: 'success' | 'error';
   }): void {
     try {
-      const id = `aiop_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const id = generatePrefixedId('aiop');
       const db = getDatabaseAdapter();
       const sql = `INSERT INTO ai_operations (id, operation, provider, model, duration_ms, input_characters, output_characters, status, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`;

@@ -346,15 +346,44 @@ export class StorageManager {
   }
 
   public static getActiveNotes(): NoteRecord[] {
-    return this.getNotes().filter((n) => !n.status || n.status === 'active');
+    if (this.notesCacheFullyHydrated && this.notesCache !== null) {
+      return this.notesCache.filter((n) => !n.status || n.status === 'active');
+    }
+    // Return cached items if available without forcing full memory dump
+    if (this.notesCache !== null && this.notesCache.length > 0) {
+      return this.notesCache.filter((n) => !n.status || n.status === 'active');
+    }
+    try {
+      const paged = SqliteRepository.getNotesPage({ pageSize: 50, status: 'active' });
+      this.notesCache = paged.notes;
+      return this.notesCache;
+    } catch {
+      return this.getNotes().filter((n) => !n.status || n.status === 'active');
+    }
   }
 
   public static getArchivedNotes(): NoteRecord[] {
-    return this.getNotes().filter((n) => n.status === 'archived');
+    if (this.notesCacheFullyHydrated && this.notesCache !== null) {
+      return this.notesCache.filter((n) => n.status === 'archived');
+    }
+    try {
+      const paged = SqliteRepository.getNotesPage({ pageSize: 50, status: 'archived' });
+      return paged.notes;
+    } catch {
+      return this.getNotes().filter((n) => n.status === 'archived');
+    }
   }
 
   public static getTrashNotes(): NoteRecord[] {
-    return this.getNotes().filter((n) => n.status === 'trash');
+    if (this.notesCacheFullyHydrated && this.notesCache !== null) {
+      return this.notesCache.filter((n) => n.status === 'trash');
+    }
+    try {
+      const paged = SqliteRepository.getNotesPage({ pageSize: 50, status: 'trash' });
+      return paged.notes;
+    } catch {
+      return this.getNotes().filter((n) => n.status === 'trash');
+    }
   }
 
   public static saveNotes(notes: NoteRecord[]): boolean {
@@ -374,11 +403,36 @@ export class StorageManager {
   }
 
   public static getNotesForEvent(eventId: number): NoteRecord[] {
-    return this.getActiveNotes().filter((n) => n.event_id === eventId);
+    if (this.notesCacheFullyHydrated && this.notesCache !== null) {
+      return this.notesCache.filter((n) => n.event_id === eventId && (!n.status || n.status === 'active'));
+    }
+    try {
+      const paged = SqliteRepository.getNotesPage({ pageSize: 100, eventId, status: 'active' });
+      return paged.notes;
+    } catch {
+      return this.getActiveNotes().filter((n) => n.event_id === eventId);
+    }
   }
 
   public static getNoteById(id: number): NoteRecord | undefined {
-    return this.getNotes().find((n) => n.id === id);
+    // 1. Check in-memory page cache first
+    if (this.notesCache !== null) {
+      const cached = this.notesCache.find((n) => n.id === id);
+      if (cached) return cached;
+    }
+    // 2. Query SQLite individually without hydrating the entire database
+    try {
+      const directNote = SqliteRepository.getNoteById(id);
+      if (directNote) {
+        if (this.notesCache !== null) {
+          this.notesCache.push(directNote);
+        }
+        return directNote;
+      }
+    } catch (e) {
+      AppLogger.warn('StorageManager', `Failed querying note ${id} directly`, e);
+    }
+    return undefined;
   }
 
   public static addNote(note: Omit<NoteRecord, 'id'>): NoteRecord {

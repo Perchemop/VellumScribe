@@ -417,7 +417,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
                     : 'bg-stone-200 dark:bg-stone-800'
                 }`}
                 style={{
-                  height: isPlaying && isPlayed ? `${Math.min(22, h * (1 + Math.random() * 0.3))}px` : `${h}px`,
+                  height: isPlaying && isPlayed ? `${Math.min(22, h * (1 + Math.sin(i * 1.5 + currentTime * 8) * 0.25))}px` : `${h}px`,
                 }}
               />
             );

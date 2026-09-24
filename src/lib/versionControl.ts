@@ -1,6 +1,7 @@
 import { DocumentVersion, NoteRecord } from '../types';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { toHex } from './cryptoUtils';
+import { generatePrefixedId } from './uuid';
 
 /**
  * SQLite-backed document revision history engine.
@@ -41,7 +42,7 @@ export class VersionControlManager {
     }
 
     const newVersion: DocumentVersion = {
-      id: `ver_${note.id}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: generatePrefixedId(`ver_${note.id}`),
       version_id: nextVersionNum,
       version_number: nextVersionNum,
       note_id: note.id,

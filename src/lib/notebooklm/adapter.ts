@@ -1,5 +1,6 @@
 import { getDatabaseAdapter } from '../sqlite/databaseAdapter';
 import { AppLogger } from '../logger';
+import { generatePrefixedId } from '../uuid';
 
 export interface NotebookLMConnection {
   id: number;
@@ -436,7 +437,7 @@ ${note.content || '(Empty content)'}
     action: 'create' | 'update' | 'delete';
     contentPayload?: string;
   }): string {
-    const jobId = `nlm_job_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const jobId = generatePrefixedId('nlm_job');
     const now = Date.now();
     const db = getDatabaseAdapter();
 

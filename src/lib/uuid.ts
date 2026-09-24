@@ -1,6 +1,6 @@
 /**
  * Cryptographically secure UUID generation for VellumScribe.
- * Replaces insecure Math.random() implementations.
+ * Uses Web Crypto API crypto.randomUUID() or crypto.getRandomValues().
  */
 
 export function generateUUID(): string {
@@ -19,13 +19,12 @@ export function generateUUID(): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
-  // Pure fallback for extreme edge cases
-  const timestamp = Date.now().toString(16);
-  const randomHex = Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, '0');
-  return `vs-${timestamp}-${randomHex}`;
+  // If running in an environment without crypto, throw controlled error rather than insecure fallback
+  throw new Error('Cryptographically secure randomness is unavailable in this runtime.');
 }
 
 export function generatePrefixedId(prefix: string): string {
   const uuid = generateUUID();
   return `${prefix}_${uuid}`;
 }
+

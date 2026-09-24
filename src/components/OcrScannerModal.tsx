@@ -22,6 +22,7 @@ import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { CloudAiConsentModal } from './CloudAiConsentModal';
 import { PrivacyManager, CloudAiConsentRequiredError } from '../lib/privacyManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { generatePrefixedId } from '../lib/uuid';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -226,7 +227,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
     try {
       let mediaKey: string | undefined = undefined;
       if (selectedImage) {
-        mediaKey = `ocr_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.jpg`;
+        mediaKey = `${generatePrefixedId('ocr')}.jpg`;
         const response = await fetch(selectedImage);
         const blob = await response.blob();
 

@@ -152,7 +152,7 @@ export class CloudSyncEngine {
     };
 
     try {
-      SyncRepository.enqueue({
+      SyncRepository.enqueueSync({
         id: item.id,
         providers: item.providers,
         reason: reason || undefined,
@@ -160,10 +160,6 @@ export class CloudSyncEngine {
         stagedStorageKey: item.stagedStorageKey,
         checksum: item.checksum,
         lastError: item.lastError,
-      }).catch(() => {
-        const queue = this.getSyncQueue();
-        queue.push(item);
-        localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(queue));
       });
     } catch {
       const queue = this.getSyncQueue();
@@ -183,7 +179,7 @@ export class CloudSyncEngine {
         });
       }
     }
-    SyncRepository.clearQueue().catch(() => {});
+    SyncRepository.clearQueueSync();
     localStorage.removeItem(this.QUEUE_STORAGE_KEY);
   }
 
@@ -195,7 +191,7 @@ export class CloudSyncEngine {
         MediaRepository.deleteBinary(item.stagedStorageKey!).catch(() => {});
       });
     }
-    SyncRepository.remove(id).catch(() => {});
+    SyncRepository.removeSync(id);
     const filtered = queue.filter((item) => item.id !== id);
     localStorage.setItem(this.QUEUE_STORAGE_KEY, JSON.stringify(filtered));
   }
@@ -247,8 +243,9 @@ export class CloudSyncEngine {
         } catch (e: any) {
           failedCount++;
           item.attempts++;
-          item.lastError = e?.message || 'Network exception';
-          SyncRepository.markFailed(item.id, item.lastError).catch(() => {});
+          const errorMsg = e?.message || 'Network exception';
+          item.lastError = errorMsg;
+          SyncRepository.markFailed(item.id, errorMsg).catch(() => {});
           break; // Stop further queue attempts if network error occurs
         }
       }

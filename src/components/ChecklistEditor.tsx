@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ChecklistItem } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';
+import { generatePrefixedId } from '../lib/uuid';
 
 interface ChecklistEditorProps {
   items: ChecklistItem[];
@@ -26,7 +27,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
     if (!newItemText.trim()) return;
 
     const newItem: ChecklistItem = {
-      id: `chk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: generatePrefixedId('chk'),
       text: newItemText.trim(),
       completed: false,
     };

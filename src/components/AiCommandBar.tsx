@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, ArrowRight, X, AlertTriangle, Check, Search, Calendar, CheckSquare, FileText } from 'lucide-react';
+import { Sparkles, ArrowRight, X, AlertTriangle, Check, Search, Calendar, CheckSquare, FileText, Layers } from 'lucide-react';
 import { AiAction, AiCommandResult } from '../types';
 import { AiCommandService } from '../services/AiCommandService';
+import { UniversalCaptureService, AiMutationProposal } from '../services/UniversalCaptureService';
+import { AiProposalPreviewModal } from './AiProposalPreviewModal';
 import { PrivacyBadge } from './PrivacyBadge';
 
 interface AiCommandBarProps {
   placeholder?: string;
   onExecuteAction: (action: AiAction) => void | Promise<void>;
   onSearchQuery?: (query: string) => void;
+  onRefresh?: () => void;
   className?: string;
 }
 
@@ -15,12 +18,14 @@ export const AiCommandBar: React.FC<AiCommandBarProps> = ({
   placeholder = 'Tell VellumScribe what you want to capture…',
   onExecuteAction,
   onSearchQuery,
+  onRefresh,
   className = '',
 }) => {
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingResult, setPendingResult] = useState<AiCommandResult | null>(null);
   const [confirmationAction, setConfirmationAction] = useState<AiAction | null>(null);
+  const [activeProposal, setActiveProposal] = useState<AiMutationProposal | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -31,19 +36,19 @@ export const AiCommandBar: React.FC<AiCommandBarProps> = ({
 
     setIsProcessing(true);
     try {
-      const result = await AiCommandService.parseCommand(text);
-      setPendingResult(result);
+      // Generate structured proposal through the universal capture pipeline
+      const proposal = await UniversalCaptureService.createProposal(text, 'text');
 
-      if (result.actions.length > 0) {
-        const firstAction = result.actions[0];
-        if (firstAction.requiresConfirmation) {
-          setConfirmationAction(firstAction);
-        } else {
-          // Direct execution
-          await handleExecute(firstAction);
+      // If high-impact or multiple actions, open proposal preview modal
+      if (proposal.actions.length > 1 || proposal.requiresConfirmation) {
+        setActiveProposal(proposal);
+      } else {
+        // Safe single operation: execute directly through proposal executor
+        const result = await UniversalCaptureService.executeProposal(proposal);
+        if (result.success) {
           setInput('');
-          setPendingResult(null);
           setIsExpanded(false);
+          onRefresh?.();
         }
       }
     } catch (err) {
@@ -170,6 +175,19 @@ export const AiCommandBar: React.FC<AiCommandBarProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Multimodal AI Proposal Review Modal */}
+      {activeProposal && (
+        <AiProposalPreviewModal
+          proposal={activeProposal}
+          isOpen={!!activeProposal}
+          onClose={() => setActiveProposal(null)}
+          onExecuted={() => {
+            setInput('');
+            setIsExpanded(false);
+            onRefresh?.();
+          }}
+        />
       )}
     </div>
   );

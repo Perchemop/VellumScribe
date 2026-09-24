@@ -23,6 +23,7 @@ import { AudioRecordingManager } from '../lib/audioRecorder';
 import { GeminiApiService } from '../lib/geminiService';
 import { SQLiteDatabase } from '../lib/storage';
 import { RecordingRecord, TranscriptRecord } from '../types';
+import { generatePrefixedId } from '../lib/uuid';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { AiSettingsManager } from '../lib/aiSettings';
@@ -413,7 +414,7 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
     const timestamp = new Date().toISOString();
     const fileName = recordedAudio.originalFileName || `rec_${Date.now()}.m4a`;
     const filePath = `/storage/notes/audio/${fileName}`;
-    const mediaKey = `media_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.m4a`;
+    const mediaKey = `${generatePrefixedId('media')}.m4a`;
 
     try {
       const blob = recordedAudio.blob;
@@ -605,7 +606,8 @@ export const AudioRecorderPlayer: React.FC<AudioRecorderPlayerProps> = ({
               <div className="flex items-center gap-1.5 h-10 w-full justify-center px-4">
                 {Array.from({ length: 24 }).map((_, i) => {
                   const heightMult = Math.sin((i / 24) * Math.PI + audioLevel * 10) * 0.5 + 0.5;
-                  const barHeight = Math.max(4, Math.round(audioLevel * 40 * heightMult + Math.random() * 6));
+                  const harmonic = Math.sin(i * 0.8 + recordingSeconds * 4) * 0.5 + 0.5;
+                  const barHeight = Math.max(4, Math.round(audioLevel * 40 * heightMult + harmonic * 6));
                   return (
                     <div
                       key={i}

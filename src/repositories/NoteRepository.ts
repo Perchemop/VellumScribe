@@ -2,6 +2,7 @@ import { NoteRecord, ChecklistItem } from '../types';
 import { getDatabaseAdapter, DatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { SearchOptions, SearchResult } from '../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../lib/logger';
+import { generatePrefixedId } from '../lib/uuid';
 
 export interface CreateNoteInput {
   title?: string;
@@ -136,7 +137,7 @@ async function recordItemChange(
   payload: unknown
 ): Promise<void> {
   try {
-    const id = `chg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const id = generatePrefixedId('chg');
     const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
     let hash = 0;
     for (let i = 0; i < payloadStr.length; i++) {
