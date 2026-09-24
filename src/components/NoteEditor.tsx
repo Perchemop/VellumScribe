@@ -53,6 +53,7 @@ import { ModalErrorFallback } from './ModalErrorFallback';
 import { ErrorBoundary } from './ErrorBoundary';
 import { PrivacyManager } from '../lib/privacyManager';
 import { AiProvenanceService } from '../services/AiProvenanceService';
+import { generatePrefixedId } from '../lib/uuid';
 
 // Code-split heavy multimodal studio dialogs (Sketch Canvas, OCR Camera Scanner, Voice Studio)
 const SketchCanvasModal = lazy(() =>
@@ -280,7 +281,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleAddChecklistItem = () => {
     const newItem: ChecklistItem = {
-      id: `chk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: generatePrefixedId('chk'),
       text: '',
       completed: false,
     };

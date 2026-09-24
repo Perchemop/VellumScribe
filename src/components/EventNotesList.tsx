@@ -648,6 +648,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <AiCommandBar
             onExecuteAction={handleAiAction}
             onSearchQuery={(q) => setSearchQuery(q)}
+            onRefresh={onRefresh}
           />
 
           <div className="relative flex items-center gap-2">

@@ -1311,7 +1311,7 @@ export class SqliteRepository {
   // --- SYNC CONFLICTS (P1-02) ---
 
   public static recordSyncConflict(conflict: Omit<SyncConflictRecord, 'id' | 'detected_at' | 'status'> & { id?: string; detected_at?: number; status?: 'open' | 'resolved' | 'ignored' }): SyncConflictRecord {
-    const id = conflict.id || `cnf_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const id = conflict.id || generatePrefixedId('cnf');
     const detected_at = conflict.detected_at || Date.now();
     const status = conflict.status || 'open';
     const rec: SyncConflictRecord = {

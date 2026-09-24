@@ -3,6 +3,7 @@ import { MediaRepository } from '../lib/MediaRepository';
 import { RecordingRecord } from '../types';
 import { AppLogger } from '../lib/logger';
 import { OfflineTranscriptionEngine } from '../lib/offlineTranscription';
+import { generatePrefixedId } from '../lib/uuid';
 
 export interface RecordedAudioResult {
   recording?: RecordingRecord;
@@ -270,7 +271,7 @@ export class AudioRecordingManager {
           // 2. Persist to MediaRepository and SQLite if noteId is provided
           if (noteId) {
             onProgress?.(90, 'Saving to secure on-device storage...');
-            const mediaKey = `rec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            const mediaKey = `${generatePrefixedId('rec')}.${wasConverted ? 'wav' : 'webm'}`;
             const fileName = `recording_${Date.now()}.${wasConverted ? 'wav' : 'webm'}`;
             await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type, noteId);
 

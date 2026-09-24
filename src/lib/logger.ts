@@ -1,3 +1,5 @@
+import { generatePrefixedId } from './uuid';
+
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
 export interface LogEntry {
@@ -60,7 +62,7 @@ export class AppLogger {
     const data = rawData !== undefined ? sanitizeValue(rawData) : undefined;
 
     const entry: LogEntry = {
-      id: `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generatePrefixedId('log'),
       timestamp: new Date().toISOString(),
       level,
       category,

@@ -295,7 +295,14 @@ export class OfflineAiManager {
    */
   public cleanTemporaryFiles(): void {
     try {
-      SqliteEngine.run("DELETE FROM transcriptions WHERE status = 'CANCELLED'");
+      const db = getDatabaseAdapter();
+      const sql = "DELETE FROM transcriptions WHERE status = ?";
+      const params = ['CANCELLED'];
+      if (db.runSync) {
+        db.runSync(sql, params);
+      } else {
+        db.run(sql, params).catch((e) => AppLogger.warn('OfflineAiManager', 'Async cleanup failed', e));
+      }
       AppLogger.info('OfflineAiManager', 'Cleaned temporary cancelled jobs.');
     } catch (e) {
       AppLogger.warn('OfflineAiManager', 'Failed cleaning temporary files', e);

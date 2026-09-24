@@ -2,6 +2,7 @@ import { AiAction, AiCommandResult } from '../types';
 import { AppLogger } from '../lib/logger';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { AiProvenanceService } from './AiProvenanceService';
+import { generatePrefixedId } from '../lib/uuid';
 
 export interface AiAuditLogEntry {
   id: string;
@@ -15,28 +16,14 @@ export interface AiAuditLogEntry {
   status: 'success' | 'error';
 }
 
-const AI_AUDIT_LOG_KEY = 'vellumscribe_ai_audit_logs';
-
 export class AiCommandService {
   /**
    * Log AI operation metadata deterministically without recording note bodies or confidential content.
+   * SQLite ai_operations table is the authoritative persistence store.
    */
   public static logAudit(entry: Omit<AiAuditLogEntry, 'id' | 'timestamp'>): void {
     try {
-      const fullEntry: AiAuditLogEntry = {
-        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        ...entry,
-      };
-
-      const existingRaw = localStorage.getItem(AI_AUDIT_LOG_KEY);
-      const list: AiAuditLogEntry[] = existingRaw ? JSON.parse(existingRaw) : [];
-      list.unshift(fullEntry);
-      // Keep up to 100 recent metadata logs
-      if (list.length > 100) list.length = 100;
-      localStorage.setItem(AI_AUDIT_LOG_KEY, JSON.stringify(list));
-
-      // Also persist to SQLite ai_operations table for durable auditing
+      // Authoritatively persist to SQLite ai_operations table
       AiProvenanceService.recordAiOperation({
         operation: entry.operation,
         provider: entry.provider,
@@ -53,15 +40,47 @@ export class AiCommandService {
 
   public static getAuditLogs(): AiAuditLogEntry[] {
     try {
-      const raw = localStorage.getItem(AI_AUDIT_LOG_KEY);
-      return raw ? JSON.parse(raw) : [];
+      const ops = AiProvenanceService.getAiOperations(100);
+      return (ops || []).map((row: any) => ({
+        id: row.id,
+        timestamp: new Date(row.created_at).toISOString(),
+        operation: row.operation,
+        provider: row.provider,
+        model: row.model,
+        durationMs: row.duration_ms,
+        inputCharacters: row.input_characters,
+        outputCharacters: row.output_characters,
+        status: row.status,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  public static async getAuditLogsAsync(): Promise<AiAuditLogEntry[]> {
+    try {
+      const ops = await AiProvenanceService.getAiOperationsAsync(100);
+      return (ops || []).map((row: any) => ({
+        id: row.id,
+        timestamp: new Date(row.created_at).toISOString(),
+        operation: row.operation,
+        provider: row.provider,
+        model: row.model,
+        durationMs: row.duration_ms,
+        inputCharacters: row.input_characters,
+        outputCharacters: row.output_characters,
+        status: row.status,
+      }));
     } catch {
       return [];
     }
   }
 
   public static clearAuditLogs(): void {
-    localStorage.removeItem(AI_AUDIT_LOG_KEY);
+    // Clear legacy localStorage cache if present
+    try {
+      localStorage.removeItem('vellumscribe_ai_audit_logs');
+    } catch {}
   }
 
   /**
@@ -232,8 +251,8 @@ export class AiCommandService {
             payload: {
               title,
               note_type: 'checklist',
-              checklist_items: items.map((t, idx) => ({
-                id: `chk_${Date.now()}_${idx}`,
+              checklist_items: items.map((t) => ({
+                id: generatePrefixedId('chk'),
                 text: t,
                 completed: false,
               })),

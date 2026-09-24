@@ -4,6 +4,7 @@ import { OfflineTranscriptionEngine } from './offlineTranscription';
 import { PrivacyManager, CloudAiConsentRequiredError } from './privacyManager';
 import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
+import { generatePrefixedId } from './uuid';
 
 export interface OcrResult {
   ocrText: string;
@@ -424,7 +425,7 @@ export class GeminiApiService {
     mimeType: string,
     originalFileName?: string
   ): Promise<TranscribeResult> {
-    const uploadId = `up_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const uploadId = generatePrefixedId('up');
     const headers = await this.getHeaders();
     headers['Content-Type'] = 'application/json';
 
@@ -543,7 +544,7 @@ export class GeminiApiService {
         phase: 'uploading',
       });
 
-      uploadId = `up_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      uploadId = generatePrefixedId('up');
       const headers = await this.getHeaders();
       headers['Content-Type'] = 'application/json';
 
