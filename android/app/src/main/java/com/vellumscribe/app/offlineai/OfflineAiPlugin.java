@@ -284,8 +284,21 @@ public class OfflineAiPlugin extends Plugin {
         String modelId = call.getString("modelId", "whisper-base");
         String language = call.getString("language", "auto"); // Propagate language parameter!
         String audioPath = call.getString("audioPath");
+        String mediaKey = call.getString("mediaKey");
         long durationMs = call.getInt("durationMs", 30000);
         int startChunk = call.getInt("startChunk", 1); // Resume support!
+
+        if ((audioPath == null || audioPath.trim().isEmpty()) && mediaKey != null && !mediaKey.trim().isEmpty()) {
+            File directKey = new File(getContext().getFilesDir(), mediaKey);
+            if (directKey.exists()) {
+                audioPath = directKey.getAbsolutePath();
+            } else {
+                File mediaSub = new File(new File(getContext().getFilesDir(), "media"), mediaKey);
+                if (mediaSub.exists()) {
+                    audioPath = mediaSub.getAbsolutePath();
+                }
+            }
+        }
 
         if (!modelManager.isModelInstalled(modelId)) {
             call.reject("OFFLINE_AI_MODEL_MISSING: Model '" + modelId + "' is not installed on device.");
@@ -300,6 +313,7 @@ public class OfflineAiPlugin extends Plugin {
             .putString(TranscriptionWorker.KEY_MODEL_ID, modelId)
             .putString(TranscriptionWorker.KEY_LANGUAGE, language != null ? language : "auto")
             .putString(TranscriptionWorker.KEY_AUDIO_PATH, audioPath != null ? audioPath : "")
+            .putString("media_key", mediaKey != null ? mediaKey : "")
             .putLong(TranscriptionWorker.KEY_DURATION_MS, durationMs)
             .putInt(TranscriptionWorker.KEY_START_CHUNK, startChunk)
             .build();

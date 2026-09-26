@@ -80,7 +80,7 @@ export const OfflineAiSettings: React.FC = () => {
   };
 
   const handleCleanTemporary = async () => {
-    OfflineAiManager.getInstance().cleanTemporaryFiles();
+    await OfflineAiManager.getInstance().cleanTemporaryFiles();
     const freshStorage = await OfflineAiManager.getInstance().getStorageBreakdown();
     setStorage(freshStorage);
     setActionFeedback('Temporary transcription cache cleaned.');

@@ -248,6 +248,10 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     recordingId: string | number;
     modelId: string;
     language?: string;
+    audioPath?: string;
+    mediaKey?: string;
+    durationMs?: number;
+    startChunk?: number;
   }): Promise<{ jobId: string }> {
     const recordingIdNum = typeof options.recordingId === 'string' ? parseInt(options.recordingId, 10) : options.recordingId;
     const jobId = `job_${recordingIdNum}_${Date.now()}`;
@@ -265,7 +269,14 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     };
     this.activeJobs.set(jobId, jobStatus);
 
-    this.executeTranscriptionJob(jobId, recordingIdNum, options.modelId, options.language).catch((err) => {
+    this.executeTranscriptionJob(
+      jobId,
+      recordingIdNum,
+      options.modelId,
+      options.language,
+      options.mediaKey,
+      options.audioPath
+    ).catch((err) => {
       AppLogger.error('OfflineAiPlugin', `Job ${jobId} failed`, err);
     });
 
@@ -293,7 +304,9 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     jobId: string,
     recordingId: number,
     modelId: string,
-    language?: string
+    language?: string,
+    mediaKey?: string,
+    audioPath?: string
   ): Promise<void> {
     const job = this.activeJobs.get(jobId);
     if (!job) return;
@@ -304,6 +317,21 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
       job.status = 'FAILED';
       job.error = 'OFFLINE_AI_AUDIO_INVALID: Recording not found in database.';
       return;
+    }
+
+    // 2. Resolve media payload via MediaRepository or path
+    const effectiveKey = mediaKey || rec.media_key;
+    if (effectiveKey) {
+      try {
+        const mediaBlob = await MediaRepository.getBinary(effectiveKey);
+        if (!mediaBlob && !audioPath && !rec.file_path) {
+          job.status = 'FAILED';
+          job.error = 'OFFLINE_AI_AUDIO_INVALID: Audio binary not found in MediaRepository.';
+          return;
+        }
+      } catch (mediaErr) {
+        AppLogger.warn('OfflineAiPlugin', 'Could not resolve media key: ' + effectiveKey, mediaErr);
+      }
     }
 
     // 2. Ensure durable record in SQLite transcriptions table

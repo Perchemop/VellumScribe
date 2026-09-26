@@ -61,13 +61,34 @@ public class TranscriptionWorker extends Worker {
 
     private SQLiteDatabase openDatabaseSafely() {
         try {
-            File dbFile = context.getDatabasePath("vellumscribe_relational_v3.sqlite");
-            if (!dbFile.exists()) {
-                File fallback = new File(context.getFilesDir(), "vellumscribe_relational_v3.sqlite");
-                if (fallback.exists()) dbFile = fallback;
+            String[] candidateNames = new String[] {
+                "vellumscribeSQLite.db",
+                "vellumscribe.db",
+                "vellumscribe_relational_v3.sqlite"
+            };
+
+            for (String name : candidateNames) {
+                File dbFile = context.getDatabasePath(name);
+                if (dbFile != null && dbFile.exists()) {
+                    return SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+                }
+                File filesFallback = new File(context.getFilesDir(), name);
+                if (filesFallback.exists()) {
+                    return SQLiteDatabase.openDatabase(filesFallback.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+                }
             }
-            if (dbFile.exists()) {
-                return SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+
+            // Check database parent directory for any existing .db / .sqlite database
+            File dbDir = context.getDatabasePath("dummy").getParentFile();
+            if (dbDir != null && dbDir.exists()) {
+                File[] list = dbDir.listFiles();
+                if (list != null) {
+                    for (File f : list) {
+                        if (f.getName().endsWith(".db") || f.getName().endsWith(".sqlite")) {
+                            return SQLiteDatabase.openDatabase(f.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
+                        }
+                    }
+                }
             }
         } catch (Exception e) {
             Log.w(TAG, "Could not open SQLite database directly: " + e.getMessage());
@@ -125,11 +146,38 @@ public class TranscriptionWorker extends Worker {
                 .build());
         }
 
-        File audioFile = new File(audioPath);
-        if (!audioFile.exists() || audioFile.length() == 0) {
+        File audioFile = null;
+        if (audioPath != null && !audioPath.trim().isEmpty()) {
+            File directFile = new File(audioPath);
+            if (directFile.exists()) {
+                audioFile = directFile;
+            } else {
+                File relFile = new File(context.getFilesDir(), audioPath);
+                if (relFile.exists()) {
+                    audioFile = relFile;
+                }
+            }
+        }
+
+        if (audioFile == null) {
+            String mediaKey = getInputData().getString("media_key");
+            if (mediaKey != null && !mediaKey.trim().isEmpty()) {
+                File keyFile = new File(context.getFilesDir(), mediaKey);
+                if (keyFile.exists()) {
+                    audioFile = keyFile;
+                } else {
+                    File mediaSubdir = new File(new File(context.getFilesDir(), "media"), mediaKey);
+                    if (mediaSubdir.exists()) {
+                        audioFile = mediaSubdir;
+                    }
+                }
+            }
+        }
+
+        if (audioFile == null || !audioFile.exists() || audioFile.length() == 0) {
             return Result.failure(new Data.Builder()
                 .putString("error_code", "OFFLINE_AI_AUDIO_MISSING")
-                .putString("error_message", "Audio recording file does not exist on disk: " + audioPath)
+                .putString("error_message", "Audio recording file does not exist on disk: " + (audioPath != null ? audioPath : "unresolved"))
                 .build());
         }
 
