@@ -78,12 +78,27 @@ export class SqliteRepository {
     return getDatabaseAdapter();
   }
 
+  public static async queryAsync<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+    const adapter = this.db;
+    return await adapter.query<T>(sql, params);
+  }
+
+  public static async runAsync(sql: string, params: unknown[] = []): Promise<{ changes: number; lastInsertRowId?: number }> {
+    const adapter = this.db;
+    return await adapter.run(sql, params);
+  }
+
+  public static async transactionAsync<T>(fn: () => Promise<T>): Promise<T> {
+    const adapter = this.db;
+    return await adapter.transaction(fn);
+  }
+
   private static query<T>(sql: string, params: unknown[] = []): T[] {
     const adapter = this.db;
     if (adapter.querySync) {
       return adapter.querySync<T>(sql, params);
     }
-    return [];
+    throw new Error('SqliteRepository: Synchronous query unsupported on current adapter. Use queryAsync.');
   }
 
   private static run(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
@@ -91,8 +106,7 @@ export class SqliteRepository {
     if (adapter.runSync) {
       return adapter.runSync(sql, params);
     }
-    adapter.run(sql, params).catch((e) => AppLogger.warn("SqliteRepository", "Async run error", e));
-    return { changes: 1 };
+    throw new Error('SqliteRepository: Synchronous run unsupported on current adapter. Use runAsync.');
   }
 
   private static transaction<T>(fn: () => T): T {
@@ -100,7 +114,7 @@ export class SqliteRepository {
     if (adapter.transactionSync) {
       return adapter.transactionSync(fn);
     }
-    return fn();
+    throw new Error('SqliteRepository: Synchronous transaction unsupported on current adapter. Use transactionAsync.');
   }
 
   private static getLastInsertId(): number {

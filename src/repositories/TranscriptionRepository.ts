@@ -10,6 +10,21 @@ import { AppLogger } from '../lib/logger';
 
 export class TranscriptionRepository {
   /**
+   * Get transcription record by ID asynchronously
+   */
+  public static async getByIdAsync(id: number): Promise<TranscriptionEntity | null> {
+    const db = getDatabaseAdapter();
+    const rows = await db.query<any>(
+      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+              status, text, created_at, started_at, completed_at, error_code, error_message
+       FROM transcriptions WHERE id = ?`,
+      [id]
+    );
+    if (!rows || rows.length === 0) return null;
+    return this.mapTranscription(rows[0]);
+  }
+
+  /**
    * Get transcription record by ID
    */
   public static getById(id: number): TranscriptionEntity | null {
@@ -20,6 +35,21 @@ export class TranscriptionRepository {
        FROM transcriptions WHERE id = ?`,
       [id]
     ) : [];
+    if (!rows || rows.length === 0) return null;
+    return this.mapTranscription(rows[0]);
+  }
+
+  /**
+   * Get latest transcription for a recording asynchronously
+   */
+  public static async getLatestForRecordingAsync(recordingId: number): Promise<TranscriptionEntity | null> {
+    const db = getDatabaseAdapter();
+    const rows = await db.query<any>(
+      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+              status, text, created_at, started_at, completed_at, error_code, error_message
+       FROM transcriptions WHERE recording_id = ? ORDER BY id DESC LIMIT 1`,
+      [recordingId]
+    );
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -40,6 +70,24 @@ export class TranscriptionRepository {
   }
 
   /**
+   * Find existing transcription by recording, engine, and model asynchronously
+   */
+  public static async findByRecordingAndModelAsync(
+    recordingId: number,
+    modelId: string
+  ): Promise<TranscriptionEntity | null> {
+    const db = getDatabaseAdapter();
+    const rows = await db.query<any>(
+      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+              status, text, created_at, started_at, completed_at, error_code, error_message
+       FROM transcriptions WHERE recording_id = ? AND model_id = ? ORDER BY id DESC LIMIT 1`,
+      [recordingId, modelId]
+    );
+    if (!rows || rows.length === 0) return null;
+    return this.mapTranscription(rows[0]);
+  }
+
+  /**
    * Find existing transcription by recording, engine, and model (idempotency)
    */
   public static findByRecordingAndModel(
@@ -55,6 +103,21 @@ export class TranscriptionRepository {
     ) : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
+  }
+
+  /**
+   * Find incomplete transcription jobs asynchronously
+   */
+  public static async getIncompleteJobsAsync(): Promise<TranscriptionEntity[]> {
+    const db = getDatabaseAdapter();
+    const rows = await db.query<any>(
+      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+              status, text, created_at, started_at, completed_at, error_code, error_message
+       FROM transcriptions 
+       WHERE status IN ('QUEUED', 'PROCESSING') 
+       ORDER BY id ASC`
+    );
+    return rows.map((r) => this.mapTranscription(r));
   }
 
   /**

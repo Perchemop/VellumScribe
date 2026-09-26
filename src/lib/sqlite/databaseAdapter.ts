@@ -104,6 +104,11 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
 
       // Check and execute one-time migration from legacy sql.js WASM file with validation state machine
       await this.migrateFromWasmSqliteFile();
+      try {
+        await SqliteEngine.initAsync();
+      } catch (e) {
+        AppLogger.warn('NativeSqliteAdapter', 'Could not initialize in-memory mirror engine', e);
+      }
 
       this.isInitialized = true;
       this.durabilityStatus = 'saved';
@@ -345,6 +350,11 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     this.durabilityStatus = 'saving';
     try {
       const res = await this.db.run(sql, params);
+      try {
+        SqliteEngine.run(sql, params);
+      } catch {
+        // Non-critical mirror write
+      }
       this.durabilityStatus = 'saved';
       const changes = res?.changes?.changes ?? 1;
       const lastInsertRowId = res?.changes?.lastId ?? undefined;
@@ -413,22 +423,23 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
 
   scheduleSave(): void {}
   cancelPendingSave(): void {}
-  isDirtyState(): boolean {
-    return false;
-  }
-
   querySync<T>(sql: string, params: unknown[] = []): T[] {
-    AppLogger.warn('NativeSqliteAdapter', 'Synchronous query executed on native adapter; fallback to empty result. Use async query.');
-    return [];
+    return SqliteEngine.query<T>(sql, params);
   }
 
   runSync(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
-    this.run(sql, params).catch((err) => AppLogger.error('NativeSqliteAdapter', 'Async bridge error', err));
-    return { changes: 1 };
+    SqliteEngine.run(sql, params);
+    const lastId = SqliteEngine.getLastInsertId();
+    if (this.db) {
+      this.db.run(sql, params).catch((err: any) =>
+        AppLogger.warn('NativeSqliteAdapter', 'Async native sync run error', err)
+      );
+    }
+    return { changes: 1, lastInsertRowId: lastId };
   }
 
   transactionSync<T>(fn: () => T): T {
-    return fn();
+    return SqliteEngine.transaction(fn);
   }
 
   async close(): Promise<void> {
