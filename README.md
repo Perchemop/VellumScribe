@@ -8,7 +8,7 @@ web app and as an Android app (via Capacitor).
 
 This README describes what the app actually does today. If you're
 looking for a warts-and-all account of what was fixed to get it to this
-state, see [`AUDIT.md`](./AUDIT.md) and [`CHANGELOG.md`](./CHANGELOG.md).
+state, see [`docs/history/AUDIT.md`](./docs/history/AUDIT.md) and [`CHANGELOG.md`](./CHANGELOG.md).
 
 ## Features
 
@@ -23,7 +23,8 @@ state, see [`AUDIT.md`](./AUDIT.md) and [`CHANGELOG.md`](./CHANGELOG.md).
   visible for navigation) and **Private Lock** (encrypts title, tags, and
   body into the AES-256-GCM envelope; masks title as "🔒 Locked Note" in
   all list views to prevent metadata and topic leakage). Keys derived via
-  PBKDF2-HMAC-SHA-256 (210,000 iterations). See [`SECURITY.md`](./SECURITY.md)
+  PBKDF2-HMAC-SHA-256 (600,000 iterations for newly created hashes, with
+  legacy 210,000 iterations supported for migration). See [`SECURITY.md`](./SECURITY.md)
   for details on the threat model.
 - **Local version history** - automatic snapshots of note edits, each
   with a real SHA-256 checksum of the content.

@@ -3,10 +3,10 @@
 All notable changes to this project are documented here, following
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-This file is the canonical, accurate history. The older `RELEASE_NOTES_*.md`
+This file is the canonical, accurate history. The older `docs/history/RELEASE_NOTES_*.md`
 files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
-code - see `AUDIT.md` for the full story of how that happened.
+code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
 ## [3.0.0] - 2026-09-04
 
