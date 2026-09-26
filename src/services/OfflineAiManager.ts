@@ -14,6 +14,7 @@ import { AiResultValidator } from './AiResultValidator';
 import { TranscriptService } from './TranscriptService';
 import { AppLogger } from '../lib/logger';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
+import { MediaRepository } from '../lib/MediaRepository';
 
 export interface StorageBreakdown {
   modelsBytes: number;
@@ -144,6 +145,19 @@ export class OfflineAiManager {
       throw new Error('OFFLINE_AI_AUDIO_INVALID: Recording was not found on this device.');
     }
 
+    // Resolve and verify media payload from MediaRepository
+    if (recording.media_key) {
+      try {
+        const mediaBlob = await MediaRepository.getBinary(recording.media_key);
+        if (!mediaBlob && !recording.file_path) {
+          throw new Error('OFFLINE_AI_AUDIO_INVALID: Recording audio data could not be located in local media storage.');
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('OFFLINE_AI')) throw err;
+        AppLogger.warn('OfflineAiManager', 'Could not verify media key binary: ' + recording.media_key, err);
+      }
+    }
+
     // Battery check warning for long recordings
     const caps = await this.getDeviceCapabilities();
     if (
@@ -161,6 +175,9 @@ export class OfflineAiManager {
       recordingId,
       modelId: targetModelId,
       language: selectedLanguage,
+      mediaKey: recording.media_key,
+      audioPath: recording.file_path,
+      durationMs: (recording.duration_seconds || 0) * 1000,
     });
   }
 
@@ -186,28 +203,29 @@ export class OfflineAiManager {
     try {
       const incomplete = TranscriptionRepository.getIncompleteJobs();
       let recoveredCount = 0;
+      const db = getDatabaseAdapter();
+
       for (const job of incomplete) {
         AppLogger.info('OfflineAiManager', `Inspecting interrupted transcription #${job.id}`);
 
         // Check if there are durable chunk checkpoints saved
         try {
-          const db = getDatabaseAdapter();
+          // 1. Try querying durable chunk checkpoints from transcription_chunk_checkpoints
           const checkpoints = await db.query<{
-            sequence: number;
-            text: string | null;
+            chunk_index: number;
+            transcript_text: string | null;
           }>(
-            'SELECT sequence, text FROM transcription_segments WHERE transcription_id = ? ORDER BY sequence ASC',
-            [job.id]
+            "SELECT chunk_index, transcript_text FROM transcription_chunk_checkpoints WHERE job_id = ? AND status = 'completed' ORDER BY chunk_index ASC",
+            [String(job.id)]
           );
 
           if (checkpoints && checkpoints.length > 0) {
             const partialText = checkpoints
-              .map((c) => c.text || '')
+              .map((c) => c.transcript_text || '')
               .filter((t) => t.trim().length > 0)
               .join(' ');
 
             if (partialText.trim().length > 0) {
-              // Restore partial transcript
               TranscriptionRepository.saveTranscription({
                 id: job.id,
                 recording_id: job.recording_id,
@@ -221,6 +239,36 @@ export class OfflineAiManager {
                 'OfflineAiManager',
                 `Recovered partial transcript from ${checkpoints.length} chunk checkpoints for job #${job.id}`
               );
+              recoveredCount++;
+              continue;
+            }
+          }
+
+          // 2. Fallback check for transcription_segments
+          const segments = await db.query<{
+            sequence: number;
+            text: string | null;
+          }>(
+            'SELECT sequence, text FROM transcription_segments WHERE transcription_id = ? ORDER BY sequence ASC',
+            [job.id]
+          );
+
+          if (segments && segments.length > 0) {
+            const segText = segments
+              .map((c) => c.text || '')
+              .filter((t) => t.trim().length > 0)
+              .join(' ');
+
+            if (segText.trim().length > 0) {
+              TranscriptionRepository.saveTranscription({
+                id: job.id,
+                recording_id: job.recording_id,
+                engine: 'whisper.cpp',
+                model_id: job.model_id,
+                status: 'COMPLETED',
+                text: segText,
+                completed_at: Date.now(),
+              });
               recoveredCount++;
               continue;
             }
@@ -293,16 +341,12 @@ export class OfflineAiManager {
   /**
    * Clean temporary cache and orphaned files without touching user recordings
    */
-  public cleanTemporaryFiles(): void {
+  public async cleanTemporaryFiles(): Promise<void> {
     try {
       const db = getDatabaseAdapter();
       const sql = "DELETE FROM transcriptions WHERE status = ?";
       const params = ['CANCELLED'];
-      if (db.runSync) {
-        db.runSync(sql, params);
-      } else {
-        db.run(sql, params).catch((e) => AppLogger.warn('OfflineAiManager', 'Async cleanup failed', e));
-      }
+      await db.run(sql, params);
       AppLogger.info('OfflineAiManager', 'Cleaned temporary cancelled jobs.');
     } catch (e) {
       AppLogger.warn('OfflineAiManager', 'Failed cleaning temporary files', e);

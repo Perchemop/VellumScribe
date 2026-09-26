@@ -6,61 +6,47 @@ type Listener = (session: PartialTranscriptionSession | null) => void;
 
 class TranscriptionProgressManagerImpl {
   private listeners = new Map<string, Set<Listener>>();
+  private sessions = new Map<string, PartialTranscriptionSession>();
 
-  private getStore(): Record<string, PartialTranscriptionSession> {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return {};
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
-  }
-
-  private setStore(store: Record<string, PartialTranscriptionSession>): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
-    } catch (e) {
-      console.warn('Failed to save transcription sessions store:', e);
+  constructor() {
+    // Purge legacy unencrypted localStorage entry if present
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore
+      }
     }
   }
 
   public saveSession(key: string, session: PartialTranscriptionSession): void {
     if (!key) return;
-    const store = this.getStore();
-    store[key] = {
+    const updated: PartialTranscriptionSession = {
       ...session,
       updatedAt: new Date().toISOString(),
     };
-    this.setStore(store);
-    this.notify(key, store[key]);
+    this.sessions.set(key, updated);
+    this.notify(key, updated);
   }
 
   public getSession(key: string): PartialTranscriptionSession | null {
     if (!key) return null;
-    const store = this.getStore();
-    return store[key] || null;
+    return this.sessions.get(key) || null;
   }
 
   public removeSession(key: string): void {
     if (!key) return;
-    const store = this.getStore();
-    if (store[key]) {
-      delete store[key];
-      this.setStore(store);
+    if (this.sessions.has(key)) {
+      this.sessions.delete(key);
       this.notify(key, null);
     }
   }
 
   public clearAll(): void {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      this.listeners.forEach((listeners, key) => {
-        listeners.forEach((fn) => fn(null));
-      });
-    } catch (e) {
-      console.warn('Failed to clear transcription sessions:', e);
-    }
+    this.sessions.clear();
+    this.listeners.forEach((listeners) => {
+      listeners.forEach((fn) => fn(null));
+    });
   }
 
   public subscribe(key: string, listener: Listener): () => void {

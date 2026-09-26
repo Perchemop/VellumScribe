@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { AppLogger } from '../logger';
 import { SqliteEngine, base64ToUint8Array } from './sqliteEngine';
-import { MIGRATIONS } from './schema';
+import { MIGRATIONS, DB_SCHEMA_VERSION } from './schema';
 
 export type DurabilityStatus = 'saved' | 'saving' | 'pending' | 'failed';
 
@@ -82,7 +82,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
           'vellumscribe',
           false,
           'no-encryption',
-          11,
+          DB_SCHEMA_VERSION,
           false
         );
       }

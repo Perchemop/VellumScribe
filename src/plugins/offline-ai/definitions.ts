@@ -35,6 +35,10 @@ export interface OfflineAiPlugin {
     recordingId: string | number;
     modelId: string;
     language?: string;
+    audioPath?: string;
+    mediaKey?: string;
+    durationMs?: number;
+    startChunk?: number;
   }): Promise<{ jobId: string }>;
 
   getTranscriptionStatus(options: {
