@@ -79,74 +79,147 @@ function validateSafeUrl(urlStr: string, options: { allowLocalhost?: boolean } =
 // Trust proxy headers behind Cloud Run / reverse proxies so req.ip reflects actual client IP
 app.set("trust proxy", 1);
 
-// Standard HTTP Security Headers
-app.use((_req, res, next) => {
+// Enhanced HTTP Security Headers & Strict CORS Middleware
+app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  res.setHeader("Origin-Agent-Cluster", "?1");
+
+  const origin = req.headers.origin;
+  if (origin) {
+    const host = req.get("host");
+    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const isSameHost = host && (origin === `http://${host}` || origin === `https://${host}`);
+    const allowedEnvOrigin = process.env.APP_URL && origin === process.env.APP_URL;
+
+    if (isLocalhost || isSameHost || allowedEnvOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-Session-Token, X-Session-Id, X-CSRF-Token");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
   next();
 });
 
-// Middleware for parsing JSON, URL-encoded, and raw octet-stream binary payloads
-app.use(express.json({ limit: "300mb" }));
-app.use(express.urlencoded({ extended: true, limit: "300mb" }));
-app.use(express.raw({ type: "application/octet-stream", limit: "300mb" }));
+// Standard default parsers with scoped 5MB limit
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+
+// High-capacity parsers for dedicated large payloads (chunk-upload, convert, cloud backups)
+const highCapacityJsonParser = express.json({ limit: "300mb" });
+const highCapacityRawParser = express.raw({ type: "application/octet-stream", limit: "300mb" });
+
+/**
+ * Error Sanitization Layer
+ * Logs internal error details server-side while preventing internal filesystem paths,
+ * IP addresses, and low-level system or provider stack fragments from leaking to clients.
+ */
+function sanitizeErrorMessage(err: unknown, defaultMessage: string = "Internal server error"): string {
+  if (!err) return defaultMessage;
+  const rawMsg = err instanceof Error ? err.message : String(err);
+  if (!rawMsg || rawMsg.trim().length === 0) return defaultMessage;
+
+  // Redact filesystem paths (/app/..., /home/..., /tmp/..., C:\...)
+  let clean = rawMsg.replace(/(\/[a-zA-Z0-9_.-]+){2,}/g, "[path]");
+  clean = clean.replace(/[a-zA-Z]:\\[a-zA-Z0-9_.\\]+/g, "[path]");
+
+  // Redact IP addresses
+  clean = clean.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b/g, "[ip]");
+
+  // Low-level socket/runtime/syntax/stack patterns fallback to safe default
+  if (/ENOENT|EACCES|ECONNREFUSED|ENOTFOUND|ERR_|SyntaxError|TypeError|ReferenceError|spawn|child_process/i.test(clean)) {
+    return defaultMessage;
+  }
+
+  return clean.slice(0, 160).trim() || defaultMessage;
+}
 
 // --- RATE LIMITING SUBSYSTEM ---
 interface RateLimitRecord {
   timestamps: number[];
 }
 
-const rateLimitMap = new Map<string, RateLimitRecord>();
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const MAX_REQUESTS_PER_WINDOW = 30; // 30 AI requests per minute per IP
+function createRateLimiter(options: {
+  windowMs: number;
+  maxRequests: number;
+  message: string;
+}) {
+  const store = new Map<string, RateLimitRecord>();
 
-// Periodically clean up stale rate limit records
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, record] of rateLimitMap.entries()) {
-    record.timestamps = record.timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
-    if (record.timestamps.length === 0) {
-      rateLimitMap.delete(ip);
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, record] of store.entries()) {
+      record.timestamps = record.timestamps.filter((ts) => now - ts < options.windowMs);
+      if (record.timestamps.length === 0) {
+        store.delete(key);
+      }
     }
-  }
-}, 2 * 60 * 1000);
+  }, options.windowMs * 2);
 
-function geminiRateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) { 
-  const clientIp = req.ip || req.socket.remoteAddress || "anonymous";
-  const now = Date.now();
+  return function rateLimiterMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+    const clientIp = req.ip || req.socket.remoteAddress || "anonymous";
+    const now = Date.now();
 
-  let record = rateLimitMap.get(clientIp);
-  if (!record) {
-    record = { timestamps: [] };
-    rateLimitMap.set(clientIp, record);
-  }
+    let record = store.get(clientIp);
+    if (!record) {
+      record = { timestamps: [] };
+      store.set(clientIp, record);
+    }
 
-  // Filter timestamps within current sliding window
-  record.timestamps = record.timestamps.filter((ts) => now - ts < RATE_LIMIT_WINDOW_MS);
+    record.timestamps = record.timestamps.filter((ts) => now - ts < options.windowMs);
 
-  if (record.timestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-    const oldest = record.timestamps[0];
-    const retryAfterSec = Math.ceil((oldest + RATE_LIMIT_WINDOW_MS - now) / 1000);
-    res.setHeader("Retry-After", String(Math.max(1, retryAfterSec)));
-    return res.status(429).json({
-      error: "Rate limit exceeded. Too many AI processing requests. Please wait a moment before retrying.",
-      retryAfterSeconds: Math.max(1, retryAfterSec),
-    });
-  }
+    if (record.timestamps.length >= options.maxRequests) {
+      const oldest = record.timestamps[0];
+      const retryAfterSec = Math.ceil((oldest + options.windowMs - now) / 1000);
+      res.setHeader("Retry-After", String(Math.max(1, retryAfterSec)));
+      return res.status(429).json({
+        error: options.message,
+        retryAfterSeconds: Math.max(1, retryAfterSec),
+      });
+    }
 
-  record.timestamps.push(now);
-  next();
+    record.timestamps.push(now);
+    next();
+  };
 }
 
-// Apply rate limiter to all AI and transcription routes
+const geminiRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 30,
+  message: "Rate limit exceeded. Too many AI processing requests. Please wait a moment before retrying.",
+});
+
+const audioRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 60,
+  message: "Rate limit exceeded. Too many audio chunk upload or conversion requests. Please wait a moment before retrying.",
+});
+
+const cloudRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 60,
+  message: "Rate limit exceeded. Too many cloud sync operations. Please wait a moment before retrying.",
+});
+
+// Apply rate limiter to all AI, audio, and cloud routes
 app.use("/api/gemini", geminiRateLimiter);
 app.use("/api/ollama", geminiRateLimiter);
 app.use("/api/local-whisper", geminiRateLimiter);
 app.use("/api/groq", geminiRateLimiter);
 app.use("/api/deepgram", geminiRateLimiter);
+app.use("/api/audio", audioRateLimiter);
+app.use("/api/cloud", cloudRateLimiter);
 
 // Lazy initialize Gemini client
 function createGeminiInstance(apiKey: string): GoogleGenAI {
@@ -422,7 +495,7 @@ app.post("/api/gemini/ocr", async (req, res) => {
   } catch (error: any) {
     console.error("Gemini OCR Error:", error);
     res.status(500).json({
-      error: error?.message || "Failed to process OCR scan with Gemini.",
+      error: sanitizeErrorMessage(error, "Failed to process OCR scan with Gemini."),
     });
   }
 });
@@ -638,13 +711,13 @@ app.post("/api/gemini/transcribe", async (req, res) => {
   } catch (error: any) {
     console.error("Gemini Transcription Error:", error);
     res.status(500).json({
-      error: error?.message || "Failed to transcribe audio with Gemini.",
+      error: sanitizeErrorMessage(error, "Failed to transcribe audio with Gemini."),
     });
   }
 });
 
 // 2b. Chunked Audio Upload & Transcription Endpoint (Bypasses Cloud Run 32MB payload limit for long/large recordings)
-app.post("/api/audio/chunk-upload", async (req, res) => {
+app.post("/api/audio/chunk-upload", highCapacityJsonParser, async (req, res) => {
   try {
     const { uploadId, chunkIndex, totalChunks, chunkBase64, originalFileName, mimeType } = req.body;
     if (!uploadId || chunkIndex === undefined || totalChunks === undefined || !chunkBase64) {
@@ -692,7 +765,7 @@ app.post("/api/audio/chunk-upload", async (req, res) => {
   } catch (error: any) {
     console.error("Audio Chunk Upload/Transcribe Error:", error);
     res.status(500).json({
-      error: error?.message || "Failed to process audio chunk.",
+      error: sanitizeErrorMessage(error, "Failed to process audio chunk."),
     });
   }
 });
@@ -869,7 +942,7 @@ app.post("/api/audio/transcribe-session/init", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Transcribe session init error:", error);
-    res.status(500).json({ error: error?.message || "Failed to initialize transcription session." });
+    res.status(500).json({ error: sanitizeErrorMessage(error, "Failed to initialize transcription session.") });
   }
 });
 
@@ -1209,7 +1282,7 @@ CRITICAL RULES:
     console.error("Gemini Summary Error:", error);
     const isQuota = Boolean(error?.isQuotaExceeded) || String(error?.message || "").includes("quota") || String(error?.message || "").includes("resource_exhausted") || String(error?.message || "").includes("RESOURCE_EXHAUSTED");
     res.status(isQuota ? 429 : 500).json({
-      error: error?.message || "Failed to generate AI summary with Gemini.",
+      error: sanitizeErrorMessage(error, "Failed to generate AI summary with Gemini."),
       isQuotaExceeded: isQuota,
       requiresKey: isQuota || Boolean(error?.requiresKey),
     });
@@ -1247,7 +1320,7 @@ ${rawBody ? `Additional Note Context:\n"""\n${rawBody}\n"""` : ""}`
     console.error("Gemini Meeting Minutes Error:", error);
     const isQuota = Boolean(error?.isQuotaExceeded) || String(error?.message || "").includes("quota") || String(error?.message || "").includes("resource_exhausted") || String(error?.message || "").includes("RESOURCE_EXHAUSTED");
     res.status(isQuota ? 429 : 500).json({
-      error: error?.message || "Failed to generate meeting minutes with Gemini.",
+      error: sanitizeErrorMessage(error, "Failed to generate meeting minutes with Gemini."),
       isQuotaExceeded: isQuota,
       requiresKey: isQuota || Boolean(error?.requiresKey),
     });
@@ -1296,7 +1369,8 @@ app.post("/api/groq/verify", async (req, res) => {
       error: data?.error?.message || "Groq key verification failed.",
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || "Failed to contact Groq." });
+    console.error("Groq key verification error:", err);
+    return res.status(500).json({ success: false, error: sanitizeErrorMessage(err, "Failed to contact Groq.") });
   }
 });
 
@@ -1340,7 +1414,8 @@ app.post("/api/groq/chat", async (req, res) => {
       source: `groq/${model}`,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || "Failed to execute Groq synthesis." });
+    console.error("Groq synthesis error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Failed to execute Groq synthesis.") });
   }
 });
 
@@ -1386,7 +1461,8 @@ app.post("/api/groq/transcribe", async (req, res) => {
       source: `groq/${model}`,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || "Groq Whisper transcription request failed." });
+    console.error("Groq Whisper error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Groq Whisper transcription request failed.") });
   }
 });
 
@@ -1412,7 +1488,8 @@ app.post("/api/deepgram/verify", async (req, res) => {
       error: data?.err_msg || "Deepgram key verification rejected.",
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || "Failed to contact Deepgram." });
+    console.error("Deepgram verify error:", err);
+    return res.status(500).json({ success: false, error: sanitizeErrorMessage(err, "Failed to contact Deepgram.") });
   }
 });
 
@@ -1454,7 +1531,8 @@ app.post("/api/deepgram/transcribe", async (req, res) => {
       source: `deepgram/${model}`,
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err.message || "Deepgram transcription error." });
+    console.error("Deepgram transcribe error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Deepgram transcription error.") });
   }
 });
 
@@ -1485,9 +1563,10 @@ app.post("/api/ollama/tags", async (req, res) => {
       error: `Could not retrieve models from Ollama at ${endpoint}.`,
     });
   } catch (err: any) {
+    console.error("Ollama tags probe error:", err);
     return res.status(502).json({
       success: false,
-      error: `Ollama daemon not reachable: ${err.message}. Ensure "ollama serve" is active.`,
+      error: `Ollama daemon not reachable: ${sanitizeErrorMessage(err, "Ensure ollama serve is active")}.`,
     });
   }
 });
@@ -1527,8 +1606,9 @@ app.post("/api/ollama/generate", async (req, res) => {
       error: data?.error || "Ollama generation failed.",
     });
   } catch (err: any) {
+    console.error("Ollama generate error:", err);
     return res.status(502).json({
-      error: `Failed to contact local Ollama daemon at ${req.body?.endpoint || "http://localhost:11434"}: ${err.message}`,
+      error: `Failed to contact local Ollama daemon: ${sanitizeErrorMessage(err, "Ollama service unavailable")}`,
     });
   }
 });
@@ -1563,7 +1643,8 @@ app.post("/api/local-whisper/verify", async (req, res) => {
       message: `Configured local Whisper at ${endpoint}. Will send audio payloads directly when recording.`,
     });
   } catch (err: any) {
-    return res.status(502).json({ success: false, error: `Local Whisper unreachable: ${err.message}` });
+    console.error("Local Whisper verify error:", err);
+    return res.status(502).json({ success: false, error: `Local Whisper unreachable: ${sanitizeErrorMessage(err, "Connection failed")}` });
   }
 });
 
@@ -1610,8 +1691,9 @@ app.post("/api/local-whisper/transcribe", async (req, res) => {
       error: data?.error || "Local Whisper failed to return transcript.",
     });
   } catch (err: any) {
+    console.error("Local Whisper transcribe error:", err);
     return res.status(502).json({
-      error: `Failed to contact Local Whisper at ${req.body?.endpoint}: ${err.message}`,
+      error: `Failed to contact Local Whisper: ${sanitizeErrorMessage(err, "Transcription failed")}`,
     });
   }
 });
@@ -1678,7 +1760,45 @@ const pendingOAuthStates = new Map<string, OAuthStateRecord>();
 const MAX_BACKUP_RETENTION = 10;
 
 // Server-side session signing secret & encryption key
-const SERVER_SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+function initializeServerSessionSecret(): string {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length >= 16) {
+    return process.env.SESSION_SECRET.trim();
+  }
+
+  const isProduction = process.env.NODE_ENV === "production";
+  const secretFilePath = path.join(process.cwd(), "data", ".session_secret");
+
+  try {
+    if (fs.existsSync(secretFilePath)) {
+      const persisted = fs.readFileSync(secretFilePath, "utf-8").trim();
+      if (persisted.length >= 32) {
+        return persisted;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not read persisted session secret file:", err);
+  }
+
+  const generated = crypto.randomBytes(32).toString("hex");
+
+  if (isProduction) {
+    console.warn("⚠️  SECURITY WARNING: SESSION_SECRET is not set in environment variables! Using auto-generated persistent secret.");
+  }
+
+  try {
+    const dataDir = path.dirname(secretFilePath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(secretFilePath, generated, { encoding: "utf-8", mode: 0o600 });
+  } catch (err) {
+    console.warn("Could not persist session secret to data directory:", err);
+  }
+
+  return generated;
+}
+
+const SERVER_SESSION_SECRET = initializeServerSessionSecret();
 
 interface SessionTokenPayload {
   sub: string;
@@ -2383,7 +2503,7 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
     });
   } catch (err: any) {
     res.status(400).json({
-      error: `Failed to connect to ${provider} server: ${err.message || "Network error"}`,
+      error: `Failed to connect to ${provider} server: ${sanitizeErrorMessage(err, "Network error")}`,
     });
   }
 });
@@ -2456,7 +2576,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
           <p style="color:#a1a1aa;">${errStr}</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: '${provider}', error: ${JSON.stringify(errStr)} }, '*');
+              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: '${provider}', error: ${JSON.stringify(errStr)} }, window.location.origin);
               setTimeout(() => window.close(), 1500);
             } else {
               window.location.href = '/?cloud_error=' + encodeURIComponent(${JSON.stringify(errStr)});
@@ -2569,7 +2689,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
             <script>
               try {
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'google_drive', account: ${JSON.stringify(accountRecord)} }, '*');
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'google_drive', account: ${JSON.stringify(accountRecord)} }, window.location.origin);
                   setTimeout(() => window.close(), 600);
                 } else {
                   window.location.href = '/?cloud=connected&provider=google_drive&cloud_connected=google_drive';
@@ -2659,7 +2779,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
             <script>
               try {
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'microsoft', account: ${JSON.stringify(accountRecord)} }, '*');
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'microsoft', account: ${JSON.stringify(accountRecord)} }, window.location.origin);
                   setTimeout(() => window.close(), 600);
                 } else {
                   window.location.href = '/?cloud=connected&provider=microsoft&cloud_connected=microsoft';
@@ -2676,7 +2796,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
     return renderError("Unsupported provider");
   } catch (error: any) {
     console.error("OAuth Callback Exception:", error);
-    return renderError(error?.message || "OAuth processing failed");
+    return renderError(sanitizeErrorMessage(error, "OAuth processing failed"));
   }
 });
 
@@ -2777,7 +2897,7 @@ app.get("/api/cloud/:provider/backups", async (req, res) => {
 });
 
 // 6. Direct Binary Backup Upload Endpoint
-app.post("/api/cloud/:provider/backup", async (req, res) => {
+app.post("/api/cloud/:provider/backup", highCapacityRawParser, highCapacityJsonParser, async (req, res) => {
   const { provider } = req.params as { provider: "google_drive" | "microsoft" | "nextcloud" | "webdav" };
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
@@ -2813,7 +2933,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
       remoteFileId = gRes.fileId;
     } catch (gErr: any) {
       return res.status(502).json({
-        error: `Google Drive upload failed: ${gErr.message}`,
+        error: `Google Drive upload failed: ${sanitizeErrorMessage(gErr, "Network or authorization error")}`,
       });
     }
 
@@ -2829,7 +2949,6 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
     };
 
     let list = session.backups.get(provider) || [];
-    list.unshift(newBackup);
     if (list.length > MAX_BACKUP_RETENTION) list = list.slice(0, MAX_BACKUP_RETENTION);
     session.backups.set(provider, list);
     persistBackupToDisk(sessionId, newBackup);
@@ -2858,7 +2977,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
       remoteFileId = msRes.fileId;
     } catch (msErr: any) {
       return res.status(502).json({
-        error: `Microsoft OneDrive upload failed: ${msErr.message}`,
+        error: `Microsoft OneDrive upload failed: ${sanitizeErrorMessage(msErr, "Network or authorization error")}`,
       });
     }
 
@@ -2926,7 +3045,7 @@ app.post("/api/cloud/:provider/backup", async (req, res) => {
       }
     } catch (putErr: any) {
       return res.status(502).json({
-        error: `Failed to upload to remote WebDAV server: ${putErr.message}`,
+        error: `Failed to upload to remote WebDAV server: ${sanitizeErrorMessage(putErr, "Network or server error")}`,
       });
     }
   }
@@ -2995,7 +3114,7 @@ app.post("/api/cloud/:provider/chunk/init", (req, res) => {
 });
 
 // 8. Resumable Chunked Upload - Upload Chunk
-app.post("/api/cloud/:provider/chunk/upload", (req, res) => {
+app.post("/api/cloud/:provider/chunk/upload", highCapacityRawParser, highCapacityJsonParser, (req, res) => {
   const sessionId = getVerifiedSessionId(req);
   if (!sessionId) {
     return res.status(401).json({ error: "Unauthorized: Valid signed cloud session required." });
@@ -3083,7 +3202,7 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
       remoteFileId = gRes.fileId;
     } catch (gErr: any) {
       return res.status(502).json({
-        error: `Google Drive upload failed: ${gErr.message}`,
+        error: `Google Drive upload failed: ${sanitizeErrorMessage(gErr, "Network or authorization error")}`,
       });
     }
 
@@ -3128,7 +3247,7 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
       remoteFileId = msRes.fileId;
     } catch (msErr: any) {
       return res.status(502).json({
-        error: `Microsoft OneDrive upload failed: ${msErr.message}`,
+        error: `Microsoft OneDrive upload failed: ${sanitizeErrorMessage(msErr, "Network or authorization error")}`,
       });
     }
 
@@ -3189,7 +3308,7 @@ app.post("/api/cloud/:provider/chunk/commit", async (req, res) => {
       }
     } catch (putErr: any) {
       return res.status(502).json({
-        error: `Failed to upload to remote WebDAV server: ${putErr.message}`,
+        error: `Failed to upload to remote WebDAV server: ${sanitizeErrorMessage(putErr, "Network or server error")}`,
       });
     }
   }
@@ -3301,7 +3420,7 @@ app.get("/api/cloud/:provider/restore/:backupId", async (req, res) => {
 });
 
 // 11. Audio Conversion Endpoint (FFmpeg-powered universal audio transcoder)
-app.post("/api/audio/convert", async (req, res) => {
+app.post("/api/audio/convert", highCapacityJsonParser, async (req, res) => {
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 
@@ -3403,7 +3522,7 @@ app.post("/api/audio/convert", async (req, res) => {
   } catch (err: any) {
     console.error("Audio Transcoding Error:", err);
     return res.status(500).json({
-      error: err?.message || "Audio file conversion failed.",
+      error: sanitizeErrorMessage(err, "Audio file conversion failed."),
     });
   } finally {
     // Cleanup temporary files
@@ -3442,7 +3561,8 @@ app.post("/api/notebooklm/validate-notebook", (req, res) => {
       validatedAt: Date.now(),
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || "Validation failed" });
+    console.error("NotebookLM validate error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Validation failed") });
   }
 });
 
@@ -3477,7 +3597,8 @@ app.post("/api/notebooklm/upload-source", (req, res) => {
       syncedAt: Date.now(),
     });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || "Failed to process NotebookLM upload" });
+    console.error("NotebookLM upload error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Failed to process NotebookLM upload") });
   }
 });
 
@@ -3498,7 +3619,8 @@ app.post("/api/notebooklm/delete-source", (req, res) => {
 
     return res.json({ success: true, deletedSourceId: safeId, timestamp: Date.now() });
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || "Failed to delete NotebookLM source" });
+    console.error("NotebookLM delete error:", err);
+    return res.status(500).json({ error: sanitizeErrorMessage(err, "Failed to delete NotebookLM source") });
   }
 });
 
