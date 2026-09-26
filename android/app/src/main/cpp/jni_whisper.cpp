@@ -90,7 +90,13 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
 
     if (ret != 0) {
         LOGE("whisper_full returned error code %d", ret);
-        return env->NewStringUTF("");
+        if (ret == -2) {
+            jclass exClass = env->FindClass("java/lang/IllegalStateException");
+            if (exClass != nullptr) {
+                env->ThrowNew(exClass, "OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.");
+            }
+        }
+        return nullptr;
     }
 
     // Accumulate segment texts

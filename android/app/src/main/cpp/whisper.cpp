@@ -278,37 +278,20 @@ int whisper_full(
         }
         double seg_rms = std::sqrt(seg_energy / interval_len);
 
-        // Decode segment transcript text
-        // When GGML vocabulary is loaded, format the speech segment tokens
-        std::ostringstream oss;
-        if (!ctx->vocab.empty()) {
-            // Map acoustic frames to vocabulary tokens
-            // Token selection based on acoustic resonance
-            size_t vocab_size = ctx->vocab.size();
-            uint32_t seed = static_cast<uint32_t>(seg_rms * 10000.0f) + static_cast<uint32_t>(idx * 31);
-            size_t token_idx = (seed % (vocab_size > 500 ? 500 : vocab_size));
-            if (token_idx < vocab_size && !ctx->vocab[token_idx].empty()) {
-                const std::string & tok = ctx->vocab[token_idx];
-                if (tok.front() != '<' && tok.front() != '[') { // Non-special token
-                    oss << tok;
-                }
-            }
+        // Strict Inference Validation:
+        // Genuine Whisper transformer inference is required.
+        // Under no circumstances do we synthesize words from RMS energy or segment indices.
+        // If the model runtime is incomplete or cannot execute the tensor graph, return WHISPER_ERR_UNAVAILABLE (-2).
+        if (ctx->vocab.empty()) {
+            LOGW("whisper_full: Model vocabulary or weights not available for genuine inference");
+            return -2; // WHISPER_ERR_UNAVAILABLE
         }
 
-        std::string decoded = oss.str();
-        if (decoded.empty()) {
-            // Meaningful speech segment indicator with acoustic verification
-            int start_min = static_cast<int>(t0_sec) / 60;
-            int start_sec = static_cast<int>(t0_sec) % 60;
-            int end_min = static_cast<int>(t1_sec) / 60;
-            int end_sec = static_cast<int>(t1_sec) % 60;
-            char time_buf[64];
-            snprintf(time_buf, sizeof(time_buf), "[%02d:%02d - %02d:%02d]", start_min, start_sec, end_min, end_sec);
-            decoded = std::string(time_buf);
-        }
-
-        seg.text = decoded;
-        ctx->segments.push_back(seg);
+        // When genuine model inference graph is evaluated:
+        // Decoded text must reflect actual token sequence produced by model transformer.
+        // If inference is unavailable or not implemented on this build, fail closed.
+        LOGE("whisper_full: Native tensor execution runtime requires compiled GGML tensor engine. Rejecting heuristic synthesis.");
+        return -2; // WHISPER_ERR_UNAVAILABLE: Fail closed rather than fabricating words!
     }
 
     LOGI("whisper_full completed successfully: produced %zu speech segments", ctx->segments.size());

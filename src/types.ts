@@ -308,6 +308,7 @@ export interface TranscriptionJobStatus {
   currentChunk?: number;
   totalChunks?: number;
   phaseLabel: string;
+  transcript?: string;
   error?: string;
 }
 

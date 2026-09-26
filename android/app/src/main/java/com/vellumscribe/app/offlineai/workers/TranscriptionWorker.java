@@ -61,37 +61,20 @@ public class TranscriptionWorker extends Worker {
 
     private SQLiteDatabase openDatabaseSafely() {
         try {
-            String[] candidateNames = new String[] {
-                "vellumscribeSQLite.db",
-                "vellumscribe.db",
-                "vellumscribe_relational_v3.sqlite"
-            };
-
-            for (String name : candidateNames) {
-                File dbFile = context.getDatabasePath(name);
-                if (dbFile != null && dbFile.exists()) {
-                    return SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
-                }
-                File filesFallback = new File(context.getFilesDir(), name);
-                if (filesFallback.exists()) {
-                    return SQLiteDatabase.openDatabase(filesFallback.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
-                }
+            // Authoritative Capacitor SQLite database file for 'vellumscribe'
+            File dbFile = context.getDatabasePath("vellumscribeSQLite.db");
+            if (dbFile != null && dbFile.exists()) {
+                return SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
             }
-
-            // Check database parent directory for any existing .db / .sqlite database
             File dbDir = context.getDatabasePath("dummy").getParentFile();
-            if (dbDir != null && dbDir.exists()) {
-                File[] list = dbDir.listFiles();
-                if (list != null) {
-                    for (File f : list) {
-                        if (f.getName().endsWith(".db") || f.getName().endsWith(".sqlite")) {
-                            return SQLiteDatabase.openDatabase(f.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
-                        }
-                    }
+            if (dbDir != null) {
+                File authDb = new File(dbDir, "vellumscribeSQLite.db");
+                if (authDb.exists()) {
+                    return SQLiteDatabase.openDatabase(authDb.getAbsolutePath(), null, SQLiteDatabase.OPEN_READWRITE);
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "Could not open SQLite database directly: " + e.getMessage());
+            Log.w(TAG, "Could not open authoritative SQLite database: " + e.getMessage());
         }
         return null;
     }
@@ -239,6 +222,9 @@ public class TranscriptionWorker extends Worker {
 
             int nThreads = determineOptimalThreadCount();
 
+            boolean hadSpeechActivity = false;
+            boolean engineUnavailable = false;
+
             for (int i = resumeChunkIndex - 1; i < totalChunks; i++) {
                 if (isStopped()) {
                     Log.i(TAG, "TranscriptionWorker stopped at chunk " + (i + 1));
@@ -266,6 +252,7 @@ public class TranscriptionWorker extends Worker {
 
                 String chunkText = "";
                 if (chunk.hasVoiceActivity && chunk.chunkFile.exists()) {
+                    hadSpeechActivity = true;
                     long fileLen = chunk.chunkFile.length();
                     int numSamples = (int) (fileLen / 2);
                     float[] pcmFloats = new float[numSamples];
@@ -288,6 +275,10 @@ public class TranscriptionWorker extends Worker {
                         }
                     } catch (Exception ex) {
                         Log.w(TAG, "Error processing chunk " + currentChunk, ex);
+                        if (ex.getMessage() != null && ex.getMessage().contains("OFFLINE_AI_ENGINE_UNAVAILABLE")) {
+                            engineUnavailable = true;
+                            break;
+                        }
                     }
                 }
 
@@ -319,22 +310,48 @@ public class TranscriptionWorker extends Worker {
 
             engine.release();
 
+            if (engineUnavailable) {
+                if (db != null && db.isOpen()) {
+                    try {
+                        long now = System.currentTimeMillis();
+                        ContentValues failCv = new ContentValues();
+                        failCv.put("status", "FAILED");
+                        failCv.put("last_error", "OFFLINE_AI_ENGINE_UNAVAILABLE");
+                        failCv.put("updated_at", now);
+                        db.update("transcription_jobs", failCv, "id = ?", new String[]{jobId});
+                        db.execSQL(
+                            "UPDATE transcriptions SET status = 'FAILED', error_code = 'OFFLINE_AI_ENGINE_UNAVAILABLE', error_message = 'Native Whisper tensor execution runtime is not available on this device.' WHERE id = (SELECT transcription_id FROM transcription_jobs WHERE id = ?)",
+                            new Object[]{jobId}
+                        );
+                    } finally {
+                        db.close();
+                    }
+                }
+                return Result.failure(new Data.Builder()
+                    .putString("error_code", "OFFLINE_AI_ENGINE_UNAVAILABLE")
+                    .putString("error_message", "Native Whisper tensor execution runtime is not available on this device.")
+                    .build());
+            }
+
+            String finalStatus = hadSpeechActivity ? (fullTranscript.length() > 0 ? "COMPLETED" : "NO_SPEECH") : "NO_SPEECH";
+            String finalText = fullTranscript.toString();
+
             // Persist final completion directly to SQLite
             if (db != null && db.isOpen()) {
                 try {
                     long now = System.currentTimeMillis();
                     ContentValues jobCv = new ContentValues();
-                    jobCv.put("status", "COMPLETED");
+                    jobCv.put("status", finalStatus);
                     jobCv.put("current_chunk", totalChunks);
                     jobCv.put("updated_at", now);
                     db.update("transcription_jobs", jobCv, "id = ?", new String[]{jobId});
 
                     // Update transcriptions table if transcription_id exists
                     db.execSQL(
-                        "UPDATE transcriptions SET status = 'COMPLETED', text = ?, completed_at = ? WHERE id = (SELECT transcription_id FROM transcription_jobs WHERE id = ?)",
-                        new Object[]{fullTranscript.toString(), now, jobId}
+                        "UPDATE transcriptions SET status = ?, text = ?, completed_at = ? WHERE id = (SELECT transcription_id FROM transcription_jobs WHERE id = ?)",
+                        new Object[]{finalStatus, finalText, now, jobId}
                     );
-                    Log.i(TAG, "Durable SQLite persistence completed for job: " + jobId);
+                    Log.i(TAG, "Durable SQLite persistence completed for job: " + jobId + " with status: " + finalStatus);
                 } catch (Exception e) {
                     Log.w(TAG, "Could not write final status to SQLite: " + e.getMessage());
                 } finally {
@@ -345,7 +362,8 @@ public class TranscriptionWorker extends Worker {
             return Result.success(new Data.Builder()
                 .putString("job_id", jobId)
                 .putLong("recording_id", recordingId)
-                .putString("transcript", fullTranscript.toString())
+                .putString("transcript", finalText)
+                .putString("status", finalStatus)
                 .putInt("total_chunks", totalChunks)
                 .build());
 
