@@ -48,9 +48,13 @@ import { StorageDashboard } from './StorageDashboard';
 import { AppLogger, LogEntry } from '../lib/logger';
 import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { OfflineAiPanel } from './settings/OfflineAiPanel';
+import { SecurityPanel } from './settings/SecurityPanel';
+import { StoragePanel } from './settings/StoragePanel';
+import { AboutPanel } from './settings/AboutPanel';
 
 interface SettingsViewProps {
-  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics';
+  initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'offline-ai' | 'about';
   onOpenConflictModal?: () => void;
   onOpenUpdateModal?: () => void;
   onOpenOnboardingGuide?: () => void;
@@ -107,16 +111,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onBackToNotes,
   activeEditingNoteTitle,
 }) => {
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics'>(
-    initialSubtab === 'ai'
-      ? 'ai'
-      : initialSubtab === 'storage'
-      ? 'storage'
-      : initialSubtab === 'security'
-      ? 'security'
-      : initialSubtab === 'diagnostics'
-      ? 'diagnostics'
-      : 'cloud'
+  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
+    initialSubtab || 'cloud'
   );
 
   const [canInstallPwa, setCanInstallPwa] = useState(() => AndroidPwaManager.canPromptInstall());
@@ -614,6 +610,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
 
         <button
+          id="subtab-offline-ai-btn"
+          role="tab"
+          aria-selected={activeTab === 'offline-ai'}
+          aria-controls="panel-offline-ai"
+          onClick={() => setActiveTab('offline-ai')}
+          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
+            activeTab === 'offline-ai'
+              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
+              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+          }`}
+        >
+          <Cpu className="w-4 h-4" />
+          <span>Offline Whisper AI</span>
+        </button>
+
+        <button
           id="subtab-ai-key-btn"
           role="tab"
           aria-selected={activeTab === 'ai'}
@@ -677,10 +689,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Layers className="w-4 h-4" />
           <span>Architecture &amp; Logs</span>
         </button>
+
+        <button
+          id="subtab-about-btn"
+          role="tab"
+          aria-selected={activeTab === 'about'}
+          aria-controls="panel-about"
+          onClick={() => setActiveTab('about')}
+          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
+            activeTab === 'about'
+              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
+              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+          }`}
+        >
+          <Zap className="w-4 h-4" />
+          <span>About &amp; Guide</span>
+        </button>
       </div>
 
       {/* Main Tab Content Body */}
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
+        {/* TAB: OFFLINE WHISPER AI */}
+        {activeTab === 'offline-ai' && (
+          <div id="panel-offline-ai" role="tabpanel" aria-labelledby="subtab-offline-ai-btn" className="max-w-5xl mx-auto space-y-6">
+            <OfflineAiPanel />
+          </div>
+        )}
+
+        {/* TAB: ABOUT & GUIDE */}
+        {activeTab === 'about' && (
+          <div id="panel-about" role="tabpanel" aria-labelledby="subtab-about-btn" className="max-w-5xl mx-auto space-y-6">
+            <AboutPanel onOpenOnboardingGuide={onOpenOnboardingGuide} />
+          </div>
+        )}
+
         {/* TAB 1: CLOUD SYNC & PROVIDERS */}
         {activeTab === 'cloud' && (
           <div id="panel-cloud-sync" role="tabpanel" aria-labelledby="subtab-cloud-sync-btn" className="max-w-5xl mx-auto space-y-6">
@@ -1787,6 +1829,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {activeTab === 'storage' && (
           <div id="panel-storage" role="tabpanel" aria-labelledby="subtab-storage-btn" className="max-w-4xl mx-auto space-y-6">
             <StorageDashboard onRefreshNotes={onRefreshNotes} />
+            <StoragePanel onRefreshNotes={onRefreshNotes} />
 
             {/* Export options */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-4">
@@ -1865,6 +1908,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 4: SECURITY & KEYSTORE */}
         {activeTab === 'security' && (
           <div id="panel-security" role="tabpanel" aria-labelledby="subtab-security-btn" className="max-w-4xl mx-auto space-y-6">
+            <SecurityPanel onRefreshNotes={onRefreshNotes} />
             <div className="p-6 bg-zinc-950 rounded-3xl text-white border border-zinc-850 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">

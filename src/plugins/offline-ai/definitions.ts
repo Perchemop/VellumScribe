@@ -39,6 +39,7 @@ export interface OfflineAiPlugin {
     mediaKey?: string;
     durationMs?: number;
     startChunk?: number;
+    preferBatteryOverSpeed?: boolean;
   }): Promise<{ jobId: string }>;
 
   getTranscriptionStatus(options: {

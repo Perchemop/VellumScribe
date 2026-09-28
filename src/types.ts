@@ -2,6 +2,7 @@ export interface ChecklistItem {
   id: string;
   text: string;
   completed: boolean;
+  is_completed?: boolean;
 }
 
 export interface EventRecord {
@@ -205,6 +206,7 @@ export type SpeechModelProfile = {
   recommendedRamMb: number | null;
   accuracyClass: 'fast' | 'balanced' | 'accurate';
   installed: boolean;
+  installedSizeBytes?: number;
   sha256: string;
   license: string;
   version?: string;
@@ -217,10 +219,12 @@ export interface AiCapabilities {
   architecture: string | null;
   androidApiLevel: number | null;
   availableStorageMb: number | null;
+  freeSpaceMb?: number | null;
   batteryLevel: number | null;
   isCharging: boolean | null;
   recommendedModelId: string;
   isNativeEngineAvailable?: boolean;
+  nativeLibraryLoaded?: boolean;
 }
 
 export type TranscriptionDurableStatus =

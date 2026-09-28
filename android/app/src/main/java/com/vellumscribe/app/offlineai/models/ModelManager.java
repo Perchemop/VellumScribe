@@ -168,6 +168,16 @@ public class ModelManager {
             return new DownloadResult(false, false, 0, "Unknown model identifier: " + modelId);
         }
 
+        // Storage space pre-check with 50MB safety headroom
+        long usableBytes = context.getFilesDir().getUsableSpace();
+        long neededBytes = meta.expectedBytes + (50L * 1024 * 1024);
+        if (usableBytes < neededBytes) {
+            long freeMb = usableBytes / (1024 * 1024);
+            long neededMb = neededBytes / (1024 * 1024);
+            return new DownloadResult(false, false, 0,
+                "Insufficient storage: " + freeMb + " MB available, need at least " + neededMb + " MB (including safety headroom). Free space and try again.");
+        }
+
         File targetFile = getModelFile(modelId);
         File tempFile = new File(getModelsDir(), meta.filename + ".tmp");
 

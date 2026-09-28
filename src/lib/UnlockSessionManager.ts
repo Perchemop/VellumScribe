@@ -30,7 +30,7 @@ export class UnlockSessionManager {
 
       this.activeSessions.set(noteId, {
         key: sessionKey,
-        expiresAt: Date.now() + this.sessionTimeoutMs,
+        expiresAt: Date.now() + this.getEffectiveTimeoutMs(),
       });
       return true;
     } catch (e) {
@@ -47,8 +47,25 @@ export class UnlockSessionManager {
       return null;
     }
     // Refresh expiration
-    session.expiresAt = Date.now() + this.sessionTimeoutMs;
+    session.expiresAt = Date.now() + this.getEffectiveTimeoutMs();
     return session.key;
+  }
+
+  private static getEffectiveTimeoutMs(): number {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vellum_unlock_timeout_minutes') : null;
+    const mins = stored ? parseInt(stored, 10) : 5;
+    return mins <= 0 ? 24 * 60 * 60 * 1000 : mins * 60 * 1000;
+  }
+
+  static getSessionTimeoutMinutes(): number {
+    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vellum_unlock_timeout_minutes') : null;
+    return stored ? parseInt(stored, 10) : 5;
+  }
+
+  static setSessionTimeoutMinutes(minutes: number): void {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('vellum_unlock_timeout_minutes', String(minutes));
+    }
   }
 
   static clearSession(noteId: number) {

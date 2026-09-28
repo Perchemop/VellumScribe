@@ -105,7 +105,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       // Check and execute one-time migration from legacy sql.js WASM file with validation state machine
       await this.migrateFromWasmSqliteFile();
       try {
-        await SqliteEngine.initAsync();
+        await SqliteEngine.initialize();
       } catch (e) {
         AppLogger.warn('NativeSqliteAdapter', 'Could not initialize in-memory mirror engine', e);
       }

@@ -307,6 +307,8 @@ public class OfflineAiPlugin extends Plugin {
 
         String jobId = "job_" + recordingId + "_" + System.currentTimeMillis();
 
+        boolean preferBatteryOverSpeed = Boolean.TRUE.equals(call.getBoolean("preferBatteryOverSpeed", false));
+
         Data inputData = new Data.Builder()
             .putString(TranscriptionWorker.KEY_JOB_ID, jobId)
             .putLong(TranscriptionWorker.KEY_RECORDING_ID, Long.parseLong(recordingId != null ? recordingId : "0"))
@@ -316,6 +318,7 @@ public class OfflineAiPlugin extends Plugin {
             .putString("media_key", mediaKey != null ? mediaKey : "")
             .putLong(TranscriptionWorker.KEY_DURATION_MS, durationMs)
             .putInt(TranscriptionWorker.KEY_START_CHUNK, startChunk)
+            .putBoolean("prefer_battery_over_speed", preferBatteryOverSpeed)
             .build();
 
         OneTimeWorkRequest workRequest = new OneTimeWorkRequest.Builder(TranscriptionWorker.class)

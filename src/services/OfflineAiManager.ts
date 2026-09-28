@@ -446,3 +446,5 @@ export class OfflineAiManager {
     return AiResultValidator.validateExtraction(rawData, segmentsCount);
   }
 }
+
+export { TranscriptionOrchestrator } from './TranscriptionOrchestrator';

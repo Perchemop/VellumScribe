@@ -130,6 +130,11 @@ export class MediaRepository {
     }
   }
 
+  static async hasKey(key: string): Promise<boolean> {
+    const blob = await this.getBinary(key);
+    return blob !== null;
+  }
+
   static async deleteBinary(key: string): Promise<void> {
     if (Capacitor.isNativePlatform()) {
       try {

@@ -3,6 +3,7 @@ package com.vellumscribe.app.offlineai.workers;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.ActivityManager;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -11,6 +12,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.BatteryManager;
 import android.os.Build;
+import android.os.PowerManager;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
@@ -79,7 +81,43 @@ public class TranscriptionWorker extends Worker {
         return null;
     }
 
-    private int determineOptimalThreadCount() {
+    private int determineOptimalThreadCount(boolean preferBatteryOverSpeed) {
+        if (preferBatteryOverSpeed) {
+            Log.i(TAG, "User configured 'Prefer battery over speed'; clamping whisper threads to 1.");
+            return 1;
+        }
+
+        // Memory awareness check
+        try {
+            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) {
+                ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+                am.getMemoryInfo(mi);
+                if (mi.lowMemory) {
+                    Log.i(TAG, "Low system memory detected; clamping whisper threads to 1.");
+                    return 1;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // Power Save & Thermal awareness
+        try {
+            PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                if (pm.isPowerSaveMode()) {
+                    Log.i(TAG, "Device is in Power Save mode; throttling whisper threads to 1.");
+                    return 1;
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    int thermalStatus = pm.getCurrentThermalStatus();
+                    if (thermalStatus >= PowerManager.THERMAL_STATUS_MODERATE) {
+                        Log.i(TAG, "Elevated thermal status (" + thermalStatus + "); throttling whisper threads to 1.");
+                        return 1;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
         int defaultThreads = Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors() - 1));
         try {
             Intent batteryIntent = context.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
@@ -90,9 +128,12 @@ public class TranscriptionWorker extends Worker {
                 boolean isCharging = (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL);
                 if (rawLevel >= 0 && scale > 0) {
                     int pct = (int) ((rawLevel / (float) scale) * 100);
-                    if (pct < 15 && !isCharging) {
+                    if (pct < 20 && !isCharging) {
                         Log.i(TAG, "Battery is critical (" + pct + "%); throttling whisper threads to 1.");
                         return 1;
+                    } else if (pct < 40 && !isCharging) {
+                        Log.i(TAG, "Battery is low (" + pct + "%); throttling whisper threads to 2.");
+                        return Math.min(2, defaultThreads);
                     }
                 }
             }
@@ -220,7 +261,8 @@ public class TranscriptionWorker extends Worker {
                 }
             }
 
-            int nThreads = determineOptimalThreadCount();
+            boolean preferBattery = getInputData().getBoolean("prefer_battery_over_speed", false);
+            int nThreads = determineOptimalThreadCount(preferBattery);
 
             boolean hadSpeechActivity = false;
             boolean engineUnavailable = false;

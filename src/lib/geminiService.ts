@@ -183,6 +183,21 @@ class OfflineSynthesisEngine {
 }
 
 export class GeminiApiService {
+  public static getInstance() {
+    return {
+      transcribeAudio: (audioBlob: Blob | string, options?: any) => {
+        return GeminiApiService.transcribeAudio(
+          audioBlob,
+          options?.mimeType || 'audio/webm',
+          0,
+          '',
+          options?.originalFileName,
+          options
+        );
+      },
+    };
+  }
+
   private static async getHeaders(): Promise<Record<string, string>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -1340,3 +1355,5 @@ Formatting Directives:
     };
   }
 }
+
+export { GeminiApiService as GeminiService };
