@@ -252,6 +252,7 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     mediaKey?: string;
     durationMs?: number;
     startChunk?: number;
+    preferBatteryOverSpeed?: boolean;
   }): Promise<{ jobId: string }> {
     const recordingIdNum = typeof options.recordingId === 'string' ? parseInt(options.recordingId, 10) : options.recordingId;
     const jobId = `job_${recordingIdNum}_${Date.now()}`;
@@ -407,3 +408,38 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
 export const OfflineAi = registerPlugin<OfflineAiPlugin>('OfflineAi', {
   web: () => new OfflineAiWeb(),
 });
+
+export async function getOfflineAiStatus(): Promise<{
+  nativeReady: boolean;
+  modelsInstalled: string[];
+  freeSpaceMb: number;
+  message: string;
+}> {
+  try {
+    const caps = await OfflineAi.getCapabilities();
+    const isNativeReady = !!(caps.isNativeEngineAvailable ?? (caps as any).nativeLibraryLoaded);
+    const freeMb = (caps.availableStorageMb ?? (caps as any).freeSpaceMb) ?? 0;
+    if (!isNativeReady) {
+      return {
+        nativeReady: false,
+        modelsInstalled: [],
+        freeSpaceMb: freeMb,
+        message: 'Native Whisper library missing. Rebuild the Android app with NDK support enabled.',
+      };
+    }
+    const models = await OfflineAi.listSpeechModels();
+    return {
+      nativeReady: true,
+      modelsInstalled: models.filter((m: any) => m.installed).map((m: any) => m.id),
+      freeSpaceMb: freeMb,
+      message: 'On-device Whisper transcription engine ready.',
+    };
+  } catch (e) {
+    return {
+      nativeReady: false,
+      modelsInstalled: [],
+      freeSpaceMb: 0,
+      message: String(e),
+    };
+  }
+}

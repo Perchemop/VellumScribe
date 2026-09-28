@@ -41,6 +41,13 @@ import { AiSummaryModal } from './AiSummaryModal';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
+import {
+  NoteTitleBar,
+  RichBodyEditor,
+  ChecklistSection,
+  MediaAttachments,
+  SecurityControls,
+} from './note-editor';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
 import { NativeBridge } from '../lib/nativeBridge';
 import { DraftStore, NoteDraft } from '../lib/DraftStore';

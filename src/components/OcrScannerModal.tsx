@@ -14,6 +14,7 @@ import {
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { GeminiApiService } from '../lib/geminiService';
+import { OcrService } from '../services/ai';
 import { SQLiteDatabase } from '../lib/storage';
 import { OcrScanRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';

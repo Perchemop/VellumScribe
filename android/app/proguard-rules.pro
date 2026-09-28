@@ -49,3 +49,14 @@
 -keep class * implements android.os.Parcelable {
     public static final android.os.Parcelable$Creator *;
 }
+
+# Capacitor + OfflineAi JNI keep rules
+-keep class com.getcapacitor.** { *; }
+-keep class com.vellumscribe.app.offlineai.** { *; }
+-keepclassmembers class com.vellumscribe.app.offlineai.whisper.WhisperEngine {
+    native <methods>;
+}
+-keep class com.vellumscribe.app.offlineai.workers.TranscriptionWorker { *; }
+
+# SQLite community plugin
+-keep class com.capacitorjs.community.plugins.sqlite.** { *; }

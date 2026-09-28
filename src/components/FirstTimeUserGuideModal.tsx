@@ -181,6 +181,24 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
         },
       ],
     },
+    {
+      badge: 'Offline AI vs Cloud AI',
+      title: 'Privacy-Preserving On-Device Transcription',
+      description:
+        'Choose how you want AI to assist you: 100% on-device Whisper models with zero network traffic, or optional Cloud Gemini for multimodal documents.',
+      highlights: [
+        {
+          icon: Mic,
+          title: 'On-Device Whisper Models',
+          desc: 'Download Tiny (~30MB) or Base (~55MB) models once to transcribe meetings and voice memos offline anywhere.',
+        },
+        {
+          icon: Sparkles,
+          title: 'Optional Gemini Cloud Assist',
+          desc: 'High-order summaries, action item extraction, and handwriting OCR with client-side API key encryption.',
+        },
+      ],
+    },
   ];
 
   const step = steps[currentStep];

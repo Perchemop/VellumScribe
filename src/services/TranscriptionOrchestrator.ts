@@ -77,7 +77,7 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
       return false;
     }
     const caps = await OfflineAiManager.getInstance().getDeviceCapabilities();
-    return caps.isNativeEngineAvailable;
+    return !!caps.isNativeEngineAvailable;
   }
 
   public async transcribe(
@@ -230,7 +230,7 @@ export class CloudGeminiEngine implements TranscriptionEngine {
     options: TranscriptionOptions
   ): Promise<TranscriptionResult> {
     // Assert explicit privacy permissions
-    PrivacyManager.assertNetworkAllowed();
+    PrivacyManager.assertNetworkAllowed('Cloud Gemini Audio Transcription');
 
     let audioBlob = input.audioBlob;
     if (!audioBlob && input.mediaKey) {
@@ -247,7 +247,7 @@ export class CloudGeminiEngine implements TranscriptionEngine {
       originalFileName: input.mediaKey || `recording_${input.recordingId}.webm`,
       recordingId: input.recordingId,
       signal: options.signal,
-      onProgress: (p) => {
+      onProgress: (p: any) => {
         options.onProgress?.({
           percent: p.percent,
           phase: p.phase,

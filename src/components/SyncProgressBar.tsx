@@ -1,6 +1,7 @@
 import React from 'react';
 import { SyncProgressUpdate } from '../lib/cloudSync';
 import { X, RefreshCw } from 'lucide-react';
+import { LiveRegion } from './common/LiveRegion';
 
 interface SyncProgressBarProps {
   isSyncing: boolean;
@@ -13,6 +14,7 @@ export const SyncProgressBar: React.FC<SyncProgressBarProps> = ({ isSyncing, pro
 
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+      <LiveRegion message={progress?.message || (isSyncing ? 'Synchronizing data to cloud...' : null)} />
       <div className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-full shadow-2xl flex items-center px-4 py-2 gap-3 min-w-[280px]">
         <div className="flex items-center justify-center">
           {(isSyncing || progress?.phase === 'uploading' || progress?.phase === 'init') ? (

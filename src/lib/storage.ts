@@ -125,6 +125,9 @@ export class StorageManager {
           this.refreshCaches();
         }
 
+        // Lightweight integrity check on cold start to repair orphaned media references
+        await this.checkColdStartIntegrity();
+
         this.isInitialized = true;
         AppLogger.info('StorageManager', 'SQLite Storage Gateway fully initialized and synchronized.');
 
@@ -485,6 +488,28 @@ export class StorageManager {
         this.notesCache.push(updated);
       }
     }
+    return updated;
+  }
+
+  /**
+   * Two-phase atomic persistence for note updates paired with media payloads.
+   * Ensures the media binary is safely stored in MediaRepository before committing
+   * the SQLite row update and cache invalidation.
+   */
+  public static async updateNoteWithMedia(
+    noteId: number,
+    patch: Partial<NoteRecord>,
+    mediaKey?: string,
+    blob?: Blob
+  ): Promise<NoteRecord | null> {
+    if (mediaKey && blob) {
+      await MediaRepository.putBinary(mediaKey, blob);
+    }
+    const updated = this.updateNote(noteId, {
+      ...patch,
+      sketch_media_key: mediaKey ?? patch.sketch_media_key,
+      updated_at: new Date().toISOString(),
+    });
     return updated;
   }
 
@@ -1482,6 +1507,58 @@ export class StorageManager {
 
   public static async flush(): Promise<void> {
     if (this.db.flush) await this.db.flush();
+    this.recordDurableSave();
+  }
+
+  public static getLastDurableSaveTime(): number | null {
+    try {
+      const rows = this.query<{ value: string }>(
+        "SELECT value FROM workspace_metadata WHERE key = 'last_durable_save';"
+      );
+      if (rows && rows.length > 0 && rows[0].value) {
+        return parseInt(rows[0].value, 10);
+      }
+    } catch {}
+    return null;
+  }
+
+  public static recordDurableSave(time: number = Date.now()): void {
+    try {
+      this.run(
+        "INSERT OR REPLACE INTO workspace_metadata (key, value, updated_at) VALUES ('last_durable_save', ?, ?);",
+        [String(time), time]
+      );
+    } catch {}
+  }
+
+  /**
+   * Lightweight integrity check on cold start: scans active notes for dangling media keys
+   * and repairs any orphaned references.
+   */
+  public static async checkColdStartIntegrity(): Promise<{ repaired: number; issues: string[] }> {
+    const issues: string[] = [];
+    let repaired = 0;
+    try {
+      const notes = this.notesCache || [];
+      for (const note of notes) {
+        if (note.sketch_media_key) {
+          const exists = await MediaRepository.hasKey(note.sketch_media_key);
+          if (!exists) {
+            issues.push(`Note #${note.id} referenced missing media key: ${note.sketch_media_key}`);
+            if (!note.sketch_data) {
+              this.updateNote(note.id, { sketch_media_key: undefined });
+              repaired++;
+            }
+          }
+        }
+      }
+      if (issues.length > 0) {
+        AppLogger.info('StorageManager', `Cold-start integrity verified: repaired ${repaired} orphaned media references.`);
+      }
+    } catch (e) {
+      AppLogger.warn('StorageManager', 'Cold start integrity check encountered error', e);
+    }
+    return { repaired, issues };
   }
 
   public static isDirty(): boolean {

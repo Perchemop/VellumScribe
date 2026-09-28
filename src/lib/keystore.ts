@@ -27,6 +27,10 @@ const KEYSTORE_STORAGE_KEY = 'vellumscribe_keystore_metadata_v2';
 export class AndroidKeystoreManager {
   private static cache: KeystoreSecret[] | null = null;
 
+  public static async isSupported(): Promise<boolean> {
+    return Capacitor.isNativePlatform();
+  }
+
   private static getStored(): KeystoreSecret[] {
     if (this.cache) {
       return this.cache;

@@ -52,6 +52,10 @@ export class PrivacyManager {
     return this.settings.privateOfflineMode;
   }
 
+  public static isNetworkAllowed(): boolean {
+    return !this.settings.privateOfflineMode;
+  }
+
   public static hasCloudAiConsent(): boolean {
     return !this.settings.warnBeforeExternalCalls || this.settings.hasConsentedToCloudAi;
   }
