@@ -50,8 +50,24 @@ export interface OfflineAiPlugin {
     jobId: string;
   }): Promise<void>;
 
+  isSpeechRecognitionAvailable(): Promise<{ available: boolean }>;
+
+  startListening(options?: { language?: string }): Promise<void>;
+
+  stopListening(): Promise<void>;
+
   addListener(
     eventName: 'modelDownloadProgress',
     listenerFunc: (event: ModelDownloadProgressEvent) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'speechRecognitionResult',
+    listenerFunc: (event: { text: string; isFinal: boolean }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'speechRecognitionError',
+    listenerFunc: (event: { error: number | string }) => void
   ): Promise<PluginListenerHandle>;
 }

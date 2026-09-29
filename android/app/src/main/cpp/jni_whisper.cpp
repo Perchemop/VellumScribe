@@ -127,4 +127,12 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeFree(
     }
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeHasTensorRuntime(
+    JNIEnv * /* env */,
+    jclass /* clazz */
+) {
+    return whisper_has_tensor_runtime() ? JNI_TRUE : JNI_FALSE;
+}
+
 } // extern "C"

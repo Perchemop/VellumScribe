@@ -30,9 +30,29 @@ public class WhisperEngine {
         return isNativeLibraryLoaded;
     }
 
+    /**
+     * Probes whether the compiled native library contains an active GGML tensor execution runtime.
+     * Prevents misleading capability claims when only a non-inferencing stub is linked.
+     */
+    public static boolean probeInferenceRuntime() {
+        if (!isNativeLibraryLoaded) return false;
+        try {
+            return nativeHasTensorRuntime();
+        } catch (UnsatisfiedLinkError | Exception e) {
+            Log.w(TAG, "Native tensor runtime probe failed: " + e.getMessage());
+            return false;
+        }
+    }
+
     public synchronized boolean initialize(File modelFile) {
         if (!isNativeLibraryLoaded) {
             Log.e(TAG, "Cannot initialize WhisperEngine: native library libwhisper.so is not loaded.");
+            this.isInitialized = false;
+            return false;
+        }
+
+        if (!probeInferenceRuntime()) {
+            Log.w(TAG, "Cannot initialize WhisperEngine: native library loaded but tensor execution runtime is unavailable.");
             this.isInitialized = false;
             return false;
         }
@@ -57,7 +77,7 @@ public class WhisperEngine {
 
     public synchronized String transcribe(float[] pcmData, String language, int nThreads) throws Exception {
         if (!isReady()) {
-            throw new IllegalStateException("OFFLINE_AI_ENGINE_NOT_READY: whisper.cpp context is not initialized.");
+            throw new IllegalStateException("OFFLINE_AI_ENGINE_NOT_READY: whisper.cpp context is not initialized or tensor runtime is unavailable.");
         }
         if (pcmData == null || pcmData.length == 0) {
             throw new IllegalArgumentException("OFFLINE_AI_AUDIO_INVALID: Empty PCM audio buffer provided.");
@@ -67,7 +87,7 @@ public class WhisperEngine {
     }
 
     public boolean isReady() {
-        return isNativeLibraryLoaded && isInitialized && contextPtr != 0;
+        return isNativeLibraryLoaded && probeInferenceRuntime() && isInitialized && contextPtr != 0;
     }
 
     public synchronized void release() {
@@ -86,4 +106,5 @@ public class WhisperEngine {
     private static native long nativeInit(String modelPath);
     private static native String nativeTranscribe(long contextPtr, float[] pcmData, String language, int nThreads);
     private static native void nativeFree(long contextPtr);
+    private static native boolean nativeHasTensorRuntime();
 }

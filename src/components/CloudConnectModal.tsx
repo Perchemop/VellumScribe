@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ExternalLink, Trash2, ShieldCheck, Cloud, RefreshCw, Zap, Server, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
+import { generatePKCE } from '../lib/pkce';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface CloudConnectModalProps {
@@ -98,7 +99,13 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const authInfo = await CloudSyncEngine.getAuthUrl(provider);
+      // PKCE Generation
+      const pkce = await generatePKCE();
+      const authInfo = await CloudSyncEngine.getAuthUrl(provider, {
+        codeChallenge: pkce.codeChallenge,
+        codeChallengeMethod: pkce.codeChallengeMethod,
+      });
+
       if (!authInfo.configured || !authInfo.url) {
         throw new Error(
           authInfo.message ||
@@ -125,23 +132,64 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         throw new Error('Popup window was blocked by the browser. Please allow popups to complete authentication.');
       }
 
+      let timeoutTimer: NodeJS.Timeout | null = null;
+      let checkClosedTimer: NodeJS.Timeout | null = null;
+
+      const cleanup = () => {
+        window.removeEventListener('message', handleMessage);
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        if (checkClosedTimer) clearInterval(checkClosedTimer);
+      };
+
       const handleMessage = (event: MessageEvent) => {
+        // S-P0 Security: Verify message origin matches current window origin
+        if (event.origin !== window.location.origin) {
+          return;
+        }
+
         if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === provider) {
-          window.removeEventListener('message', handleMessage);
-          const accounts = CloudSyncEngine.getAccounts();
-          const account = accounts.find((a) => a.provider === provider);
-          if (account) {
-            onConnected(account);
+          cleanup();
+          const safeAccount = event.data?.account;
+          if (safeAccount) {
+            CloudSyncEngine.saveConnectedAccount(safeAccount);
+            onConnected(safeAccount);
+          } else {
+            const accounts = CloudSyncEngine.getAccounts();
+            const account = accounts.find((a) => a.provider === provider);
+            if (account) {
+              onConnected(account);
+            }
           }
           setLoading(false);
         } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
-          window.removeEventListener('message', handleMessage);
+          cleanup();
           setError(event.data?.error || 'Authentication was cancelled or failed.');
           setLoading(false);
         }
       };
 
       window.addEventListener('message', handleMessage);
+
+      // Periodic check if popup was closed by the user manually
+      checkClosedTimer = setInterval(() => {
+        if (popup.closed) {
+          cleanup();
+          setLoading((prev) => {
+            if (prev) {
+              // Only clear loading state if not already resolved
+              return false;
+            }
+            return prev;
+          });
+        }
+      }, 1000);
+
+      // Timeout after 5 minutes
+      timeoutTimer = setTimeout(() => {
+        cleanup();
+        setLoading(false);
+        setError('Authentication timed out. Please try again.');
+      }, 5 * 60 * 1000);
     } catch (e: any) {
       console.error('Failed OAuth authentication:', e);
       setError(e.message || 'Failed to authenticate. Please verify server configuration and network connectivity.');

@@ -424,13 +424,27 @@ export class CloudSyncEngine {
   }
 
   /**
-   * Retrieves provider OAuth / SSO authorization URL for popup authentication
+   * Retrieves provider OAuth / SSO authorization URL with PKCE for secure authentication
    */
   static async getAuthUrl(
-    provider: 'google_drive' | 'microsoft'
+    provider: 'google_drive' | 'microsoft',
+    options?: {
+      codeChallenge?: string;
+      codeChallengeMethod?: string;
+      redirectUri?: string;
+    }
   ): Promise<{ configured: boolean; url?: string; message?: string }> {
     await this.ensureSessionToken();
-    const res = await fetch(`/api/cloud/${provider}/auth-url`, {
+    const query = new URLSearchParams();
+    if (options?.codeChallenge) {
+      query.set('code_challenge', options.codeChallenge);
+      query.set('code_challenge_method', options.codeChallengeMethod || 'S256');
+    }
+    if (options?.redirectUri) {
+      query.set('redirect_uri', options.redirectUri);
+    }
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const res = await fetch(`/api/cloud/${provider}/auth-url${queryString}`, {
       headers: this.getHeaders(),
       credentials: 'same-origin',
     });

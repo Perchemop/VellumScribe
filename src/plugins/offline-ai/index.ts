@@ -165,7 +165,22 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
       isCharging,
       recommendedModelId,
       isNativeEngineAvailable: false,
+      nativeLibraryLoaded: false,
+      inferenceRuntimeReady: false,
     };
+  }
+
+  public async isSpeechRecognitionAvailable(): Promise<{ available: boolean }> {
+    const isAvail = typeof window !== 'undefined' && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    return { available: isAvail };
+  }
+
+  public async startListening(_options?: { language?: string }): Promise<void> {
+    // Handled in Web Speech layer
+  }
+
+  public async stopListening(): Promise<void> {
+    // Handled in Web Speech layer
   }
 
   public async listSpeechModels(): Promise<SpeechModelProfile[]> {

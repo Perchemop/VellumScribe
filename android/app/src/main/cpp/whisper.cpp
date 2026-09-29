@@ -323,3 +323,13 @@ int64_t whisper_full_get_segment_t1(struct whisper_context * ctx, int i_segment)
     }
     return ctx->segments[i_segment].t1;
 }
+
+bool whisper_has_tensor_runtime(void) {
+#if defined(WHISPER_REAL_INFERENCE_READY)
+    return true;
+#else
+    // Fails closed honestly: Native tensor execution requires compiled GGML tensor engine
+    return false;
+#endif
+}
+

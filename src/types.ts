@@ -215,6 +215,7 @@ export type SpeechModelProfile = {
 
 export interface AiCapabilities {
   availableRamMb: number | null;
+  totalRamMb?: number | null;
   cpuCores: number | null;
   architecture: string | null;
   androidApiLevel: number | null;
@@ -225,6 +226,7 @@ export interface AiCapabilities {
   recommendedModelId: string;
   isNativeEngineAvailable?: boolean;
   nativeLibraryLoaded?: boolean;
+  inferenceRuntimeReady?: boolean;
 }
 
 export type TranscriptionDurableStatus =
