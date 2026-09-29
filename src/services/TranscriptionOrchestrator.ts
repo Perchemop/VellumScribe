@@ -19,6 +19,7 @@ import { TranscriptionRepository } from '../repositories/TranscriptionRepository
 import { MediaRepository } from '../lib/MediaRepository';
 import { GeminiService } from '../lib/geminiService';
 import {
+  RecordingRecord,
   TranscriptionEntity,
   StructuredAiExtraction,
   OfflineAiErrorCode,
@@ -27,7 +28,7 @@ import {
 export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed';
 
 export interface TranscriptionInput {
-  recordingId: number;
+  recordingId?: number;
   noteId?: number;
   audioBlob?: Blob;
   mediaKey?: string;
@@ -35,6 +36,8 @@ export interface TranscriptionInput {
   mimeType?: string;
   durationSeconds?: number;
   language?: string;
+  liveTranscript?: string;
+  liveCapturedText?: string;
 }
 
 export interface TranscriptionOptions {
@@ -77,7 +80,7 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
       return false;
     }
     const caps = await OfflineAiManager.getInstance().getDeviceCapabilities();
-    return !!caps.isNativeEngineAvailable;
+    return Boolean(caps.isNativeEngineAvailable && caps.inferenceRuntimeReady);
   }
 
   public async transcribe(
@@ -87,8 +90,12 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
     const aiMgr = OfflineAiManager.getInstance();
     const caps = await aiMgr.getDeviceCapabilities();
 
-    if (!caps.isNativeEngineAvailable) {
+    if (!caps.isNativeEngineAvailable || !caps.inferenceRuntimeReady) {
       throw new Error('OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.');
+    }
+
+    if (!input.recordingId) {
+      throw new Error('OFFLINE_AI_AUDIO_INVALID: Native Whisper engine requires a persistent recording ID.');
     }
 
     const startRes = await aiMgr.transcribeRecording(input.recordingId, {
@@ -190,10 +197,12 @@ export class WebOfflineEngine implements TranscriptionEngine {
       status: 'Analyzing acoustic speech structure offline...',
     });
 
+    const liveText = input.liveCapturedText || input.liveTranscript;
     const offlineRes = await OfflineTranscriptionEngine.transcribeAudio(
       audioPayload,
       input.mimeType || 'audio/webm',
-      input.durationSeconds || 0
+      input.durationSeconds || 0,
+      liveText
     );
 
     options.onProgress?.({
@@ -300,51 +309,69 @@ export class TranscriptionOrchestrator {
   ): Promise<TranscriptionResult> {
     const policy: TranscriptionPolicy = options.policy || 'local_first';
 
-    // 1. Verify recording existence
-    let recording = await RecordingRepository.getByIdAsync(input.recordingId);
-    if (!recording) {
-      recording = RecordingRepository.getById(input.recordingId);
+    // 1. Verify recording existence if recordingId provided, or synthesize
+    let recording: RecordingRecord | null = null;
+    if (input.recordingId) {
+      recording = await RecordingRepository.getByIdAsync(input.recordingId);
+      if (!recording) {
+        recording = RecordingRepository.getById(input.recordingId);
+      }
     }
-    if (!recording) {
+
+    if (!recording && input.recordingId) {
       throw new Error(`OFFLINE_AI_AUDIO_INVALID: Recording #${input.recordingId} was not found on this device.`);
     }
 
     // Merge metadata
     const mergedInput: TranscriptionInput = {
       ...input,
-      mediaKey: input.mediaKey || recording.media_key,
-      audioPath: input.audioPath || recording.file_path,
-      durationSeconds: input.durationSeconds || recording.duration_seconds,
-      mimeType: input.mimeType || recording.mime_type,
+      mediaKey: input.mediaKey || recording?.media_key,
+      audioPath: input.audioPath || recording?.file_path,
+      durationSeconds: input.durationSeconds || recording?.duration_seconds || 0,
+      mimeType: input.mimeType || recording?.mime_type || 'audio/wav',
     };
 
     // 2. Select appropriate engine
-    const engine = await this.selectEngine(policy);
+    const engine = await this.selectEngine(policy, mergedInput);
     AppLogger.info('TranscriptionOrchestrator', `Selected engine: ${engine.id} under policy: ${policy}`);
 
-    // 3. Register initial durable job in SQLite
+    // 3. Register initial durable job in SQLite if recordingId exists
     let durableRecord: TranscriptionEntity | null = null;
-    try {
-      durableRecord = TranscriptionRepository.save({
-        recording_id: input.recordingId,
-        engine: engine.id,
-        engine_version: engine.version,
-        model_id: options.modelId || 'default',
-        language: input.language || 'auto',
-        status: 'PREPARING',
-        started_at: Date.now(),
-      });
-    } catch (saveErr) {
-      AppLogger.warn('TranscriptionOrchestrator', 'Failed to register initial durable job record', saveErr);
+    if (input.recordingId) {
+      try {
+        durableRecord = TranscriptionRepository.save({
+          recording_id: input.recordingId,
+          engine: engine.id,
+          engine_version: engine.version,
+          model_id: options.modelId || 'default',
+          language: input.language || 'auto',
+          status: 'PREPARING',
+          started_at: Date.now(),
+        });
+      } catch (saveErr) {
+        AppLogger.warn('TranscriptionOrchestrator', 'Failed to register initial durable job record', saveErr);
+      }
     }
 
     try {
       // 4. Run real inference via chosen engine
       const result = await engine.transcribe(mergedInput, options);
 
-      // Strict validation: Reject synthetic text
-      if (!result.transcript || !result.transcript.trim()) {
-        throw new Error('OFFLINE_AI_NO_SPEECH: Speech recognition returned empty transcript.');
+      // Strict validation: Reject synthetic text or VAD instructional placeholders (T-P0.3)
+      const text = (result.transcript || '').trim();
+      const looksLikePlaceholder =
+        /verbatim speech-to-text transcription requires/i.test(text) ||
+        /speech activity detected across/i.test(text) ||
+        text.startsWith('### Audio Recording') ||
+        text.startsWith('### Audio Voice Memo') ||
+        /captured locally on-device/i.test(text);
+
+      if (!text || looksLikePlaceholder) {
+        throw new Error(
+          result.isOffline
+            ? 'OFFLINE_AI_ENGINE_UNAVAILABLE: No on-device speech engine produced a transcript. Use live dictation during recording, install a working Whisper runtime, or enable Cloud AI.'
+            : 'OFFLINE_AI_NO_SPEECH: Empty transcript.'
+        );
       }
 
       // 5. Persist durable completion
@@ -359,7 +386,7 @@ export class TranscriptionOrchestrator {
           // Persist immutable raw transcript
           TranscriptionRepository.saveTranscription({
             id: durableRecord.id,
-            recording_id: input.recordingId,
+            recording_id: input.recordingId || 0,
             engine: engine.id,
             engine_version: engine.version,
             model_id: result.modelId,
@@ -396,11 +423,16 @@ export class TranscriptionOrchestrator {
   }
 
   /**
-   * Determine the optimal engine based on policy and hardware capability
+   * Determine the optimal engine based on policy, hardware capability, and available speech tokens
    */
-  private async selectEngine(policy: TranscriptionPolicy): Promise<TranscriptionEngine> {
+  private async selectEngine(
+    policy: TranscriptionPolicy,
+    input?: TranscriptionInput
+  ): Promise<TranscriptionEngine> {
     const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
     const isOfflineMode = !PrivacyManager.isNetworkAllowed() || policy === 'offline_only';
+    const liveText = input?.liveCapturedText || input?.liveTranscript;
+    const hasLiveText = Boolean(liveText && liveText.trim().length > 0);
 
     // 1. Android Native Platform
     if (isAndroid) {
@@ -412,11 +444,19 @@ export class TranscriptionOrchestrator {
 
     // 2. Strict Offline Mode: Never call remote network
     if (isOfflineMode) {
-      const webOffline = this.engines.get('browser_acoustic_analyzer');
-      if (webOffline && (await webOffline.isAvailable())) {
-        return webOffline;
+      const whisper = this.engines.get('whisper.cpp');
+      if (whisper && (await whisper.isAvailable())) {
+        return whisper;
       }
-      throw new Error('OFFLINE_AI_ENGINE_UNAVAILABLE: No on-device speech transcription engine is available in offline mode.');
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          return webOffline;
+        }
+      }
+      throw new Error(
+        'OFFLINE_AI_ENGINE_UNAVAILABLE: Offline transcription requires live microphone dictation during recording or an active native Whisper runtime. Neither is available for this recording.'
+      );
     }
 
     // 3. Local-First Mode
@@ -425,14 +465,16 @@ export class TranscriptionOrchestrator {
       if (whisper && (await whisper.isAvailable())) {
         return whisper;
       }
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          return webOffline;
+        }
+      }
       // If network is allowed and cloud is permitted, use Cloud AI
       const cloud = this.engines.get('cloud_gemini_multimodal');
       if (cloud && (await cloud.isAvailable())) {
         return cloud;
-      }
-      const webOffline = this.engines.get('browser_acoustic_analyzer');
-      if (webOffline && (await webOffline.isAvailable())) {
-        return webOffline;
       }
     }
 
@@ -442,12 +484,16 @@ export class TranscriptionOrchestrator {
       if (cloud && (await cloud.isAvailable())) {
         return cloud;
       }
-      const webOffline = this.engines.get('browser_acoustic_analyzer');
-      if (webOffline && (await webOffline.isAvailable())) {
-        return webOffline;
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          return webOffline;
+        }
       }
     }
 
-    throw new Error('OFFLINE_AI_ENGINE_UNAVAILABLE: No compatible transcription engine could be initialized.');
+    throw new Error(
+      'OFFLINE_AI_ENGINE_UNAVAILABLE: No compatible transcription engine could be initialized. Use live dictation during recording, install a Whisper runtime, or enable Cloud AI.'
+    );
   }
 }

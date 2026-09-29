@@ -37,6 +37,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Post-recording offline transcription pipeline state
@@ -58,8 +59,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const handleStart = async () => {
     setErrorMessage(null);
     setElapsedSec(0);
+    setLiveTranscript('');
     try {
-      await recordingManager.startRecording();
+      await recordingManager.startRecording({
+        onLiveTranscript: (text) => setLiveTranscript(text),
+      });
       setIsRecording(true);
       setIsPaused(false);
 
@@ -221,6 +225,16 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 {isPaused ? 'Recording Paused' : 'Recording In Progress'}
               </p>
             </div>
+
+            {/* Live Dictation Preview */}
+            {liveTranscript && (
+              <div className="w-full p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs text-stone-700 dark:text-stone-300 max-h-24 overflow-y-auto">
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">
+                  🎙️ Live Dictation (Offline Speech Recognizer):
+                </span>
+                <p className="italic">{liveTranscript}</p>
+              </div>
+            )}
 
             {/* Controls */}
             <div className="flex items-center gap-4 pt-2">

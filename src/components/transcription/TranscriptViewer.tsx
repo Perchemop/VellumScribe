@@ -188,20 +188,34 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
         </div>
       </div>
 
-      {/* Model & provenance metadata chip */}
-      <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-500 dark:text-stone-400 px-1">
-        <span>Engine: <strong className="text-stone-700 dark:text-stone-300">{transcription.engine}</strong></span>
-        <span>•</span>
-        <span>Model: <strong className="text-stone-700 dark:text-stone-300">{transcription.model_id}</strong></span>
-        <span>•</span>
-        <span>
-          Confidence:{' '}
-          {transcription.error_code ? (
-            <span className="text-amber-600">{transcription.error_code}</span>
-          ) : (
-            <span className="text-stone-600 dark:text-stone-400 italic">Confidence unavailable</span>
-          )}
+      {/* Engine & provenance metadata badge (T-P1.3) */}
+      <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
+        {transcription.engine.includes('whisper') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            whisper.cpp (On-Device)
+          </span>
+        ) : transcription.engine.includes('gemini') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+            <Sparkles className="w-3 h-3 text-indigo-500" />
+            Gemini Multimodal (Cloud AI)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+            Live Microphone Dictation (Offline)
+          </span>
+        )}
+
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-mono text-[10px]">
+          Model: {transcription.model_id}
         </span>
+
+        {transcription.error_code && (
+          <span className="text-amber-600 dark:text-amber-400 font-mono text-[10px]">
+            [{transcription.error_code}]
+          </span>
+        )}
       </div>
 
       {/* Content Tab 1: Segments */}

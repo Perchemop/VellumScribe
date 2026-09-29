@@ -5,6 +5,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.BatteryManager;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import androidx.work.Data;
 import androidx.work.ExistingWorkPolicy;
@@ -23,6 +29,7 @@ import com.vellumscribe.app.offlineai.whisper.WhisperEngine;
 import com.vellumscribe.app.offlineai.workers.TranscriptionWorker;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -35,6 +42,8 @@ public class OfflineAiPlugin extends Plugin {
     private ModelManager modelManager;
     private ExecutorService downloadExecutor;
     private final Map<String, AtomicBoolean> activeDownloads = new ConcurrentHashMap<>();
+    private SpeechRecognizer speechRecognizer;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
     public void load() {
@@ -48,7 +57,93 @@ public class OfflineAiPlugin extends Plugin {
         if (downloadExecutor != null) {
             downloadExecutor.shutdownNow();
         }
+        if (speechRecognizer != null) {
+            mainHandler.post(() -> {
+                if (speechRecognizer != null) {
+                    speechRecognizer.destroy();
+                    speechRecognizer = null;
+                }
+            });
+        }
         super.handleOnDestroy();
+    }
+
+    @PluginMethod
+    public void isSpeechRecognitionAvailable(PluginCall call) {
+        boolean available = SpeechRecognizer.isRecognitionAvailable(getContext());
+        JSObject ret = new JSObject();
+        ret.put("available", available);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void startListening(PluginCall call) {
+        String language = call.getString("language", "en-US");
+        mainHandler.post(() -> {
+            try {
+                if (speechRecognizer != null) {
+                    speechRecognizer.destroy();
+                }
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
+                speechRecognizer.setRecognitionListener(new RecognitionListener() {
+                    @Override public void onReadyForSpeech(Bundle params) {}
+                    @Override public void onBeginningOfSpeech() {}
+                    @Override public void onRmsChanged(float rmsdB) {}
+                    @Override public void onBufferReceived(byte[] buffer) {}
+                    @Override public void onEndOfSpeech() {}
+                    @Override
+                    public void onError(int error) {
+                        JSObject data = new JSObject();
+                        data.put("error", error);
+                        notifyListeners("speechRecognitionError", data);
+                    }
+                    @Override
+                    public void onResults(Bundle results) {
+                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                        String text = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
+                        JSObject data = new JSObject();
+                        data.put("text", text);
+                        data.put("isFinal", true);
+                        notifyListeners("speechRecognitionResult", data);
+                    }
+                    @Override
+                    public void onPartialResults(Bundle partialResults) {
+                        ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                        String text = (matches != null && !matches.isEmpty()) ? matches.get(0) : "";
+                        JSObject data = new JSObject();
+                        data.put("text", text);
+                        data.put("isFinal", false);
+                        notifyListeners("speechRecognitionResult", data);
+                    }
+                    @Override public void onEvent(int eventType, Bundle params) {}
+                });
+
+                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
+                intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+                intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                speechRecognizer.startListening(intent);
+                call.resolve();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed starting SpeechRecognizer", e);
+                call.reject("SPEECH_RECOGNITION_ERROR", e.getMessage());
+            }
+        });
+    }
+
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        mainHandler.post(() -> {
+            try {
+                if (speechRecognizer != null) {
+                    speechRecognizer.stopListening();
+                }
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("SPEECH_STOP_ERROR", e.getMessage());
+            }
+        });
     }
 
     @PluginMethod
@@ -91,7 +186,9 @@ public class OfflineAiPlugin extends Plugin {
             Log.w(TAG, "Failed reading battery status", e);
         }
 
-        boolean nativeEngineReady = WhisperEngine.isNativeLibraryAvailable();
+        // T-P0.2: Split capability flags: library loaded vs genuine GGML tensor inference runtime ready
+        boolean libLoaded = WhisperEngine.isNativeLibraryAvailable();
+        boolean inferenceReady = libLoaded && WhisperEngine.probeInferenceRuntime();
 
         ret.put("availableRamMb", availRamMb > 0 ? availRamMb : null);
         ret.put("totalRamMb", totalRamMb > 0 ? totalRamMb : null);
@@ -101,7 +198,9 @@ public class OfflineAiPlugin extends Plugin {
         ret.put("availableStorageMb", freeStorageMb);
         ret.put("batteryLevel", batteryLevel);
         ret.put("isCharging", isCharging);
-        ret.put("isNativeEngineAvailable", nativeEngineReady);
+        ret.put("nativeLibraryLoaded", libLoaded);
+        ret.put("inferenceRuntimeReady", inferenceReady);
+        ret.put("isNativeEngineAvailable", inferenceReady);
 
         String recommended = "whisper-base";
         if (availRamMb > 0 && availRamMb < 3000) {

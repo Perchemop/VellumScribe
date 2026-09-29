@@ -57,6 +57,9 @@ int64_t whisper_full_get_segment_t0(struct whisper_context * ctx, int i_segment)
 // End timestamp of segment in 10ms units
 int64_t whisper_full_get_segment_t1(struct whisper_context * ctx, int i_segment);
 
+// Query whether compiled binary has real GGML tensor inference execution graph ready
+bool whisper_has_tensor_runtime(void);
+
 #ifdef __cplusplus
 }
 #endif

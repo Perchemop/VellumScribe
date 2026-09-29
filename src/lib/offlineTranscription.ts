@@ -117,61 +117,25 @@ export class OfflineTranscriptionEngine {
       };
     }
 
-    // 2. Perform on-device acoustic analysis via Web Audio API to detect voice activity & segments
+    // 2. If no live speech tokens were captured during recording, fail closed honestly (T-P0.3)
+    // Never fabricate markdown blurbs or instructional text as if they were a spoken transcript.
     try {
       const arrayBuffer = await this.getAudioArrayBuffer(audioBlobOrBase64);
       if (arrayBuffer && arrayBuffer.byteLength > 0) {
         const acousticInfo = await this.analyzeAcousticSignal(arrayBuffer);
-        const dur = Math.max(1, durationSeconds || acousticInfo.duration || 1);
-        const formatTime = (secs: number) => {
-          const m = Math.floor(secs / 60);
-          const s = Math.floor(secs % 60);
-          return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-        };
-
-        if (acousticInfo.hasVoiceActivity && acousticInfo.segments.length > 0) {
-          const transcriptSummary = [
-            `### Audio Recording (${formatTime(dur)})`,
-            `*Speech activity detected across ${acousticInfo.segments.length} vocal segments.*`,
-            ``,
-            `*Verbatim speech-to-text transcription requires an active network connection for Cloud AI transcription, or live microphone dictation during recording.*`,
-          ].join('\n');
-
-          return {
-            transcript: transcriptSummary,
-            source: 'browser_audio (Voice Activity Detection)',
-            confidence: undefined,
-            durationSeconds: dur,
-            segments: acousticInfo.segments.map((s) => ({
-              start: s.start,
-              end: s.end,
-              text: `Speech Segment`,
-            })),
-          };
+        if (!acousticInfo.hasVoiceActivity || acousticInfo.segments.length === 0) {
+          throw new Error('OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.');
         }
       }
-    } catch (e) {
-      console.warn('Offline acoustic analysis fallback:', e);
+    } catch (e: any) {
+      if (e?.message?.includes('OFFLINE_AI_NO_SPEECH')) {
+        throw e;
+      }
     }
 
-    // 3. Clean deterministic fallback if Web Audio API decode was not possible (e.g. unsupported container)
-    const dur = Math.max(1, durationSeconds || 1);
-    const m = Math.floor(dur / 60);
-    const s = Math.floor(dur % 60);
-    const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-
-    const defaultTranscript = [
-      `### Audio Voice Memo (${timeStr})`,
-      `Audio recording captured locally on-device. Duration: ${timeStr} (${mimeType}).`,
-      `To transcribe speech into text on-device, speak clearly during recording with microphone recognition enabled.`,
-    ].join('\n');
-
-    return {
-      transcript: defaultTranscript,
-      source: 'device_recording',
-      confidence: undefined,
-      durationSeconds: dur,
-    };
+    throw new Error(
+      'OFFLINE_AI_ENGINE_UNAVAILABLE: On-device offline transcription requires live microphone dictation during recording or an active native Whisper runtime. Enable live dictation while recording or connect to Cloud AI.'
+    );
   }
 
   /**

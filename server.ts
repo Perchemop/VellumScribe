@@ -1752,6 +1752,9 @@ const chunkSessionsStore = new Map<string, ChunkSession>();
 interface OAuthStateRecord {
   sessionId: string;
   provider: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+  codeVerifier?: string;
   createdAt: number;
   expiresAt: number;
 }
@@ -2165,16 +2168,23 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
 
   const randomNonce = crypto.randomBytes(24).toString("hex");
   const state = `${sessionId}:${randomNonce}`;
+
+  const codeChallenge = typeof req.query.code_challenge === "string" ? req.query.code_challenge : undefined;
+  const codeChallengeMethod = typeof req.query.code_challenge_method === "string" ? req.query.code_challenge_method : "S256";
+
   pendingOAuthStates.set(state, {
     sessionId,
     provider,
     createdAt: Date.now(),
     expiresAt: Date.now() + 10 * 60 * 1000,
+    codeChallenge,
+    codeChallengeMethod: codeChallenge ? codeChallengeMethod : undefined,
   });
 
   if (provider === "google_drive") {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
+    const clientRedirectUri = typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined;
+    const redirectUri = clientRedirectUri || process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
     if (!clientId) {
       return res.json({
         configured: false,
@@ -2185,15 +2195,19 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
     const scopes = encodeURIComponent(
       "openid email profile https://www.googleapis.com/auth/drive.file"
     );
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
+    let url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&response_type=code&scope=${scopes}&access_type=offline&prompt=consent&state=${state}`;
+    if (codeChallenge) {
+      url += `&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=${encodeURIComponent(codeChallengeMethod)}`;
+    }
     return res.json({ configured: true, provider: "google_drive", url, state });
   }
 
   if (provider === "microsoft") {
     const clientId = process.env.MICROSOFT_CLIENT_ID;
-    const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
+    const clientRedirectUri = typeof req.query.redirect_uri === "string" ? req.query.redirect_uri : undefined;
+    const redirectUri = clientRedirectUri || process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
     if (!clientId) {
       return res.json({
         configured: false,
@@ -2202,9 +2216,12 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
       });
     }
     const scopes = encodeURIComponent("openid email profile Files.ReadWrite.AppFolder User.Read offline_access");
-    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
+    let url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(
       redirectUri
     )}&response_mode=query&scope=${scopes}&state=${state}`;
+    if (codeChallenge) {
+      url += `&code_challenge=${encodeURIComponent(codeChallenge)}&code_challenge_method=${encodeURIComponent(codeChallengeMethod)}`;
+    }
     return res.json({ configured: true, provider: "microsoft", url, state });
   }
 
@@ -2667,6 +2684,15 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       };
       session.accounts.set("google_drive", accountRecord);
 
+      // Safe non-token account representation for client postMessage
+      const clientAccount = {
+        provider: "google_drive",
+        accountId,
+        email: email || "",
+        displayName,
+        connectedAt: accountRecord.connectedAt,
+      };
+
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -2689,7 +2715,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
             <script>
               try {
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'google_drive', account: ${JSON.stringify(accountRecord)} }, window.location.origin);
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'google_drive', account: ${JSON.stringify(clientAccount)} }, window.location.origin);
                   setTimeout(() => window.close(), 600);
                 } else {
                   window.location.href = '/?cloud=connected&provider=google_drive&cloud_connected=google_drive';
@@ -2757,6 +2783,15 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       };
       session.accounts.set("microsoft", accountRecord);
 
+      // Safe non-token account representation for client postMessage
+      const clientAccount = {
+        provider: "microsoft",
+        accountId,
+        email: email || "",
+        displayName,
+        connectedAt: accountRecord.connectedAt,
+      };
+
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -2779,7 +2814,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
             <script>
               try {
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'microsoft', account: ${JSON.stringify(accountRecord)} }, window.location.origin);
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'microsoft', account: ${JSON.stringify(clientAccount)} }, window.location.origin);
                   setTimeout(() => window.close(), 600);
                 } else {
                   window.location.href = '/?cloud=connected&provider=microsoft&cloud_connected=microsoft';

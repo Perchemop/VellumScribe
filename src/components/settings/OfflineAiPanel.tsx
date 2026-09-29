@@ -129,7 +129,8 @@ export const OfflineAiPanel: React.FC<OfflineAiPanelProps> = () => {
 
   const formatMb = (bytes: number | null | undefined) => (((bytes || 0) / (1024 * 1024)).toFixed(1));
 
-  const isEngineReady = !!(caps?.isNativeEngineAvailable ?? (caps as any)?.nativeLibraryLoaded);
+  const isLibraryLoaded = Boolean(caps?.nativeLibraryLoaded);
+  const isInferenceReady = Boolean(caps?.inferenceRuntimeReady);
   const freeStorageMb = caps?.availableStorageMb ?? (caps as any)?.freeSpaceMb ?? 0;
 
   if (loading && !caps) {
@@ -147,22 +148,32 @@ export const OfflineAiPanel: React.FC<OfflineAiPanelProps> = () => {
       <div className="p-5 rounded-2xl bg-zinc-900/40 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${isEngineReady ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+            <div className={`p-2.5 rounded-xl ${isInferenceReady ? 'bg-emerald-500/10 text-emerald-500' : isLibraryLoaded ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-800 text-zinc-400'}`}>
               <Cpu className="w-5 h-5" />
             </div>
             <div>
               <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                 On-Device Speech-to-Text (Whisper)
-                {isEngineReady && (
+                {isInferenceReady ? (
                   <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     Engine Ready
+                  </span>
+                ) : isLibraryLoaded ? (
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Native Linked (Tensor Pending)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700">
+                    Unavailable on Web
                   </span>
                 )}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {isEngineReady
+                {isInferenceReady
                   ? 'High-performance offline audio transcription powered by vendored whisper.cpp.'
-                  : 'Native Whisper library not present. Rebuild Android app with NDK support to enable on-device transcription.'}
+                  : isLibraryLoaded
+                  ? 'Native library libwhisper.so is linked. Full GGML tensor engine execution is being compiled.'
+                  : 'On-device Whisper requires the Android native APK build. Web environment supports real-time live microphone dictation.'}
               </p>
             </div>
           </div>
@@ -176,7 +187,15 @@ export const OfflineAiPanel: React.FC<OfflineAiPanelProps> = () => {
         </div>
 
         {/* System telemetry pills */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-zinc-200/60 dark:border-zinc-800/80 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-zinc-200/60 dark:border-zinc-800/80 text-xs">
+          <div>
+            <span className="text-zinc-400 block">Native Library</span>
+            <span className="font-medium text-zinc-200">{isLibraryLoaded ? '✓ Loaded' : 'Not Loaded'}</span>
+          </div>
+          <div>
+            <span className="text-zinc-400 block">Tensor Runtime</span>
+            <span className="font-medium text-zinc-200">{isInferenceReady ? '✓ Active' : 'Pending GGML'}</span>
+          </div>
           <div>
             <span className="text-zinc-400 block">Free Storage</span>
             <span className="font-mono font-medium text-zinc-200">{freeStorageMb} MB</span>
@@ -226,6 +245,22 @@ export const OfflineAiPanel: React.FC<OfflineAiPanelProps> = () => {
           <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
         </label>
       </div>
+
+      {/* Informational Callout when tensor runtime is pending (T-P1.4 / T-P0.2) */}
+      {!isInferenceReady && (
+        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-start gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+          <div className="space-y-1">
+            <div className="font-semibold text-amber-200">Offline Whisper Tensor Runtime Status</div>
+            <p className="text-zinc-400 dark:text-zinc-300">
+              {isLibraryLoaded
+                ? 'The native libwhisper.so library is linked, but the full GGML tensor inference runtime is not compiled into this binary. Model downloads are disabled to prevent downloading models that cannot yet run.'
+                : 'Offline Whisper model inference requires the Android native APK build with compiled GGML tensor support.'}
+              {' '}Real-time offline microphone dictation (live speech recognition) and Cloud Gemini AI remain fully functional.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       {errorMessage && (
@@ -299,8 +334,9 @@ export const OfflineAiPanel: React.FC<OfflineAiPanelProps> = () => {
                   ) : (
                     <button
                       onClick={() => handleDownloadModel(model)}
-                      disabled={downloadingModelId !== null}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white transition flex items-center gap-1.5"
+                      disabled={!isInferenceReady || downloadingModelId !== null}
+                      title={!isInferenceReady ? 'Requires compiled GGML tensor inference engine' : undefined}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition flex items-center gap-1.5"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Download ({formatMb(model.downloadBytes)} MB)
