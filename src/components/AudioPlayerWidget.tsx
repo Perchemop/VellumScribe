@@ -13,6 +13,9 @@ import {
   Loader2,
   AlertCircle,
   WifiOff,
+  Mic,
+  HelpCircle,
+  ArrowUpRight,
 } from 'lucide-react';
 import { RecordingRecord, TranscriptionJobStatus } from '../types';
 import { SQLiteDatabase } from '../lib/storage';
@@ -490,20 +493,42 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         </div>
       </div>
 
-      {/* Error notice if transcription fails */}
+      {/* Humanized Error Sheet with Recovery Actions (UX-P0.2) */}
       {transcribeError && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-          <div className="flex-1 space-y-1">
-            <p className="font-semibold">Transcription Notice</p>
-            <p className="text-amber-700 dark:text-amber-300">{transcribeError}</p>
+        <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs text-amber-200 space-y-2.5 animate-in fade-in">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-0.5">
+              <p className="font-semibold text-amber-300">Couldn't Transcribe Offline</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-300 leading-relaxed">
+                {transcribeError.includes('Whisper') || transcribeError.includes('runtime') || transcribeError.includes('unavailable')
+                  ? 'On-device Whisper tensor inference is not compiled into this binary yet. You can use live dictation while recording or optional Cloud Gemini AI.'
+                  : transcribeError}
+              </p>
+            </div>
+            <button
+              onClick={() => setTranscribeError(null)}
+              className="text-zinc-400 hover:text-zinc-200 p-0.5"
+              aria-label="Dismiss error"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            onClick={handleTranscribeWithOfflineAi}
-            className="px-2.5 py-1 bg-amber-600 text-white rounded-lg text-xs font-medium hover:bg-amber-700 transition-colors"
-          >
-            Retry
-          </button>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/15">
+            <button
+              type="button"
+              onClick={handleTranscribeWithOfflineAi}
+              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors"
+            >
+              Retry
+            </button>
+            <span className="text-[11px] text-zinc-400">or try:</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-800 text-stone-300 rounded-md text-[11px]">
+              <Mic className="w-3 h-3 text-emerald-400" />
+              Live Dictation (when recording)
+            </span>
+          </div>
         </div>
       )}
 

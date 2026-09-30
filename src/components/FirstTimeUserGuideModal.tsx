@@ -19,6 +19,7 @@ import { AppLogo } from './AppLogo';
 import { StorageManager } from '../lib/storage';
 import { AndroidPwaManager } from '../lib/androidPwaManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { OfflineAiManager } from '../services/OfflineAiManager';
 
 interface FirstTimeUserGuideModalProps {
   isOpen: boolean;
@@ -92,6 +93,16 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
   const [currentStep, setCurrentStep] = useState(0);
   const [canInstall, setCanInstall] = useState(() => AndroidPwaManager.canPromptInstall());
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [isWhisperRuntimeReady, setIsWhisperRuntimeReady] = useState(false);
+
+  useEffect(() => {
+    OfflineAiManager.getInstance()
+      .getDeviceCapabilities()
+      .then((caps) => {
+        setIsWhisperRuntimeReady(Boolean(caps.inferenceRuntimeReady));
+      })
+      .catch(() => setIsWhisperRuntimeReady(false));
+  }, []);
 
   useEffect(() => {
     return AndroidPwaManager.subscribe((can) => {
@@ -165,14 +176,14 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
     },
     {
       badge: '100% Offline & Private',
-      title: 'On-Device Storage & Local Voice Transcription',
+      title: 'On-Device Storage & Private Voice Memos',
       description:
-        'Your notes, voice recordings, and sketches never leave your phone without your permission. Fast offline speech transcription and local backups are ready immediately.',
+        'Your notes, voice recordings, and sketches never leave your phone without your permission. Fast local capture and encrypted snapshots are ready immediately.',
       highlights: [
         {
           icon: Mic,
-          title: 'Live Voice Memos & Transcription',
-          desc: 'Capture audio recordings with on-device speech-to-text and live waveforms with zero cloud requirement.',
+          title: 'Live Voice Memos & Dictation',
+          desc: 'Capture audio recordings with real-time on-device speech-to-text dictation and waveforms with zero cloud requirement.',
         },
         {
           icon: Shield,
@@ -182,15 +193,20 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
       ],
     },
     {
-      badge: 'Offline AI vs Cloud AI',
-      title: 'Privacy-Preserving On-Device Transcription',
-      description:
-        'Choose how you want AI to assist you: 100% on-device Whisper models with zero network traffic, or optional Cloud Gemini for multimodal documents.',
+      badge: 'Voice & AI Assistant',
+      title: isWhisperRuntimeReady
+        ? 'Privacy-Preserving On-Device Transcription'
+        : 'Voice Memos That Stay on Your Phone',
+      description: isWhisperRuntimeReady
+        ? 'Download on-device Whisper models with zero network traffic, or use optional Cloud Gemini for multimodal documents.'
+        : 'Record notes offline. Turn speech into text with live dictation while recording, or optional cloud transcription when you allow network. Full offline Whisper arrives when the on-device runtime is built into the Android app.',
       highlights: [
         {
           icon: Mic,
-          title: 'On-Device Whisper Models',
-          desc: 'Download Tiny (~30MB) or Base (~55MB) models once to transcribe meetings and voice memos offline anywhere.',
+          title: isWhisperRuntimeReady ? 'On-Device Whisper Models' : 'Real-Time Microphone Dictation',
+          desc: isWhisperRuntimeReady
+            ? 'Download Tiny (~30MB) or Base (~55MB) models once to transcribe meetings and voice memos offline anywhere.'
+            : 'Offline speech recognition transcribes words as you speak during recording with zero cloud traffic.',
         },
         {
           icon: Sparkles,
