@@ -1,10 +1,13 @@
 # Offline AI & Whisper Build Architecture
 
+> **CRITICAL ARCHITECTURE NOTICE: The current shipped binary includes the native stub implementation until ggml is vendored.**
+> Full on-device Whisper inference is gated and will not produce transcripts until `third_party/whisper.cpp` + `ggml` are compiled into the native Android library.
+
 This document describes the on-device Speech-to-Text (STT) architecture in VellumScribe, detailing the current stub implementation, capability gating, and the integration path to full native GGML tensor inference.
 
 ---
 
-## 1. Current Status (Archive 42 / v3.0.0)
+## 1. Current Status (Archive 43 / v3.0.0)
 
 > **Current binary ships the stub implementation until ggml is vendored.**
 

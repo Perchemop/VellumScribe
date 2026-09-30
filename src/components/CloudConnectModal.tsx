@@ -4,6 +4,7 @@ import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { generatePKCE } from '../lib/pkce';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { NativeBridge } from '../lib/nativeBridge';
 
 interface CloudConnectModalProps {
   provider: CloudStorageProvider;
@@ -116,6 +117,50 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                 : 'MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET'
             } in the server environment.`
         );
+      }
+
+      if (NativeBridge.isNative()) {
+        await NativeBridge.openInAppBrowser(authInfo.url);
+
+        let nativePollingInterval: NodeJS.Timeout | null = null;
+        let removeAppUrlListener: (() => void) | null = null;
+
+        const nativeCleanup = () => {
+          if (removeAppUrlListener) removeAppUrlListener();
+          if (nativePollingInterval) clearInterval(nativePollingInterval);
+          NativeBridge.closeInAppBrowser().catch(() => {});
+        };
+
+        removeAppUrlListener = NativeBridge.addAppUrlListener(async () => {
+          try {
+            nativeCleanup();
+            await CloudSyncEngine.fetchConfig();
+            const accounts = CloudSyncEngine.getAccounts();
+            const connected = accounts.find((a) => a.provider === provider);
+            if (connected) {
+              onConnected(connected);
+            }
+          } catch (e: any) {
+            console.warn('Native OAuth completion error:', e);
+          } finally {
+            setLoading(false);
+          }
+        });
+
+        nativePollingInterval = setInterval(async () => {
+          try {
+            await CloudSyncEngine.fetchConfig();
+            const accounts = CloudSyncEngine.getAccounts();
+            const connected = accounts.find((a) => a.provider === provider);
+            if (connected) {
+              nativeCleanup();
+              setLoading(false);
+              onConnected(connected);
+            }
+          } catch {}
+        }, 2500);
+
+        return;
       }
 
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);

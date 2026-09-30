@@ -12,6 +12,7 @@ import {
   ListTodo,
   Share2,
   BookOpen,
+  Mic,
 } from 'lucide-react';
 import {
   TranscriptionEntity,
@@ -190,7 +191,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
 
       {/* Engine & provenance metadata badge (T-P1.3) */}
       <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
-        {transcription.engine.includes('whisper') ? (
+        {transcription.engine.includes('whisper') && !transcription.engine.includes('groq') ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             whisper.cpp (On-Device)
@@ -200,10 +201,20 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             <Sparkles className="w-3 h-3 text-indigo-500" />
             Gemini Multimodal (Cloud AI)
           </span>
+        ) : transcription.engine.includes('groq') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+            Groq Whisper (Cloud LPU)
+          </span>
+        ) : transcription.engine.includes('deepgram') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+            Deepgram Nova (Cloud AI)
+          </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-            Live Microphone Dictation (Offline)
+            <Mic className="w-3 h-3 text-sky-500" />
+            Live Microphone Dictation (Web Speech / OS)
           </span>
         )}
 
