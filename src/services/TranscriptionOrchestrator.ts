@@ -25,7 +25,7 @@ import {
   OfflineAiErrorCode,
 } from '../types';
 
-export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed';
+export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed' | 'cloud_only';
 
 export interface TranscriptionInput {
   recordingId?: number;
@@ -43,6 +43,7 @@ export interface TranscriptionInput {
 export interface TranscriptionOptions {
   modelId?: string;
   policy?: TranscriptionPolicy;
+  enginePreference?: string;
   onProgress?: (progress: { percent: number; phase: string; status: string }) => void;
   signal?: AbortSignal;
 }
@@ -332,7 +333,7 @@ export class TranscriptionOrchestrator {
     };
 
     // 2. Select appropriate engine
-    const engine = await this.selectEngine(policy, mergedInput);
+    const engine = await this.selectEngine(policy, mergedInput, options.enginePreference);
     AppLogger.info('TranscriptionOrchestrator', `Selected engine: ${engine.id} under policy: ${policy}`);
 
     // 3. Register initial durable job in SQLite if recordingId exists
@@ -427,12 +428,33 @@ export class TranscriptionOrchestrator {
    */
   private async selectEngine(
     policy: TranscriptionPolicy,
-    input?: TranscriptionInput
+    input?: TranscriptionInput,
+    enginePreference?: string
   ): Promise<TranscriptionEngine> {
     const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
     const isOfflineMode = !PrivacyManager.isNetworkAllowed() || policy === 'offline_only';
     const liveText = input?.liveCapturedText || input?.liveTranscript;
     const hasLiveText = Boolean(liveText && liveText.trim().length > 0);
+
+    // 0. Explicit cloud_only policy
+    if (policy === 'cloud_only') {
+      if (!PrivacyManager.isNetworkAllowed()) {
+        throw new Error('Privacy Policy Violation: Network access is blocked by Privacy Mode. Cannot perform cloud transcription.');
+      }
+      const cloud = this.engines.get('cloud_gemini_multimodal');
+      if (cloud && (await cloud.isAvailable())) {
+        return cloud;
+      }
+      throw new Error('NO_ENGINE: Cloud Gemini transcription engine is not configured or unavailable.');
+    }
+
+    // Explicit engine preference if allowed by policy
+    if (enginePreference && !isOfflineMode) {
+      const preferred = this.engines.get(enginePreference);
+      if (preferred && (await preferred.isAvailable())) {
+        return preferred;
+      }
+    }
 
     // 1. Android Native Platform
     if (isAndroid) {

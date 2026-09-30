@@ -2,7 +2,9 @@ import { RecordingRepository } from '../repositories/RecordingRepository';
 import { MediaRepository } from '../lib/MediaRepository';
 import { RecordingRecord } from '../types';
 import { AppLogger } from '../lib/logger';
+import { PluginListenerHandle } from '@capacitor/core';
 import { OfflineTranscriptionEngine } from '../lib/offlineTranscription';
+import { NativeBridge } from '../lib/nativeBridge';
 import { generatePrefixedId } from '../lib/uuid';
 
 export interface RecordedAudioResult {
@@ -33,6 +35,7 @@ export class AudioRecordingManager {
   private analyser: AnalyserNode | null = null;
   private animationFrameId: number | null = null;
   private speechRecognizer: any = null;
+  private nativeSpeechListener: PluginListenerHandle | null = null;
 
   private startTime = 0;
   private pausedDuration = 0;
@@ -105,8 +108,24 @@ export class AudioRecordingManager {
         }
       }
 
-      // Initialize on-device speech recognition if supported
-      if (OfflineTranscriptionEngine.isSpeechRecognitionSupported()) {
+      // Initialize on-device speech recognition (Android native SpeechRecognizer first, fallback to Web Speech)
+      if (NativeBridge.isAndroid()) {
+        try {
+          const { OfflineAi } = await import('../plugins/offline-ai');
+          const avail = await OfflineAi.isSpeechRecognitionAvailable().catch(() => ({ available: false }));
+          if (avail.available) {
+            this.nativeSpeechListener = await OfflineAi.addListener('speechRecognitionResult', (ev) => {
+              if (ev?.text) {
+                this.liveTranscript = ev.text;
+                if (options?.onLiveTranscript) options.onLiveTranscript(ev.text);
+              }
+            });
+            await OfflineAi.startListening({ language: 'en-US' });
+          }
+        } catch (nativeRecErr) {
+          AppLogger.warn('AudioRecordingManager', 'Native speech recognition startup notice', nativeRecErr);
+        }
+      } else if (OfflineTranscriptionEngine.isSpeechRecognitionSupported()) {
         try {
           this.speechRecognizer = OfflineTranscriptionEngine.createSpeechRecognizer({
             onInterim: (text) => {
@@ -225,6 +244,15 @@ export class AudioRecordingManager {
         this.speechRecognizer.stop();
       } catch {}
       this.speechRecognizer = null;
+    }
+
+    if (this.nativeSpeechListener) {
+      try {
+        const { OfflineAi } = await import('../plugins/offline-ai');
+        await OfflineAi.stopListening().catch(() => {});
+        this.nativeSpeechListener.remove();
+      } catch {}
+      this.nativeSpeechListener = null;
     }
 
     const capturedLiveTranscript = this.liveTranscript.trim();
@@ -452,6 +480,15 @@ export class AudioRecordingManager {
         this.speechRecognizer.stop();
       } catch {}
       this.speechRecognizer = null;
+    }
+    if (this.nativeSpeechListener) {
+      try {
+        this.nativeSpeechListener.remove();
+        import('../plugins/offline-ai').then(({ OfflineAi }) => {
+          OfflineAi.stopListening().catch(() => {});
+        }).catch(() => {});
+      } catch {}
+      this.nativeSpeechListener = null;
     }
     if (this.audioStream) {
       this.audioStream.getTracks().forEach((track) => track.stop());

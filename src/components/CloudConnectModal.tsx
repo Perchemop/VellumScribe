@@ -124,13 +124,16 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
 
         let nativePollingInterval: NodeJS.Timeout | null = null;
         let removeAppUrlListener: (() => void) | null = null;
+        let removeBrowserFinishedListener: (() => void) | null = null;
 
         const nativeCleanup = () => {
           if (removeAppUrlListener) removeAppUrlListener();
+          if (removeBrowserFinishedListener) removeBrowserFinishedListener();
           if (nativePollingInterval) clearInterval(nativePollingInterval);
           NativeBridge.closeInAppBrowser().catch(() => {});
         };
 
+        // 1. Return via deep link or App Link redirect
         removeAppUrlListener = NativeBridge.addAppUrlListener(async () => {
           try {
             nativeCleanup();
@@ -147,6 +150,23 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
           }
         });
 
+        // 2. Browser finished / user closed the browser tab (prevents indefinite loading spinner)
+        NativeBridge.addBrowserFinishedListener(() => {
+          CloudSyncEngine.fetchConfig().then(() => {
+            const accounts = CloudSyncEngine.getAccounts();
+            const connected = accounts.find((a) => a.provider === provider);
+            if (connected) {
+              onConnected(connected);
+            }
+          }).finally(() => {
+            nativeCleanup();
+            setLoading(false);
+          });
+        }).then((cleanupFn) => {
+          removeBrowserFinishedListener = cleanupFn;
+        });
+
+        // 3. Periodic configuration poll while browser tab is open
         nativePollingInterval = setInterval(async () => {
           try {
             await CloudSyncEngine.fetchConfig();
