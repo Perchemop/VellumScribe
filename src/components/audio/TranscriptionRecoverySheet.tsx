@@ -24,7 +24,7 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
   onTranscribeSuccess,
   onRetryOffline,
 }) => {
-  useModalBackHandler(isOpen, onClose);
+  useModalBackHandler(isOpen, onClose, 'transcription-recovery-sheet');
 
   const [isCloudTranscribing, setIsCloudTranscribing] = useState(false);
   const [cloudError, setCloudError] = useState<string | null>(null);

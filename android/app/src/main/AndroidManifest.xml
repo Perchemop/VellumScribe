@@ -25,6 +25,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep Link Intent Filter for OAuth Return (Custom Scheme: com.vellumscribe.app://oauth) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.vellumscribe.app" android:host="oauth" />
+            </intent-filter>
+
+            <!-- App Links Intent Filter for HTTPS Cloud Callbacks -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="*vellumscribe*" android:pathPrefix="/api/cloud" />
+            </intent-filter>
+
         </activity>
 
         <provider

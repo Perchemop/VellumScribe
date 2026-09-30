@@ -341,4 +341,21 @@ export class NativeBridge {
     } catch {}
     return () => {};
   }
+
+  /**
+   * Listen for user dismissing / closing in-app browser tab (prevents indefinite loading spinner)
+   */
+  public static async addBrowserFinishedListener(callback: () => void): Promise<() => void> {
+    try {
+      if (this.isNative()) {
+        const handle = await Browser.addListener('browserFinished', () => {
+          callback();
+        });
+        return () => {
+          handle.remove();
+        };
+      }
+    } catch {}
+    return () => {};
+  }
 }
