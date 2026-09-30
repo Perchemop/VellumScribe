@@ -9,6 +9,7 @@
         "@capacitor-community/sqlite": "^8.1.1",
         "@capacitor/android": "^8.5.1",
         "@capacitor/app": "^8.1.1",
+        "@capacitor/browser": "^8.0.4",
         "@capacitor/camera": "^8.2.3",
         "@capacitor/cli": "^8.5.1",
         "@capacitor/clipboard": "^8.0.1",
@@ -105,6 +106,8 @@
     "@capacitor/android": ["@capacitor/android@8.5.2", "", { "peerDependencies": { "@capacitor/core": "^8.5.0" } }, ""],
 
     "@capacitor/app": ["@capacitor/app@8.1.1", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, ""],
+
+    "@capacitor/browser": ["@capacitor/browser@8.0.4", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-ORZ4u/y+7aMuu6yVuk6SP529fUZyqcbnuHB1q5McpA3o2SYfVoi28iB8rsQjI2ad1qlKJd29ZUuGtspXLBDlWg=="],
 
     "@capacitor/camera": ["@capacitor/camera@8.2.4", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, ""],
 

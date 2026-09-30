@@ -52,4 +52,25 @@ describe('TranscriptionOrchestrator Selection & Honesty Matrix', () => {
       )
     ).rejects.toThrow(/(OFFLINE_AI_ENGINE_UNAVAILABLE|OFFLINE_AI_NO_SPEECH|NO_ENGINE)/i);
   });
+
+  it('verifies cloud_only recovery route enforces network privacy permission', async () => {
+    const orchestrator = TranscriptionOrchestrator.getInstance();
+    const { PrivacyManager } = await import('../lib/privacyManager');
+
+    // Force network disabled in privacy manager
+    const originalAllowed = PrivacyManager.isNetworkAllowed;
+    (PrivacyManager as any).isNetworkAllowed = () => false;
+
+    try {
+      const dummyBlob = new Blob(['RIFF....WAVEfmt '], { type: 'audio/wav' });
+      await expect(
+        orchestrator.orchestrate(
+          { audioBlob: dummyBlob },
+          { policy: 'cloud_only', enginePreference: 'cloud_gemini_multimodal' }
+        )
+      ).rejects.toThrow(/(Privacy|Network|NO_ENGINE|OFFLINE_AI_ENGINE_UNAVAILABLE)/i);
+    } finally {
+      (PrivacyManager as any).isNetworkAllowed = originalAllowed;
+    }
+  });
 });

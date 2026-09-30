@@ -5,6 +5,8 @@ import { Clipboard } from '@capacitor/clipboard';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Camera } from '@capacitor/camera';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { Browser } from '@capacitor/browser';
+import { App } from '@capacitor/app';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -293,5 +295,50 @@ export class NativeBridge {
       console.warn('Native reminder cancellation failed:', e);
     }
     return false;
+  }
+
+  /**
+   * Open in-app browser tab for native Android OAuth flows
+   */
+  public static async openInAppBrowser(url: string): Promise<boolean> {
+    try {
+      if (this.isNative()) {
+        await Browser.open({ url, presentationStyle: 'popover' });
+        return true;
+      }
+    } catch (e) {
+      console.warn('Native Browser.open failed:', e);
+    }
+    return false;
+  }
+
+  /**
+   * Close in-app browser tab
+   */
+  public static async closeInAppBrowser(): Promise<void> {
+    try {
+      if (this.isNative()) {
+        await Browser.close();
+      }
+    } catch {}
+  }
+
+  /**
+   * Listen for native deep link appUrlOpen events (for OAuth redirect back into the APK)
+   */
+  public static addAppUrlListener(callback: (url: string) => void): () => void {
+    try {
+      if (this.isNative()) {
+        const handlePromise = App.addListener('appUrlOpen', (data) => {
+          if (data?.url) {
+            callback(data.url);
+          }
+        });
+        return () => {
+          handlePromise.then((h) => h.remove()).catch(() => {});
+        };
+      }
+    } catch {}
+    return () => {};
   }
 }
