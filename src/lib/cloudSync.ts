@@ -431,6 +431,7 @@ export class CloudSyncEngine {
     options?: {
       codeChallenge?: string;
       codeChallengeMethod?: string;
+      codeVerifier?: string;
       redirectUri?: string;
     }
   ): Promise<{ configured: boolean; url?: string; message?: string }> {
@@ -439,6 +440,9 @@ export class CloudSyncEngine {
     if (options?.codeChallenge) {
       query.set('code_challenge', options.codeChallenge);
       query.set('code_challenge_method', options.codeChallengeMethod || 'S256');
+    }
+    if (options?.codeVerifier) {
+      query.set('code_verifier', options.codeVerifier);
     }
     if (options?.redirectUri) {
       query.set('redirect_uri', options.redirectUri);

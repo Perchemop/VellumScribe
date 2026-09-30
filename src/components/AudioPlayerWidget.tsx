@@ -25,6 +25,8 @@ import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { OfflineAiManager } from '../services/OfflineAiManager';
 import { TranscriptService, FullTranscriptView } from '../services/TranscriptService';
 import { TranscriptViewer } from './transcription/TranscriptViewer';
+import { TranscriptionRecoverySheet } from './audio/TranscriptionRecoverySheet';
+import { LiveRegion } from './common/LiveRegion';
 
 interface AudioPlayerWidgetProps {
   recording: RecordingRecord;
@@ -54,6 +56,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const [jobStatus, setJobStatus] = useState<TranscriptionJobStatus | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
+  const [showRecoverySheet, setShowRecoverySheet] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -106,7 +109,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           } else if (status.status === 'FAILED') {
             clearInterval(pollInterval);
             setIsTranscribing(false);
-            setTranscribeError(OfflineAiManager.mapErrorCodeToUserMessage(status.error));
+            const errorMsg = OfflineAiManager.mapErrorCodeToUserMessage(status.error);
+            setTranscribeError(errorMsg);
+            setShowRecoverySheet(true);
           } else if (status.status === 'CANCELLED') {
             clearInterval(pollInterval);
             setIsTranscribing(false);
@@ -115,11 +120,14 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           clearInterval(pollInterval);
           setIsTranscribing(false);
           setTranscribeError(e?.message || 'Could not verify speech recognition job status.');
+          setShowRecoverySheet(true);
         }
       }, 300);
     } catch (err: any) {
       setIsTranscribing(false);
-      setTranscribeError(OfflineAiManager.mapErrorCodeToUserMessage(err?.message));
+      const errorMsg = OfflineAiManager.mapErrorCodeToUserMessage(err?.message);
+      setTranscribeError(errorMsg);
+      setShowRecoverySheet(true);
     }
   };
 
@@ -371,6 +379,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       {/* Progress & Status when actively transcribing */}
       {isTranscribing && jobStatus && (
         <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs space-y-2">
+          <LiveRegion
+            message={`Speech transcription progress: ${jobStatus.progressPercent} percent. ${jobStatus.phaseLabel || ''}`}
+            role="status"
+          />
           <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200">
             <span className="font-medium flex items-center gap-1.5">
               <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
@@ -496,6 +508,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       {/* Humanized Error Sheet with Recovery Actions (UX-P0.2) */}
       {transcribeError && (
         <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-2xl text-xs text-amber-200 space-y-2.5 animate-in fade-in">
+          <LiveRegion message={`Transcription notice: ${transcribeError}`} role="alert" />
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 space-y-0.5">
@@ -518,6 +531,13 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/15">
             <button
               type="button"
+              onClick={() => setShowRecoverySheet(true)}
+              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium rounded-lg text-xs transition-colors shadow-sm"
+            >
+              View Solutions & Alternatives
+            </button>
+            <button
+              type="button"
               onClick={handleTranscribeWithOfflineAi}
               className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors"
             >
@@ -531,6 +551,21 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           </div>
         </div>
       )}
+
+      {/* Dedicated Transcription Recovery & Alternatives Sheet */}
+      <TranscriptionRecoverySheet
+        isOpen={showRecoverySheet}
+        onClose={() => setShowRecoverySheet(false)}
+        errorText={transcribeError || undefined}
+        recordingId={recording.id}
+        onTranscribeSuccess={() => {
+          refreshTranscriptData();
+          setShowTranscript(true);
+          setTranscribeError(null);
+          setShowRecoverySheet(false);
+        }}
+        onRetryOffline={handleTranscribeWithOfflineAi}
+      />
 
       {/* Timestamped Segments Transcript Viewer */}
       {showTranscript && fullTranscript && (

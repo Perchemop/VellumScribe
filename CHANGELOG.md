@@ -8,6 +8,24 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
+## [3.0.0-archive42] - 2026-09-30
+
+UX honesty hardening, transcription recovery sheet pattern, NoteEditor toolbar simplification, PKCE token verification, and durable cloud account persistence.
+
+### Added
+
+- **Transcription Recovery & Alternatives Pattern (UX-P0.2):** Introduced `TranscriptionRecoverySheet` providing transparent engine capability reporting ("GGML Tensor Runtime Pending"), single-click Cloud Gemini transcription fallback, and real-time microphone dictation guidance.
+- **Durable Encrypted Cloud Account Storage (server.ts):** Implemented AES-256-GCM encrypted persistence (`persistAccountsToDisk`, `loadPersistedAccountsFromDisk`) so connected accounts across Google Drive, Microsoft, and Nextcloud survive server restarts without exposing tokens.
+- **Full PKCE Code Verifier Exchange:** Wired `code_verifier` from client generation through server authorization URLs and into the OAuth token exchange POST requests for Google Drive and Microsoft.
+- **Live Dictation Screen-Reader Accessibility (UX-P2.1):** Added `LiveRegion` dynamic announcements (`aria-live="polite"`) for real-time transcription status, progress updates, and dictation text stream.
+- **Mobile Direct Navigation Fallback for SSO:** Added graceful direct URL redirection when popup windows are blocked or executing on mobile environments, with post-authentication redirect handling.
+- **Offline AI Build Documentation:** Added `OFFLINE_AI_BUILD.md` clearly documenting the current stub vs real upstream ggml/whisper.cpp build architecture.
+
+### Changed
+
+- **NoteEditor Toolbar Simplification (UX-P1.1):** Streamlined toolbar to 3 primary creation actions (Checklist, Voice Memo, AI Summary) and organized secondary actions (Sketch, OCR, Reminder, Geotag, PIN Lock, Markdown Toggle, Share, Pin) into an accessible, non-overflowing "More" actions sheet.
+- **Honest Onboarding & Model Download Gating (UX-P0.1 / UX-P0.3):** First-time guide copy truthfully reflects that native tensor inference is pending compile, directing users to live dictation and optional cloud AI; model downloads are disabled with clear explanation until GGML is vendored.
+
 ## [3.0.0] - 2026-09-04
 
 Comprehensive security hardening, cloud sync integrity, and offline privacy enforcement.
