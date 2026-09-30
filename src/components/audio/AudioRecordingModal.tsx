@@ -228,7 +228,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
 
             {/* Live Dictation Preview */}
             {liveTranscript && (
-              <div className="w-full p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs text-stone-700 dark:text-stone-300 max-h-24 overflow-y-auto">
+              <div
+                aria-live="polite"
+                aria-atomic="false"
+                className="w-full p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs text-stone-700 dark:text-stone-300 max-h-24 overflow-y-auto"
+              >
                 <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">
                   🎙️ Live Dictation (Offline Speech Recognizer):
                 </span>

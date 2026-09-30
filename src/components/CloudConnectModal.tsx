@@ -104,6 +104,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       const authInfo = await CloudSyncEngine.getAuthUrl(provider, {
         codeChallenge: pkce.codeChallenge,
         codeChallengeMethod: pkce.codeChallengeMethod,
+        codeVerifier: pkce.codeVerifier,
       });
 
       if (!authInfo.configured || !authInfo.url) {
@@ -117,19 +118,29 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         );
       }
 
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const width = 520;
       const height = 650;
       const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
       const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
 
-      const popup = window.open(
-        authInfo.url,
-        `sso_${provider}`,
-        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
-      );
+      let popup: Window | null = null;
+      if (!isMobile) {
+        try {
+          popup = window.open(
+            authInfo.url,
+            `sso_${provider}`,
+            `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes`
+          );
+        } catch {
+          popup = null;
+        }
+      }
 
-      if (!popup || popup.closed) {
-        throw new Error('Popup window was blocked by the browser. Please allow popups to complete authentication.');
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        // Direct navigation fallback for mobile browsers or blocked popups
+        window.location.href = authInfo.url;
+        return;
       }
 
       let timeoutTimer: NodeJS.Timeout | null = null;

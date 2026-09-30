@@ -67,10 +67,15 @@ export default function App() {
   // Run schema checks and check for remote updates once per session on startup
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('cloud') === 'connected') {
+    const cloudError = params.get('cloud_error');
+    if (cloudError) {
+      showToast(`Cloud Notice: ${cloudError}`);
+      window.history.replaceState({}, document.title, '/');
+    } else if (params.get('cloud') === 'connected') {
       CloudSyncEngine.fetchConfig().then(() => {
         setActiveView('settings');
         setSettingsSubtab('cloud' as any);
+        showToast('Cloud account connected successfully.');
         window.history.replaceState({}, document.title, '/');
       });
     } else {

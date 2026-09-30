@@ -676,171 +676,132 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <span className="hidden sm:inline">Checklist</span>
           </button>
 
-          {/* Add / Edit Independent Sketch Drawing */}
-          <button
-            id="toggle-sketch-btn"
-            aria-label={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
-            onClick={() => setShowSketchModal(true)}
-            title={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
-            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              sketchData
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
-                : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
-            }`}
-          >
-            <PenTool className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sketch</span>
-          </button>
-
-          {/* AI Summarization & Synthesis */}
-          <button
-            id="open-ai-summary-btn"
-            aria-label="Generate AI Summary with Google Gemini"
-            onClick={handleOpenAiSummaryModal}
-            title="Generate AI Summary with Google Gemini (Executive, Action Items, Outline)"
-            className="flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>AI Summary</span>
-          </button>
-
-          {/* Quick AI Studio Key Authenticator */}
-          <button
-            id="ai-studio-key-btn"
-            aria-label={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
-            onClick={() => setShowAiKeyModal(true)}
-            title={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
-            className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              AiSettingsManager.hasLocalKey()
-                ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-                : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">{AiSettingsManager.hasLocalKey() ? 'Key Active' : 'Add Key'}</span>
-          </button>
-
-          {/* Voice Memo Recording */}
-          <div className="flex items-center">
+          {/* Add / Edit Independent Sketch Drawing (Desktop) */}
+          <div className="hidden lg:flex items-center gap-1">
             <button
-              id="open-audio-recorder-btn"
-              aria-label="Record Voice Memo"
-              onClick={() => setShowAudioRecorder((prev) => !prev)}
-              title="Record Voice Memo (Inline)"
+              id="toggle-sketch-btn"
+              aria-label={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
+              onClick={() => setShowSketchModal(true)}
+              title={sketchData ? 'Edit Handwritten Sketch' : 'Add Sketch Canvas to Note'}
               className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                showAudioRecorder
-                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                sketchData
+                  ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 shadow-2xs'
                   : 'text-zinc-600 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800/80'
               }`}
             >
-              <Mic className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Voice</span>
+              <PenTool className="w-3.5 h-3.5" />
+              <span>Sketch</span>
             </button>
+
+            {/* Quick AI Studio Key Authenticator */}
             <button
-              id="open-audio-studio-modal-btn"
-              aria-label="Open Whisper Transcription Studio Modal"
-              onClick={() => setShowAudioStudioModal(true)}
-              title="Open Offline Whisper Voice Studio Modal"
-              className="p-1.5 text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 rounded-md transition-colors"
+              id="ai-studio-key-btn"
+              aria-label={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
+              onClick={() => setShowAiKeyModal(true)}
+              title={AiSettingsManager.hasLocalKey() ? `AI Studio Key Configured (${AiSettingsManager.getMaskedKey()})` : 'Add Free Google AI Studio API Key'}
+              className={`flex items-center justify-center gap-1 min-h-[38px] px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                AiSettingsManager.hasLocalKey()
+                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+                  : 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+              }`}
             >
-              <Sparkles className="w-3 h-3" />
+              <Key className="w-3.5 h-3.5" />
+              <span>{AiSettingsManager.hasLocalKey() ? 'Key Active' : 'Add Key'}</span>
             </button>
-          </div>
 
-          {/* OCR Document Scan */}
-          <button
-            id="open-ocr-scanner-btn"
-            aria-label="OCR Scan Document"
-            onClick={() => setShowOcrScanner(true)}
-            title="OCR Scan Document"
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
-          >
-            <Camera className="w-3.5 h-3.5" />
-          </button>
+            {/* OCR Document Scan */}
+            <button
+              id="open-ocr-scanner-btn"
+              aria-label="OCR Scan Document"
+              onClick={() => setShowOcrScanner(true)}
+              title="OCR Scan Document"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
 
-          {/* Reminder button */}
-          <button
-            aria-label={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
-            onClick={() => setShowReminderPicker((p) => !p)}
-            title={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
-            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
-              reminderAt
-                ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
-                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-          </button>
+            {/* Reminder button */}
+            <button
+              aria-label={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
+              onClick={() => setShowReminderPicker((p) => !p)}
+              title={reminderAt ? `Reminder: ${new Date(reminderAt).toLocaleString()}` : 'Set Note Reminder'}
+              className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
+                reminderAt
+                  ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                  : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+            </button>
 
-          {/* Geotag Location */}
-          <button
-            aria-label={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
-            onClick={() => setShowLocationPicker((p) => !p)}
-            title={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
-            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
-              locationName
-                ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
-                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
-            }`}
-          >
-            <MapPin className="w-3.5 h-3.5" />
-          </button>
+            {/* Geotag Location */}
+            <button
+              aria-label={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
+              onClick={() => setShowLocationPicker((p) => !p)}
+              title={locationName ? `Location: ${locationName}` : 'Add Location / Geotag'}
+              className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
+                locationName
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
+                  : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
+              }`}
+            >
+              <MapPin className="w-3.5 h-3.5" />
+            </button>
 
-          {/* PIN Security Lock */}
-          <button
-            aria-label={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
-            onClick={() => setShowSecurityModal(true)}
-            title={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
-            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
-              note.is_locked
-                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
-                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
-            }`}
-          >
-            {note.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-          </button>
+            {/* PIN Security Lock */}
+            <button
+              aria-label={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
+              onClick={() => setShowSecurityModal(true)}
+              title={note.is_locked ? 'Manage PIN Security' : 'Protect Note with PIN'}
+              className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
+                note.is_locked
+                  ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40'
+                  : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
+              }`}
+            >
+              {note.is_locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+            </button>
 
-          {/* Markdown View / Edit Toggle */}
-          <button
-            aria-label={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
-            onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
-            title={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
-          >
-            {viewMode === 'preview' ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          </button>
+            {/* Markdown View / Edit Toggle */}
+            <button
+              aria-label={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
+              onClick={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')}
+              title={viewMode === 'preview' ? 'Switch to Markdown Edit Mode' : 'Switch to Markdown Preview'}
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 rounded-lg transition-colors"
+            >
+              {viewMode === 'preview' ? <Edit3 className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
 
-          {/* Toggle Pin */}
-          <button
-            id="note-editor-pin-btn"
-            aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note'}
-            onClick={() => {
-              const updated = StorageManager.togglePinNote(note.id);
-              if (updated) onNoteUpdated(updated);
-            }}
-            title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
-            className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
-              note.is_pinned
-                ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800 font-semibold'
-                : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
-            }`}
-          >
-            <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
-          </button>
+            {/* Toggle Pin */}
+            <button
+              id="note-editor-pin-btn"
+              aria-label={note.is_pinned ? 'Unpin Note' : 'Pin Note'}
+              onClick={() => {
+                const updated = StorageManager.togglePinNote(note.id);
+                if (updated) onNoteUpdated(updated);
+              }}
+              title={note.is_pinned ? 'Unpin Note' : 'Pin Note to Top'}
+              className={`flex items-center justify-center min-h-[38px] min-w-[38px] p-2 rounded-lg transition-colors ${
+                note.is_pinned
+                  ? 'text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850'
+              }`}
+            >
+              <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
+            </button>
 
-          {/* Share & Export */}
-          <button
-            id="note-editor-share-btn"
-            aria-label="Share & Export Note"
-            onClick={() => setShowShareModal(true)}
-            title="Share & Export Note"
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-          </button>
+            {/* Share & Export */}
+            <button
+              id="note-editor-share-btn"
+              aria-label="Share & Export Note"
+              onClick={() => setShowShareModal(true)}
+              title="Share & Export Note"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
 
-          {/* Secondary Actions: Visible on Desktop, in 'More' Menu on Mobile */}
-          <div className="hidden sm:flex items-center gap-1">
+            {/* Duplicate */}
             <button
               id="note-editor-duplicate-btn"
               aria-label="Duplicate Note"
@@ -854,6 +815,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <Copy className="w-3.5 h-3.5" />
             </button>
 
+            {/* History */}
             <button
               id="note-editor-history-btn"
               aria-label="View Revision History"
@@ -864,6 +826,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <Clock className="w-3.5 h-3.5" />
             </button>
 
+            {/* Settings */}
             <button
               id="note-editor-settings-btn"
               aria-label="Settings & Google AI Studio API Key"
@@ -875,14 +838,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             </button>
           </div>
 
-          {/* Mobile 'More' Overflow Button */}
-          <div className="relative sm:hidden">
+          {/* Mobile 'More' Overflow Sheet / Menu */}
+          <div className="relative lg:hidden">
             <button
               id="note-editor-more-actions-btn"
               aria-label="More Note Options"
               onClick={() => setShowMoreActionsSheet((prev) => !prev)}
               title="More Actions"
-              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
@@ -890,65 +853,202 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {showMoreActionsSheet && (
               <>
                 <div
-                  className="fixed inset-0 z-40"
+                  className="fixed inset-0 z-40 bg-black/30 backdrop-blur-2xs"
                   onClick={() => setShowMoreActionsSheet(false)}
                 />
-                <div className="absolute right-0 top-full mt-1.5 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl z-50 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 top-full mt-1.5 w-56 max-h-[80vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl z-50 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in zoom-in-95">
+                  {/* Sketch Drawing */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowSketchModal(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <PenTool className="w-4 h-4 text-zinc-500" />
+                      <span>Sketch Drawing</span>
+                    </div>
+                    {sketchData && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200">
+                        Added
+                      </span>
+                    )}
+                  </button>
+
+                  {/* OCR Document Scanner */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowOcrScanner(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Camera className="w-4 h-4 text-zinc-500" />
+                    <span>OCR Scan Document</span>
+                  </button>
+
+                  {/* Share & Export */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowShareModal(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Share2 className="w-4 h-4 text-zinc-500" />
+                    <span>Share & Export</span>
+                  </button>
+
+                  <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
+
+                  {/* Reminder */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowReminderPicker(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Bell className="w-4 h-4 text-amber-500" />
+                      <span>{reminderAt ? 'Edit Reminder' : 'Set Reminder'}</span>
+                    </div>
+                    {reminderAt && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                        Due
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Geotag */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowLocationPicker(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <MapPin className="w-4 h-4 text-emerald-500" />
+                      <span>{locationName ? 'Edit Geotag' : 'Add Geotag'}</span>
+                    </div>
+                    {locationName && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                        Tagged
+                      </span>
+                    )}
+                  </button>
+
+                  {/* PIN Security */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowSecurityModal(true);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Lock className="w-4 h-4 text-zinc-500" />
+                      <span>PIN Lock Security</span>
+                    </div>
+                    {note.is_locked && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                        Locked
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Markdown Toggle */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setViewMode(viewMode === 'preview' ? 'edit' : 'preview');
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {viewMode === 'preview' ? <Edit3 className="w-4 h-4 text-zinc-500" /> : <Eye className="w-4 h-4 text-zinc-500" />}
+                      <span>{viewMode === 'preview' ? 'Edit Raw Markdown' : 'Preview Markdown'}</span>
+                    </div>
+                    <span className="text-[10px] font-mono uppercase text-zinc-400">
+                      {viewMode}
+                    </span>
+                  </button>
+
+                  {/* Pin to Top */}
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      const updated = StorageManager.togglePinNote(note.id);
+                      if (updated) onNoteUpdated(updated);
+                    }}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Pin className={`w-4 h-4 text-zinc-500 ${note.is_pinned ? 'fill-current' : ''}`} />
+                      <span>{note.is_pinned ? 'Unpin from Top' : 'Pin to Top'}</span>
+                    </div>
+                    {note.is_pinned && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200">
+                        Pinned
+                      </span>
+                    )}
+                  </button>
+
+                  <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
+
+                  {/* Duplicate Note */}
                   <button
                     onClick={() => {
                       setShowMoreActionsSheet(false);
                       const dup = StorageManager.duplicateNote(note.id);
                       if (dup) onNoteUpdated(dup);
                     }}
-                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                    className="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
                   >
-                    <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                    <Copy className="w-4 h-4 text-zinc-500" />
                     <span>Duplicate Note</span>
                   </button>
 
+                  {/* Version History */}
                   <button
                     onClick={() => {
                       setShowMoreActionsSheet(false);
                       setShowRevisionsModal(true);
                     }}
-                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                    className="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
                   >
-                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                    <Clock className="w-4 h-4 text-zinc-500" />
                     <span>Version History</span>
                   </button>
 
+                  {/* AI Studio Key */}
                   <button
                     onClick={() => {
                       setShowMoreActionsSheet(false);
-                      setShowReminderPicker(true);
+                      setShowAiKeyModal(true);
                     }}
-                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
                   >
-                    <Bell className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>{reminderAt ? 'Edit Reminder' : 'Set Reminder'}</span>
+                    <div className="flex items-center gap-2.5">
+                      <Key className="w-4 h-4 text-zinc-500" />
+                      <span>Google AI Key</span>
+                    </div>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${AiSettingsManager.hasLocalKey() ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'}`}>
+                      {AiSettingsManager.hasLocalKey() ? 'Active' : 'Missing'}
+                    </span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setShowMoreActionsSheet(false);
-                      setShowLocationPicker(true);
-                    }}
-                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
-                  >
-                    <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-                    <span>{locationName ? 'Edit Geotag' : 'Add Geotag'}</span>
-                  </button>
-
-                  <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
-
+                  {/* App Settings */}
                   <button
                     onClick={() => {
                       setShowMoreActionsSheet(false);
                       setShowSettingsModal(true);
                     }}
-                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                    className="w-full px-3.5 py-2.5 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
                   >
-                    <Settings className="w-3.5 h-3.5 text-zinc-500" />
+                    <Settings className="w-4 h-4 text-zinc-500" />
                     <span>App Settings</span>
                   </button>
                 </div>

@@ -2213,6 +2213,7 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
 
   const codeChallenge = typeof req.query.code_challenge === "string" ? req.query.code_challenge : undefined;
   const codeChallengeMethod = typeof req.query.code_challenge_method === "string" ? req.query.code_challenge_method : "S256";
+  const codeVerifier = typeof req.query.code_verifier === "string" ? req.query.code_verifier : undefined;
 
   pendingOAuthStates.set(state, {
     sessionId,
@@ -2221,6 +2222,7 @@ app.get("/api/cloud/:provider/auth-url", (req, res) => {
     expiresAt: Date.now() + 10 * 60 * 1000,
     codeChallenge,
     codeChallengeMethod: codeChallenge ? codeChallengeMethod : undefined,
+    codeVerifier,
   });
 
   if (provider === "google_drive") {
@@ -2677,16 +2679,21 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
       const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${origin}/api/cloud/google_drive/callback`;
 
+      const googleTokenParams: Record<string, string> = {
+        code,
+        client_id: clientId || "",
+        client_secret: clientSecret || "",
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      };
+      if (stateRecord.codeVerifier) {
+        googleTokenParams.code_verifier = stateRecord.codeVerifier;
+      }
+
       const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId || "",
-          client_secret: clientSecret || "",
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
+        body: new URLSearchParams(googleTokenParams),
       });
 
       if (!tokenRes.ok) {
@@ -2778,16 +2785,21 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
       const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
       const redirectUri = process.env.MICROSOFT_REDIRECT_URI || `${origin}/api/cloud/microsoft/callback`;
 
+      const msTokenParams: Record<string, string> = {
+        code,
+        client_id: clientId || "",
+        client_secret: clientSecret || "",
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      };
+      if (stateRecord.codeVerifier) {
+        msTokenParams.code_verifier = stateRecord.codeVerifier;
+      }
+
       const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: clientId || "",
-          client_secret: clientSecret || "",
-          redirect_uri: redirectUri,
-          grant_type: "authorization_code",
-        }),
+        body: new URLSearchParams(msTokenParams),
       });
 
       if (!tokenRes.ok) {
