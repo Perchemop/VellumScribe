@@ -174,6 +174,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [ollamaVerifyResult, setOllamaVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false);
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
@@ -1443,6 +1444,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
+            {/* Advanced External Providers Toggle (UX-P2.4) */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedAi((prev) => !prev)}
+                className="w-full p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300 font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-zinc-500" />
+                  <span>Advanced Providers &amp; Local Daemons (Groq, Deepgram, Ollama, Local Whisper)</span>
+                </div>
+                <span className="text-[11px] font-medium text-zinc-400">
+                  {showAdvancedAi ? 'Hide Advanced ▲' : 'Show Advanced ▼'}
+                </span>
+              </button>
+            </div>
+
+            {showAdvancedAi && (
+              <>
             {/* Provider 2: Groq Cloud Key */}
             <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
@@ -1794,6 +1814,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </button>
               </div>
             </div>
+              </>
+            )}
 
             {/* Import from .env / JSON */}
             <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex items-center justify-between">

@@ -930,21 +930,51 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             />
           )
         ) : (
-          <div className="p-10 text-center text-zinc-400 space-y-2">
-            <FileText className="w-7 h-7 mx-auto mb-1 opacity-40 stroke-[1.2]" />
-            <p className="text-xs font-normal">
-              {activeTab === 'trash'
-                ? 'Trash is empty.'
-                : activeTab === 'archived'
-                ? 'No archived notes.'
-                : activeTab === 'checklist'
-                ? 'No checklist notes.'
-                : activeTab === 'sketch'
-                ? 'No sketch notes.'
-                : activeTab === 'reminders'
-                ? 'No active reminders.'
-                : 'No notes found.'}
-            </p>
+          <div className="p-8 text-center text-zinc-400 space-y-3 max-w-xs mx-auto animate-in fade-in">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 flex items-center justify-center mx-auto text-zinc-400">
+              <FileText className="w-6 h-6 stroke-[1.4]" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                {activeTab === 'trash'
+                  ? 'Trash is Empty'
+                  : activeTab === 'archived'
+                  ? 'No Archived Notes'
+                  : activeTab === 'checklist'
+                  ? 'No Checklists Yet'
+                  : activeTab === 'sketch'
+                  ? 'No Sketches Yet'
+                  : activeTab === 'reminders'
+                  ? 'No Active Reminders'
+                  : 'No Notes in this Category'}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {activeTab === 'all'
+                  ? 'Start capturing thoughts, checklists, or voice memos offline.'
+                  : 'Items matching this filter will appear here.'}
+              </p>
+            </div>
+
+            {activeTab === 'all' && (
+              <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onCreateNote(selectedEventId || events[0]?.id || 1, 'text')}
+                  className="w-full sm:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Note</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onCreateNote(selectedEventId || events[0]?.id || 1, 'checklist')}
+                  className="w-full sm:w-auto px-3 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <CheckSquare className="w-3.5 h-3.5" />
+                  <span>New Checklist</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

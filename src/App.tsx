@@ -206,6 +206,7 @@ export default function App() {
 
   const handleCreateNote = (eventId?: number, type: 'text' | 'checklist' | 'sketch' = 'text') => {
     let targetEventId = eventId || selectedEventId;
+    let createdGeneralCategory = false;
     if (!targetEventId) {
       if (events.length > 0) {
         targetEventId = events[0].id;
@@ -217,6 +218,7 @@ export default function App() {
           color: '#3b82f6',
         });
         targetEventId = defaultCat.id;
+        createdGeneralCategory = true;
       }
     }
 
@@ -235,6 +237,9 @@ export default function App() {
       setSelectedNoteId(newNote.id);
       setActiveView('notes');
       setShowFabSpeedDial(false);
+      if (createdGeneralCategory) {
+        showToast('Created note under new "General" category');
+      }
     } catch (e: any) {
       console.error('Failed to create new note:', e);
       showToast(e.message ? `Could not create note: ${e.message}` : 'Could not create note. Please verify available device storage.');

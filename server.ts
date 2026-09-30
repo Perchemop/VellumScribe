@@ -1935,7 +1935,7 @@ function loadPersistedBackupsFromDisk(sessionId: string): CloudBackupRecord[] {
     const dir = getVaultSessionDir(sessionId);
     if (!fs.existsSync(dir)) return [];
     const files = fs.readdirSync(dir);
-    const metaFiles = files.filter((f) => f.endsWith(".json"));
+    const metaFiles = files.filter((f) => f.endsWith(".json") && f !== "accounts.enc.json");
     const backups: CloudBackupRecord[] = [];
     for (const mf of metaFiles) {
       try {
@@ -1960,6 +1960,47 @@ function loadPersistedBackupsFromDisk(sessionId: string): CloudBackupRecord[] {
     console.warn("Failed to list persisted backups:", e);
     return [];
   }
+}
+
+function persistAccountsToDisk(sessionId: string, accounts: Map<string, CloudAccountRecord>): void {
+  try {
+    const dir = getVaultSessionDir(sessionId);
+    const accountsFile = path.join(dir, "accounts.enc.json");
+    if (accounts.size === 0) {
+      if (fs.existsSync(accountsFile)) {
+        fs.unlinkSync(accountsFile);
+      }
+      return;
+    }
+    const accountsArray = Array.from(accounts.values());
+    const ciphertext = encryptCredential(JSON.stringify(accountsArray));
+    fs.writeFileSync(accountsFile, ciphertext, "utf-8");
+  } catch (e) {
+    console.error("Failed to persist accounts to disk storage:", e);
+  }
+}
+
+function loadPersistedAccountsFromDisk(sessionId: string): Map<string, CloudAccountRecord> {
+  const map = new Map<string, CloudAccountRecord>();
+  try {
+    const dir = getVaultSessionDir(sessionId);
+    const accountsFile = path.join(dir, "accounts.enc.json");
+    if (!fs.existsSync(accountsFile)) return map;
+    const ciphertext = fs.readFileSync(accountsFile, "utf-8");
+    const decrypted = decryptCredential(ciphertext);
+    if (!decrypted) return map;
+    const parsed = JSON.parse(decrypted) as CloudAccountRecord[];
+    if (Array.isArray(parsed)) {
+      for (const acc of parsed) {
+        if (acc && acc.provider) {
+          map.set(acc.provider, acc);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load persisted accounts from disk:", e);
+  }
+  return map;
 }
 
 function getVerifiedSessionId(req: express.Request): string | null {
@@ -2026,8 +2067,9 @@ function getSessionStore(sessionId: string): SessionCloudData {
       list.push(b);
       backupsMap.set(b.provider, list);
     }
+    const diskAccounts = loadPersistedAccountsFromDisk(sessionId);
     store = {
-      accounts: new Map(),
+      accounts: diskAccounts,
       backups: backupsMap,
       lastActive: Date.now(),
     };
@@ -2506,6 +2548,7 @@ app.post("/api/cloud/:provider/connect-credentials", async (req, res) => {
     };
 
     session.accounts.set(provider, record);
+    persistAccountsToDisk(sessionId, session.accounts);
 
     res.json({
       success: true,
@@ -2683,6 +2726,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       };
       session.accounts.set("google_drive", accountRecord);
+      persistAccountsToDisk(sessionId, session.accounts);
 
       // Safe non-token account representation for client postMessage
       const clientAccount = {
@@ -2782,6 +2826,7 @@ app.get("/api/cloud/:provider/callback", async (req, res) => {
         expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
       };
       session.accounts.set("microsoft", accountRecord);
+      persistAccountsToDisk(sessionId, session.accounts);
 
       // Safe non-token account representation for client postMessage
       const clientAccount = {
@@ -2841,6 +2886,7 @@ app.post("/api/cloud/:provider/disconnect", (req, res) => {
   const sessionId = getSessionId(req);
   const session = getSessionStore(sessionId);
   session.accounts.delete(provider);
+  persistAccountsToDisk(sessionId, session.accounts);
   res.json({ success: true, message: `Disconnected ${provider} account.` });
 });
 

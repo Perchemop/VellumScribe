@@ -24,6 +24,7 @@ import {
   Pin,
   Copy,
   RotateCcw,
+  MoreVertical,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { NoteRecord, EventRecord, RecordingRecord, TranscriptRecord, OcrScanRecord, ChecklistItem } from '../types';
@@ -126,6 +127,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
   const [showAudioStudioModal, setShowAudioStudioModal] = useState(false);
+  const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [pendingAiAction, setPendingAiAction] = useState<(() => void) | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
 
@@ -826,20 +828,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
           </button>
 
-          {/* Duplicate Note */}
-          <button
-            id="note-editor-duplicate-btn"
-            aria-label="Duplicate Note"
-            onClick={() => {
-              const dup = StorageManager.duplicateNote(note.id);
-              if (dup) onNoteUpdated(dup);
-            }}
-            title="Duplicate Note"
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-
           {/* Share & Export */}
           <button
             id="note-editor-share-btn"
@@ -851,27 +839,122 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <Share2 className="w-3.5 h-3.5" />
           </button>
 
-          {/* Revision History */}
-          <button
-            id="note-editor-history-btn"
-            aria-label="View Revision History"
-            onClick={() => setShowRevisionsModal(true)}
-            title="View Revision History & Restorations"
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
-          >
-            <Clock className="w-3.5 h-3.5" />
-          </button>
+          {/* Secondary Actions: Visible on Desktop, in 'More' Menu on Mobile */}
+          <div className="hidden sm:flex items-center gap-1">
+            <button
+              id="note-editor-duplicate-btn"
+              aria-label="Duplicate Note"
+              onClick={() => {
+                const dup = StorageManager.duplicateNote(note.id);
+                if (dup) onNoteUpdated(dup);
+              }}
+              title="Duplicate Note"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
 
-          {/* App & AI Settings */}
-          <button
-            id="note-editor-settings-btn"
-            aria-label="Settings & Google AI Studio API Key"
-            onClick={() => setShowSettingsModal(true)}
-            title="Settings & Google AI Studio API Key"
-            className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
+            <button
+              id="note-editor-history-btn"
+              aria-label="View Revision History"
+              onClick={() => setShowRevisionsModal(true)}
+              title="View Revision History & Restorations"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            >
+              <Clock className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              id="note-editor-settings-btn"
+              aria-label="Settings & Google AI Studio API Key"
+              onClick={() => setShowSettingsModal(true)}
+              title="Settings & Google AI Studio API Key"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Mobile 'More' Overflow Button */}
+          <div className="relative sm:hidden">
+            <button
+              id="note-editor-more-actions-btn"
+              aria-label="More Note Options"
+              onClick={() => setShowMoreActionsSheet((prev) => !prev)}
+              title="More Actions"
+              className="flex items-center justify-center min-h-[38px] min-w-[38px] p-2 text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-850 rounded-lg transition-colors"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+
+            {showMoreActionsSheet && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowMoreActionsSheet(false)}
+                />
+                <div className="absolute right-0 top-full mt-1.5 w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl z-50 py-1.5 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in zoom-in-95">
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      const dup = StorageManager.duplicateNote(note.id);
+                      if (dup) onNoteUpdated(dup);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Duplicate Note</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowRevisionsModal(true);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Version History</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowReminderPicker(true);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>{reminderAt ? 'Edit Reminder' : 'Set Reminder'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowLocationPicker(true);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>{locationName ? 'Edit Geotag' : 'Add Geotag'}</span>
+                  </button>
+
+                  <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-1" />
+
+                  <button
+                    onClick={() => {
+                      setShowMoreActionsSheet(false);
+                      setShowSettingsModal(true);
+                    }}
+                    className="w-full px-3.5 py-2 flex items-center gap-2.5 hover:bg-zinc-100 dark:hover:bg-zinc-800/80 text-left transition-colors"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>App Settings</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
