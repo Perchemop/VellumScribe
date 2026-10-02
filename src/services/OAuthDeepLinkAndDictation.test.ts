@@ -40,7 +40,7 @@ describe('OAuth Deep Links & Speech Recognition Lifecycle (Review Archive 45)', 
 
   describe('NativeBridge App URL and Browser Lifecycle Listeners', () => {
     it('registers and invokes appUrlOpen callback on deep-link arrival', async () => {
-      let registeredCallback: ((data: { url: string }) => void) | null = null;
+      let registeredCallback: ((url: string) => void) | null = null;
       vi.spyOn(NativeBridge, 'addAppUrlListener').mockImplementation((cb: any) => {
         registeredCallback = cb;
         return () => {
@@ -49,12 +49,12 @@ describe('OAuth Deep Links & Speech Recognition Lifecycle (Review Archive 45)', 
       });
 
       let receivedUrl = '';
-      const cleanup = NativeBridge.addAppUrlListener((data) => {
-        receivedUrl = data.url;
+      const cleanup = NativeBridge.addAppUrlListener((url) => {
+        receivedUrl = url;
       });
 
       expect(registeredCallback).not.toBeNull();
-      registeredCallback!({ url: 'com.vellumscribe.app://oauth?cloud=connected' });
+      registeredCallback!('com.vellumscribe.app://oauth?cloud=connected');
       expect(receivedUrl).toBe('com.vellumscribe.app://oauth?cloud=connected');
 
       cleanup();
