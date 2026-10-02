@@ -8,6 +8,18 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
+## [3.0.0-archive45] - 2026-09-30
+
+Android SSO deep-link plumbing, native OS SpeechRecognizer wiring during audio recording, engine provenance badges, and OAuth cancel/timeout UX hardening.
+
+### Added
+
+- **Android SSO Deep-Link Intent Filters (S-P0.1):** Configured standard custom scheme intent filters (`com.vellumscribe.app://oauth` and `vellumscribe://oauth`) and standards-compliant `autoVerify="true"` HTTPS App Link filters in `AndroidManifest.xml` across production and preview hosts.
+- **Native OS SpeechRecognizer in Recording Pipeline (T-P1.1):** Wired `OfflineAi.isSpeechRecognitionAvailable()`, `startListening({ language: 'en-US' })`, `stopListening()`, and `speechRecognitionResult` listener into `AudioRecordingManager.ts` for live on-device dictation during recording sessions.
+- **Engine Provenance Badges on Saved Transcripts (T-P1.3):** Updated `TranscriptViewer.tsx` to explicitly identify whether transcripts were generated via Android SpeechRecognizer (OS On-Device), Browser Acoustic Dictation (Offline), Whisper Native, or Cloud Gemini AI.
+- **OAuth Cancel & Timeout UX Polish:** Hardened `CloudConnectModal.tsx` with Custom Tabs / Browser finish listeners, active timer cleanup on close, and user-friendly timeout states to prevent indefinite spinners.
+- **Automated Tests for OAuth Return & Dictation Events:** Added unit tests verifying PKCE token exchange parameters, OAuth return handling, and live dictation recording events.
+
 ## [3.0.0-archive42] - 2026-09-30
 
 UX honesty hardening, transcription recovery sheet pattern, NoteEditor toolbar simplification, PKCE token verification, and durable cloud account persistence.
