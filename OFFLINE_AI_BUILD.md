@@ -7,28 +7,32 @@ This document describes the on-device Speech-to-Text (STT) architecture in Vellu
 
 ---
 
-## 1. Current Status (Archive 43 / v3.0.0)
+## 1. Current Status (Archive 45 / v3.0.0)
 
 > **Current binary ships the stub implementation until ggml is vendored.**
 
-- **Native Library:** `libwhisper.so` is linked, but only the fail-closed C/C++ stub is compiled into this binary.
-- **Inference Runtime Check:** `OfflineAiManager.getDeviceCapabilities().inferenceRuntimeReady` evaluates to `false` because `WHISPER_REAL_INFERENCE_READY` is unset.
+- **Native Whisper Library:** `libwhisper.so` is compiled with the fail-closed C/C++ stub until upstream `ggml` is vendored.
+- **Inference Runtime Check:** `OfflineAiManager.getDeviceCapabilities().inferenceRuntimeReady` safely evaluates to `false` because `WHISPER_REAL_INFERENCE_READY` is unset.
 - **Honesty Gating:**
-  - **Onboarding:** Guides users toward **Live Dictation** while recording or optional **Cloud Gemini AI**.
-  - **Model Downloads:** Disabled in Offline AI Settings to prevent downloading multi-megabyte `.bin` weight files that cannot execute without GGML.
-  - **Transcripts:** `TranscriptionOrchestrator` strictly rejects placeholders or VAD instruction text as successful transcripts.
-  - **Recovery Pattern:** `TranscriptionRecoverySheet` immediately provides recovery alternatives (Cloud AI, Live Dictation) when offline Whisper inference is requested.
+  - **Onboarding:** Clearly directs users toward **Live Dictation** while recording or optional **Cloud Gemini AI**.
+  - **Model Downloads:** Disabled in Offline AI Settings to prevent unnecessary downloads until GGML inference is compiled.
+  - **Transcripts:** `TranscriptionOrchestrator` strictly enforces engine transparency and rejects placeholder text.
+  - **Recovery Pattern:** `TranscriptionRecoverySheet` provides immediate one-click fallback (Cloud AI, Live Dictation) when offline Whisper is requested.
 
 ---
 
-## 2. Working Speech-to-Text Paths Today
+## 2. Working Speech-to-Text & SSO Paths Today (Archive 45)
 
-1. **Live Microphone Dictation (100% Offline & Free):**
-   - Utilizes browser and Android OS speech recognizers (`SpeechRecognition` / `android.speech.SpeechRecognizer`) directly during recording sessions.
-   - Text is captured live in real time and saved alongside the recording entity.
+1. **Native OS SpeechRecognizer in Recording Path (Android & Web):**
+   - `AudioRecordingManager` automatically detects `android.speech.SpeechRecognizer` via the `OfflineAi` plugin or Web Speech API.
+   - Speech is transcribed live in real time into the note while audio records, requiring zero model weight downloads.
+   - Transcripts indicate provenance via distinct engine badges (`Android SpeechRecognizer` or `Browser Acoustic Dictation`).
 2. **Cloud Gemini Multimodal STT:**
-   - When network access is permitted via Privacy Mode and a Google AI Studio API key is configured.
-   - Provides automatic punctuation, timestamps, and speaker identification.
+   - Supported when network access is allowed via Privacy Mode and a Google AI Studio API key is provided.
+   - Provides automated punctuation, timestamps, and speaker identification.
+3. **Android SSO Deep-Link Plumbing (Archive 45):**
+   - Native Capacitor Browser + App Links and custom scheme filters (`com.vellumscribe.app://oauth` and `vellumscribe://oauth`) in `AndroidManifest.xml`.
+   - Full PKCE `code_verifier` round-trip and AES-256-GCM encrypted persistence across server restarts.
 
 ---
 

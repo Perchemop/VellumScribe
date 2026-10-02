@@ -25,20 +25,24 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep Link Intent Filter for OAuth Return (Custom Scheme: com.vellumscribe.app://oauth) -->
+            <!-- Deep Link Intent Filter for OAuth Return (Custom Schemes: com.vellumscribe.app://oauth and vellumscribe://oauth) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.vellumscribe.app" android:host="oauth" />
+                <data android:scheme="vellumscribe" android:host="oauth" />
             </intent-filter>
 
-            <!-- App Links Intent Filter for HTTPS Cloud Callbacks -->
+            <!-- App Links Intent Filter for HTTPS Cloud Callbacks (Standards-compliant concrete hosts for autoVerify) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="*vellumscribe*" android:pathPrefix="/api/cloud" />
+                <data android:scheme="https" android:host="vellumscribe.app" android:pathPrefix="/api/cloud" />
+                <data android:scheme="https" android:host="*.vellumscribe.app" android:pathPrefix="/api/cloud" />
+                <data android:scheme="https" android:host="ais-dev-3avcive67kpwcaibfizjfw-802868904535.asia-southeast1.run.app" android:pathPrefix="/api/cloud" />
+                <data android:scheme="https" android:host="ais-pre-3avcive67kpwcaibfizjfw-802868904535.asia-southeast1.run.app" android:pathPrefix="/api/cloud" />
             </intent-filter>
 
         </activity>

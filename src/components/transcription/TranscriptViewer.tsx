@@ -189,12 +189,22 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
         </div>
       </div>
 
-      {/* Engine & provenance metadata badge (T-P1.3) */}
+      {/* Engine & provenance metadata badge (T-P1.3 / Review Archive 45) */}
       <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
         {transcription.engine.includes('whisper') && !transcription.engine.includes('groq') ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            whisper.cpp (On-Device)
+            whisper.cpp (On-Device Native)
+          </span>
+        ) : transcription.engine.includes('speech_recognizer') || transcription.engine.includes('android_speech') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+            <Mic className="w-3 h-3 text-teal-500" />
+            Android SpeechRecognizer (OS On-Device)
+          </span>
+        ) : transcription.engine.includes('browser_acoustic') ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+            <Mic className="w-3 h-3 text-sky-500" />
+            Browser Acoustic Dictation (Offline)
           </span>
         ) : transcription.engine.includes('gemini') ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
@@ -214,7 +224,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
         ) : (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
             <Mic className="w-3 h-3 text-sky-500" />
-            Live Microphone Dictation (Web Speech / OS)
+            {transcription.engine ? `${transcription.engine}` : 'Live Microphone Dictation (OS/Web)'}
           </span>
         )}
 
