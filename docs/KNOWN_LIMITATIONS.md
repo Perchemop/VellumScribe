@@ -22,3 +22,11 @@ This document tracks known constraints, trade-offs, and platform boundaries as o
 
 ## 5. UI Architecture
 - `SettingsView.tsx` remains a consolidated orchestration view managing privacy, encryption, backup accounts, and AI configurations. Modular sub-panels (`SecurityPanel`, `StoragePanel`, `OfflineAiPanel`) help maintain maintainability.
+
+## 6. Offline Whisper packaging
+
+CMake + JNI + stub ship in the app repo.
+A complete `third_party/whisper.cpp` must include `src/`, `include/`, and `ggml/`.
+Trees that only contain examples/bindings/CI metadata force the fail-closed stub.
+Clone ggml-org/whisper.cpp before expecting inferenceRuntimeReady=true.
+
