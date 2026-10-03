@@ -62,7 +62,7 @@ struct whisper_context * whisper_init_from_file(const char * path_model) {
     ctx->is_loaded = false;
 
     // Verify GGML header variants
-    // 0x67676d6c = "ggml", 0x67676d66 = "ggmf", 0x676d6c75 = "gmlu"
+    // 0x67676d6c = "ggml", 0x67676d66 = "ggmf", 0x67676d6c = "ggml", 0x676d6c75 = "gmlu"
     if (magic == GGML_FILE_MAGIC || magic == 0x67676d66 || magic == 0x67676d6c || magic == 0x676d6c75) {
         LOGI("Valid GGML magic header found: 0x%08x", magic);
     } else {
@@ -332,4 +332,3 @@ bool whisper_has_tensor_runtime(void) {
     return false;
 #endif
 }
-
