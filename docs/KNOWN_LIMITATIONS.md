@@ -25,8 +25,11 @@ This document tracks known constraints, trade-offs, and platform boundaries as o
 
 ## 6. Offline Whisper packaging
 
-CMake + JNI + stub ship in the app repo.
-A complete `third_party/whisper.cpp` must include `src/`, `include/`, and `ggml/`.
-Trees that only contain examples/bindings/CI metadata force the fail-closed stub.
-Clone ggml-org/whisper.cpp before expecting inferenceRuntimeReady=true.
+CMake, JNI, and the fail-closed stub ship in the app repo.
+`third_party/whisper.cpp` must include **src/**, **include/**, and **ggml/**
+(especially `ggml/src/ggml.c`) or the build stays on the stub and
+`inferenceRuntimeReady` remains false.
+Clone https://github.com/ggml-org/whisper.cpp into that path before release builds
+that advertise offline Whisper.
+
 
