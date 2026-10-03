@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
+# -----------------------------------------------------------------------------
+# VELLUM_WHISPER_REAL:
+#   ON  (default when upstream tree present) — link ggml + upstream whisper.cpp
+#   OFF — compile fail-closed stub/ only
+# Override: -DVELLUM_WHISPER_REAL=OFF in Gradle externalNativeBuild arguments
+# -----------------------------------------------------------------------------
+
 set(WHISPER_UPSTREAM "${CMAKE_SOURCE_DIR}/third_party/whisper.cpp")
 set(WHISPER_STUB_DIR "${CMAKE_SOURCE_DIR}/stub")
 
@@ -22,6 +29,7 @@ endif()
 if (VELLUM_WHISPER_REAL)
     message(STATUS "VellumScribe: REAL whisper.cpp + ggml build")
 
+    # Android-friendly ggml defaults (must be set before add_subdirectory)
     set(GGML_NATIVE OFF CACHE BOOL "ggml: disable host-native CPU flags" FORCE)
     set(GGML_OPENMP OFF CACHE BOOL "ggml: OpenMP off on Android" FORCE)
     set(GGML_BACKEND_DL OFF CACHE BOOL "ggml: no dynamic backends" FORCE)
@@ -84,4 +92,6 @@ target_compile_options(whisper PRIVATE
     -O3
     -DNDEBUG
     -fvisibility=hidden
+    -fno-exceptions
+    -fno-rtti
 )

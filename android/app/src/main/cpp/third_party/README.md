@@ -1,21 +1,17 @@
-# Upstream Vendored Whisper.cpp
+# third_party/whisper.cpp
 
-This directory houses the vendored upstream `whisper.cpp` + `ggml` repository for building the real on-device tensor inference runtime in VellumScribe v3.1.0+.
+Vendored upstream from https://github.com/ggml-org/whisper.cpp
 
-## How to Vendor for Real Production APK Builds
-
-On your local workstation or CI/CD builder with NDK installed:
+## Install (required for real offline Whisper)
 
 ```bash
 cd android/app/src/main/cpp/third_party
 rm -rf whisper.cpp
 git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git whisper.cpp
+test -f whisper.cpp/src/whisper.cpp && test -f whisper.cpp/ggml/src/ggml.c && echo OK
 ```
 
-Ensure the following paths exist:
-- `third_party/whisper.cpp/src/whisper.cpp`
-- `third_party/whisper.cpp/include/whisper.h`
-- `third_party/whisper.cpp/ggml/src/ggml.c`
-- `third_party/whisper.cpp/ggml/include/ggml.h`
+Do **not** commit multi-hundred-MB model `.bin` files here.
 
-When these files are present, `CMakeLists.txt` automatically detects `_vellum_upstream_ok` and builds the real `libwhisper.so` with `WHISPER_REAL_INFERENCE_READY=1`.
+Having these sources alone does not enable inference until CMake links them
+(automatic when both files above exist) and you build with the Android NDK.

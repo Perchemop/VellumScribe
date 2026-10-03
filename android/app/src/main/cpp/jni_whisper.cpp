@@ -19,11 +19,20 @@ extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeInit(
-    JNIEnv * env, jclass, jstring modelPath)
-{
-    if (modelPath == nullptr) return 0;
+    JNIEnv * env,
+    jclass /* clazz */,
+    jstring modelPath
+) {
+    if (modelPath == nullptr) {
+        LOGE("nativeInit: modelPath was null");
+        return 0;
+    }
+
     const char * nativeModelPath = env->GetStringUTFChars(modelPath, nullptr);
-    if (!nativeModelPath) return 0;
+    if (!nativeModelPath) {
+        LOGE("nativeInit: Failed to get UTF chars for modelPath");
+        return 0;
+    }
 
     LOGI("nativeInit: path=%s real_build=%d", nativeModelPath, VELLUM_WHISPER_REAL_BUILD);
     struct whisper_context * ctx = nullptr;
@@ -37,23 +46,46 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeInit(
 #endif
 
     env->ReleaseStringUTFChars(modelPath, nativeModelPath);
-    if (ctx == nullptr) return 0;
+
+    if (ctx == nullptr) {
+        LOGE("nativeInit: Failed to create whisper_context");
+        return 0;
+    }
+
     return reinterpret_cast<jlong>(ctx);
 }
 
 JNIEXPORT jstring JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
-    JNIEnv * env, jclass, jlong contextPtr, jfloatArray pcmData,
-    jstring language, jint nThreads)
-{
+    JNIEnv * env,
+    jclass /* clazz */,
+    jlong contextPtr,
+    jfloatArray pcmData,
+    jstring language,
+    jint nThreads
+) {
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
-    if (ctx == nullptr || pcmData == nullptr) return env->NewStringUTF("");
+    if (ctx == nullptr) {
+        LOGE("nativeTranscribe: contextPtr is null");
+        return env->NewStringUTF("");
+    }
+
+    if (pcmData == nullptr) {
+        LOGE("nativeTranscribe: pcmData is null");
+        return env->NewStringUTF("");
+    }
 
     jsize sampleCount = env->GetArrayLength(pcmData);
-    if (sampleCount <= 0) return env->NewStringUTF("");
+    if (sampleCount <= 0) {
+        LOGW("nativeTranscribe: Empty audio buffer");
+        return env->NewStringUTF("");
+    }
 
     jfloat * floatBuffer = env->GetFloatArrayElements(pcmData, nullptr);
-    if (floatBuffer == nullptr) return env->NewStringUTF("");
+    if (floatBuffer == nullptr) {
+        LOGE("nativeTranscribe: Failed to acquire float array elements");
+        return env->NewStringUTF("");
+    }
 
     std::string langStr = "en";
     if (language != nullptr) {
@@ -65,6 +97,9 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
     }
 
     int threads = nThreads > 0 ? nThreads : 4;
+    LOGI("nativeTranscribe: samples=%d threads=%d lang=%s real_build=%d",
+         sampleCount, threads, langStr.c_str(), VELLUM_WHISPER_REAL_BUILD);
+
     int ret = 0;
 
 #if VELLUM_WHISPER_REAL_BUILD
@@ -89,6 +124,7 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
     env->ReleaseFloatArrayElements(pcmData, floatBuffer, JNI_ABORT);
 
     if (ret != 0) {
+        LOGE("whisper_full returned error code %d", ret);
         if (ret == -2) {
             jclass exClass = env->FindClass("java/lang/IllegalStateException");
             if (exClass != nullptr) {
@@ -108,21 +144,27 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
             fullText += text;
         }
     }
+
     return env->NewStringUTF(fullText.c_str());
 }
 
 JNIEXPORT void JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeFree(
-    JNIEnv *, jclass, jlong contextPtr)
-{
+    JNIEnv * /* env */,
+    jclass /* clazz */,
+    jlong contextPtr
+) {
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
-    if (ctx != nullptr) whisper_free(ctx);
+    if (ctx != nullptr) {
+        whisper_free(ctx);
+    }
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeHasTensorRuntime(
-    JNIEnv *, jclass)
-{
+    JNIEnv * /* env */,
+    jclass /* clazz */
+) {
 #if VELLUM_WHISPER_REAL_BUILD
     return JNI_TRUE;
 #else

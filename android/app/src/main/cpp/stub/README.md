@@ -1,11 +1,10 @@
-# VellumScribe Offline AI Stub Engine
+# stub/ — fail-closed Whisper shim
 
-This directory contains the fail-closed fallback implementation of the Whisper C API for VellumScribe.
+This is **not** ggml-org whisper.cpp.
 
-When the real upstream `third_party/whisper.cpp` is not present or when `VELLUM_WHISPER_REAL=OFF` is set in CMake, this stub compiles into `libwhisper.so`.
+It implements a minimal API compatible with `jni_whisper.cpp` and always reports
+`whisper_has_tensor_runtime() == false` unless compiled with
+`WHISPER_REAL_INFERENCE_READY` (which must **never** be set for this stub).
 
-## Behavior
-- `whisper_has_tensor_runtime()` returns `false` (`0`).
-- `whisper_init_from_file()` returns `nullptr`.
-- `whisper_full()` returns `-2`, signaling `OFFLINE_AI_ENGINE_UNAVAILABLE`.
-- The Android UI and `TranscriptionOrchestrator` cleanly recognize this state (`inferenceRuntimeReady=false`) and guide the user to Live Dictation (OS SpeechRecognizer) or Cloud AI transcription via `TranscriptionRecoverySheet`.
+Real sources live in `../third_party/whisper.cpp` and are linked only when
+CMake detects them and `VELLUM_WHISPER_REAL` is ON.
