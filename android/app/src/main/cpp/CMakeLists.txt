@@ -5,35 +5,81 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
-# Path to vendored whisper.cpp sources
-set(WHISPER_DIR ${CMAKE_SOURCE_DIR}/whisper)
+set(WHISPER_UPSTREAM "${CMAKE_SOURCE_DIR}/third_party/whisper.cpp")
+set(WHISPER_STUB_DIR "${CMAKE_SOURCE_DIR}/stub")
 
-if (EXISTS ${WHISPER_DIR}/whisper.cpp)
-    set(WHISPER_SRCS ${WHISPER_DIR}/whisper.cpp)
-    set(WHISPER_INCLUDE_DIRS ${WHISPER_DIR})
-else()
-    set(WHISPER_SRCS whisper.cpp)
-    set(WHISPER_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR})
+set(_vellum_upstream_ok FALSE)
+if (EXISTS "${WHISPER_UPSTREAM}/src/whisper.cpp" AND EXISTS "${WHISPER_UPSTREAM}/ggml/src/ggml.c")
+    set(_vellum_upstream_ok TRUE)
 endif()
 
-add_library(whisper SHARED
-    ${WHISPER_SRCS}
-    jni_whisper.cpp
-)
+option(VELLUM_WHISPER_REAL "Build real upstream whisper.cpp + ggml" ${_vellum_upstream_ok})
 
-target_include_directories(whisper PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${WHISPER_INCLUDE_DIRS}
-)
+if (VELLUM_WHISPER_REAL AND NOT _vellum_upstream_ok)
+    message(FATAL_ERROR "VELLUM_WHISPER_REAL=ON but third_party/whisper.cpp is incomplete")
+endif()
 
-find_library(log-lib log)
+if (VELLUM_WHISPER_REAL)
+    message(STATUS "VellumScribe: REAL whisper.cpp + ggml build")
 
-target_link_libraries(whisper
-    ${log-lib}
-    m
-)
+    set(GGML_NATIVE OFF CACHE BOOL "ggml: disable host-native CPU flags" FORCE)
+    set(GGML_OPENMP OFF CACHE BOOL "ggml: OpenMP off on Android" FORCE)
+    set(GGML_BACKEND_DL OFF CACHE BOOL "ggml: no dynamic backends" FORCE)
+    set(GGML_STATIC ON CACHE BOOL "ggml: static" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+    set(GGML_METAL OFF CACHE BOOL "" FORCE)
+    set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+    set(GGML_BLAS OFF CACHE BOOL "" FORCE)
+    set(GGML_RPC OFF CACHE BOOL "" FORCE)
 
-# Optimize for mobile ARM/NEON size and performance
+    add_subdirectory("${WHISPER_UPSTREAM}/ggml" "${CMAKE_BINARY_DIR}/ggml-build")
+
+    add_library(whisper SHARED
+        "${WHISPER_UPSTREAM}/src/whisper.cpp"
+        jni_whisper.cpp
+    )
+
+    target_include_directories(whisper PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${WHISPER_UPSTREAM}/include"
+        "${WHISPER_UPSTREAM}/src"
+        "${WHISPER_UPSTREAM}/ggml/include"
+        "${WHISPER_UPSTREAM}/ggml/src"
+        "${WHISPER_UPSTREAM}/ggml/src/ggml-cpu"
+    )
+
+    target_compile_definitions(whisper PRIVATE
+        WHISPER_REAL_INFERENCE_READY=1
+        GGML_USE_CPU=1
+    )
+
+    find_library(log-lib log)
+    find_library(android-lib android)
+
+    target_link_libraries(whisper
+        ${log-lib}
+        ${android-lib}
+        ggml
+        m
+    )
+else()
+    message(STATUS "VellumScribe: STUB libwhisper.so (inferenceRuntimeReady=false)")
+
+    add_library(whisper SHARED
+        "${WHISPER_STUB_DIR}/whisper.cpp"
+        jni_whisper.cpp
+    )
+
+    target_include_directories(whisper PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${WHISPER_STUB_DIR}"
+    )
+
+    find_library(log-lib log)
+    target_link_libraries(whisper ${log-lib} m)
+endif()
+
 target_compile_options(whisper PRIVATE
     -O3
     -DNDEBUG

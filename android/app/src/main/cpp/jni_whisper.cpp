@@ -1,6 +1,6 @@
 #include <jni.h>
 #include <string>
-#include <vector>
+#include <cstring>
 #include <android/log.h>
 #include "whisper.h"
 
@@ -9,130 +9,125 @@
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+#if defined(WHISPER_REAL_INFERENCE_READY)
+#define VELLUM_WHISPER_REAL_BUILD 1
+#else
+#define VELLUM_WHISPER_REAL_BUILD 0
+#endif
+
 extern "C" {
 
 JNIEXPORT jlong JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeInit(
-    JNIEnv * env,
-    jclass /* clazz */,
-    jstring modelPath
-) {
-    if (modelPath == nullptr) {
-        LOGE("nativeInit: modelPath was null");
-        return 0;
-    }
-
+    JNIEnv * env, jclass, jstring modelPath)
+{
+    if (modelPath == nullptr) return 0;
     const char * nativeModelPath = env->GetStringUTFChars(modelPath, nullptr);
-    if (!nativeModelPath) {
-        LOGE("nativeInit: Failed to get UTF chars for modelPath");
-        return 0;
-    }
+    if (!nativeModelPath) return 0;
 
-    LOGI("nativeInit: Initializing whisper context from path: %s", nativeModelPath);
-    struct whisper_context * ctx = whisper_init_from_file(nativeModelPath);
+    LOGI("nativeInit: path=%s real_build=%d", nativeModelPath, VELLUM_WHISPER_REAL_BUILD);
+    struct whisper_context * ctx = nullptr;
+
+#if VELLUM_WHISPER_REAL_BUILD
+    struct whisper_context_params cparams = whisper_context_default_params();
+    cparams.use_gpu = false;
+    ctx = whisper_init_from_file_with_params(nativeModelPath, cparams);
+#else
+    ctx = whisper_init_from_file(nativeModelPath);
+#endif
+
     env->ReleaseStringUTFChars(modelPath, nativeModelPath);
-
-    if (ctx == nullptr) {
-        LOGE("nativeInit: Failed to create whisper_context");
-        return 0;
-    }
-
+    if (ctx == nullptr) return 0;
     return reinterpret_cast<jlong>(ctx);
 }
 
 JNIEXPORT jstring JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
-    JNIEnv * env,
-    jclass /* clazz */,
-    jlong contextPtr,
-    jfloatArray pcmData,
-    jstring language,
-    jint nThreads
-) {
+    JNIEnv * env, jclass, jlong contextPtr, jfloatArray pcmData,
+    jstring language, jint nThreads)
+{
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
-    if (ctx == nullptr) {
-        LOGE("nativeTranscribe: contextPtr is null");
-        return env->NewStringUTF("");
-    }
-
-    if (pcmData == nullptr) {
-        LOGE("nativeTranscribe: pcmData is null");
-        return env->NewStringUTF("");
-    }
+    if (ctx == nullptr || pcmData == nullptr) return env->NewStringUTF("");
 
     jsize sampleCount = env->GetArrayLength(pcmData);
-    if (sampleCount <= 0) {
-        LOGW("nativeTranscribe: Empty audio buffer");
-        return env->NewStringUTF("");
-    }
+    if (sampleCount <= 0) return env->NewStringUTF("");
 
     jfloat * floatBuffer = env->GetFloatArrayElements(pcmData, nullptr);
-    if (floatBuffer == nullptr) {
-        LOGE("nativeTranscribe: Failed to acquire float array elements");
-        return env->NewStringUTF("");
-    }
+    if (floatBuffer == nullptr) return env->NewStringUTF("");
 
-    const char * lang = "auto";
+    std::string langStr = "en";
     if (language != nullptr) {
-        lang = env->GetStringUTFChars(language, nullptr);
+        const char * tmp = env->GetStringUTFChars(language, nullptr);
+        if (tmp) {
+            langStr = tmp;
+            env->ReleaseStringUTFChars(language, tmp);
+        }
     }
 
     int threads = nThreads > 0 ? nThreads : 4;
-    LOGI("nativeTranscribe: Starting inference on %d samples with %d threads, lang=%s",
-         sampleCount, threads, lang ? lang : "auto");
+    int ret = 0;
 
-    int ret = whisper_full(ctx, floatBuffer, sampleCount, lang, threads);
-
-    if (language != nullptr && lang != nullptr) {
-        env->ReleaseStringUTFChars(language, lang);
+#if VELLUM_WHISPER_REAL_BUILD
+    struct whisper_full_params wparams =
+        whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    wparams.n_threads = threads;
+    wparams.print_progress = false;
+    wparams.print_realtime = false;
+    wparams.print_timestamps = false;
+    if (langStr == "auto" || langStr.empty()) {
+        wparams.language = "auto";
+        wparams.detect_language = true;
+    } else {
+        wparams.language = langStr.c_str();
+        wparams.detect_language = false;
     }
+    ret = whisper_full(ctx, wparams, floatBuffer, sampleCount);
+#else
+    ret = whisper_full(ctx, floatBuffer, sampleCount, langStr.c_str(), threads);
+#endif
+
     env->ReleaseFloatArrayElements(pcmData, floatBuffer, JNI_ABORT);
 
     if (ret != 0) {
-        LOGE("whisper_full returned error code %d", ret);
         if (ret == -2) {
             jclass exClass = env->FindClass("java/lang/IllegalStateException");
             if (exClass != nullptr) {
-                env->ThrowNew(exClass, "OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.");
+                env->ThrowNew(exClass,
+                    "OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.");
             }
         }
         return nullptr;
     }
 
-    // Accumulate segment texts
-    std::string fullText = "";
+    std::string fullText;
     int n_segments = whisper_full_n_segments(ctx);
     for (int i = 0; i < n_segments; ++i) {
         const char * text = whisper_full_get_segment_text(ctx, i);
-        if (text && strlen(text) > 0) {
-            if (!fullText.empty()) {
-                fullText += " ";
-            }
+        if (text && std::strlen(text) > 0) {
+            if (!fullText.empty()) fullText += " ";
             fullText += text;
         }
     }
-
     return env->NewStringUTF(fullText.c_str());
 }
 
 JNIEXPORT void JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeFree(
-    JNIEnv * /* env */,
-    jclass /* clazz */,
-    jlong contextPtr
-) {
+    JNIEnv *, jclass, jlong contextPtr)
+{
     auto * ctx = reinterpret_cast<struct whisper_context *>(contextPtr);
-    if (ctx != nullptr) {
-        whisper_free(ctx);
-    }
+    if (ctx != nullptr) whisper_free(ctx);
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeHasTensorRuntime(
-    JNIEnv * /* env */,
-    jclass /* clazz */
-) {
+    JNIEnv *, jclass)
+{
+#if VELLUM_WHISPER_REAL_BUILD
+    return JNI_TRUE;
+#else
     return whisper_has_tensor_runtime() ? JNI_TRUE : JNI_FALSE;
+#endif
 }
 
 } // extern "C"
