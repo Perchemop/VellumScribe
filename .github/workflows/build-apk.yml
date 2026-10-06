@@ -56,16 +56,60 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Android SDK + NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install NDK
+      # Do NOT use android-actions/setup-android packages that still request the
+      # obsolete SDK "tools" package (removed from Google's repo).
+      - name: Setup Android SDK packages (no obsolete tools package)
         run: |
-          sdkmanager --install "ndk;26.1.10909125" "cmake;3.22.1" || true
-          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" || true
+          set -euo pipefail
+          # Prefer preinstalled SDK on GitHub-hosted runners
+          if [[ -z "${ANDROID_HOME:-}" && -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          fi
+          if [[ -z "${ANDROID_HOME:-}" && -d "$HOME/Android/Sdk" ]]; then
+            echo "ANDROID_HOME=$HOME/Android/Sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$HOME/Android/Sdk"
+          fi
+          if [[ -z "${ANDROID_HOME:-}" && -d /usr/local/lib/android/sdk ]]; then
+            echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+          fi
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          # Locate sdkmanager
+          SM=""
+          for c in \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" \
+            /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
+            /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager; do
+            if [[ -x "$c" ]]; then SM="$c"; break; fi
+          done
+          # glob expand
+          if [[ -z "$SM" ]]; then
+            SM=$(ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)
+          fi
+          if [[ -z "$SM" || ! -x "$SM" ]]; then
+            echo "sdkmanager not found; installing commandlinetools..."
+            mkdir -p "$HOME/android-sdk/cmdline-tools"
+            curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/cmdtools.zip -d "$HOME/android-sdk/cmdline-tools"
+            mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
+            echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$HOME/android-sdk"
+            SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "Using sdkmanager: $SM"
+          yes | "$SM" --licenses >/tmp/sdk-licenses.txt || true
+          "$SM" --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" \
+            "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
 
       - name: Install NPM Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build Web Application
         run: npm run build:spa
@@ -89,51 +133,33 @@ jobs:
           MODE="${{ github.event.inputs.whisper_mode || 'stub' }}"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           if [[ "$MODE" == "real" ]]; then
-            echo "WHISPER_CMAKE_ARGS=-DANDROID_STL=c++_shared" >> "$GITHUB_ENV"
             echo "Building REAL whisper.cpp + ggml (slow)"
           else
-            # Fail-closed stub keeps CI fast and reliable
-            echo "WHISPER_CMAKE_ARGS=-DANDROID_STL=c++_shared -DVELLUM_WHISPER_REAL=OFF" >> "$GITHUB_ENV"
             echo "Building STUB libwhisper.so (inferenceRuntimeReady=false)"
           fi
 
-      - name: Inject CMake arguments into Gradle
+      - name: Apply STUB CMake flag when requested
+        if: ${{ (github.event.inputs.whisper_mode || 'stub') == 'stub' }}
         run: |
           set -euo pipefail
-          # Ensure externalNativeBuild cmake arguments include our env
+          # Inject -DVELLUM_WHISPER_REAL=OFF into app build.gradle cmake arguments
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/build.gradle")
           text = p.read_text()
-          args = """arguments "${System.getenv('WHISPER_CMAKE_ARGS') ?: '-DANDROID_STL=c++_shared'}""""
-          # Only rewrite if a simple arguments line exists
-          import re
-          new = re.sub(
-              r'arguments\s+"[^"]*"',
-              'arguments "' + (__import__("os").environ.get("WHISPER_CMAKE_ARGS","-DANDROID_STL=c++_shared")).replace('"','\\"') + '"',
-              text,
-              count=1,
-          )
-          # Safer: write property file consumed optionally — keep gradle stable
-          Path("android/gradle.properties").write_text(
-              Path("android/gradle.properties").read_text() + "\n# whisper mode injected by CI\n"
-              if Path("android/gradle.properties").exists()
-              else "# whisper mode injected by CI\n"
-          )
-          print("gradle.properties touched")
+          needle = 'arguments "-DANDROID_STL=c++_shared"'
+          repl = 'arguments "-DANDROID_STL=c++_shared", "-DVELLUM_WHISPER_REAL=OFF"'
+          if needle in text:
+              p.write_text(text.replace(needle, repl, 1))
+              print("Injected VELLUM_WHISPER_REAL=OFF")
+          else:
+              print("WARNING: could not find cmake arguments line; leaving as-is")
           PY
 
       - name: Build Android APKs (Debug and Unsigned Release)
         run: |
           cd android
-          # Pass CMake args via CLI for both STUB and REAL
-          EXTRA=()
-          if [[ "${{ steps.whisper.outputs.mode }}" == "stub" ]]; then
-            EXTRA=(-DVELLUM_WHISPER_REAL=OFF)
-          fi
-          ./gradlew assembleDebug assembleRelease --stacktrace \
-            -Pandroid.injected.build.abi=arm64-v8a \
-            ${EXTRA[@]+"${EXTRA[@]}"}
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
