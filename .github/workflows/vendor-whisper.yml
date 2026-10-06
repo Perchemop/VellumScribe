@@ -1,0 +1,41 @@
+name: Vendor Whisper upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch full whisper.cpp + ggml
+        run: |
+          set -euo pipefail
+          bash scripts/setup-whisper-third-party.sh
+          test -f android/app/src/main/cpp/third_party/whisper.cpp/src/whisper.cpp
+          test -f android/app/src/main/cpp/third_party/whisper.cpp/include/whisper.h
+          test -f android/app/src/main/cpp/third_party/whisper.cpp/ggml/src/ggml.c
+          echo "UPSTREAM_OK"
+
+      - name: Strip non-inference bulk (optional size save)
+        run: |
+          cd android/app/src/main/cpp/third_party/whisper.cpp
+          rm -rf .git .github .devops bindings examples models tests || true
+
+      - name: Commit and push if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A android/app/src/main/cpp/third_party/whisper.cpp
+          if git diff --staged --quiet; then
+            echo "No changes to commit (tree already complete)."
+            exit 0
+          fi
+          git commit -m "chore: vendor complete whisper.cpp + ggml for offline Whisper"
+          git push origin HEAD:main
