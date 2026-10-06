@@ -36,7 +36,6 @@ jobs:
           set -euo pipefail
           ROOT="android/app/src/main/cpp/third_party/whisper.cpp"
           if [[ ! -f "$ROOT/src/whisper.cpp" || ! -f "$ROOT/ggml/src/ggml.c" ]]; then
-            echo "Upstream incomplete — running setup-whisper-third-party.sh"
             bash scripts/setup-whisper-third-party.sh
           fi
           test -f "$ROOT/src/whisper.cpp"
@@ -77,7 +76,6 @@ jobs:
             export ANDROID_HOME="$HOME/android-sdk"
             SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           fi
-          echo "Using sdkmanager: $SM"
           yes | "$SM" --licenses >/tmp/sdk-licenses.txt || true
           "$SM" --install \
             "platform-tools" \
@@ -93,34 +91,21 @@ jobs:
       - name: Build Web Application
         run: npm run build:spa
 
-      - name: Initialize & Sync Capacitor Android
-        run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-          npx cap sync android
+      - name: Sync Capacitor Android
+        run: npx cap sync android
 
       - name: Make Gradle Executable
-        run: |
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-          fi
+        run: chmod +x android/gradlew
 
       - name: Configure Whisper STUB vs REAL
         id: whisper
         run: |
           MODE="${{ github.event.inputs.whisper_mode || 'stub' }}"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-          if [[ "$MODE" == "real" ]]; then
-            echo "Building REAL whisper.cpp + ggml (slow)"
-          else
-            echo "Building STUB libwhisper.so (inferenceRuntimeReady=false)"
-          fi
 
       - name: Apply STUB CMake flag when requested
         if: ${{ (github.event.inputs.whisper_mode || 'stub') == 'stub' }}
         run: |
-          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/build.gradle")
@@ -131,10 +116,10 @@ jobs:
               p.write_text(text.replace(needle, repl, 1))
               print("Injected VELLUM_WHISPER_REAL=OFF")
           else:
-              print("WARNING: could not find cmake arguments line; leaving as-is")
+              print("WARNING: cmake arguments line not found")
           PY
 
-      - name: Build Android APKs (Debug and Unsigned Release)
+      - name: Build Android APKs (Debug + Unsigned Release)
         run: |
           cd android
           ./gradlew assembleDebug assembleRelease --stacktrace
