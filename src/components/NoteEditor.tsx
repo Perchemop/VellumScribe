@@ -1,1 +1,1 @@
-PLACEHOLDER
+export { NoteEditor } from './NoteEditorImpl';
