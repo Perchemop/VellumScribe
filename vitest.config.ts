@@ -1,9 +1,7 @@
 import path from 'path';
 import { defineConfig } from 'vitest/config';
 
-// Deliberately a separate file from vite.config.ts rather than adding a
-// `test` block there, so the app's build config stays untouched by the
-// test setup and vice versa.
+// Separate from vite.config.ts so app build config stays independent of test setup.
 export default defineConfig({
   resolve: {
     alias: {
@@ -11,9 +9,12 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'jsdom',
+    // Use node environment: jsdom 30 + undici crashes on Node 20
+    // (webidl.util.markAsUncloneable is not a function).
+    environment: 'node',
     globals: true,
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./vitest.setup.ts'],
+    pool: 'forks',
   },
 });
