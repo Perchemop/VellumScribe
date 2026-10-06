@@ -56,40 +56,19 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # Do NOT use android-actions/setup-android packages that still request the
-      # obsolete SDK "tools" package (removed from Google's repo).
       - name: Setup Android SDK packages (no obsolete tools package)
         run: |
           set -euo pipefail
-          # Prefer preinstalled SDK on GitHub-hosted runners
           if [[ -z "${ANDROID_HOME:-}" && -n "${ANDROID_SDK_ROOT:-}" ]]; then
             echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
             export ANDROID_HOME="$ANDROID_SDK_ROOT"
-          fi
-          if [[ -z "${ANDROID_HOME:-}" && -d "$HOME/Android/Sdk" ]]; then
-            echo "ANDROID_HOME=$HOME/Android/Sdk" >> "$GITHUB_ENV"
-            export ANDROID_HOME="$HOME/Android/Sdk"
           fi
           if [[ -z "${ANDROID_HOME:-}" && -d /usr/local/lib/android/sdk ]]; then
             echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
             export ANDROID_HOME=/usr/local/lib/android/sdk
           fi
-          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
-          # Locate sdkmanager
-          SM=""
-          for c in \
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" \
-            /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
-            /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager; do
-            if [[ -x "$c" ]]; then SM="$c"; break; fi
-          done
-          # glob expand
-          if [[ -z "$SM" ]]; then
-            SM=$(ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)
-          fi
+          SM=$(ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)
           if [[ -z "$SM" || ! -x "$SM" ]]; then
-            echo "sdkmanager not found; installing commandlinetools..."
             mkdir -p "$HOME/android-sdk/cmdline-tools"
             curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
             unzip -q /tmp/cmdtools.zip -d "$HOME/android-sdk/cmdline-tools"
@@ -109,7 +88,7 @@ jobs:
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
 
       - name: Install NPM Dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-fund --no-audit
 
       - name: Build Web Application
         run: npm run build:spa
@@ -142,7 +121,6 @@ jobs:
         if: ${{ (github.event.inputs.whisper_mode || 'stub') == 'stub' }}
         run: |
           set -euo pipefail
-          # Inject -DVELLUM_WHISPER_REAL=OFF into app build.gradle cmake arguments
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android/app/build.gradle")
