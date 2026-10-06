@@ -34,18 +34,40 @@ const STORAGE_KEYS = {
 
 import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/schema';
 
-export const CURRENT_APP_VERSION = '3.0.0';
-export const CURRENT_BUILD_NUMBER = 30000;
+export const CURRENT_APP_VERSION = '3.1.0';
+export const CURRENT_BUILD_NUMBER = 31000;
 export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
-export const CURRENT_BACKUP_FORMAT_VERSION = '3.0';
+export const CURRENT_BACKUP_FORMAT_VERSION = '3.1';
 export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '3.1.0',
+    buildNumber: 31000,
+    releaseDate: '2026-10-03',
+    isCurrent: true,
+    highlights: [
+      'Real native Whisper build path (upstream whisper.cpp + ggml when third_party is present)',
+      'Dual-mode JNI bridge supporting full tensor inference and fail-closed stub',
+      'CMake STUB vs REAL modes with Android-optimized ggml SIMD flags',
+      'Unified 3.1.0 release across web, android gradle, and runtime update manager',
+    ],
+    features: [
+      'Real native whisper.cpp + ggml C++17 build support in CMakeLists.txt with automatic upstream validation',
+      'Dual-mode jni_whisper.cpp supporting both WHISPER_REAL_INFERENCE_READY and fail-closed stub fallback',
+      'Segment iteration and greedy sampling parameter initialization in nativeTranscribe',
+      'Clean separation of stub implementation into cpp/stub/ with dedicated fail-closed documentation',
+    ],
+    fixes: [
+      'Removed ambiguous root-level whisper.cpp and nested whisper/ mirrors',
+      'Added CMake fail-closed flag fallback (-DVELLUM_WHISPER_REAL=OFF) for lightweight development environments',
+    ],
+  },
+  {
     version: '3.0.0',
     buildNumber: 30000,
     releaseDate: '2026-09-04',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Encrypted Cloud Vault with client-side AES-256-GCM + GZIP envelope',
       'True WebDAV and Nextcloud server verification and chunked backup synchronization',
