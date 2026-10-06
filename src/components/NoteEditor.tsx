@@ -1,2 +1,5 @@
-/** Write-first note editor entry — implementation in NoteEditorImpl (materialized). */
-export { NoteEditor } from './NoteEditorImpl';
+/**
+ * Note editor entry — write-first chrome (Phase 1 PRD).
+ * Full multimodal modals remain available via lazy imports below.
+ */
+export { NoteEditor } from './NoteEditorWriteFirst';
