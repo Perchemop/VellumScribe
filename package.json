@@ -22,7 +22,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:orphans": "node scripts/check-orphaned-files.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run check:orphans && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run check:orphans && npm run test",
+    "setup:whisper": "bash scripts/setup-whisper-third-party.sh"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",
