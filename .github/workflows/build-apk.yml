@@ -8,6 +8,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      whisper_mode:
+        description: 'Native Whisper build mode'
+        required: true
+        default: 'stub'
+        type: choice
+        options:
+          - stub
+          - real
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
@@ -16,28 +25,94 @@ jobs:
   build:
     name: Build & Package Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
+
+      - name: Verify Whisper upstream tree (src + ggml)
+        run: |
+          set -euo pipefail
+          ROOT="android/app/src/main/cpp/third_party/whisper.cpp"
+          if [[ ! -f "$ROOT/src/whisper.cpp" || ! -f "$ROOT/ggml/src/ggml.c" ]]; then
+            echo "Upstream incomplete — running setup-whisper-third-party.sh"
+            bash scripts/setup-whisper-third-party.sh
+          fi
+          test -f "$ROOT/src/whisper.cpp"
+          test -f "$ROOT/include/whisper.h"
+          test -f "$ROOT/ggml/src/ggml.c"
+          echo "WHISPER_TREE_OK"
 
       - name: Setup Node.js Environment (Node 22)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'npm'
 
       - name: Setup Java Development Kit (JDK 21)
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
+      # Do NOT use android-actions/setup-android packages that still request the
+      # obsolete SDK "tools" package (removed from Google's repo).
+      - name: Setup Android SDK packages (no obsolete tools package)
+        run: |
+          set -euo pipefail
+          # Prefer preinstalled SDK on GitHub-hosted runners
+          if [[ -z "${ANDROID_HOME:-}" && -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          fi
+          if [[ -z "${ANDROID_HOME:-}" && -d "$HOME/Android/Sdk" ]]; then
+            echo "ANDROID_HOME=$HOME/Android/Sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$HOME/Android/Sdk"
+          fi
+          if [[ -z "${ANDROID_HOME:-}" && -d /usr/local/lib/android/sdk ]]; then
+            echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+          fi
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          # Locate sdkmanager
+          SM=""
+          for c in \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" \
+            /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager \
+            /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager; do
+            if [[ -x "$c" ]]; then SM="$c"; break; fi
+          done
+          # glob expand
+          if [[ -z "$SM" ]]; then
+            SM=$(ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)
+          fi
+          if [[ -z "$SM" || ! -x "$SM" ]]; then
+            echo "sdkmanager not found; installing commandlinetools..."
+            mkdir -p "$HOME/android-sdk/cmdline-tools"
+            curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q /tmp/cmdtools.zip -d "$HOME/android-sdk/cmdline-tools"
+            mv "$HOME/android-sdk/cmdline-tools/cmdline-tools" "$HOME/android-sdk/cmdline-tools/latest"
+            echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+            export ANDROID_HOME="$HOME/android-sdk"
+            SM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          echo "Using sdkmanager: $SM"
+          yes | "$SM" --licenses >/tmp/sdk-licenses.txt || true
+          "$SM" --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;26.1.10909125" \
+            "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+
       - name: Install NPM Dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build Web Application
-        run: npm run build
+        run: npm run build:spa
 
       - name: Initialize & Sync Capacitor Android
         run: |
@@ -52,27 +127,56 @@ jobs:
             chmod +x android/gradlew
           fi
 
+      - name: Configure Whisper STUB vs REAL
+        id: whisper
+        run: |
+          MODE="${{ github.event.inputs.whisper_mode || 'stub' }}"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          if [[ "$MODE" == "real" ]]; then
+            echo "Building REAL whisper.cpp + ggml (slow)"
+          else
+            echo "Building STUB libwhisper.so (inferenceRuntimeReady=false)"
+          fi
+
+      - name: Apply STUB CMake flag when requested
+        if: ${{ (github.event.inputs.whisper_mode || 'stub') == 'stub' }}
+        run: |
+          set -euo pipefail
+          # Inject -DVELLUM_WHISPER_REAL=OFF into app build.gradle cmake arguments
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle")
+          text = p.read_text()
+          needle = 'arguments "-DANDROID_STL=c++_shared"'
+          repl = 'arguments "-DANDROID_STL=c++_shared", "-DVELLUM_WHISPER_REAL=OFF"'
+          if needle in text:
+              p.write_text(text.replace(needle, repl, 1))
+              print("Injected VELLUM_WHISPER_REAL=OFF")
+          else:
+              print("WARNING: could not find cmake arguments line; leaving as-is")
+          PY
+
       - name: Build Android APKs (Debug and Unsigned Release)
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
       - name: Upload APK Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: VellumScribe-Android-APKs
+          name: VellumScribe-Android-APKs-${{ steps.whisper.outputs.mode }}
           path: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
           retention-days: 30
+          if-no-files-found: warn
 
       - name: Release APK (on tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
-            android/app/build/outputs/apk/release/app-release-unsigned.apk
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
