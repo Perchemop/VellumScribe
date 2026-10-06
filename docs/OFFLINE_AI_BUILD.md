@@ -48,13 +48,19 @@ Native code lives in `android/app/src/main/cpp/`:
 
 ```
 android/app/src/main/cpp/
-├── CMakeLists.txt              # Build definition for libwhisper.so
+├── CMakeLists.txt              # Dual-mode build definition for libwhisper.so
 ├── jni_whisper.cpp             # JNI bridge between WhisperEngine.java and whisper.cpp
-├── whisper.h                   # Core Whisper C/C++ API header
-├── whisper.cpp                 # Main inference engine
-└── whisper/                    # Vendored whisper.cpp source mirror
-    ├── whisper.h
-    └── whisper.cpp
+├── stub/                       # Fail-closed shim (used when upstream is absent or VELLUM_WHISPER_REAL=OFF)
+│   ├── README.md
+│   ├── whisper.cpp
+│   └── whisper.h
+└── third_party/                # Upstream vendored whisper.cpp + ggml tree
+    ├── README.md
+    └── whisper.cpp/
+        ├── CMakeLists.txt
+        ├── ggml/
+        ├── include/
+        └── src/
 ```
 
 ---
