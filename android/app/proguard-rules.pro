@@ -60,3 +60,8 @@
 
 # SQLite community plugin
 -keep class com.capacitorjs.community.plugins.sqlite.** { *; }
+
+# Google Tink / R8: annotation classes referenced but not on compile classpath
+-dontwarn javax.annotation.Nullable
+-dontwarn javax.annotation.concurrent.GuardedBy
+-dontwarn javax.annotation.**
