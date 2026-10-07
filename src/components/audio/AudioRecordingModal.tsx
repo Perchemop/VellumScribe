@@ -5,18 +5,17 @@ import {
   Pause,
   Play,
   X,
-  Sparkles,
   AlertCircle,
-  RefreshCw,
-  HardDrive,
   WifiOff,
+  Cpu,
 } from 'lucide-react';
 import { AudioRecordingManager, RecordedAudioResult } from '../../services/AudioRecordingManager';
+import { TranscriptionOrchestrator } from '../../services/TranscriptionOrchestrator';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { TranscriptService } from '../../services/TranscriptService';
-import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
+import { PrivacyManager } from '../../lib/privacyManager';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -40,20 +39,38 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const [liveTranscript, setLiveTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Post-recording offline transcription pipeline state
   const [transcribing, setTranscribing] = useState(false);
-  const [jobStatus, setJobStatus] = useState<TranscriptionJobStatus | null>(null);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressStatus, setProgressStatus] = useState('Preparing…');
+  const [engineLabel, setEngineLabel] = useState('Checking runtime…');
+  const [inferenceReady, setInferenceReady] = useState<boolean | null>(null);
 
-  const timerRef = useRef<any>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       handleStart();
+      OfflineAiManager.getInstance()
+        .getDeviceCapabilities()
+        .then((caps) => {
+          const ready = Boolean(caps.inferenceRuntimeReady && caps.isNativeEngineAvailable);
+          setInferenceReady(ready);
+          setEngineLabel(
+            ready
+              ? 'On-device Whisper ready'
+              : 'Live dictation + offline fallback (Whisper runtime not ready)'
+          );
+        })
+        .catch(() => {
+          setInferenceReady(false);
+          setEngineLabel('Live dictation + offline fallback');
+        });
     } else {
       handleCleanup();
     }
     return () => handleCleanup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleStart = async () => {
@@ -88,38 +105,79 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   };
 
   const handleStop = async () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     try {
       const result = await recordingManager.stopRecording(noteId);
       setIsRecording(false);
       setIsPaused(false);
 
-      // Trigger offline transcription automatically per spec
+      // Persist live text on result for recovery / note body
+      const liveText = (result.liveTranscript || liveTranscript || '').trim();
+      if (liveText) {
+        result.liveTranscript = liveText;
+        try {
+          sessionStorage.setItem(`vs_live_transcript_${result.recording?.id || 'latest'}`, liveText);
+        } catch {
+          /* ignore */
+        }
+      }
+
       if (result.recording) {
         setTranscribing(true);
-        const aiManager = OfflineAiManager.getInstance();
-        const { jobId } = await aiManager.transcribeRecording(result.recording.id);
-        setActiveJobId(jobId);
+        setProgressPercent(5);
+        setProgressStatus('Selecting transcription engine…');
 
-        // Poll progress truthfully
-        const pollInterval = setInterval(async () => {
-          try {
-            const status = await aiManager.getTranscriptionStatus(jobId);
-            setJobStatus(status);
+        const controller = new AbortController();
+        abortRef.current = controller;
 
-            if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
-              clearInterval(pollInterval);
-              setTranscribing(false);
-              onRecordingComplete(result);
-              onClose();
+        const policy = PrivacyManager.isNetworkAllowed() ? 'local_first' : 'offline_only';
+
+        try {
+          const orchestrator = TranscriptionOrchestrator.getInstance();
+          const tr = await orchestrator.orchestrate(
+            {
+              recordingId: result.recording.id,
+              noteId,
+              audioBlob: result.blob,
+              mediaKey: result.recording.media_key,
+              mimeType: result.mimeType,
+              durationSeconds: result.durationSeconds,
+              liveTranscript: liveText,
+              liveCapturedText: liveText,
+            },
+            {
+              policy,
+              signal: controller.signal,
+              onProgress: (p) => {
+                setProgressPercent(p.percent);
+                setProgressStatus(p.status || p.phase);
+              },
             }
-          } catch (pollErr) {
-            clearInterval(pollInterval);
-            setTranscribing(false);
-            onRecordingComplete(result);
+          );
+
+          setProgressPercent(100);
+          setProgressStatus(`Done via ${tr.engineId}`);
+
+          // Attach transcript for callers that append to note body
+          (result as RecordedAudioResult & { transcript?: string }).transcript = tr.transcript;
+        } catch (txErr: any) {
+          // Recording is still saved; surface honest error but close with result
+          setErrorMessage(
+            txErr?.message ||
+              'Transcription could not complete. Your recording is saved — use recovery options on the note.'
+          );
+        } finally {
+          setTranscribing(false);
+          abortRef.current = null;
+          onRecordingComplete(result);
+          // Brief pause if error so user can read, else close
+          if (!errorMessage) {
             onClose();
           }
-        }, 300);
+        }
       } else {
         onRecordingComplete(result);
         onClose();
@@ -127,23 +185,25 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to stop and save recording.');
       setIsRecording(false);
+      setTranscribing(false);
     }
   };
 
-  const handleCancelTranscription = async () => {
-    if (activeJobId) {
-      await OfflineAiManager.getInstance().cancelTranscription(activeJobId);
-      setTranscribing(false);
-      onClose();
-    }
+  const handleCancelTranscription = () => {
+    abortRef.current?.abort();
+    setTranscribing(false);
+    onClose();
   };
 
   const handleCleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    abortRef.current?.abort();
     setIsRecording(false);
     setIsPaused(false);
     setTranscribing(false);
-    setJobStatus(null);
   };
 
   if (!isOpen) return null;
@@ -154,19 +214,16 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         id="audio-recording-modal"
         className="w-full max-w-md bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-6 shadow-2xl space-y-6 text-stone-800 dark:text-stone-200"
       >
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <WifiOff className="w-4 h-4" />
+              {inferenceReady ? <Cpu className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
             </div>
             <div>
               <h3 className="font-semibold text-sm text-stone-900 dark:text-stone-100">
-                {transcribing ? 'Transcribing Speech Locally' : 'Record Audio Memo'}
+                {transcribing ? 'Transcribing' : 'Record Audio Memo'}
               </h3>
-              <span className="text-[11px] text-stone-500">
-                16 kHz Mono PCM • On-Device AI
-              </span>
+              <span className="text-[11px] text-stone-500">{engineLabel}</span>
             </div>
           </div>
 
@@ -174,6 +231,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
             <button
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors"
+              aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
@@ -187,25 +245,22 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           </div>
         )}
 
-        {/* Dynamic State View */}
         {transcribing ? (
           <div className="py-4">
             <TranscriptionProgressCard
               progress={{
                 phase: 'transcribing',
-                percent: jobStatus?.progressPercent || 25,
-                currentSegment: jobStatus?.currentChunk || 1,
-                totalSegments: jobStatus?.totalChunks || 1,
-                completedSegmentsCount: Math.max(0, (jobStatus?.currentChunk || 1) - 1),
-                status: jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
+                percent: progressPercent || 25,
+                currentSegment: 1,
+                totalSegments: 1,
+                completedSegmentsCount: progressPercent >= 100 ? 1 : 0,
+                status: progressStatus,
               }}
               onCancel={handleCancelTranscription}
             />
           </div>
         ) : (
-          /* Active Recording View */
           <div className="py-6 flex flex-col items-center justify-center space-y-5">
-            {/* Visual Pulse circle */}
             <div
               className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
                 isPaused
@@ -216,7 +271,6 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
               <Mic className="w-10 h-10" />
             </div>
 
-            {/* Timer Counter */}
             <div className="text-center space-y-1">
               <span className="font-mono text-3xl font-bold tracking-tight text-stone-900 dark:text-stone-100">
                 {TranscriptService.formatTimeMs(elapsedSec * 1000)}
@@ -226,7 +280,6 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
               </p>
             </div>
 
-            {/* Live Dictation Preview */}
             {liveTranscript && (
               <div
                 aria-live="polite"
@@ -234,13 +287,12 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 className="w-full p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs text-stone-700 dark:text-stone-300 max-h-24 overflow-y-auto"
               >
                 <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">
-                  🎙️ Live Dictation (Offline Speech Recognizer):
+                  Live dictation (device speech recognizer)
                 </span>
                 <p className="italic">{liveTranscript}</p>
               </div>
             )}
 
-            {/* Controls */}
             <div className="flex items-center gap-4 pt-2">
               {isPaused ? (
                 <button

@@ -1,86 +1,44 @@
-# Cumulative open issues — all audit / review sections
+# Cumulative open issues — status after D/P/U implementation pass
 
-Last updated after: write-first UI, SSO shell, transcription, cloud crypto deep-dives.
+## Implemented in-repo (this pass)
 
-Legend: **D** = device/ops · **P** = product/code · **U** = UX polish · **L** = lint/hygiene
+| ID | Item | Status |
+|----|------|--------|
+| P-01 | AudioRecordingModal → TranscriptionOrchestrator + liveCapturedText | **Done** |
+| P-05 | Live transcript on result + sessionStorage key | **Done** |
+| P-02 | Optional backup passphrase API + BackupPassphrasePanel | **Done** (wire into Settings cloud tab if not auto-imported) |
+| P-04 | Sync queue exponential backoff (cap 3 failures) | **Done** (patch script) |
+| P-03 | settingsSubtab includes offline-ai / about | **Done** (patch script) |
+| U-01 | Settings icon hidden on md+ (tabs suffice) | **Done** (patch script) |
+| U-04 | Capability-aware recording labels | **Done** |
+| D-03 | `public/.well-known/assetlinks.json` template | **Done** (replace fingerprint) |
 
----
+## Still requires device / ops / host config
 
-## A. Device / ops (blocked without hardware or secrets)
+| ID | Item | Notes |
+|----|------|--------|
+| D-01 | REAL Whisper smoke | Physical APK + model |
+| D-02 | OAuth E2E | Secrets + Android |
+| D-03 | Live App Links | Host template with real SHA-256 |
+| D-04 | OEM speech packs | User device settings |
+| D-05 | Cloud restore E2E | Real providers |
 
-| ID | Severity | Section | Issue | Status |
-|----|----------|---------|-------|--------|
-| D-01 | High | Whisper | Build REAL `libwhisper` APK, install model, smoke offline STT | Open |
-| D-02 | High | SSO | Configure `GOOGLE_*` / `MICROSOFT_*` env; Android OAuth E2E with deep link / App Links | Open |
-| D-03 | Med | SSO | Publish production `assetlinks.json` for verified HTTPS App Links | Open |
-| D-04 | Med | Audio | OEM SpeechRecognizer language packs required for live dictation quality | Open |
-| D-05 | Low | Sync | End-to-end cloud backup upload/restore on real Drive/OneDrive/WebDAV | Open |
+## Remaining polish (optional)
 
----
+| ID | Item |
+|----|------|
+| U-02 | EventNotesList progressive disclosure (PRD backlog) |
+| U-03 | Further SettingsView extraction |
+| L-01 | ESLint ratchet |
 
-## B. Product / code (in-repo remaining)
+## Wire BackupPassphrasePanel
 
-| ID | Severity | Section | Issue | Status |
-|----|----------|---------|-------|--------|
-| P-01 | Med | Transcription | `AudioRecordingModal` calls `OfflineAiManager.transcribeRecording` directly — **bypasses** `TranscriptionOrchestrator`, so **live dictation text is not used** when Whisper fails | Open — recommended fix |
-| P-02 | Med | Cloud crypto | No guided **user passphrase / key export** for multi-device restore of encrypted backups | Open |
-| P-03 | Low | Settings | `settingsSubtab` type in App omits `offline-ai` / `about` (runtime cast works) | Open polish |
-| P-04 | Low | Sync | Sync queue aborts remaining items on first network error; no exponential backoff | Open |
-| P-05 | Low | Transcription | Ensure every offline record path persists `liveCapturedText` on the recording entity for recovery | Open (related to P-01) |
+In Settings cloud section, import:
 
-**Recently closed (this cycle):**
+```tsx
+import { BackupPassphrasePanel } from './settings/BackupPassphrasePanel';
+// ...
+<BackupPassphrasePanel />
+```
 
-- Cloud Gemini consent on orchestrator engine
-- Recovery sheet `media_key` + consent + `recordingId` wiring
-- Capability fallback sets `inferenceRuntimeReady: false`
-- Global OAuth `appUrlOpen` listener in App
-- Write-first editor, draft/lock, sketch hydration, conflict panel, etc. (see `AUDIT_CHECKLIST.md`)
-
----
-
-## C. UX polish (non-blocking)
-
-| ID | Severity | Section | Issue | Status |
-|----|----------|---------|-------|--------|
-| U-01 | Low | Shell | Desktop Settings button + “Settings & AI” tab redundancy | Open |
-| U-02 | Low | List | `EventNotesList` still dense (~48KB); progressive disclosure for power actions | Open (PRD backlog) |
-| U-03 | Low | Settings | SettingsView remains large; further panel extraction | Open |
-| U-04 | Low | Recording | Modal claims “On-Device AI” even when only STUB Whisper is linked — align copy with capability flags | Open |
-
----
-
-## D. Lint / hygiene
-
-| ID | Severity | Section | Issue | Status |
-|----|----------|---------|-------|--------|
-| L-01 | Low | CI | ESLint warnings budget 620 (~615); ratchet toward 0 | Ongoing |
-
----
-
-## E. Sections reviewed (complete for in-repo scope)
-
-| Section | Doc | Residual |
-|---------|-----|----------|
-| Write-first / editor chrome | AUDIT_CHECKLIST P0–P1 | Device only |
-| Settings IA | AUDIT_CHECKLIST P2 | U-03 |
-| SSO / App shell | AUDIT_SECTION_SSO_AND_SHELL.md | D-02, D-03 |
-| Transcription pipeline | AUDIT_SECTION_TRANSCRIPTION.md | D-01, P-01, P-05, U-04 |
-| Cloud backup crypto | AUDIT_SECTION_CLOUD_CRYPTO.md | P-02, P-04, D-05 |
-
----
-
-## F. Recommended next implementation order
-
-1. **P-01** — Route `AudioRecordingModal` stop path through `TranscriptionOrchestrator` with `liveCapturedText: liveTranscript` and `policy: 'local_first'` (fallback cloud only if allowed).
-2. **U-04** — Capability-aware labels in recording / recovery UI.
-3. **P-02** — Optional backup passphrase in Settings → Cloud (encrypt with user phrase; document restore).
-4. **D-01 / D-02** — Hardware validation.
-5. **L-01** — Lint ratchet.
-
----
-
-## G. Explicitly out of scope for pure code agents
-
-- Physical APK install and microphone tests
-- Production OAuth client secrets and Google/Microsoft console config
-- Digital Asset Links hosting for the production domain
+Patch script does not auto-inject into the large SettingsView; add one line when editing Settings cloud tab.
