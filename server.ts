@@ -12,7 +12,7 @@ dotenv.config();
 
 const app = express();
 // Hardcoded to port 3000 per platform specifications
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 /**
  * SSRF Guard: Validates user-supplied endpoints (Ollama, local Whisper, WebDAV)
