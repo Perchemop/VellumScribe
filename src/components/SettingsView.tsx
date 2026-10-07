@@ -52,6 +52,7 @@ import { OfflineAiPanel } from './settings/OfflineAiPanel';
 import { SecurityPanel } from './settings/SecurityPanel';
 import { StoragePanel } from './settings/StoragePanel';
 import { AboutPanel } from './settings/AboutPanel';
+import { DiagnosticsTools } from './settings/DiagnosticsTools';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'offline-ai' | 'about';
@@ -2051,6 +2052,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 5: ARCHITECTURE & DIAGNOSTICS */}
         {activeTab === 'diagnostics' && (
           <div id="panel-diagnostics" role="tabpanel" aria-labelledby="subtab-diagnostics-btn" className="max-w-4xl mx-auto space-y-5">
+            <DiagnosticsTools />
             {/* Android Mobile Platform & Performance Guidance Card */}
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
               <div className="flex items-center justify-between">

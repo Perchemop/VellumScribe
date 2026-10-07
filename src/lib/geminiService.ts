@@ -218,6 +218,7 @@ export class GeminiApiService {
     preferredModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
   ): Promise<{ text: string; model: string }> {
     PrivacyManager.assertNetworkAllowed('Google AI Studio');
+    PrivacyManager.assertCloudAiConsent('Google AI Studio');
     const apiKey = (AiSettingsManager.getGoogleApiKey() || (await AiSettingsManager.getApiKeyAsync())).trim();
     if (!apiKey) {
       throw new Error('Google AI Studio API key not configured.');

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Lock, FileText } from 'lucide-react';
 import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { MediaRepository } from '../lib/MediaRepository';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { AiProvenanceBadge } from './AiProvenanceBadge';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
@@ -544,8 +545,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onSave={(dataUrl: string) => {
               setSketchData(dataUrl);
               setShowSketchModal(false);
-              const updated = StorageManager.updateNote(note.id, { sketch_data: dataUrl });
-              if (updated) onNoteUpdated(updated);
+              void (async () => {
+                try {
+                  const mediaKey = `${generatePrefixedId('sketch')}.png`;
+                  const res = await fetch(dataUrl);
+                  const blob = await res.blob();
+                  await MediaRepository.putBinary(mediaKey, blob);
+                  const updated = StorageManager.updateNote(note.id, {
+                    sketch_media_key: mediaKey,
+                    sketch_data: undefined,
+                  });
+                  if (updated) onNoteUpdated(updated);
+                } catch {
+                  const updated = StorageManager.updateNote(note.id, { sketch_data: dataUrl });
+                  if (updated) onNoteUpdated(updated);
+                }
+              })();
             }}
             onClose={() => setShowSketchModal(false)}
           />
