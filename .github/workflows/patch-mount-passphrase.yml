@@ -1,0 +1,22 @@
+name: Mount Backup Passphrase Panel
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/patch_mount_passphrase_panel.py
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_mount_passphrase_panel.py
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/components/SettingsView.tsx
+          git diff --cached --quiet && echo No changes && exit 0
+          git commit -m "feat(settings): show BackupPassphrasePanel on cloud settings"
+          git push
