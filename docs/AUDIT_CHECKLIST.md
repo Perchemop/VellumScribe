@@ -16,7 +16,7 @@ Track audit findings on `main`.
 - [x] `saveUnlockedNote` path while session PIN held after unlock
 - [x] Apply decrypted payload via `onUnlockSession`
 - [x] Remove orphaned `AudioRecorderPlayer` + `audioRecorder` shim
-- [x] CI typecheck + test green on main (runs #234–#236 success)
+- [x] CI typecheck + test green on main
 - [x] Direct Google AI path requires cloud AI consent
 
 ## P1 — Write-first parity
@@ -25,7 +25,7 @@ Track audit findings on `main`.
 - [x] ReminderService wiring
 - [x] Inline voice memos (AudioPlayerWidget)
 - [x] Inline OCR scan list
-- [x] Sketch → `sketch_media_key` binary path (MediaRepository; data-URL fallback)
+- [x] Sketch → `sketch_media_key` binary path
 - [x] Focus mode minimal chrome
 - [x] Onboarding copy for + / ⋮
 - [x] Recovery sheet after audio close
@@ -33,19 +33,20 @@ Track audit findings on `main`.
 ## P2 — Settings IA
 
 - [x] Simple / Advanced mode toggle
-- [x] Advanced-only tabs (AI, offline AI, storage, diagnostics)
+- [x] Advanced-only tabs
 - [x] Diagnostics log export + FTS rebuild (`DiagnosticsTools`)
-- [ ] Conflict resolver UI (no conflict UI surface found yet; types exist)
+- [x] Conflict resolver UI (`ConflictResolverPanel` + `resolveSyncConflict`)
 
 ## P3–P9
 
 - [ ] Whisper REAL device smoke (needs device / REAL APK)
 - [x] Gemini network/consent gates on primary API paths
 - [ ] OAuth E2E Android
-- [ ] Lower ESLint max-warnings (626 warnings remain)
-- [x] README already documents limitations honestly
+- [x] Lower ESLint max-warnings (650 → 620; continue ratcheting)
+- [x] README documents limitations honestly
 
-## Notes
+## Device / ops (cannot complete in CI alone)
 
-- Conflict resolution: `SyncConflictRecord` exists in types; no dedicated modal wired — track as product follow-up.
-- Whisper REAL: vendor tree + dual-mode CMake present; confirm on hardware after `setup:whisper` + model download.
+- [ ] Whisper REAL NDK build + model download smoke on hardware
+- [ ] OAuth App Links E2E (Google / Microsoft) on Android
+- [ ] Further ESLint warning cleanup toward 0
