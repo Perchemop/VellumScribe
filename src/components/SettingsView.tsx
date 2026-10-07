@@ -48,7 +48,8 @@ import { StorageDashboard } from './StorageDashboard';
 import { AppLogger, LogEntry } from '../lib/logger';
 import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
 import { useModalBackHandler } from '../lib/modalBackStack';
-import { OfflineAiPanel } from './settings/OfflineAiPanel';
+import { OfflineAiPanel } from './settings/OfflineAiPanel'
+import { BackupPassphrasePanel } from './settings/BackupPassphrasePanel';
 import { SecurityPanel } from './settings/SecurityPanel';
 import { StoragePanel } from './settings/StoragePanel';
 import { AboutPanel } from './settings/AboutPanel';
@@ -389,6 +390,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   React.useEffect(() => {
+              <BackupPassphrasePanel />
     if (activeTab === 'cloud') {
       accounts.forEach((acc) => {
         handleLoadRemoteBackups(acc.provider);
