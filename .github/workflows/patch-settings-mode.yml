@@ -1,6 +1,10 @@
 name: Patch Settings Simple/Advanced
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/patch-settings-mode.yml'
+      - 'scripts/trigger-settings-patch'
 jobs:
   patch:
     runs-on: ubuntu-latest
