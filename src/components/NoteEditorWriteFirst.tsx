@@ -6,7 +6,7 @@ import { SearchIndexQueue } from '../lib/SearchIndexQueue';
 import { generatePrefixedId } from '../lib/uuid';
 import { NoteEditorChrome } from './NoteEditorChrome';
 import { ChecklistEditor } from './ChecklistEditor';
-import { AiSettingsManager } from '../lib/aiSettings';
+import { AiSettingsManager, type LlmProvider } from '../lib/aiSettings';
 import { PrivacyManager } from '../lib/privacyManager';
 import { ModalLoadingFallback } from './ModalLoadingFallback';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -42,6 +42,15 @@ const AiSummaryModal = lazy(() =>
 const CloudAiConsentModal = lazy(() =>
   import('./CloudAiConsentModal').then((m) => ({ default: m.CloudAiConsentModal }))
 );
+
+const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
+  google: 'Google Gemini',
+  groq: 'Groq',
+  ollama: 'Ollama (self-hosted endpoint)',
+  offline_rules: 'Offline rules engine',
+};
+
+const llmProviderLabel = (provider: LlmProvider): string => LLM_PROVIDER_LABELS[provider] || provider;
 
 interface NoteEditorProps {
   note: NoteRecord;
@@ -250,8 +259,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       <Suspense fallback={<ModalLoadingFallback label="Loading…" />}>
         {showSketchModal && (
           <SketchCanvasModal
-            isOpen={showSketchModal}
-            initialData={sketchData}
+            initialDataUrl={sketchData}
             onSave={(dataUrl: string) => {
               setSketchData(dataUrl);
               setShowSketchModal(false);
@@ -262,13 +270,33 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           />
         )}
         {showOcrScanner && (
-          <OcrScannerModal isOpen={showOcrScanner} noteId={note.id} onClose={() => setShowOcrScanner(false)} onScanComplete={() => setShowOcrScanner(false)} />
+          <OcrScannerModal
+            noteId={note.id}
+            onOcrExtracted={(text, _scanRecord, mode) => {
+              // The OCR scan record itself is persisted by the scanner; apply the
+              // extracted text to the note body using the mode the user picked.
+              const newBody = mode === 'replace' ? text : body ? `${body}\n\n${text}` : text;
+              handleBodyChange(newBody);
+            }}
+            onClose={() => setShowOcrScanner(false)}
+          />
         )}
         {showAudioStudioModal && (
-          <AudioRecordingModal isOpen={showAudioStudioModal} noteId={note.id} onClose={() => setShowAudioStudioModal(false)} />
+          <AudioRecordingModal
+            isOpen={showAudioStudioModal}
+            noteId={note.id}
+            onRecordingComplete={() => {
+              // The memo and its transcript are written to storage by
+              // AudioRecordingManager / OfflineAiManager, so re-read the note to
+              // surface the new recording and transcript in the editor.
+              const refreshed = StorageManager.getNoteById(note.id);
+              if (refreshed) onNoteUpdated(refreshed);
+            }}
+            onClose={() => setShowAudioStudioModal(false)}
+          />
         )}
         {showSecurityModal && (
-          <NoteSecurityModal note={note} onClose={() => setShowSecurityModal(false)} onUpdated={onNoteUpdated} />
+          <NoteSecurityModal note={note} onClose={() => setShowSecurityModal(false)} onSuccess={onNoteUpdated} />
         )}
         {showShareModal && (
           <NoteShareModal note={note} event={events.find((e) => e.id === eventId)} onClose={() => setShowShareModal(false)} />
@@ -281,12 +309,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </ErrorBoundary>
         )}
         {showSettingsModal && <SettingsModal onClose={() => setShowSettingsModal(false)} onSettingsUpdated={() => {}} />}
-        {showAiKeyModal && <AiStudioKeyModal onClose={() => setShowAiKeyModal(false)} />}
+        {showAiKeyModal && <AiStudioKeyModal isOpen={showAiKeyModal} onClose={() => setShowAiKeyModal(false)} />}
         {showAiSummaryModal && (
           <AiSummaryModal
             isOpen={showAiSummaryModal}
-            noteBody={body}
-            noteTitle={title}
+            note={{ ...note, title, body }}
             onClose={() => setShowAiSummaryModal(false)}
             onApplySummary={(summaryText: string, mode: 'append' | 'prepend' | 'replace') => {
               let newBody = body;
@@ -301,7 +328,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {showCloudAiConsentModal && (
           <CloudAiConsentModal
             isOpen={showCloudAiConsentModal}
-            title="Cloud AI"
+            providerName={llmProviderLabel(AiSettingsManager.getSettings().primaryLlmProvider)}
+            operationDescription="Generate an AI summary of this note"
             onConfirm={() => {
               setShowCloudAiConsentModal(false);
               if (pendingAiAction) {
