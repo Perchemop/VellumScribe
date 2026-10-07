@@ -1,4 +1,5 @@
 import React from 'react';
+import { version } from '../../package.json';
 
 interface AppLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -73,7 +74,7 @@ export const AppLogo: React.FC<AppLogoProps> = ({
               VellumScribe
             </span>
             <span className="text-xs px-1 py-0.2 bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-md font-mono border border-zinc-200/60 dark:border-zinc-700/60">
-              v2.6
+              v{version}
             </span>
           </div>
           <span className="text-xs text-zinc-500 dark:text-zinc-400 font-normal leading-none mt-0.5">
