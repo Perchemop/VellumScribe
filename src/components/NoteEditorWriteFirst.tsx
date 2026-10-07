@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { Lock } from 'lucide-react';
-import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord } from '../types';
+import { Lock, FileText } from 'lucide-react';
+import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { NotePayloadData } from '../lib/cryptoUtils';
 import { AiProvenanceBadge } from './AiProvenanceBadge';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
 import { DraftStore, type NoteDraft } from '../lib/DraftStore';
@@ -116,10 +117,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
     StorageManager.getRecordingsForNote(note.id)
   );
+  const [ocrScans, setOcrScans] = useState<OcrScanRecord[]>(() =>
+    StorageManager.getOcrScansForNote(note.id)
+  );
+  /** Session PIN held only while unlocked; used by saveUnlockedNote to re-encrypt */
+  const [heldPin, setHeldPin] = useState<string | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
 
   const refreshRecordings = () => {
     setRecordings(StorageManager.getRecordingsForNote(note.id));
+  };
+
+  const refreshOcrScans = () => {
+    setOcrScans(StorageManager.getOcrScansForNote(note.id));
+  };
+
+  const applyUnlockedPayload = (payload: NotePayloadData, pin: string) => {
+    setHeldPin(pin);
+    setIsUnlockedLocally(true);
+    if (payload.title !== undefined) setTitle(payload.title || '');
+    setBody(payload.body || '');
+    if (payload.checklist_items) {
+      setChecklistItems(payload.checklist_items);
+      setShowChecklistSection(payload.checklist_items.length > 0);
+    }
+    if (payload.sketch_data !== undefined) setSketchData(payload.sketch_data);
+    const meta = payload.protected_metadata;
+    if (meta?.location_name) setLocationName(meta.location_name);
+    if (meta?.reminder_at) setReminderAt(meta.reminder_at);
   };
 
   useEffect(() => {
@@ -134,7 +159,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setLocationName(note.location_name || '');
     setSketchData(note.sketch_data);
     setIsUnlockedLocally(!note.is_locked);
+    setHeldPin(null);
     setRecordings(StorageManager.getRecordingsForNote(note.id));
+    setOcrScans(StorageManager.getOcrScansForNote(note.id));
   }, [note.id, note.updated_at, note.is_locked]);
 
   useEffect(() => {
@@ -164,14 +191,36 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         savedAt: Date.now(),
       });
     }
+
+    const finish = (updated: NoteRecord | null | undefined) => {
+      if (updated) {
+        DraftStore.clear(note.id);
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('stored'), 1800);
+        notifyUpdatedDebounced(updated);
+      } else {
+        setSaveStatus('stored');
+      }
+    };
+
+    // Locked notes must re-encrypt via saveUnlockedNote while session PIN is held
+    if (note.is_locked && heldPin) {
+      void StorageManager.saveUnlockedNote(
+        note.id,
+        { title: nextTitle, body: nextBody },
+        heldPin
+      )
+        .then((updated) => {
+          SearchIndexQueue.enqueue(note.id);
+          finish(updated);
+        })
+        .catch(() => setSaveStatus('stored'));
+      return;
+    }
+
     const updated = StorageManager.updateNoteText(note.id, nextTitle, nextBody, true);
     SearchIndexQueue.enqueue(note.id);
-    if (updated) {
-      DraftStore.clear(note.id);
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('stored'), 1800);
-      notifyUpdatedDebounced(updated);
-    }
+    finish(updated);
   };
 
   const handleBodyChange = (newBody: string) => {
@@ -454,6 +503,35 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 ))}
               </div>
             )}
+            {ocrScans.length > 0 && (
+              <div className="space-y-2" aria-label="Document scans">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                  Document scans
+                </p>
+                <ul className="space-y-1.5">
+                  {ocrScans.map((scan) => (
+                    <li
+                      key={scan.id}
+                      className="flex items-start gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-xs"
+                    >
+                      <FileText className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                          Scan #{scan.id}
+                        </p>
+                        {scan.ocr_text ? (
+                          <p className="text-zinc-500 dark:text-zinc-400 line-clamp-2 mt-0.5">
+                            {scan.ocr_text}
+                          </p>
+                        ) : (
+                          <p className="text-zinc-400 mt-0.5">No extracted text</p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {locationName && <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {locationName}</p>}
           </>
         )}
@@ -478,8 +556,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onOcrExtracted={(text, _scanRecord, mode) => {
               const newBody = mode === 'replace' ? text : body ? `${body}\n\n${text}` : text;
               handleBodyChange(newBody);
+              refreshOcrScans();
             }}
-            onClose={() => setShowOcrScanner(false)}
+            onClose={() => {
+              setShowOcrScanner(false);
+              refreshOcrScans();
+            }}
           />
         )}
         {showAudioStudioModal && !lockedGate && (
@@ -507,6 +589,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <NoteSecurityModal
             note={note}
             onClose={() => setShowSecurityModal(false)}
+            onUnlockSession={(payload, pin) => {
+              applyUnlockedPayload(payload, pin);
+            }}
             onSuccess={(updated) => {
               setIsUnlockedLocally(true);
               onNoteUpdated(updated);
