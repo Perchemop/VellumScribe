@@ -29,8 +29,8 @@ Track audit findings on `main`.
 
 ## P2 — Settings IA
 
-- [ ] Simple / Advanced mode toggle
-- [ ] Advanced-only tabs
+- [x] Simple / Advanced mode toggle
+- [x] Advanced-only tabs (AI, offline AI, storage, diagnostics)
 - [ ] Conflict resolver UI
 - [ ] Diagnostics log export + FTS rebuild
 
