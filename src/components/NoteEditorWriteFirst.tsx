@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { Lock } from 'lucide-react';
-import { NoteRecord, EventRecord, ChecklistItem } from '../types';
+import { Lock, Mic, Camera, FileText } from 'lucide-react';
+import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { DraftStore, type NoteDraft } from '../lib/DraftStore';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
@@ -43,6 +43,11 @@ const AiSummaryModal = lazy(() =>
 );
 const CloudAiConsentModal = lazy(() =>
   import('./CloudAiConsentModal').then((m) => ({ default: m.CloudAiConsentModal }))
+);
+const TranscriptionRecoverySheet = lazy(() =>
+  import('./audio/TranscriptionRecoverySheet').then((m) => ({
+    default: m.TranscriptionRecoverySheet,
+  }))
 );
 
 const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
@@ -101,11 +106,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
   const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
+  const [showRecoverySheet, setShowRecoverySheet] = useState(false);
   const [pendingAiAction, setPendingAiAction] = useState<(() => void) | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
   const [isUnlockedLocally, setIsUnlockedLocally] = useState(!note.is_locked);
   const [recoveredDraft, setRecoveredDraft] = useState<NoteDraft | null>(null);
+  const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
+    StorageManager.getRecordingsForNote(note.id)
+  );
+  const [ocrScans, setOcrScans] = useState<OcrScanRecord[]>(() =>
+    StorageManager.getOcrScansForNote(note.id)
+  );
   const debounceTimerRef = useRef<number | null>(null);
+
+  const refreshMedia = () => {
+    setRecordings(StorageManager.getRecordingsForNote(note.id));
+    setOcrScans(StorageManager.getOcrScansForNote(note.id));
+  };
 
   useEffect(() => {
     const newer = DraftStore.findNewerDraft(
@@ -125,21 +142,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setLocationName(note.location_name || '');
     setSketchData(note.sketch_data);
     setIsUnlockedLocally(!note.is_locked);
+    refreshMedia();
   }, [note.id, note.updated_at, note.is_locked]);
+
+  // Focus mode: close sheets so writing surface stays clean
+  useEffect(() => {
+    if (focusMode) {
+      setShowAttachSheet(false);
+      setShowMoreActionsSheet(false);
+    }
+  }, [focusMode]);
 
   const notifyUpdatedDebounced = (updatedNote: NoteRecord) => {
     if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = window.setTimeout(() => onNoteUpdated(updatedNote), 400);
   };
 
-  /** Persist title/body. Locked notes must be unlocked first — no plaintext path. */
   const persistText = (nextTitle: string, nextBody: string) => {
     if (note.is_locked && !isUnlockedLocally) {
       setShowSecurityModal(true);
       return;
     }
     setSaveStatus('saving');
-    // Never write plaintext drafts for locked notes
     if (!note.is_locked) {
       DraftStore.write({
         noteId: note.id,
@@ -268,43 +292,69 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       id="note-editor-container"
       className="h-full flex flex-col bg-white dark:bg-[#0c0c0e] overflow-hidden select-text relative"
     >
-      <NoteEditorChrome
-        note={note}
-        events={events}
-        eventId={eventId}
-        setEventId={setEventId}
-        onNoteUpdated={onNoteUpdated}
-        onNoteDeleted={onNoteDeleted}
-        onClose={onClose}
-        saveStatus={saveStatus}
-        showAttachSheet={showAttachSheet}
-        setShowAttachSheet={setShowAttachSheet}
-        showMoreActionsSheet={showMoreActionsSheet}
-        setShowMoreActionsSheet={setShowMoreActionsSheet}
-        showChecklistSection={showChecklistSection}
-        setShowChecklistSection={setShowChecklistSection}
-        handleAddChecklistItem={handleAddChecklistItem}
-        sketchData={sketchData}
-        reminderAt={reminderAt}
-        locationName={locationName}
-        focusMode={focusMode}
-        onToggleFocus={onToggleFocus}
-        setShowAudioStudioModal={setShowAudioStudioModal}
-        setShowSketchModal={setShowSketchModal}
-        setShowOcrScanner={setShowOcrScanner}
-        setShowReminderPicker={setShowReminderPicker}
-        setShowLocationPicker={setShowLocationPicker}
-        setShowSecurityModal={setShowSecurityModal}
-        setShowShareModal={setShowShareModal}
-        setShowRevisionsModal={setShowRevisionsModal}
-        setShowAiKeyModal={setShowAiKeyModal}
-        setShowSettingsModal={setShowSettingsModal}
-        handleOpenAiSummaryModal={handleOpenAiSummaryModal}
-      />
+      {!focusMode && (
+        <NoteEditorChrome
+          note={note}
+          events={events}
+          eventId={eventId}
+          setEventId={setEventId}
+          onNoteUpdated={onNoteUpdated}
+          onNoteDeleted={onNoteDeleted}
+          onClose={onClose}
+          saveStatus={saveStatus}
+          showAttachSheet={showAttachSheet}
+          setShowAttachSheet={setShowAttachSheet}
+          showMoreActionsSheet={showMoreActionsSheet}
+          setShowMoreActionsSheet={setShowMoreActionsSheet}
+          showChecklistSection={showChecklistSection}
+          setShowChecklistSection={setShowChecklistSection}
+          handleAddChecklistItem={handleAddChecklistItem}
+          sketchData={sketchData}
+          reminderAt={reminderAt}
+          locationName={locationName}
+          focusMode={focusMode}
+          onToggleFocus={onToggleFocus}
+          setShowAudioStudioModal={setShowAudioStudioModal}
+          setShowSketchModal={setShowSketchModal}
+          setShowOcrScanner={setShowOcrScanner}
+          setShowReminderPicker={setShowReminderPicker}
+          setShowLocationPicker={setShowLocationPicker}
+          setShowSecurityModal={setShowSecurityModal}
+          setShowShareModal={setShowShareModal}
+          setShowRevisionsModal={setShowRevisionsModal}
+          setShowAiKeyModal={setShowAiKeyModal}
+          setShowSettingsModal={setShowSettingsModal}
+          handleOpenAiSummaryModal={handleOpenAiSummaryModal}
+        />
+      )}
+
+      {focusMode && (
+        <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-850 flex items-center justify-between shrink-0">
+          <button
+            type="button"
+            className="min-h-[44px] px-3 text-sm text-zinc-600 dark:text-zinc-300"
+            onClick={onClose}
+            aria-label="Back"
+          >
+            ← Back
+          </button>
+          <span className="text-[11px] text-zinc-400" aria-live="polite">
+            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Focus mode'}
+          </span>
+          <button
+            type="button"
+            className="min-h-[44px] px-3 text-sm font-medium text-indigo-600 dark:text-indigo-400"
+            onClick={() => onToggleFocus?.()}
+          >
+            Done
+          </button>
+        </div>
+      )}
 
       {recoveredDraft && !lockedGate && (
         <div
           role="status"
+          aria-live="polite"
           className="px-4 py-2.5 border-b border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-xs flex flex-wrap items-center justify-between gap-2 shrink-0"
         >
           <span className="text-amber-900 dark:text-amber-100">
@@ -329,7 +379,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
       )}
 
-      {showReminderPicker && (
+      {showReminderPicker && !focusMode && (
         <div className="px-4 py-2 border-b border-amber-200/60 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-950/20 flex items-center gap-2 text-xs shrink-0 flex-wrap">
           <span className="font-medium">Reminder</span>
           <input
@@ -342,25 +392,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
           />
           {reminderAt && (
-            <button
-              type="button"
-              className="text-rose-600 dark:text-rose-400 underline"
-              onClick={() => void handleSetReminder('')}
-            >
+            <button type="button" className="text-rose-600 underline" onClick={() => void handleSetReminder('')}>
               Clear
             </button>
           )}
-          <button
-            type="button"
-            className="text-zinc-500 underline"
-            onClick={() => setShowReminderPicker(false)}
-          >
+          <button type="button" className="text-zinc-500 underline" onClick={() => setShowReminderPicker(false)}>
             Done
           </button>
         </div>
       )}
 
-      {showLocationPicker && (
+      {showLocationPicker && !focusMode && (
         <div className="px-4 py-2 border-b border-sky-200/60 dark:border-sky-900/40 bg-sky-50/70 dark:bg-sky-950/20 flex items-center gap-2 text-xs shrink-0 flex-wrap">
           <span className="font-medium">Location</span>
           <input
@@ -383,11 +425,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           >
             Use GPS
           </button>
-          <button
-            type="button"
-            className="text-zinc-500 underline"
-            onClick={() => setShowLocationPicker(false)}
-          >
+          <button type="button" className="text-zinc-500 underline" onClick={() => setShowLocationPicker(false)}>
             Done
           </button>
         </div>
@@ -400,9 +438,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               <Lock className="w-7 h-7 text-amber-700 dark:text-amber-300" />
             </div>
             <div>
-              <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                This note is locked
-              </p>
+              <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">This note is locked</p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm">
                 Unlock to view and edit contents. Content stays encrypted until you authenticate.
               </p>
@@ -442,6 +478,49 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 <img src={sketchData} alt="Sketch" className="max-w-full rounded-lg" />
               </div>
             )}
+
+            {/* Inline media: recordings + OCR */}
+            {(recordings.length > 0 || ocrScans.length > 0) && (
+              <div className="space-y-2" aria-label="Attachments">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                  Attachments
+                </p>
+                {recordings.map((rec) => (
+                  <div
+                    key={rec.id}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-sm"
+                  >
+                    <Mic className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                        Voice memo
+                      </p>
+                      <p className="text-[11px] text-zinc-400">
+                        {rec.duration_seconds != null ? `${rec.duration_seconds}s` : 'Audio'}
+                        {rec.status ? ` · ${rec.status}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {ocrScans.map((scan) => (
+                  <div
+                    key={scan.id}
+                    className="flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-sm"
+                  >
+                    <Camera className="w-4 h-4 text-cyan-500 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-zinc-800 dark:text-zinc-200">Document scan</p>
+                      <p className="text-[11px] text-zinc-400 truncate">
+                        {(scan as { ocr_text?: string }).ocr_text?.slice(0, 80) ||
+                          'OCR result saved'}
+                      </p>
+                    </div>
+                    <FileText className="w-4 h-4 text-zinc-400 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {locationName && (
               <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {locationName}</p>
             )}
@@ -469,8 +548,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               const newBody =
                 mode === 'replace' ? text : body ? `${body}\n\n${text}` : text;
               handleBodyChange(newBody);
+              refreshMedia();
             }}
-            onClose={() => setShowOcrScanner(false)}
+            onClose={() => {
+              setShowOcrScanner(false);
+              refreshMedia();
+            }}
           />
         )}
         {showAudioStudioModal && !lockedGate && (
@@ -480,8 +563,19 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onRecordingComplete={() => {
               const refreshed = StorageManager.getNoteById(note.id);
               if (refreshed) onNoteUpdated(refreshed);
+              refreshMedia();
             }}
-            onClose={() => setShowAudioStudioModal(false)}
+            onClose={() => {
+              setShowAudioStudioModal(false);
+              refreshMedia();
+              setShowRecoverySheet(true);
+            }}
+          />
+        )}
+        {showRecoverySheet && (
+          <TranscriptionRecoverySheet
+            noteId={note.id}
+            onClose={() => setShowRecoverySheet(false)}
           />
         )}
         {showSecurityModal && (
