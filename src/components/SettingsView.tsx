@@ -111,9 +111,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onBackToNotes,
   activeEditingNoteTitle,
 }) => {
+  const [settingsMode, setSettingsMode] = useState<'simple' | 'advanced'>(() => {
+    try {
+      const s = localStorage.getItem('vellumscribe_settings_mode_v1');
+      return s === 'advanced' ? 'advanced' : 'simple';
+    } catch {
+      return 'simple';
+    }
+  });
+
   const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
     initialSubtab || 'cloud'
   );
+
+  const setMode = (mode: 'simple' | 'advanced') => {
+    setSettingsMode(mode);
+    try {
+      localStorage.setItem('vellumscribe_settings_mode_v1', mode);
+    } catch {
+      /* ignore */
+    }
+    if (mode === 'simple' && !['cloud', 'security', 'about'].includes(activeTab)) {
+      setActiveTab('cloud');
+    }
+  };
 
   const [canInstallPwa, setCanInstallPwa] = useState(() => AndroidPwaManager.canPromptInstall());
   const [pwaInstalledSuccess, setPwaInstalledSuccess] = useState(false);
@@ -583,6 +604,44 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      {/* Simple / Advanced mode */}
+      <div className="px-6 py-2 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 mr-1">Mode</span>
+        <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-700 p-0.5">
+          <button
+            type="button"
+            id="settings-mode-simple"
+            aria-pressed={settingsMode === 'simple'}
+            onClick={() => setMode('simple')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              settingsMode === 'simple'
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            Simple
+          </button>
+          <button
+            type="button"
+            id="settings-mode-advanced"
+            aria-pressed={settingsMode === 'advanced'}
+            onClick={() => setMode('advanced')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              settingsMode === 'advanced'
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            Advanced
+          </button>
+        </div>
+        <span className="text-[11px] text-zinc-400 hidden sm:inline">
+          {settingsMode === 'simple'
+            ? 'Backup, security, and about'
+            : 'AI keys, Whisper, storage, diagnostics'}
+        </span>
+      </div>
+
       {/* Secondary Subtab Navigation */}
       <div
         role="tablist"
@@ -610,6 +669,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </button>
 
+        {settingsMode === 'advanced' && (
         <button
           id="subtab-offline-ai-btn"
           role="tab"
@@ -625,7 +685,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Cpu className="w-4 h-4" />
           <span>Offline Whisper AI</span>
         </button>
+        )}
 
+        {settingsMode === 'advanced' && (
         <button
           id="subtab-ai-key-btn"
           role="tab"
@@ -642,7 +704,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Speech &amp; AI Intelligence</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500" title="Offline-First Active" />
         </button>
+        )}
 
+        {settingsMode === 'advanced' && (
         <button
           id="subtab-storage-btn"
           role="tab"
@@ -658,6 +722,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <HardDrive className="w-4 h-4" />
           <span>Storage &amp; Backups</span>
         </button>
+        )}
 
         <button
           id="subtab-security-btn"
@@ -675,6 +740,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <span>Security &amp; Keystore</span>
         </button>
 
+        {settingsMode === 'advanced' && (
         <button
           id="subtab-diagnostics-btn"
           role="tab"
@@ -690,6 +756,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <Layers className="w-4 h-4" />
           <span>Architecture &amp; Logs</span>
         </button>
+        )}
 
         <button
           id="subtab-about-btn"
