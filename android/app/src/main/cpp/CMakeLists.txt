@@ -43,15 +43,25 @@ if (VELLUM_WHISPER_REAL)
 
     add_subdirectory("${WHISPER_UPSTREAM}/ggml" "${CMAKE_BINARY_DIR}/ggml-build")
 
-    add_library(whisper SHARED
+    # Match upstream src/CMakeLists.txt library sources (whisper + aneforge).
+    set(_whisper_sources
         "${WHISPER_UPSTREAM}/src/whisper.cpp"
         jni_whisper.cpp
     )
+    if (EXISTS "${WHISPER_UPSTREAM}/src/aneforge/whisper-aneforge.cpp")
+        list(APPEND _whisper_sources "${WHISPER_UPSTREAM}/src/aneforge/whisper-aneforge.cpp")
+        message(STATUS "VellumScribe: including whisper-aneforge.cpp")
+    else()
+        message(WARNING "VellumScribe: aneforge source missing — link may fail")
+    endif()
+
+    add_library(whisper SHARED ${_whisper_sources})
 
     target_include_directories(whisper PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${WHISPER_UPSTREAM}/include"
         "${WHISPER_UPSTREAM}/src"
+        "${WHISPER_UPSTREAM}/src/aneforge"
         "${WHISPER_UPSTREAM}/ggml/include"
         "${WHISPER_UPSTREAM}/ggml/src"
         "${WHISPER_UPSTREAM}/ggml/src/ggml-cpu"
@@ -61,7 +71,7 @@ if (VELLUM_WHISPER_REAL)
     target_compile_definitions(whisper PRIVATE
         WHISPER_REAL_INFERENCE_READY=1
         GGML_USE_CPU=1
-        WHISPER_VERSION="1.7.5"
+        WHISPER_VERSION="1.9.4"
     )
 
     find_library(log-lib log)
