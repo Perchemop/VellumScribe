@@ -1,52 +1,36 @@
 # VellumScribe audit checklist
 
-Track audit findings on `main`.
+Track audit findings on `main` (updated after conflict UI + sketch hydration).
 
 ## P0 — Correctness / security
 
 - [x] Write-first primary bar + Attach / More
-- [x] Modal prop alignment (OCR, audio, security, AI)
-- [x] Draft recovery banner + aria-live
-- [x] No plaintext drafts for locked notes
-- [x] Locked-note UI gate
-- [x] NoteEditorWriteFirst restored + PR #48 reimplemented
-- [x] TranscriptionRecoverySheet `isOpen` prop
-- [x] AI provenance badge next to title
-- [x] Audio playback strip (`AudioPlayerWidget`) for note memos
-- [x] `saveUnlockedNote` path while session PIN held after unlock
-- [x] Apply decrypted payload via `onUnlockSession`
-- [x] Remove orphaned `AudioRecorderPlayer` + `audioRecorder` shim
-- [x] CI typecheck + test green on main
-- [x] Direct Google AI path requires cloud AI consent
+- [x] Modal prop alignment
+- [x] Draft recovery + locked-note draft safety
+- [x] Locked-note UI gate + `saveUnlockedNote` / `onUnlockSession`
+- [x] AI provenance + audio playback strip
+- [x] Orphan cleanup (CI orphans gate)
+- [x] Google AI consent + network asserts
 
 ## P1 — Write-first parity
 
-- [x] Location picker
-- [x] ReminderService wiring
-- [x] Inline voice memos (AudioPlayerWidget)
-- [x] Inline OCR scan list
-- [x] Sketch → `sketch_media_key` binary path
-- [x] Focus mode minimal chrome
-- [x] Onboarding copy for + / ⋮
-- [x] Recovery sheet after audio close
+- [x] Location / reminder
+- [x] Voice memos + OCR list
+- [x] Sketch binary path (`sketch_media_key` save + hydrate)
+- [x] Focus mode + onboarding
 
 ## P2 — Settings IA
 
-- [x] Simple / Advanced mode toggle
-- [x] Advanced-only tabs
-- [x] Diagnostics log export + FTS rebuild (`DiagnosticsTools`)
-- [x] Conflict resolver UI (`ConflictResolverPanel` + `resolveSyncConflict`)
+- [x] Simple / Advanced mode
+- [x] DiagnosticsTools (log export + FTS rebuild)
+- [x] ConflictResolverPanel (open conflicts + resolve)
 
-## P3–P9
+## Device / ops (not automatable in CI)
 
-- [ ] Whisper REAL device smoke (needs device / REAL APK)
-- [x] Gemini network/consent gates on primary API paths
-- [ ] OAuth E2E Android
-- [x] Lower ESLint max-warnings (650 → 620; continue ratcheting)
-- [x] README documents limitations honestly
+- [ ] Whisper REAL APK + model download smoke on hardware
+- [ ] OAuth App Links E2E on Android (Google / Microsoft)
+- [ ] Continue ESLint warning cleanup (budget 620; ~615 today)
 
-## Device / ops (cannot complete in CI alone)
+## Notes
 
-- [ ] Whisper REAL NDK build + model download smoke on hardware
-- [ ] OAuth App Links E2E (Google / Microsoft) on Android
-- [ ] Further ESLint warning cleanup toward 0
+In-repo audit checklist items are complete. Remaining work is hardware/credentials validation and incremental lint hygiene.
