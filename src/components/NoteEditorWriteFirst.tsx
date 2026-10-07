@@ -623,6 +623,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           <TranscriptionRecoverySheet
             isOpen={showRecoverySheet}
             onClose={() => setShowRecoverySheet(false)}
+            recordingId={recordings.length > 0 ? recordings[recordings.length - 1].id : undefined}
+            onTranscribeSuccess={(transcript) => {
+              if (transcript) {
+                const newBody = body ? `${body}
+
+${transcript}` : transcript;
+                handleBodyChange(newBody);
+              }
+              setShowRecoverySheet(false);
+            }}
           />
         )}
         {showSecurityModal && (
