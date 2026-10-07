@@ -57,9 +57,11 @@ if (VELLUM_WHISPER_REAL)
         "${WHISPER_UPSTREAM}/ggml/src/ggml-cpu"
     )
 
+    # Upstream whisper.cpp uses try/throw and reports version via WHISPER_VERSION.
     target_compile_definitions(whisper PRIVATE
         WHISPER_REAL_INFERENCE_READY=1
         GGML_USE_CPU=1
+        WHISPER_VERSION="1.7.5"
     )
 
     find_library(log-lib log)
@@ -70,6 +72,15 @@ if (VELLUM_WHISPER_REAL)
         ${android-lib}
         ggml
         m
+    )
+
+    # REAL build requires C++ exceptions (upstream throw/try paths).
+    target_compile_options(whisper PRIVATE
+        -O3
+        -DNDEBUG
+        -fvisibility=hidden
+        -fexceptions
+        -frtti
     )
 else()
     message(STATUS "VellumScribe: STUB libwhisper.so (inferenceRuntimeReady=false)")
@@ -86,12 +97,12 @@ else()
 
     find_library(log-lib log)
     target_link_libraries(whisper ${log-lib} m)
-endif()
 
-target_compile_options(whisper PRIVATE
-    -O3
-    -DNDEBUG
-    -fvisibility=hidden
-    -fno-exceptions
-    -fno-rtti
-)
+    target_compile_options(whisper PRIVATE
+        -O3
+        -DNDEBUG
+        -fvisibility=hidden
+        -fno-exceptions
+        -fno-rtti
+    )
+endif()
