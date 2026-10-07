@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Lock } from 'lucide-react';
-import { NoteRecord, EventRecord, ChecklistItem } from '../types';
+import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { AiProvenanceBadge } from './AiProvenanceBadge';
+import { AudioPlayerWidget } from './AudioPlayerWidget';
 import { DraftStore, type NoteDraft } from '../lib/DraftStore';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
 import { generatePrefixedId } from '../lib/uuid';
@@ -111,7 +113,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
   const [isUnlockedLocally, setIsUnlockedLocally] = useState(!note.is_locked);
   const [recoveredDraft, setRecoveredDraft] = useState<NoteDraft | null>(null);
+  const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
+    StorageManager.getRecordingsForNote(note.id)
+  );
   const debounceTimerRef = useRef<number | null>(null);
+
+  const refreshRecordings = () => {
+    setRecordings(StorageManager.getRecordingsForNote(note.id));
+  };
 
   useEffect(() => {
     const newer = DraftStore.findNewerDraft(note.id, note.updated_at || note.created_at);
@@ -125,6 +134,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setLocationName(note.location_name || '');
     setSketchData(note.sketch_data);
     setIsUnlockedLocally(!note.is_locked);
+    setRecordings(StorageManager.getRecordingsForNote(note.id));
   }, [note.id, note.updated_at, note.is_locked]);
 
   useEffect(() => {
@@ -399,14 +409,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </div>
         ) : (
           <>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              placeholder="Note title"
-              aria-label="Note title"
-              className="w-full text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="Note title"
+                aria-label="Note title"
+                className="flex-1 min-w-[12rem] text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+              />
+              <AiProvenanceBadge entityType="note" entityId={note.id} className="shrink-0" />
+            </div>
             <textarea
               value={body}
               onChange={(e) => handleBodyChange(e.target.value)}
@@ -422,6 +435,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             {sketchData && (
               <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
                 <img src={sketchData} alt="Sketch" className="max-w-full rounded-lg" />
+              </div>
+            )}
+            {recordings.length > 0 && (
+              <div className="space-y-2" aria-label="Voice memos">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                  Voice memos
+                </p>
+                {recordings.map((rec) => (
+                  <AudioPlayerWidget
+                    key={rec.id}
+                    recording={rec}
+                    onDelete={(id) => {
+                      StorageManager.deleteRecording(id);
+                      refreshRecordings();
+                    }}
+                  />
+                ))}
               </div>
             )}
             {locationName && <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {locationName}</p>}
@@ -459,6 +489,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             onRecordingComplete={() => {
               const refreshed = StorageManager.getNoteById(note.id);
               if (refreshed) onNoteUpdated(refreshed);
+              refreshRecordings();
             }}
             onClose={() => {
               setShowAudioStudioModal(false);
