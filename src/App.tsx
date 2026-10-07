@@ -103,6 +103,31 @@ export default function App() {
     ReminderService.reconcileReminders(notes).catch((e) => console.warn('Reminder reconciliation', e));
   }, []);
 
+  // Global OAuth / App Link return path (cold start & background)
+  // CloudConnectModal also listens while open; this covers returns when modal is not mounted.
+  useEffect(() => {
+    const cleanup = NativeBridge.addAppUrlListener((url) => {
+      const lower = (url || '').toLowerCase();
+      const looksLikeOauth =
+        lower.includes('oauth') ||
+        lower.includes('cloud') ||
+        lower.includes('code=') ||
+        lower.includes('vellumscribe://') ||
+        lower.includes('com.vellumscribe.app://');
+      if (!looksLikeOauth) return;
+      CloudSyncEngine.fetchConfig()
+        .then(() => {
+          setActiveView('settings');
+          setSettingsSubtab('cloud');
+          showToast('Cloud account connected successfully.');
+        })
+        .catch(() => {
+          showToast('Returned from cloud sign-in. Open Settings → Cloud to verify.');
+        });
+    });
+    return cleanup;
+  }, [showToast]);
+
   // Active Note Reminder Notification Watcher (In-app alerts + Web Notification API)
   useEffect(() => {
     // Skip scheduling interval if no active notes have reminders
