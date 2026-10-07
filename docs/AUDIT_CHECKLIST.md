@@ -13,15 +13,17 @@ Track audit findings on `main`.
 - [x] TranscriptionRecoverySheet `isOpen` prop
 - [x] AI provenance badge next to title
 - [x] Audio playback strip (`AudioPlayerWidget`) for note memos
-- [ ] `saveUnlockedNote` / re-encrypt path after unlock
-- [ ] CI typecheck + test green on latest main
+- [x] `saveUnlockedNote` path while session PIN held after unlock
+- [x] Apply decrypted payload via `onUnlockSession`
+- [x] Remove orphaned `AudioRecorderPlayer` + `audioRecorder` shim (CI orphans)
+- [ ] CI typecheck + test green on latest main (verify after orphans fix)
 
 ## P1 — Write-first parity
 
 - [x] Location picker
 - [x] ReminderService wiring
 - [x] Inline voice memos (AudioPlayerWidget)
-- [ ] Inline OCR scan list
+- [x] Inline OCR scan list
 - [ ] Sketch → `sketch_media_key` binary path
 - [x] Focus mode minimal chrome
 - [x] Onboarding copy for + / ⋮
