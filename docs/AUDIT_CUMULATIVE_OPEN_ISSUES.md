@@ -1,44 +1,31 @@
-# Cumulative open issues — status after D/P/U implementation pass
+# Cumulative open issues — post D/P/U implementation
 
-## Implemented in-repo (this pass)
-
-| ID | Item | Status |
-|----|------|--------|
-| P-01 | AudioRecordingModal → TranscriptionOrchestrator + liveCapturedText | **Done** |
-| P-05 | Live transcript on result + sessionStorage key | **Done** |
-| P-02 | Optional backup passphrase API + BackupPassphrasePanel | **Done** (wire into Settings cloud tab if not auto-imported) |
-| P-04 | Sync queue exponential backoff (cap 3 failures) | **Done** (patch script) |
-| P-03 | settingsSubtab includes offline-ai / about | **Done** (patch script) |
-| U-01 | Settings icon hidden on md+ (tabs suffice) | **Done** (patch script) |
-| U-04 | Capability-aware recording labels | **Done** |
-| D-03 | `public/.well-known/assetlinks.json` template | **Done** (replace fingerprint) |
-
-## Still requires device / ops / host config
-
-| ID | Item | Notes |
-|----|------|--------|
-| D-01 | REAL Whisper smoke | Physical APK + model |
-| D-02 | OAuth E2E | Secrets + Android |
-| D-03 | Live App Links | Host template with real SHA-256 |
-| D-04 | OEM speech packs | User device settings |
-| D-05 | Cloud restore E2E | Real providers |
-
-## Remaining polish (optional)
+## Done in-repo
 
 | ID | Item |
 |----|------|
-| U-02 | EventNotesList progressive disclosure (PRD backlog) |
-| U-03 | Further SettingsView extraction |
-| L-01 | ESLint ratchet |
+| **P-01** | AudioRecordingModal → TranscriptionOrchestrator + liveCapturedText |
+| **P-05** | Live transcript on result + sessionStorage |
+| **P-02** | `CloudBackupCrypto` user passphrase API + `BackupPassphrasePanel` component |
+| **U-04** | Capability-aware recording labels |
+| **D-03** | `public/.well-known/assetlinks.json` template (fill SHA-256) |
 
-## Wire BackupPassphrasePanel
+## Still open (device / host / backlog)
 
-In Settings cloud section, import:
+| ID | Severity | Item |
+|----|----------|------|
+| D-01 | High | REAL Whisper APK + model smoke |
+| D-02 | High | OAuth secrets + Android SSO E2E |
+| D-03 | Med | Host assetlinks with real release fingerprint |
+| D-04 | Med | OEM SpeechRecognizer packs |
+| D-05 | Low | Cloud restore E2E on real providers |
+| P-03 | Low | App settingsSubtab type widen (if not yet merged) |
+| P-04 | Low | Sync queue backoff (re-apply if bot conflict) |
+| U-01 | Low | Hide desktop Settings icon redundancy |
+| U-02 | Low | EventNotesList progressive disclosure (PRD) |
+| U-03 | Low | SettingsView further extraction |
+| L-01 | Low | ESLint ratchet |
 
-```tsx
-import { BackupPassphrasePanel } from './settings/BackupPassphrasePanel';
-// ...
-<BackupPassphrasePanel />
-```
+## Note
 
-Patch script does not auto-inject into the large SettingsView; add one line when editing Settings cloud tab.
+One-off GitHub Actions patch scripts were retired by repo hygiene PR #49. Prefer direct source commits going forward.

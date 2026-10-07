@@ -17,18 +17,42 @@ export interface EncryptedCloudBackupEnvelope {
   createdAt: string;
 }
 
-/**
- * CloudBackupCrypto: End-to-End Client-Side Backup Encryption & Compression Engine
- * Enforces AES-256-GCM outer envelope encryption paired with GZIP compression.
- * Cloud backup archives leaving this device contain only encrypted ciphertext.
- */
 export class CloudBackupCrypto {
   private static cachedVaultKey: string | null = null;
+  private static readonly BACKUP_PASSPHRASE_SESSION = 'vs_cloud_backup_passphrase';
+  private static readonly BACKUP_PASSPHRASE_HINT = 'vs_cloud_backup_passphrase_hint';
 
-  /**
-   * Retrieves or creates a secure client-side master vault key unique to this device.
-   * Leverages AndroidKeystoreManager (hardware-backed AES/GCM) when available.
-   */
+  public static setUserBackupPassphrase(passphrase: string | null): void {
+    try {
+      if (!passphrase || !passphrase.trim()) {
+        sessionStorage.removeItem(this.BACKUP_PASSPHRASE_SESSION);
+        localStorage.removeItem(this.BACKUP_PASSPHRASE_HINT);
+        return;
+      }
+      const trimmed = passphrase.trim();
+      sessionStorage.setItem(this.BACKUP_PASSPHRASE_SESSION, trimmed);
+      localStorage.setItem(this.BACKUP_PASSPHRASE_HINT, String(trimmed.length));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  public static getUserBackupPassphrase(): string | undefined {
+    try {
+      return sessionStorage.getItem(this.BACKUP_PASSPHRASE_SESSION) || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  public static hasUserBackupPassphraseConfigured(): boolean {
+    try {
+      return Boolean(localStorage.getItem(this.BACKUP_PASSPHRASE_HINT));
+    } catch {
+      return false;
+    }
+  }
+
   public static async getClientVaultKeyAsync(): Promise<string> {
     if (this.cachedVaultKey) return this.cachedVaultKey;
     try {
@@ -38,7 +62,6 @@ export class CloudBackupCrypto {
 
       let key = await AndroidKeystoreManager.getSecret('client_vault_key');
       if (!key) {
-        // If master vault key exists in keystore metadata but decryption failed, FAIL CLOSED
         if (vaultSecretMeta) {
           throw new Error(
             'Device master vault key is registered in secure storage metadata but could not be decrypted. Failing closed to prevent data corruption.'
@@ -54,11 +77,10 @@ export class CloudBackupCrypto {
             localStorage.removeItem(CLIENT_VAULT_KEY_STORAGE);
           }
         } else {
-          key = generateSalt() + generateSalt(); // 64 hex characters (256-bit entropy)
+          key = generateSalt() + generateSalt();
           await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
         }
       } else if (typeof localStorage !== 'undefined') {
-        // Ensure any legacy plaintext key in localStorage is purged
         localStorage.removeItem(CLIENT_VAULT_KEY_STORAGE);
       }
       this.cachedVaultKey = key;
@@ -73,7 +95,6 @@ export class CloudBackupCrypto {
 
   public static getOrCreateClientVaultKey(): string {
     if (this.cachedVaultKey) return this.cachedVaultKey;
-    // Check if key was registered in keystore metadata - fail closed if present but unreadable
     try {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('vellumscribe_keystore_metadata_v2') : null;
       if (raw && raw.includes('"alias":"client_vault_key"')) {
@@ -85,7 +106,6 @@ export class CloudBackupCrypto {
       if (e?.message?.includes('Refusing')) throw e;
     }
 
-    // Volatile in-memory vault key - never stored in localStorage
     if (typeof localStorage !== 'undefined') {
       const legacyKey = localStorage.getItem(CLIENT_VAULT_KEY_STORAGE);
       if (legacyKey && legacyKey.trim()) {
@@ -99,9 +119,6 @@ export class CloudBackupCrypto {
     return ephemeralKey;
   }
 
-  /**
-   * Compresses data using browser-native CompressionStream('gzip')
-   */
   public static async compressGzip(data: Uint8Array): Promise<Uint8Array> {
     if (typeof CompressionStream !== 'undefined') {
       try {
@@ -109,7 +126,6 @@ export class CloudBackupCrypto {
         const writer = cs.writable.getWriter();
         writer.write(data as any);
         writer.close();
-
         const chunks: Uint8Array[] = [];
         const reader = cs.readable.getReader();
         while (true) {
@@ -117,7 +133,6 @@ export class CloudBackupCrypto {
           if (done) break;
           if (value) chunks.push(value);
         }
-
         const total = chunks.reduce((acc, c) => acc + c.length, 0);
         const result = new Uint8Array(total);
         let offset = 0;
@@ -133,18 +148,13 @@ export class CloudBackupCrypto {
     return data;
   }
 
-  /**
-   * Decompresses gzip data using browser-native DecompressionStream('gzip')
-   */
   public static async decompressGzip(data: Uint8Array): Promise<Uint8Array> {
-    // Check gzip magic bytes (0x1f, 0x8b)
     if (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b && typeof DecompressionStream !== 'undefined') {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
         writer.write(data as any);
         writer.close();
-
         const chunks: Uint8Array[] = [];
         const reader = ds.readable.getReader();
         while (true) {
@@ -152,7 +162,6 @@ export class CloudBackupCrypto {
           if (done) break;
           if (value) chunks.push(value);
         }
-
         const total = chunks.reduce((acc, c) => acc + c.length, 0);
         const result = new Uint8Array(total);
         let offset = 0;
@@ -168,14 +177,10 @@ export class CloudBackupCrypto {
     return data;
   }
 
-  /**
-   * Derives an AES-256-GCM CryptoKey using PBKDF2 (210,000 iterations)
-   */
   private static async deriveKey(passphrase: string, saltHex: string): Promise<CryptoKey> {
     if (typeof crypto === 'undefined' || !crypto.subtle) {
       throw new Error('Web Crypto API is required for secure client-side backup encryption.');
     }
-
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
@@ -184,7 +189,6 @@ export class CloudBackupCrypto {
       false,
       ['deriveKey']
     );
-
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
@@ -199,26 +203,22 @@ export class CloudBackupCrypto {
     );
   }
 
-  /**
-   * Compresses with GZIP and encrypts with AES-256-GCM.
-   * Returns a binary Blob ready for cloud upload.
-   */
   public static async encryptArchive(jsonString: string, userPassphrase?: string): Promise<Blob> {
-    const passphrase = userPassphrase?.trim() || (await this.getClientVaultKeyAsync());
+    const passphrase =
+      userPassphrase?.trim() ||
+      this.getUserBackupPassphrase() ||
+      (await this.getClientVaultKeyAsync());
     const saltHex = generateSalt();
     const iv = crypto.getRandomValues(new Uint8Array(12));
-
     const encoder = new TextEncoder();
     const rawBytes = encoder.encode(jsonString);
     const compressedBytes = await this.compressGzip(rawBytes);
-
     const key = await this.deriveKey(passphrase, saltHex);
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
       compressedBytes as any
     );
-
     const envelope: EncryptedCloudBackupEnvelope = {
       vellumscribe_archive: true,
       version: 3,
@@ -231,20 +231,17 @@ export class CloudBackupCrypto {
       ciphertext: toHex(ciphertextBuffer),
       createdAt: new Date().toISOString(),
     };
-
-    const serialized = JSON.stringify(envelope);
-    return new Blob([serialized], { type: 'application/octet-stream' });
+    return new Blob([JSON.stringify(envelope)], { type: 'application/octet-stream' });
   }
 
-  /**
-   * Decrypts AES-256-GCM envelope and decompresses GZIP archive back to JSON string.
-   */
   public static async decryptArchive(
     data: Blob | ArrayBuffer | string,
     passphraseOrOptions?: string | { userPassphrase?: string; allowLegacyUnencrypted?: boolean }
   ): Promise<string> {
-    const userPassphrase = typeof passphraseOrOptions === 'string' ? passphraseOrOptions : passphraseOrOptions?.userPassphrase;
-    const allowLegacy = typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
+    const userPassphrase =
+      typeof passphraseOrOptions === 'string' ? passphraseOrOptions : passphraseOrOptions?.userPassphrase;
+    const allowLegacy =
+      typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
 
     let rawText = '';
     if (typeof data === 'string') {
@@ -252,8 +249,7 @@ export class CloudBackupCrypto {
     } else if (data instanceof Blob) {
       rawText = await data.text();
     } else {
-      const decoder = new TextDecoder();
-      rawText = decoder.decode(data);
+      rawText = new TextDecoder().decode(data);
     }
 
     let envelope: any = null;
@@ -263,7 +259,6 @@ export class CloudBackupCrypto {
       throw new Error('Invalid backup archive: Content is not valid JSON or encrypted envelope.');
     }
 
-    // Legacy unencrypted JSON fallback support for pre-v3 exports: require explicit migration flag
     if (!envelope.vellumscribe_archive && (envelope.schema || envelope.version)) {
       if (!allowLegacy) {
         throw new Error(
@@ -278,9 +273,11 @@ export class CloudBackupCrypto {
       throw new Error('Unsupported or corrupted encrypted backup envelope.');
     }
 
-    const passphrase = userPassphrase?.trim() || (await this.getClientVaultKeyAsync());
+    const passphrase =
+      userPassphrase?.trim() ||
+      this.getUserBackupPassphrase() ||
+      (await this.getClientVaultKeyAsync());
     const key = await this.deriveKey(passphrase, envelope.salt);
-
     const iv = fromHex(envelope.iv);
     const ciphertext = fromHex(envelope.ciphertext);
 
@@ -291,12 +288,11 @@ export class CloudBackupCrypto {
         key,
         ciphertext as any
       );
-    } catch (e: any) {
+    } catch {
       throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');
     }
 
     const decompressedBytes = await this.decompressGzip(new Uint8Array(decryptedBuffer));
-    const decoder = new TextDecoder();
-    return decoder.decode(decompressedBytes);
+    return new TextDecoder().decode(decompressedBytes);
   }
 }
