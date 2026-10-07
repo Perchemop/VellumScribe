@@ -1,7 +1,7 @@
 /**
  * Transcription Orchestrator
  * Single authoritative pipeline for speech transcription across platforms and privacy policies.
- * 
+ *
  * Enforces:
  * - Privacy Policy: 'offline_only' | 'local_first' | 'cloud_allowed'
  * - Offline network gating: Never calls remote transcription in 'offline_only' mode or when PrivacyManager blocks network.
@@ -21,7 +21,6 @@ import { GeminiService } from '../lib/geminiService';
 import {
   RecordingRecord,
   TranscriptionEntity,
-  StructuredAiExtraction,
   OfflineAiErrorCode,
 } from '../types';
 
@@ -107,7 +106,6 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
     const jobId = startRes.jobId;
     let pollCount = 0;
 
-    // Poll until completion, failure, or cancellation
     while (true) {
       if (options.signal?.aborted) {
         await aiMgr.cancelTranscription(jobId);
@@ -163,13 +161,19 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
 
 /**
  * On-Device Browser Acoustic & Dictation Engine
+ * Uses live dictation tokens and/or offline acoustic analysis — never fabricates speech text.
  */
 export class WebOfflineEngine implements TranscriptionEngine {
   public id = 'browser_acoustic_analyzer';
   public version = '2.0.0';
 
   public async isAvailable(): Promise<boolean> {
-    return typeof window !== 'undefined';
+    // Available on web, hybrid, and Node unit tests (live-transcript path does not need DOM).
+    // Not used as a substitute for Android native Whisper when that runtime is ready.
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+      return true; // still usable as live-dictation fallback on Android WebView
+    }
+    return true;
   }
 
   public async transcribe(
@@ -239,7 +243,6 @@ export class CloudGeminiEngine implements TranscriptionEngine {
     input: TranscriptionInput,
     options: TranscriptionOptions
   ): Promise<TranscriptionResult> {
-    // Assert explicit privacy permissions
     PrivacyManager.assertNetworkAllowed('Cloud Gemini Audio Transcription');
 
     let audioBlob = input.audioBlob;
@@ -301,16 +304,12 @@ export class TranscriptionOrchestrator {
     this.engines.set(engine.id, engine);
   }
 
-  /**
-   * Orchestrates transcription based on policy, hardware availability, and audio source.
-   */
   public async orchestrate(
     input: TranscriptionInput,
     options: TranscriptionOptions = {}
   ): Promise<TranscriptionResult> {
     const policy: TranscriptionPolicy = options.policy || 'local_first';
 
-    // 1. Verify recording existence if recordingId provided, or synthesize
     let recording: RecordingRecord | null = null;
     if (input.recordingId) {
       recording = await RecordingRepository.getByIdAsync(input.recordingId);
@@ -323,7 +322,6 @@ export class TranscriptionOrchestrator {
       throw new Error(`OFFLINE_AI_AUDIO_INVALID: Recording #${input.recordingId} was not found on this device.`);
     }
 
-    // Merge metadata
     const mergedInput: TranscriptionInput = {
       ...input,
       mediaKey: input.mediaKey || recording?.media_key,
@@ -332,11 +330,9 @@ export class TranscriptionOrchestrator {
       mimeType: input.mimeType || recording?.mime_type || 'audio/wav',
     };
 
-    // 2. Select appropriate engine
     const engine = await this.selectEngine(policy, mergedInput, options.enginePreference);
     AppLogger.info('TranscriptionOrchestrator', `Selected engine: ${engine.id} under policy: ${policy}`);
 
-    // 3. Register initial durable job in SQLite if recordingId exists
     let durableRecord: TranscriptionEntity | null = null;
     if (input.recordingId) {
       try {
@@ -355,10 +351,8 @@ export class TranscriptionOrchestrator {
     }
 
     try {
-      // 4. Run real inference via chosen engine
       const result = await engine.transcribe(mergedInput, options);
 
-      // Strict validation: Reject synthetic text or VAD instructional placeholders (T-P0.3)
       const text = (result.transcript || '').trim();
       const looksLikePlaceholder =
         /verbatim speech-to-text transcription requires/i.test(text) ||
@@ -375,7 +369,6 @@ export class TranscriptionOrchestrator {
         );
       }
 
-      // 5. Persist durable completion
       if (durableRecord?.id) {
         try {
           TranscriptionRepository.updateStatus(
@@ -384,7 +377,6 @@ export class TranscriptionOrchestrator {
             undefined,
             undefined
           );
-          // Persist immutable raw transcript
           TranscriptionRepository.saveTranscription({
             id: durableRecord.id,
             recording_id: input.recordingId || 0,
@@ -423,9 +415,6 @@ export class TranscriptionOrchestrator {
     }
   }
 
-  /**
-   * Determine the optimal engine based on policy, hardware capability, and available speech tokens
-   */
   private async selectEngine(
     policy: TranscriptionPolicy,
     input?: TranscriptionInput,
@@ -436,7 +425,6 @@ export class TranscriptionOrchestrator {
     const liveText = input?.liveCapturedText || input?.liveTranscript;
     const hasLiveText = Boolean(liveText && liveText.trim().length > 0);
 
-    // 0. Explicit cloud_only policy
     if (policy === 'cloud_only') {
       if (!PrivacyManager.isNetworkAllowed()) {
         throw new Error('Privacy Policy Violation: Network access is blocked by Privacy Mode. Cannot perform cloud transcription.');
@@ -448,7 +436,6 @@ export class TranscriptionOrchestrator {
       throw new Error('NO_ENGINE: Cloud Gemini transcription engine is not configured or unavailable.');
     }
 
-    // Explicit engine preference if allowed by policy
     if (enginePreference && !isOfflineMode) {
       const preferred = this.engines.get(enginePreference);
       if (preferred && (await preferred.isAvailable())) {
@@ -456,7 +443,6 @@ export class TranscriptionOrchestrator {
       }
     }
 
-    // 1. Android Native Platform
     if (isAndroid) {
       const whisper = this.engines.get('whisper.cpp');
       if (whisper && (await whisper.isAvailable())) {
@@ -464,7 +450,6 @@ export class TranscriptionOrchestrator {
       }
     }
 
-    // 2. Strict Offline Mode: Never call remote network
     if (isOfflineMode) {
       const whisper = this.engines.get('whisper.cpp');
       if (whisper && (await whisper.isAvailable())) {
@@ -481,7 +466,6 @@ export class TranscriptionOrchestrator {
       );
     }
 
-    // 3. Local-First Mode
     if (policy === 'local_first') {
       const whisper = this.engines.get('whisper.cpp');
       if (whisper && (await whisper.isAvailable())) {
@@ -493,14 +477,12 @@ export class TranscriptionOrchestrator {
           return webOffline;
         }
       }
-      // If network is allowed and cloud is permitted, use Cloud AI
       const cloud = this.engines.get('cloud_gemini_multimodal');
       if (cloud && (await cloud.isAvailable())) {
         return cloud;
       }
     }
 
-    // 4. Cloud Allowed
     if (policy === 'cloud_allowed') {
       const cloud = this.engines.get('cloud_gemini_multimodal');
       if (cloud && (await cloud.isAvailable())) {

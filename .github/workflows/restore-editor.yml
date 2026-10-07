@@ -1,0 +1,53 @@
+name: Restore NoteEditorWriteFirst
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore editor from known-good commit and fix props
+        run: |
+          git show 8c69441c376deeab928d1c762620151b605c32ae:src/components/NoteEditorWriteFirst.tsx > src/components/NoteEditorWriteFirst.tsx
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path('src/components/NoteEditorWriteFirst.tsx')
+          t = p.read_text()
+          old = '''        {showRecoverySheet && (
+          <TranscriptionRecoverySheet
+            noteId={note.id}
+            onClose={() => setShowRecoverySheet(false)}
+          />
+        )}'''
+          new = '''        {showRecoverySheet && (
+          <TranscriptionRecoverySheet
+            isOpen={showRecoverySheet}
+            recordingId={recordings[0]?.id}
+            onClose={() => setShowRecoverySheet(false)}
+          />
+        )}'''
+          if old in t:
+              t = t.replace(old, new, 1)
+              p.write_text(t)
+              print('fixed recovery props')
+          elif 'isOpen={showRecoverySheet}' in t:
+              print('already fixed')
+          else:
+              print('pattern not found')
+              raise SystemExit(1)
+          assert 'export const NoteEditor' in t
+          assert len(t) > 10000
+          print('ok', len(t))
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/NoteEditorWriteFirst.tsx
+          git diff --cached --quiet && echo 'No changes' && exit 0
+          git commit -m "fix(ui): restore NoteEditorWriteFirst + TranscriptionRecoverySheet isOpen props"
+          git push
