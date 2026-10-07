@@ -1,35 +1,29 @@
-# Priority status — v3.1.0 (post vendor + remaining work)
+# Priority status — v3.1.0
 
-## Completed on GitHub
+## Done on GitHub
 
-| Priority | Status |
-|----------|--------|
-| Dual-mode CMake (STUB/REAL) | Done |
-| Dual-mode JNI | Done |
-| Fail-closed stub | Done |
-| Vendor full whisper.cpp + ggml on `main` | Done (vendor-whisper workflow) |
-| `npm run setup:whisper` / setup script | Done |
-| CI verifies source gate files | Done |
-| APK workflow stub vs real input | Done |
-| Docs honesty (KNOWN_LIMITATIONS, setup) | Done |
+| Item | Status |
+|------|--------|
+| Dual-mode CMake / JNI / fail-closed stub | Done |
+| Vendored whisper.cpp + ggml on `main` | Done (vendor-whisper workflow) |
+| `setup:whisper` script + docs | Done |
+| CI install (legacy-peer-deps) + source gate check | Done |
+| APK workflow without obsolete SDK `tools` | Done |
 | App Links `/oauth` path | Done |
-| Recovery sheet / SSO Browser plumbing | Present in app code |
-| OfflineAiPanel honesty gating | Present |
+| Repo hygiene (test file, dual lockfile, README) | Done |
 
-## Requires a build machine / device (not doable from chat alone)
+## Still environment-dependent
 
-| Priority | Action |
-|----------|--------|
-| REAL NDK APK | Run **Build Android APK** with `whisper_mode=real`, or local `./gradlew assembleRelease` |
-| Device smoke test | Engine Ready → tiny model → airplane mode transcript |
-| Signed Play release | Configure signing keystore secrets |
-| Live SSO on device | Test Google/Microsoft Browser + deep link return |
-| SpeechRecognizer offline packs | User installs system language data |
+| Item | Notes |
+|------|--------|
+| Green CI `npm test` | Needs localStorage mock + honest orchestrator expectations |
+| Green release APK | R8/Tink `-dontwarn javax.annotation.**`; REAL NDK is slow |
+| Device smoke test | Install APK → Engine Ready → tiny model → offline transcript |
+| Signed Play build | Keystore secrets |
+| Dependabot PRs | Prefer patch bumps; **do not** merge TypeScript 7 without a dedicated upgrade |
 
-## How to finish offline Whisper (mobile-friendly)
+## Mobile-friendly next steps
 
-1. GitHub → **Actions** → **Build Android APK** → **Run workflow** → `whisper_mode=real` (long).
-2. Download the artifact APK when green.
-3. Install on arm64 phone and run the smoke test.
-
-For faster CI green builds use `whisper_mode=stub` (default).
+1. Actions → **Build Android APK** → Run workflow (`stub` for speed, `real` for Whisper).
+2. Download the APK artifact on the phone when the job is green.
+3. Merge low-risk Dependabot PRs after CI is green on `main`.
