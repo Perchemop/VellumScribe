@@ -12,6 +12,7 @@
     "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
+    "resolveJsonModule": true,
     "allowJs": true,
     "jsx": "react-jsx",
     "strict": true,
