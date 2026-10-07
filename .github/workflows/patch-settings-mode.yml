@@ -1,10 +1,10 @@
-name: Patch Settings Simple/Advanced
+name: Patch Settings Mode
 on:
   workflow_dispatch:
   push:
     paths:
-      - '.github/workflows/patch-settings-mode.yml'
-      - 'scripts/trigger-settings-patch'
+      - scripts/patch_settings_mode.py
+      - scripts/trigger-settings-patch
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -12,136 +12,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply Simple/Advanced mode patch
+      - name: Apply patch
+        run: python3 scripts/patch_settings_mode.py
+      - name: Commit
         run: |
-          python3 << 'PY'
-          from pathlib import Path
-          p = Path('src/components/SettingsView.tsx')
-          text = p.read_text()
-          if 'settings-mode-simple' in text:
-              print('already patched')
-              raise SystemExit(0)
-
-          old = """  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
-    initialSubtab || 'cloud'
-  );"""
-
-          new = """  const [settingsMode, setSettingsMode] = useState<'simple' | 'advanced'>(() => {
-    try {
-      const s = localStorage.getItem('vellumscribe_settings_mode_v1');
-      return s === 'advanced' ? 'advanced' : 'simple';
-    } catch {
-      return 'simple';
-    }
-  });
-
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
-    initialSubtab || 'cloud'
-  );
-
-  const setMode = (mode: 'simple' | 'advanced') => {
-    setSettingsMode(mode);
-    try {
-      localStorage.setItem('vellumscribe_settings_mode_v1', mode);
-    } catch {
-      /* ignore */
-    }
-    if (mode === 'simple' && !['cloud', 'security', 'about'].includes(activeTab)) {
-      setActiveTab('cloud');
-    }
-  };"""
-
-          if old not in text:
-              raise SystemExit('state marker missing')
-          text = text.replace(old, new, 1)
-
-          old_nav = """      {/* Secondary Subtab Navigation */}
-      <div
-        role="tablist"
-        aria-label="Settings categories"
-        className="px-6 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-[#0e0e12] flex items-center gap-1 overflow-x-auto custom-minimal-scrollbar text-xs"
-      >
-        <button
-          id="subtab-cloud-sync-btn"""
-
-          new_nav = """      {/* Simple / Advanced mode */}
-      <div className="px-6 py-2 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 mr-1">Mode</span>
-        <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-700 p-0.5">
-          <button
-            type="button"
-            id="settings-mode-simple"
-            aria-pressed={settingsMode === 'simple'}
-            onClick={() => setMode('simple')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-              settingsMode === 'simple'
-                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            Simple
-          </button>
-          <button
-            type="button"
-            id="settings-mode-advanced"
-            aria-pressed={settingsMode === 'advanced'}
-            onClick={() => setMode('advanced')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-              settingsMode === 'advanced'
-                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            Advanced
-          </button>
-        </div>
-        <span className="text-[11px] text-zinc-400 hidden sm:inline">
-          {settingsMode === 'simple'
-            ? 'Backup, security, and about'
-            : 'AI keys, Whisper, storage, diagnostics'}
-        </span>
-      </div>
-
-      {/* Secondary Subtab Navigation */}
-      <div
-        role="tablist"
-        aria-label="Settings categories"
-        className="px-6 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/60 dark:bg-[#0e0e12] flex items-center gap-1 overflow-x-auto custom-minimal-scrollbar text-xs"
-      >
-        <button
-          id="subtab-cloud-sync-btn"""
-
-          if old_nav not in text:
-              raise SystemExit('nav marker missing')
-          text = text.replace(old_nav, new_nav, 1)
-
-          def wrap_id(start_id):
-              global text
-              start = text.find(f'id="{start_id}"')
-              if start < 0:
-                  print('missing', start_id)
-                  return
-              if "settingsMode === 'advanced'" in text[max(0,start-80):start]:
-                  print('already', start_id)
-                  return
-              btn = text.rfind('<button', 0, start)
-              end = text.find('</button>', start) + len('</button>')
-              block = text[btn:end]
-              wrapped = f"{{settingsMode === 'advanced' && (\n        {block}\n        )}}"
-              text = text[:btn] + wrapped + text[end:]
-              print('wrapped', start_id)
-
-          for sid in ['subtab-offline-ai-btn', 'subtab-ai-key-btn', 'subtab-storage-btn', 'subtab-diagnostics-btn']:
-              wrap_id(sid)
-
-          p.write_text(text)
-          print('patched', len(text))
-          PY
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/components/SettingsView.tsx
-          git diff --cached --quiet && echo 'No changes' && exit 0
+          git diff --cached --quiet && echo No changes && exit 0
           git commit -m "feat(settings): Simple/Advanced mode for casual vs power users"
           git push
