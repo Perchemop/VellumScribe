@@ -9,17 +9,19 @@ Track audit findings on `main`.
 - [x] Draft recovery banner + aria-live
 - [x] No plaintext drafts for locked notes
 - [x] Locked-note UI gate
-- [x] NoteEditorWriteFirst restored after accidental empty push (2026-10-07)
+- [x] NoteEditorWriteFirst restored + PR #48 reimplemented
 - [x] TranscriptionRecoverySheet `isOpen` prop
+- [x] AI provenance badge next to title
+- [x] Audio playback strip (`AudioPlayerWidget`) for note memos
 - [ ] `saveUnlockedNote` / re-encrypt path after unlock
-- [x] Remove materialize artifacts (earlier)
 - [ ] CI typecheck + test green on latest main
 
 ## P1 — Write-first parity
 
 - [x] Location picker
 - [x] ReminderService wiring
-- [~] Inline recordings / OCR list (was in full editor; re-add after restore)
+- [x] Inline voice memos (AudioPlayerWidget)
+- [ ] Inline OCR scan list
 - [ ] Sketch → `sketch_media_key` binary path
 - [x] Focus mode minimal chrome
 - [x] Onboarding copy for + / ⋮
@@ -27,7 +29,7 @@ Track audit findings on `main`.
 
 ## P2 — Settings IA
 
-- [ ] Simple / Advanced mode toggle (workflow prepared; needs successful Actions run)
+- [ ] Simple / Advanced mode toggle
 - [ ] Advanced-only tabs
 - [ ] Conflict resolver UI
 - [ ] Diagnostics log export + FTS rebuild
@@ -39,5 +41,3 @@ Track audit findings on `main`.
 - [ ] OAuth E2E Android
 - [ ] Lower ESLint max-warnings
 - [ ] Honest README / Play STT claims
-
-See `docs/AUDIT_IMPROVEMENTS.md`.
