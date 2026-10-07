@@ -1,37 +1,38 @@
 # VellumScribe audit checklist
 
-Track audit findings on `main`. Update when items ship.
+Track audit findings on `main`.
 
 ## P0 — Correctness / security
 
 - [x] Write-first primary bar + Attach / More
 - [x] Modal prop alignment (OCR, audio, security, AI)
-- [x] Draft recovery banner
+- [x] Draft recovery banner + aria-live
 - [x] No plaintext drafts for locked notes
 - [x] Locked-note UI gate
+- [x] NoteEditorWriteFirst restored after accidental empty push (2026-10-07)
+- [x] TranscriptionRecoverySheet `isOpen` prop
 - [ ] `saveUnlockedNote` / re-encrypt path after unlock
-- [x] Remove materialize artifacts
+- [x] Remove materialize artifacts (earlier)
 - [ ] CI typecheck + test green on latest main
 
 ## P1 — Write-first parity
 
 - [x] Location picker
 - [x] ReminderService wiring
-- [x] Inline recordings / OCR list under body
+- [~] Inline recordings / OCR list (was in full editor; re-add after restore)
 - [ ] Sketch → `sketch_media_key` binary path
-- [x] Focus mode minimal chrome (Done)
-- [ ] Onboarding copy for + / ⋮
-- [x] Draft banner `aria-live`
-- [x] Transcription recovery sheet after audio (isOpen API)
+- [x] Focus mode minimal chrome
+- [x] Onboarding copy for + / ⋮
+- [x] Recovery sheet after audio close
 
 ## P2 — Settings IA
 
-- [x] Simple / Advanced mode toggle
-- [x] Advanced-only tabs: AI, offline AI, storage, diagnostics
+- [ ] Simple / Advanced mode toggle (workflow prepared; needs successful Actions run)
+- [ ] Advanced-only tabs
 - [ ] Conflict resolver UI
-- [ ] Diagnostics: log export + FTS rebuild controls
+- [ ] Diagnostics log export + FTS rebuild
 
-## P3–P9 (summary)
+## P3–P9
 
 - [ ] Whisper REAL device smoke
 - [ ] All Gemini entry points privacy-gated
@@ -39,4 +40,4 @@ Track audit findings on `main`. Update when items ship.
 - [ ] Lower ESLint max-warnings
 - [ ] Honest README / Play STT claims
 
-See also `docs/AUDIT_IMPROVEMENTS.md`.
+See `docs/AUDIT_IMPROVEMENTS.md`.
