@@ -41,13 +41,19 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
       if (!PrivacyManager.isNetworkAllowed()) {
         throw new Error('Network permission is blocked by Privacy Mode. Allow network in Settings to use Cloud AI.');
       }
+      if (!PrivacyManager.hasCloudAiConsent()) {
+        throw new Error('Cloud AI consent is required. Grant consent in Settings → Privacy, or when prompted before cloud features.');
+      }
 
       let targetBlob = audioBlob;
       if (!targetBlob && recordingId) {
         const rec = await RecordingRepository.getByIdAsync(recordingId);
         if (rec) {
           const { MediaRepository } = await import('../../lib/MediaRepository');
-          targetBlob = (await MediaRepository.getBinary(rec.file_path)) || undefined;
+          const key = rec.media_key || rec.file_path;
+          if (key) {
+            targetBlob = (await MediaRepository.getBinary(key)) || undefined;
+          }
         }
       }
 

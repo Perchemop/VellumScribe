@@ -51,6 +51,8 @@ export class OfflineAiManager {
         isCharging: null,
         recommendedModelId: 'whisper-base',
         isNativeEngineAvailable: false,
+        nativeLibraryLoaded: false,
+        inferenceRuntimeReady: false,
       };
     }
   }
