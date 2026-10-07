@@ -18,7 +18,7 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "eslint src --max-warnings=620",
+    "lint": "eslint src --max-warnings=580",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:orphans": "node scripts/check-orphaned-files.mjs",
