@@ -244,6 +244,7 @@ export class CloudGeminiEngine implements TranscriptionEngine {
     options: TranscriptionOptions
   ): Promise<TranscriptionResult> {
     PrivacyManager.assertNetworkAllowed('Cloud Gemini Audio Transcription');
+    PrivacyManager.assertCloudAiConsent('Cloud Gemini Audio Transcription');
 
     let audioBlob = input.audioBlob;
     if (!audioBlob && input.mediaKey) {
