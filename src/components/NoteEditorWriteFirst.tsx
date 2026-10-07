@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
-import { NoteRecord, EventRecord, ChecklistItem } from '../types';
+import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { DraftStore } from '../lib/DraftStore';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
 import { generatePrefixedId } from '../lib/uuid';
 import { NoteEditorChrome } from './NoteEditorChrome';
 import { ChecklistEditor } from './ChecklistEditor';
+import { AudioPlayerWidget } from './AudioPlayerWidget';
+import { AiProvenanceBadge } from './AiProvenanceBadge';
 import { AiSettingsManager, type LlmProvider } from '../lib/aiSettings';
 import { PrivacyManager } from '../lib/privacyManager';
 import { ModalLoadingFallback } from './ModalLoadingFallback';
@@ -98,6 +100,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
   const [pendingAiAction, setPendingAiAction] = useState<(() => void) | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'stored'>('stored');
+  const [recordings, setRecordings] = useState<RecordingRecord[]>(() =>
+    StorageManager.getRecordingsForNote(note.id)
+  );
   const debounceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -109,6 +114,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     setReminderAt(note.reminder_at || '');
     setLocationName(note.location_name || '');
     setSketchData(note.sketch_data);
+    setRecordings(StorageManager.getRecordingsForNote(note.id));
   }, [note.id, note.updated_at]);
 
   const notifyUpdatedDebounced = (updatedNote: NoteRecord) => {
@@ -229,14 +235,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       )}
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          placeholder="Note title"
-          aria-label="Note title"
-          className="w-full text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="Note title"
+            aria-label="Note title"
+            className="flex-1 min-w-0 text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+          />
+          <AiProvenanceBadge entityType="note" entityId={note.id} className="shrink-0" />
+        </div>
         <textarea
           value={body}
           onChange={(e) => handleBodyChange(e.target.value)}
@@ -252,6 +261,25 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         {sketchData && (
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
             <img src={sketchData} alt="Sketch" className="max-w-full rounded-lg" />
+          </div>
+        )}
+        {recordings.length > 0 && (
+          <div className="space-y-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
+            <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold block">
+              Audio Memos ({recordings.length})
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {recordings.map((rec) => (
+                <AudioPlayerWidget
+                  key={rec.id}
+                  recording={rec}
+                  onDelete={(id) => {
+                    StorageManager.deleteRecording(id);
+                    setRecordings(StorageManager.getRecordingsForNote(note.id));
+                  }}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -291,6 +319,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               // surface the new recording and transcript in the editor.
               const refreshed = StorageManager.getNoteById(note.id);
               if (refreshed) onNoteUpdated(refreshed);
+              setRecordings(StorageManager.getRecordingsForNote(note.id));
             }}
             onClose={() => setShowAudioStudioModal(false)}
           />
