@@ -242,7 +242,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Mic className="w-5 h-5 text-zinc-500" />
-                <span>Voice memo / recording</span>
+                <span>Record voice</span>
               </button>
               <button
                 type="button"
@@ -258,7 +258,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Upload className="w-5 h-5 text-zinc-500" />
-                <span>Upload audio to transcribe</span>
+                <span>Upload audio</span>
               </button>
               <button
                 type="button"
@@ -285,7 +285,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Camera className="w-5 h-5 text-zinc-500" />
-                <span>Scan document</span>
+                <span>Scan</span>
               </button>
             </div>
           </div>
@@ -389,7 +389,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Share2 className="w-5 h-5 text-zinc-500" />
-                <span>Share & export</span>
+                <span>Share</span>
               </button>
               <button
                 type="button"
@@ -400,7 +400,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Clock className="w-5 h-5 text-zinc-500" />
-                <span>Version history</span>
+                <span>History</span>
               </button>
               <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
                 Note
@@ -429,9 +429,6 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 <span>Delete</span>
               </button>
               <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-4" />
-              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Advanced
-              </p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
@@ -441,7 +438,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Sparkles className="w-5 h-5 text-indigo-500" />
-                <span>AI summary</span>
+                <span>Summarize</span>
               </button>
               <button
                 type="button"
@@ -453,7 +450,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               >
                 <span className="flex items-center gap-3">
                   <Key className="w-5 h-5 text-zinc-500" />
-                  <span>Google AI key</span>
+                  <span>AI key</span>
                 </span>
                 <span
                   className={`text-[10px] px-1.5 py-0.5 rounded ${
@@ -474,7 +471,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Settings className="w-5 h-5 text-zinc-500" />
-                <span>App settings</span>
+                <span>Settings</span>
               </button>
             </div>
           </div>

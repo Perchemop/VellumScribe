@@ -324,9 +324,6 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
               <span>•</span>
               <span>{(recording.file_size / 1024).toFixed(0)} KB</span>
               <span>•</span>
-              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-                <WifiOff className="w-3 h-3" /> Offline AI
-              </span>
             </div>
           </div>
         </div>
@@ -351,7 +348,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           <button
             onClick={() => handleTranscribeWithOfflineAi()}
             disabled={isTranscribing}
-            title={fullTranscript ? 'Re-transcribe recording offline' : 'Transcribe recording locally'}
+            title={fullTranscript ? 'Re-transcribe' : 'Transcribe'}
             className="px-2.5 py-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
           >
             {isTranscribing ? (
@@ -360,7 +357,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
             )}
             <span className="hidden sm:inline">
-              {isTranscribing ? 'Transcribing...' : fullTranscript ? 'Re-transcribe' : 'Transcribe'}
+              {isTranscribing ? '…' : fullTranscript ? 'Retry' : 'Transcribe'}
             </span>
           </button>
 
