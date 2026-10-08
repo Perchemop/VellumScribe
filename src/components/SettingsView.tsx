@@ -123,8 +123,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
-    initialSubtab || 'cloud'
+  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
+    initialSubtab === 'offline-ai' ? 'ai' : (initialSubtab || 'cloud')
   );
 
   const setMode = (mode: 'simple' | 'advanced') => {
@@ -677,11 +677,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <button
           id="subtab-offline-ai-btn"
           role="tab"
-          aria-selected={activeTab === 'offline-ai'}
+          aria-selected={activeTab === 'ai' && false /* merged into ai */}
           aria-controls="panel-offline-ai"
           onClick={() => setActiveTab('offline-ai')}
           className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
-            activeTab === 'offline-ai'
+            activeTab === 'ai' && false /* merged into ai */
               ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
               : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
           }`}
@@ -782,7 +782,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* Main Tab Content Body */}
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
         {/* TAB: OFFLINE WHISPER AI */}
-        {activeTab === 'offline-ai' && (
+        {activeTab === 'ai' && false /* merged into ai */ && (
           <div id="panel-offline-ai" role="tabpanel" aria-labelledby="subtab-offline-ai-btn" className="max-w-5xl mx-auto space-y-6">
             <OfflineAiPanel />
           </div>

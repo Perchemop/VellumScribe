@@ -31,8 +31,6 @@ import { StorageManager } from '../lib/storage';
 import { BatchActionBar } from './BatchActionBar';
 import { NoteShareModal } from './NoteShareModal';
 import { useModalBackHandler } from '../lib/modalBackStack';
-import { AiCommandBar } from './AiCommandBar';
-import { AiAction } from '../types';
 import { ReminderService } from '../services/ReminderService';
 import { VirtualizedNotesList } from './VirtualizedNotesList';
 import { AppLogger } from '../lib/logger';
@@ -306,42 +304,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
     onRefresh();
   };
 
-  const handleAiAction = async (action: AiAction) => {
-    if (action.type === 'create_note' || action.type === 'create_checklist' || action.type === 'create_reminder') {
-      const nowIso = new Date().toISOString();
-      const newNote = StorageManager.addNote({
-        title: action.payload.title || 'New Note',
-        body: action.payload.body || '',
-        note_type: action.payload.note_type || 'text',
-        checklist_items: action.payload.checklist_items,
-        reminder_at: action.payload.reminder_at,
-        event_id: selectedEventId || (events[0]?.id ?? 1),
-        created_at: nowIso,
-        updated_at: nowIso,
-      });
-      if (action.payload.reminder_at && newNote) {
-        await ReminderService.scheduleReminder(newNote);
-      }
-      onRefresh();
-      if (newNote) {
-        onSelectNote(newNote.id);
-      }
-    } else if (action.type === 'delete_note') {
-      if (action.payload?.query) {
-        const query = (action.payload.query as string).toLowerCase();
-        const match = notes.find(
-          (n) => (n.title && n.title.toLowerCase().includes(query)) || n.body.toLowerCase().includes(query)
-        );
-        if (match) {
-          onDeleteNote(match.id);
-          onRefresh();
-        }
-      } else if (selectedNoteId) {
-        onDeleteNote(selectedNoteId);
-        onRefresh();
-      }
-    }
-  };
 
   const renderNoteCard = (note: NoteRecord) => {
     const isSelectedInBatch = selectedNoteIds.includes(note.id);
@@ -645,11 +607,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
       {selectedNoteIds.length === 0 && (
         <div className="p-3 pb-1.5 shrink-0 space-y-2">
           {/* AI Intake & Command Bar */}
-          <AiCommandBar
-            onExecuteAction={handleAiAction}
-            onSearchQuery={(q) => setSearchQuery(q)}
-            onRefresh={onRefresh}
-          />
 
           <div className="relative flex items-center gap-2">
             <div className="relative flex-1">
