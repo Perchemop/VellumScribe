@@ -1,3 +1,4 @@
+@import './styles/safe-area.css';
 @import "tailwindcss";
 
 @layer base {

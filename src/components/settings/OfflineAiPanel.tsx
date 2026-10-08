@@ -146,7 +146,7 @@ export const OfflineAiPanel: React.FC = () => {
       )}
 
       <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Models</h4>
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span></h4>
         {models.map((model) => {
           const isInstalled = !!model.installed;
           const isDownloading = downloadingModelId === model.id;
