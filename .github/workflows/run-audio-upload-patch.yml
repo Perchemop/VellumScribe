@@ -1,29 +1,9 @@
-name: Run Audio Upload Patch
-
+name: "(disabled) run-audio-upload-patch"
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/patch_audio_upload.py
-      - .github/workflows/run-audio-upload-patch.yml
-
 jobs:
-  patch:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Apply patch
-        run: python3 scripts/patch_audio_upload.py
-      - name: Commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/NoteEditorChrome.tsx src/services/AudioRecordingManager.ts src/components/NoteEditorWriteFirst.tsx
-          if git diff --staged --quiet; then
-            echo "No changes"
-          else
-            git commit -m "feat(audio): upload pre-recorded file to transcribe; remove extra mic button"
-            git push
-          fi
+      - run: echo disabled

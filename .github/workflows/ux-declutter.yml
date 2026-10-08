@@ -1,26 +1,9 @@
-name: UX Declutter Pass
-
+name: "(disabled) ux-declutter"
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/ux_declutter_pass.py
-      - .github/workflows/ux-declutter.yml
-
 jobs:
-  patch:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 scripts/ux_declutter_pass.py
-      - name: Commit
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --staged --quiet; then echo No changes; else
-            git commit -m "ux: offline Whisper default + declutter transcription and note menus"
-            git push
-          fi
+      - run: echo disabled
