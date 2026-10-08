@@ -18,13 +18,11 @@ import {
   Copy,
   Trash2,
   Sparkles,
-  Key,
   Settings,
   Eye,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
-import { AiSettingsManager } from '../lib/aiSettings';
 
 export type SaveStatus = 'saving' | 'saved' | 'stored';
 
@@ -92,7 +90,6 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
     setShowSecurityModal,
     setShowShareModal,
     setShowRevisionsModal,
-    setShowAiKeyModal,
     setShowSettingsModal,
     handleOpenAiSummaryModal,
   } = props;
@@ -101,14 +98,14 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
 
   return (
     <>
-      <div className="px-3 sm:px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2 shrink-0 bg-white/90 dark:bg-[#0c0c0e]/90 backdrop-blur-xs">
+      <div className="px-3 sm:px-4 py-2.5 border-b border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2 shrink-0 bg-white/90 dark:bg-[#0c0c0e]/90 backdrop-blur-xs safe-area-pt">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
           {onClose && (
             <button
               id="back-to-notes-btn"
               type="button"
               onClick={onClose}
-              aria-label="Back to Notes list"
+              aria-label="Back"
               className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-xl transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -131,23 +128,14 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               </option>
             ) : (
               safeEvents.map((ev) => (
-                <option
-                  key={ev.id}
-                  value={ev.id}
-                  className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
-                >
+                <option key={ev.id} value={ev.id} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
                   {ev.title}
                 </option>
               ))
             )}
           </select>
           {note.is_locked && (
-            <span
-              className="hidden sm:inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-300 shrink-0"
-              title="Locked note"
-            >
-              <Lock className="w-3 h-3" />
-            </span>
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" aria-label="Locked" />
           )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
@@ -161,13 +149,12 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
             }`}
             aria-live="polite"
           >
-            {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : ''}
+            {saveStatus === 'saving' ? '…' : saveStatus === 'saved' ? 'Saved' : ''}
           </span>
-          {/* Quick Voice memo — always visible so users do not miss attach sheet */}
           <button
             type="button"
             id="note-attach-btn"
-            aria-label="Add to note"
+            aria-label="Add"
             aria-expanded={showAttachSheet}
             onClick={() => {
               setShowMoreActionsSheet(false);
@@ -184,7 +171,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           <button
             type="button"
             id="note-more-btn"
-            aria-label="More note options"
+            aria-label="More"
             aria-expanded={showMoreActionsSheet}
             onClick={() => {
               setShowAttachSheet(false);
@@ -206,87 +193,87 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           <button
             type="button"
             className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50"
-            aria-label="Close add menu"
+            aria-label="Close"
             onClick={() => setShowAttachSheet(false)}
           />
           <div
             role="dialog"
-            aria-label="Add to note"
+            aria-label="Add"
             className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:inset-x-auto sm:right-3 sm:bottom-auto sm:top-[3.25rem] sm:w-72 rounded-t-2xl sm:rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl max-h-[70vh] overflow-y-auto safe-area-pb"
           >
             <div className="sm:hidden flex justify-center pt-2 pb-1">
               <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             </div>
-            <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-              Add to note
-            </p>
             <div className="py-1 pb-6 sm:pb-2">
-              <button
-                type="button"
-                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
-                onClick={() => {
-                  setShowAttachSheet(false);
-                  if (!showChecklistSection) handleAddChecklistItem();
-                  else setShowChecklistSection(true);
-                }}
-              >
-                <CheckSquare className="w-5 h-5 text-zinc-500" />
-                <span>Checklist</span>
-              </button>
-              <button
-                type="button"
-                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
-                onClick={() => {
-                  setShowAttachSheet(false);
-                  setShowAudioStudioModal(true);
-                }}
-              >
-                <Mic className="w-5 h-5 text-zinc-500" />
-                <span>Record voice</span>
-              </button>
-              <button
-                type="button"
-                id="note-upload-audio-btn"
-                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
-                onClick={() => {
-                  setShowAttachSheet(false);
-                  try {
-                    (window as any).__vellumScribePickAudio?.();
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-              >
-                <Upload className="w-5 h-5 text-zinc-500" />
-                <span>Upload audio</span>
-              </button>
-              <button
-                type="button"
-                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
-                onClick={() => {
-                  setShowAttachSheet(false);
-                  setShowSketchModal(true);
-                }}
-              >
-                <PenTool className="w-5 h-5 text-zinc-500" />
-                <span>Sketch</span>
-                {sketchData && (
-                  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                    Added
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
-                onClick={() => {
-                  setShowAttachSheet(false);
-                  setShowOcrScanner(true);
-                }}
-              >
-                <Camera className="w-5 h-5 text-zinc-500" />
-                <span>Scan</span>
-              </button>
+              {[
+                {
+                  id: 'checklist',
+                  icon: CheckSquare,
+                  label: 'Checklist',
+                  onClick: () => {
+                    setShowAttachSheet(false);
+                    if (!showChecklistSection) handleAddChecklistItem();
+                    else setShowChecklistSection(true);
+                  },
+                },
+                {
+                  id: 'record',
+                  icon: Mic,
+                  label: 'Record voice',
+                  onClick: () => {
+                    setShowAttachSheet(false);
+                    setShowAudioStudioModal(true);
+                  },
+                },
+                {
+                  id: 'upload',
+                  icon: Upload,
+                  label: 'Upload audio',
+                  onClick: () => {
+                    setShowAttachSheet(false);
+                    try {
+                      (window as any).__vellumScribePickAudio?.();
+                    } catch {
+                      /* ignore */
+                    }
+                  },
+                },
+                {
+                  id: 'sketch',
+                  icon: PenTool,
+                  label: 'Sketch',
+                  badge: sketchData ? 'Added' : undefined,
+                  onClick: () => {
+                    setShowAttachSheet(false);
+                    setShowSketchModal(true);
+                  },
+                },
+                {
+                  id: 'scan',
+                  icon: Camera,
+                  label: 'Scan',
+                  onClick: () => {
+                    setShowAttachSheet(false);
+                    setShowOcrScanner(true);
+                  },
+                },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  id={item.id === 'upload' ? 'note-upload-audio-btn' : undefined}
+                  className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
+                  onClick={item.onClick}
+                >
+                  <item.icon className="w-5 h-5 text-zinc-500" />
+                  <span>{item.label}</span>
+                  {item.badge && (
+                    <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </>
@@ -297,21 +284,19 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           <button
             type="button"
             className="fixed inset-0 z-40 bg-black/30 dark:bg-black/50"
-            aria-label="Close more menu"
+            aria-label="Close"
             onClick={() => setShowMoreActionsSheet(false)}
           />
           <div
             role="dialog"
-            aria-label="More note options"
+            aria-label="More"
             className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:inset-x-auto sm:right-3 sm:bottom-auto sm:top-[3.25rem] sm:w-80 rounded-t-2xl sm:rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl max-h-[75vh] overflow-y-auto safe-area-pb"
           >
             <div className="sm:hidden flex justify-center pt-2 pb-1">
               <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             </div>
             <div className="py-1 pb-8 sm:pb-2 text-sm">
-              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Organize
-              </p>
+              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Note</p>
               {onToggleFocus && (
                 <button
                   type="button"
@@ -322,7 +307,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   }}
                 >
                   <Eye className="w-5 h-5 text-zinc-500" />
-                  <span>{focusMode ? 'Exit focus mode' : 'Focus mode'}</span>
+                  <span>{focusMode ? 'Exit focus' : 'Focus'}</span>
                 </button>
               )}
               <button
@@ -335,7 +320,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <Pin className={`w-5 h-5 text-zinc-500 ${note.is_pinned ? 'fill-current' : ''}`} />
-                <span>{note.is_pinned ? 'Unpin' : 'Pin note'}</span>
+                <span>{note.is_pinned ? 'Unpin' : 'Pin'}</span>
               </button>
               <button
                 type="button"
@@ -345,8 +330,8 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   setShowReminderPicker(true);
                 }}
               >
-                <Bell className="w-5 h-5 text-amber-500" />
-                <span>{reminderAt ? 'Edit reminder' : 'Set reminder'}</span>
+                <Bell className="w-5 h-5 text-zinc-500" />
+                <span>Reminder</span>
               </button>
               <button
                 type="button"
@@ -357,11 +342,8 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 }}
               >
                 <MapPin className="w-5 h-5 text-zinc-500" />
-                <span>{locationName ? 'Edit location' : 'Add location'}</span>
+                <span>Location</span>
               </button>
-              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Privacy
-              </p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
@@ -370,16 +352,9 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   setShowSecurityModal(true);
                 }}
               >
-                {note.is_locked ? (
-                  <Lock className="w-5 h-5 text-amber-600" />
-                ) : (
-                  <Unlock className="w-5 h-5 text-zinc-500" />
-                )}
-                <span>{note.is_locked ? 'Security & unlock…' : 'Lock note…'}</span>
+                {note.is_locked ? <Lock className="w-5 h-5 text-amber-600" /> : <Unlock className="w-5 h-5 text-zinc-500" />}
+                <span>{note.is_locked ? 'Unlock…' : 'Lock'}</span>
               </button>
-              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Share & history
-              </p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
@@ -402,9 +377,6 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 <Clock className="w-5 h-5 text-zinc-500" />
                 <span>History</span>
               </button>
-              <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-                Note
-              </p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
@@ -422,13 +394,15 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-left text-rose-600 dark:text-rose-400 min-h-[48px]"
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  if (window.confirm('Delete this note? This cannot be undone.')) onNoteDeleted(note.id);
+                  if (window.confirm('Delete this note?')) onNoteDeleted(note.id);
                 }}
               >
                 <Trash2 className="w-5 h-5" />
                 <span>Delete</span>
               </button>
+
               <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-4" />
+              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">App</p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
@@ -437,30 +411,8 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   handleOpenAiSummaryModal();
                 }}
               >
-                <Sparkles className="w-5 h-5 text-indigo-500" />
+                <Sparkles className="w-5 h-5 text-zinc-500" />
                 <span>Summarize</span>
-              </button>
-              <button
-                type="button"
-                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"
-                onClick={() => {
-                  setShowMoreActionsSheet(false);
-                  setShowAiKeyModal(true);
-                }}
-              >
-                <span className="flex items-center gap-3">
-                  <Key className="w-5 h-5 text-zinc-500" />
-                  <span>AI key</span>
-                </span>
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded ${
-                    AiSettingsManager.hasLocalKey()
-                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
-                      : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
-                  }`}
-                >
-                  {AiSettingsManager.hasLocalKey() ? 'Active' : 'Missing'}
-                </span>
               </button>
               <button
                 type="button"
