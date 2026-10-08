@@ -1,0 +1,27 @@
+name: UX Residual Complete
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/ux_residual_complete.py
+      - .github/workflows/ux-residual.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/ux_residual_complete.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git reset HEAD -- .github/workflows || true
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "ux: residual — compact note filters, bury advanced AI, focus default"
+            git push
+          fi

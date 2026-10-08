@@ -1,22 +1,9 @@
-name: Patch Recovery Recording Id
+name: "(disabled) patch-recovery-recording-id"
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/patch_recovery_recording_id.py
 jobs:
-  patch:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 scripts/patch_recovery_recording_id.py
-      - name: Commit
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/components/NoteEditorWriteFirst.tsx
-          git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "fix(editor): wire recordingId + append transcript on recovery success"
-          git push
+      - run: echo disabled

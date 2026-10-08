@@ -1,22 +1,9 @@
-name: Patch Transcription Audit
+name: "(disabled) patch-transcription-audit"
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/patch_transcription_audit.py
 jobs:
-  patch:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - run: python3 scripts/patch_transcription_audit.py
-      - name: Commit
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/services/TranscriptionOrchestrator.ts src/services/OfflineAiManager.ts src/components/audio/TranscriptionRecoverySheet.tsx
-          git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "fix(transcription): consent gate, media_key recovery, capability honesty"
-          git push
+      - run: echo disabled

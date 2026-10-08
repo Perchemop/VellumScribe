@@ -1,54 +1,9 @@
-name: Restore storage.ts
-
+name: "(disabled) restore-storage"
 on:
-  push:
-    paths:
-      - '.github/workflows/restore-storage.yml'
   workflow_dispatch:
-
 jobs:
-  restore:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download known-good storage.ts
-        run: |
-          set -e
-          URL1="https://cdn.jsdelivr.net/gh/Perchemop/VellumScribe@b5cbe3ea23f7d122eee654a3e71da656590897f9/src/lib/storage.ts"
-          URL2="https://raw.githubusercontent.com/Perchemop/VellumScribe/b5cbe3ea23f7d122eee654a3e71da656590897f9/src/lib/storage.ts"
-          curl -fsSL "$URL1" -o src/lib/storage.ts || curl -fsSL "$URL2" -o src/lib/storage.ts
-          wc -c src/lib/storage.ts
-          grep -q StorageManager src/lib/storage.ts
-
-      - name: Patch initPromise reset on failure
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/lib/storage.ts')
-          t = path.read_text()
-          old = """      } catch (err: any) {
-        AppLogger.error('StorageManager', 'Initialization failed', err);
-        throw err;
-      }"""
-          new = """      } catch (err: any) {
-        AppLogger.error('StorageManager', 'Initialization failed', err);
-        this.initPromise = null;
-        this.isInitialized = false;
-        throw err;
-      }"""
-          if old not in t:
-              raise SystemExit('pattern not found in storage.ts')
-          path.write_text(t.replace(old, new, 1))
-          print('patched ok', path.stat().st_size)
-          PY
-
-      - name: Commit and push
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/lib/storage.ts
-          git commit -m 'fix(boot): restore storage.ts and allow init retry after failure' || echo 'no change'
-          git push
+      - run: echo disabled

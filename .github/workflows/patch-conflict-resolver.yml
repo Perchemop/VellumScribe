@@ -1,24 +1,9 @@
-name: Patch Conflict Resolver
+name: "(disabled) patch-conflict-resolver"
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/patch_conflict_resolver.py
-      - src/components/settings/ConflictResolverPanel.tsx
 jobs:
-  patch:
+  noop:
+    if: false
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - name: Patch SettingsView
-        run: python3 scripts/patch_conflict_resolver.py
-      - name: Commit
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/components/SettingsView.tsx
-          git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "feat: mount ConflictResolverPanel in Settings diagnostics"
-          git push
+      - run: echo disabled
