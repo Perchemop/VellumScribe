@@ -5,6 +5,7 @@
 - Full `StorageManager` API restored on `main` (`c18e1e39` and later).
 - Android APK **Build #199** succeeded with `whisper_mode=stub` on that commit.
 - Runtime crashes from missing methods (`getNotesPage`, `getRecordingsForNote`) are fixed in source; install the latest APK artifact.
+- `CloudSettingsPanel` mounted in SettingsView (orphan check).
 
 ## Install
 
@@ -21,6 +22,6 @@
 
 ## Known follow-ups
 
-- CI typecheck may still flag edge mismatches in non-storage modules (`cloudSync` Blob typing).
+- ESLint baseline ~636 warnings (max-warnings=700); ratchet down over time.
 - REAL Whisper NDK builds need upstream tree + model assets on device.
 - Prefer uninstalling before upgrading after storage schema/API changes.
