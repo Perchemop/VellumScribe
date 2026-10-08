@@ -9,16 +9,13 @@ import {
   Upload,
   CheckCircle,
   AlertTriangle,
-  FileText,
   Layers,
   Sparkles,
-  Lock,
   WifiOff,
 } from 'lucide-react';
 import { StorageManager } from '../lib/storage';
 import { SqliteStats, SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { PrivacyManager, PrivacySettings } from '../lib/privacyManager';
-import { AppLogger } from '../lib/logger';
 
 interface StorageDashboardProps {
   onRefreshNotes?: () => void;
@@ -42,15 +39,22 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
     refreshDashboard();
   }, []);
 
-  const handleRunIntegrityCheck = () => {
+  const handleRunIntegrityCheck = async () => {
     setIsCheckingIntegrity(true);
-    setTimeout(() => {
-      const result = StorageManager.checkDatabaseIntegrity();
-      setIntegrityResult(result);
+    try {
+      const result = await StorageManager.checkDatabaseIntegrity();
+      setIntegrityResult({ status: result.status, details: result.details });
+      setFeedbackMessage(
+        result.status === 'ok'
+          ? 'SQLite PRAGMA integrity_check PASSED: Database is healthy.'
+          : `Integrity check failed: ${result.details}`
+      );
+    } catch (e: any) {
+      setFeedbackMessage(`Integrity check failed: ${e?.message || 'Unknown error'}`);
+    } finally {
       setIsCheckingIntegrity(false);
-      setFeedbackMessage(result.status === 'ok' ? 'SQLite PRAGMA integrity_check PASSED: Database is healthy.' : `Integrity check failed: ${result.details}`);
       setTimeout(() => setFeedbackMessage(null), 4000);
-    }, 250);
+    }
   };
 
   const handleVacuum = async () => {
@@ -90,7 +94,9 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
     orphans.forEach((k) => SqliteRepository.removeOrphanMediaRecord(k));
     const mediaCleanup = await StorageManager.cleanOrphanedMedia();
     refreshDashboard();
-    setFeedbackMessage(`Cleaned up ${orphans.length} catalog entries & reclaimed ${mediaCleanup.cleanedCount} binary media files.`);
+    setFeedbackMessage(
+      `Cleaned up ${orphans.length} catalog entries & reclaimed ${mediaCleanup.cleanedCount} binary media files.`
+    );
     setTimeout(() => setFeedbackMessage(null), 3500);
   };
 
@@ -136,7 +142,11 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
     const next = !privacy.privateOfflineMode;
     const updated = PrivacyManager.updateSettings({ privateOfflineMode: next });
     setPrivacy(updated);
-    setFeedbackMessage(next ? 'Private Offline Mode ENABLED: All external network requests are strictly blocked.' : 'Private Offline Mode disabled.');
+    setFeedbackMessage(
+      next
+        ? 'Private Offline Mode ENABLED: All external network requests are strictly blocked.'
+        : 'Private Offline Mode disabled.'
+    );
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
@@ -165,7 +175,6 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         </div>
       )}
 
-      {/* Primary SQLite Health Card */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -183,7 +192,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
             </div>
           </div>
           <button
-            onClick={handleRunIntegrityCheck}
+            onClick={() => void handleRunIntegrityCheck()}
             disabled={isCheckingIntegrity}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
           >
@@ -192,7 +201,6 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           </button>
         </div>
 
-        {/* Database Metric Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
             <span className="text-xs text-slate-500 block">Database Size</span>
@@ -209,12 +217,12 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
             <span className="text-xs text-slate-500 block">Integrity Status</span>
             <span className="text-sm font-semibold text-emerald-700 flex items-center gap-1 mt-1">
-              <ShieldCheck className="w-4 h-4" /> PRAGMA OK
+              <ShieldCheck className="w-4 h-4" />{' '}
+              {integrityResult ? integrityResult.status.toUpperCase() : 'PRAGMA OK'}
             </span>
           </div>
         </div>
 
-        {/* Relational Table Breakdown */}
         <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
           <span className="font-semibold text-slate-700 block mb-1">Relational Table Row Counts:</span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -228,10 +236,9 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           </div>
         </div>
 
-        {/* Maintenance Actions */}
         <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
           <button
-            onClick={handleVacuum}
+            onClick={() => void handleVacuum()}
             disabled={isVacuuming}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors disabled:opacity-50"
           >
@@ -247,7 +254,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           </button>
           {orphanKeys.length > 0 && (
             <button
-              onClick={handleCleanupOrphans}
+              onClick={() => void handleCleanupOrphans()}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition-colors"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
@@ -257,7 +264,6 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         </div>
       </div>
 
-      {/* Private Offline Mode & FOSS Independence */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -268,9 +274,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
               <h4 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
                 Private Offline Mode (Air-Gapped)
                 {privacy.privateOfflineMode && (
-                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                    ACTIVE
-                  </span>
+                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">ACTIVE</span>
                 )}
               </h4>
               <p className="text-xs text-slate-500">Blocks 100% of outbound network traffic for complete on-device isolation</p>
@@ -289,7 +293,6 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         </div>
       </div>
 
-      {/* Open Database Backup & Portability */}
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <h4 className="font-semibold text-slate-900 text-sm mb-1 flex items-center gap-2">
           <HardDrive className="w-4 h-4 text-slate-600" />
@@ -311,12 +314,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           <label className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer border border-slate-200">
             <Upload className="w-4 h-4" />
             <span>Import .sqlite Database</span>
-            <input
-              type="file"
-              accept=".sqlite,.db,.sqlite3"
-              onChange={handleImportSqlite}
-              className="hidden"
-            />
+            <input type="file" accept=".sqlite,.db,.sqlite3" onChange={handleImportSqlite} className="hidden" />
           </label>
 
           <button

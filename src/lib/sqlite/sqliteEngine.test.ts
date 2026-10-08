@@ -18,8 +18,8 @@ describe('SQLite Engine & Repository', () => {
     expect(stats.databaseSizeBytes).toBeGreaterThan(0);
   });
 
-  it('passes PRAGMA integrity_check on clean database', () => {
-    const integrity = StorageManager.checkDatabaseIntegrity();
+  it('passes PRAGMA integrity_check on clean database', async () => {
+    const integrity = await StorageManager.checkDatabaseIntegrity();
     expect(integrity.status).toBe('ok');
     expect(integrity.details).toBe('ok');
   });
@@ -47,7 +47,6 @@ describe('SQLite Engine & Repository', () => {
     expect(retrieved?.checklist_items).toHaveLength(2);
     expect(retrieved?.checklist_items?.[1].completed).toBe(true);
 
-    // Save version snapshot
     SqliteRepository.saveNoteVersion({
       id: `ver_${note.id}_1`,
       note_id: note.id,
@@ -80,8 +79,8 @@ describe('SQLite Engine & Repository', () => {
     });
 
     const results = StorageManager.searchNotes({ query: 'superposition' });
-    expect(results).toHaveLength(1);
-    expect(results[0].title).toBe('Quantum Computing Notes');
+    expect(results.notes).toHaveLength(1);
+    expect(results.notes[0].title).toBe('Quantum Computing Notes');
   });
 
   it('supports raw .sqlite export and import roundtrip', async () => {
@@ -96,12 +95,10 @@ describe('SQLite Engine & Repository', () => {
     const binary = StorageManager.exportSqliteBinary();
     expect(binary.byteLength).toBeGreaterThan(0);
 
-    // Clear DB
     await SqliteEngine.resetForTesting();
     StorageManager.refreshCaches();
     expect(StorageManager.getNotes()).toHaveLength(0);
 
-    // Import binary
     await StorageManager.importSqliteBinary(binary);
     StorageManager.refreshCaches();
     expect(StorageManager.getNotes()).toHaveLength(1);
