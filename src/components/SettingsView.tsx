@@ -76,30 +76,30 @@ interface ProviderCardMeta {
 
 const PROVIDERS: Record<CloudStorageProvider, ProviderCardMeta> = {
   google_drive: {
-    name: 'Google (SSO & Drive)',
-    category: 'Google SSO',
-    description: 'Single Sign-On authentication and encrypted backups directly to Google Drive.',
+    name: 'Google Drive',
+    category: 'Google',
+    description: 'Sign in and back up notes.',
     brandColor: '#34a853',
     badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   },
   microsoft: {
-    name: 'Microsoft (SSO & OneDrive)',
-    category: 'Microsoft SSO',
-    description: 'Single Sign-On authentication and encrypted backup snapshots in Microsoft OneDrive.',
+    name: 'OneDrive',
+    category: 'Microsoft',
+    description: 'Sign in and back up notes.',
     brandColor: '#0078d4',
     badgeBg: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
   },
   nextcloud: {
     name: 'Nextcloud',
     category: 'Nextcloud',
-    description: 'Store backups on private or self-hosted Nextcloud instances via WebDAV.',
+    description: 'Private or self-hosted backup.',
     brandColor: '#0082c9',
     badgeBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
   },
   webdav: {
-    name: 'Custom WebDAV',
+    name: 'WebDAV',
     category: 'WebDAV',
-    description: 'Universal standard WebDAV endpoint with encrypted snapshot support.',
+    description: 'Any WebDAV server.',
     brandColor: '#f59e0b',
     badgeBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
   },
@@ -234,12 +234,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Manual Sync trigger
   const handleManualSync = async () => {
     if (isAirGapped) {
-      setSyncFeedback('Operating in 100% offline air-gapped mode. Local snapshot is preserved.');
+      setSyncFeedback('Offline — local only.');
       return;
     }
     setIsSyncing(true);
     setSyncFeedback(null);
-    setSyncProgress({ percent: 10, message: 'Starting cloud backup...', phase: 'init' });
+    setSyncProgress({ percent: 10, message: 'Backing up…', phase: 'init' });
 
     try {
       const success = await CloudSyncEngine.triggerSync({
@@ -249,11 +249,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setAccounts(CloudSyncEngine.getAccounts());
       setSyncQueue(CloudSyncEngine.getSyncQueue());
       setNotes(StorageManager.getNotes());
-      setSyncFeedback(success ? 'Sync complete' : 'Sync failed (queued for automatic retry)');
+      setSyncFeedback(success ? 'Sync complete' : 'Sync failed — will retry.');
       onRefreshNotes();
     } catch {
       setSyncQueue(CloudSyncEngine.getSyncQueue());
-      setSyncFeedback('Sync failed. Request queued for automatic retry when online.');
+      setSyncFeedback('Sync failed — will retry.');
     } finally {
       setIsSyncing(false);
       setTimeout(() => {
@@ -264,7 +264,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleFlushQueue = async () => {
     setIsSyncing(true);
-    setSyncFeedback('Processing queued offline sync requests...');
+    setSyncFeedback('Retrying queue…');
     try {
       const res = await CloudSyncEngine.processSyncQueue();
       setSyncQueue(CloudSyncEngine.getSyncQueue());
@@ -282,7 +282,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleClearQueue = () => {
     CloudSyncEngine.clearSyncQueue();
     setSyncQueue([]);
-    setSyncFeedback('Offline sync retry queue cleared.');
+    setSyncFeedback('Queue cleared.');
     setTimeout(() => setSyncFeedback(null), 3000);
   };
 
@@ -291,7 +291,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setBackupFrequencyState(val);
     CloudSyncEngine.setBackupFrequency(val);
     if (val === 'off') {
-      setSyncFeedback('Backup frequency set to Off. Operating completely offline.');
+      setSyncFeedback('Backups off.');
     } else {
       setSyncFeedback(`Backup frequency updated to: ${val}`);
     }
@@ -371,11 +371,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setRestoreConfirmTarget(null);
 
     setIsRestoringBackupId(backupId);
-    setSyncFeedback('Restoring and decrypting cloud backup snapshot...');
+    setSyncFeedback('Restoring…');
     try {
       const res = await CloudSyncEngine.restoreFromCloudBackup(provider, backupId);
       if (res.success) {
-        setSyncFeedback('✓ Cloud snapshot restored and local database updated successfully.');
+        setSyncFeedback('Restored.');
         setNotes(StorageManager.getNotes());
         onRefreshNotes();
       } else {
