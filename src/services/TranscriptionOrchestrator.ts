@@ -118,7 +118,7 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
         options.onProgress({
           percent: status.progressPercent || 0,
           phase: status.status,
-          status: status.phaseLabel || 'Processing offline audio...',
+          status: status.phaseLabel || 'Transcribing…',
         });
       }
 
@@ -365,7 +365,7 @@ export class TranscriptionOrchestrator {
       if (!text || looksLikePlaceholder) {
         throw new Error(
           result.isOffline
-            ? 'OFFLINE_AI_ENGINE_UNAVAILABLE: No on-device speech engine produced a transcript. Use live dictation during recording, install a working Whisper runtime, or enable Cloud AI.'
+            ? 'OFFLINE_AI_ENGINE_UNAVAILABLE: No transcript. Try live dictation or install a speech model in Settings → AI.'
             : 'OFFLINE_AI_NO_SPEECH: Empty transcript.'
         );
       }
@@ -463,7 +463,7 @@ export class TranscriptionOrchestrator {
         }
       }
       throw new Error(
-        'OFFLINE_AI_ENGINE_UNAVAILABLE: Offline transcription requires live microphone dictation during recording or an active native Whisper runtime. Neither is available for this recording.'
+        'OFFLINE_AI_ENGINE_UNAVAILABLE: On-device transcription is not available. Use live dictation while recording.'
       );
     }
 
@@ -498,7 +498,7 @@ export class TranscriptionOrchestrator {
     }
 
     throw new Error(
-      'OFFLINE_AI_ENGINE_UNAVAILABLE: No compatible transcription engine could be initialized. Use live dictation during recording, install a Whisper runtime, or enable Cloud AI.'
+      'OFFLINE_AI_ENGINE_UNAVAILABLE: Transcription unavailable. Check Settings → AI.'
     );
   }
 }

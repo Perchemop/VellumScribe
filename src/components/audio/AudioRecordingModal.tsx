@@ -57,14 +57,12 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           const ready = Boolean(caps.inferenceRuntimeReady && caps.isNativeEngineAvailable);
           setInferenceReady(ready);
           setEngineLabel(
-            ready
-              ? 'On-device'
-              : 'Microphone only'
+            ready ? 'On-device' : ''
           );
         })
         .catch(() => {
           setInferenceReady(false);
-          setEngineLabel('Microphone');
+          setEngineLabel('');
         });
     } else {
       handleCleanup();
