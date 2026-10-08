@@ -309,76 +309,22 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             </>
           ) : (
             <>
-              {/* Merge Notes Button (Requires at least 2 notes) */}
-              {count >= 2 && onOpenMergeModal && (
-                <button
-                  id="batch-merge-btn"
-                  type="button"
-                  onClick={onOpenMergeModal}
-                  aria-label="Merge selected notes"
-                  title="Merge Selected Notes"
-                  className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
-                >
-                  <GitMerge className="w-4 h-4 text-emerald-400 dark:text-emerald-600" />
-                  <span className="hidden sm:inline">Merge</span>
-                </button>
-              )}
-
-              {/* Move to Category */}
-              <button
-                id="batch-move-category-btn"
-                type="button"
-                onClick={() => setShowCategorySheet(true)}
-                aria-label="Move selected notes to category"
-                title="Move Category"
-                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
-              >
-                <FolderInput className="w-4 h-4" />
-                <span className="hidden md:inline">Move</span>
-              </button>
-
-              {/* Pin / Unpin */}
-              <button
-                type="button"
-                onClick={handleBatchPin}
-                aria-label={hasUnpinned ? 'Pin selected notes' : 'Unpin selected notes'}
-                title={hasUnpinned ? 'Pin Selected' : 'Unpin Selected'}
-                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
-              >
-                <Pin className={`w-4 h-4 ${!hasUnpinned ? 'fill-current' : ''}`} />
-                <span className="hidden md:inline">{hasUnpinned ? 'Pin' : 'Unpin'}</span>
-              </button>
-
-              {/* Archive / Unarchive */}
+              {/* Primary actions kept minimal — rest under More */}
               <button
                 type="button"
                 onClick={handleBatchArchive}
-                aria-label={activeTab === 'archived' ? 'Unarchive selected notes' : 'Archive selected notes'}
-                title={activeTab === 'archived' ? 'Unarchive Selected' : 'Archive Selected'}
-                className="min-h-[44px] px-2.5 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors flex items-center gap-1.5 text-xs font-medium"
-              >
-                <Archive className="w-4 h-4" />
-                <span className="hidden md:inline">{activeTab === 'archived' ? 'Unarchive' : 'Archive'}</span>
-              </button>
-
-              {/* Color Palette Picker */}
-              <button
-                type="button"
-                onClick={() => setShowColorSheet(true)}
-                aria-label="Change note color accent"
-                title="Change Color"
+                aria-label={activeTab === 'archived' ? 'Unarchive' : 'Archive'}
+                title={activeTab === 'archived' ? 'Unarchive' : 'Archive'}
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/15 dark:hover:bg-black/10 transition-colors"
               >
-                <Palette className="w-4 h-4" />
+                <Archive className="w-4 h-4" />
               </button>
-
-              {/* Trash */}
               <button
                 id="batch-trash-btn"
                 type="button"
                 onClick={handleBatchTrashOrDelete}
-                aria-label="Move selected notes to trash"
-                title="Move to Trash"
+                aria-label="Trash"
+                title="Trash"
                 className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-rose-500/20 text-rose-300 dark:text-rose-600 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
@@ -399,7 +345,50 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
                 {showMoreMenu && (
                   <div className="absolute right-0 top-10 w-48 bg-white dark:bg-[#18181c] text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-xl p-1.5 shadow-2xl z-40 space-y-0.5 text-xs animate-fade-in">
+                    
+                    {count >= 2 && onOpenMergeModal && (
+                      <button
+                        onClick={() => {
+                          setShowMoreMenu(false);
+                          onOpenMergeModal();
+                        }}
+                        className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                      >
+                        <GitMerge className="w-3.5 h-3.5 text-zinc-500" />
+                        <span>Merge</span>
+                      </button>
+                    )}
                     <button
+                      onClick={() => {
+                        setShowCategorySheet(true);
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                    >
+                      <FolderInput className="w-3.5 h-3.5 text-zinc-500" />
+                      <span>Move</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleBatchPin();
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                    >
+                      <Pin className="w-3.5 h-3.5 text-zinc-500" />
+                      <span>{hasUnpinned ? 'Pin' : 'Unpin'}</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowColorSheet(true);
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full px-2.5 py-2 text-left rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2"
+                    >
+                      <Palette className="w-3.5 h-3.5 text-zinc-500" />
+                      <span>Color</span>
+                    </button>
+<button
                       onClick={() => {
                         setShowTagSheet(true);
                         setShowMoreMenu(false);

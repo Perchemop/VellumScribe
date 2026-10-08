@@ -41,6 +41,16 @@ export function hasCompletedOnboarding(): boolean {
     }
     const item = StorageManager.getItem<any>(STORAGE_KEY, null);
     if (item === true || item === 'true' || item === 1 || item === '1') return true;
+    // Returning installs: any existing notes means skip the first-run tour
+    try {
+      const notes = StorageManager.getNotes();
+      if (Array.isArray(notes) && notes.length > 0) {
+        markOnboardingCompleted();
+        return true;
+      }
+    } catch {
+      /* ignore */
+    }
     return false;
   } catch {
     return false;
