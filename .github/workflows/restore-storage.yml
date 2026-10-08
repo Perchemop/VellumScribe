@@ -1,5 +1,8 @@
 name: Restore storage.ts
 on:
+  push:
+    paths:
+      - '.github/workflows/restore-storage.yml'
   workflow_dispatch:
 jobs:
   restore:
