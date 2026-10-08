@@ -16,70 +16,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Restore and patch
+      - name: Restore storage.ts and patch boot retry
         run: |
           set -euo pipefail
-          git show 77eff17814857e80c358678f4a478a986fbbf020:src/App.tsx > src/App.tsx
-          git show 10874f76efa1618c1672051758c42b6e27b9765e:src/lib/cloudSync.ts > src/lib/cloudSync.ts
-
+          git show b5cbe3ea23f7d122eee654a3e71da656590897f9:src/lib/storage.ts > src/lib/storage.ts
           python3 << 'PY'
           from pathlib import Path
-
-          # App: SettingsView props
-          app = Path("src/App.tsx").read_text()
-          old = "<SettingsView activeSubtab={settingsSubtab} onSubtabChange={setSettingsSubtab} />"
-          new = """<SettingsView
-                initialSubtab={settingsSubtab}
-                onRefreshNotes={refreshData}
-                onBackToNotes={() => setActiveView('notes')}
-              />"""
-          if old in app:
-              app = app.replace(old, new, 1)
-              Path("src/App.tsx").write_text(app)
-              print("App props fixed")
-          assert "export default function App" in app
-          print("App bytes", Path("src/App.tsx").stat().st_size)
-
-          # cloudSync backoff
-          t = Path("src/lib/cloudSync.ts").read_text()
-          if "consecutiveFailures" not in t:
-              old = "// Process items sequentially\n      for (const item of [...queue]) {\n        try {"
-              new = "// Process items sequentially with exponential backoff after failures\n      let consecutiveFailures = 0;\n      for (const item of [...queue]) {\n        if (consecutiveFailures > 0) {\n          const delayMs = Math.min(30000, 1000 * Math.pow(2, consecutiveFailures - 1));\n          await new Promise((r) => setTimeout(r, delayMs));\n        }\n        try {"
-              if old not in t:
-                  raise SystemExit("cloudSync loop marker missing")
-              t = t.replace(old, new, 1)
-              t = t.replace(
-                  "successCount++;\n            this.removeFromSyncQueue(item.id);",
-                  "successCount++;\n            consecutiveFailures = 0;\n            this.removeFromSyncQueue(item.id);",
-                  1,
-              )
-              t = t.replace(
-                  "break; // Stop further queue attempts if network error occurs",
-                  "if (consecutiveFailures >= 3) break;\n          // was hard-stop; now limited retries with backoff",
-                  1,
-              )
-              # increment consecutiveFailures on failure paths
-              t = t.replace(
-                  "failedCount++;\n            item.attempts++;\n            item.lastError = 'Sync failed during queue execution';",
-                  "failedCount++;\n            consecutiveFailures++;\n            item.attempts++;\n            item.lastError = 'Sync failed during queue execution';",
-                  1,
-              )
-              t = t.replace(
-                  "failedCount++;\n          item.attempts++;\n          const errorMsg = e?.message || 'Network exception';",
-                  "failedCount++;\n          consecutiveFailures++;\n          item.attempts++;\n          const errorMsg = e?.message || 'Network exception';",
-                  1,
-              )
-              Path("src/lib/cloudSync.ts").write_text(t)
-              print("cloudSync backoff applied")
-          else:
-              print("cloudSync already has backoff")
-          print("cloudSync bytes", Path("src/lib/cloudSync.ts").stat().st_size)
+          path = Path('src/lib/storage.ts')
+          t = path.read_text()
+          old = """      } catch (err: any) {
+        AppLogger.error('StorageManager', 'Initialization failed', err);
+        throw err;
+      }"""
+          new = """      } catch (err: any) {
+        AppLogger.error('StorageManager', 'Initialization failed', err);
+        this.initPromise = null;
+        this.isInitialized = false;
+        throw err;
+      }"""
+          if old not in t:
+              raise SystemExit('storage.ts pattern not found')
+          path.write_text(t.replace(old, new, 1))
+          assert 'StorageManager' in t
+          print('storage restored', path.stat().st_size)
           PY
 
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/lib/cloudSync.ts
-          git commit -m "fix: restore App.tsx and cloudSync.ts with P-03/P-04/U-01" || exit 0
+          git add src/lib/storage.ts
+          git commit -m "fix(boot): restore storage.ts with init retry after failure" || exit 0
           git push
