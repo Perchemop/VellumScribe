@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Circle,
   MoreHorizontal,
+  Filter,
   FolderPlus,
   Share2,
   Copy,
@@ -658,85 +659,65 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         </div>
       )}
 
-      {/* Omni-Notes Core Mode Tabs (Pills) */}
+      {/* Compact filters: All + type filter + Archive + Trash */}
       <div className="px-3 py-1 shrink-0">
-        <div className="grid grid-cols-6 gap-1 text-xs font-medium bg-zinc-100 dark:bg-[#141418] rounded-xl p-1 border border-zinc-200/60 dark:border-zinc-800/60">
+        <div className="flex items-center gap-1.5 text-xs font-medium">
           <button
+            type="button"
             onClick={() => setActiveTab('all')}
-            title="All Notes"
-            aria-label="All Notes"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            aria-label="All notes"
+            className={`min-h-[40px] px-3 rounded-xl border transition-all ${
               activeTab === 'all'
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent'
+                : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
+            All
           </button>
-
+          <label className="relative flex-1 min-w-0">
+            <span className="sr-only">Filter</span>
+            <div className="flex items-center gap-1.5 min-h-[40px] px-2.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300">
+              <Filter className="w-3.5 h-3.5 shrink-0 opacity-60" />
+              <select
+                value={['checklist', 'sketch', 'reminders'].includes(activeTab) ? activeTab : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v) setActiveTab(v as NoteTabFilter);
+                  else setActiveTab('all');
+                }}
+                className="flex-1 bg-transparent text-xs font-medium focus:outline-none min-w-0"
+                aria-label="Filter notes"
+              >
+                <option value="">Type</option>
+                <option value="checklist">Lists</option>
+                <option value="sketch">Sketch</option>
+                <option value="reminders">Reminders</option>
+              </select>
+            </div>
+          </label>
           <button
-            onClick={() => setActiveTab('checklist')}
-            title="Checklists & To-Dos"
-            aria-label="Checklists"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-              activeTab === 'checklist'
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <CheckSquare className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTab('sketch')}
-            title="Sketches & Drawings"
-            aria-label="Sketches"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-              activeTab === 'sketch'
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <PenTool className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reminders')}
-            title="Reminders & Alarms"
-            aria-label="Reminders"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
-              activeTab === 'reminders'
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-          </button>
-
-          <button
+            type="button"
             onClick={() => setActiveTab('archived')}
-            title="Archive"
             aria-label="Archive"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl border transition-all ${
               activeTab === 'archived'
-                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent'
+                : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800'
             }`}
           >
-            <Archive className="w-3.5 h-3.5" />
+            <Archive className="w-4 h-4" />
           </button>
-
           <button
+            type="button"
             onClick={() => setActiveTab('trash')}
-            title="Trash / Recycle Bin"
             aria-label="Trash"
-            className={`min-h-[38px] py-1.5 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            className={`min-h-[40px] min-w-[40px] flex items-center justify-center rounded-xl border transition-all ${
               activeTab === 'trash'
-                ? 'bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 font-semibold shadow-2xs'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                ? 'bg-rose-600 text-white border-transparent'
+                : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800'
             }`}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -752,7 +733,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
               : 'bg-white/80 dark:bg-[#16161a] border border-zinc-200/60 dark:border-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
           }`}
         >
-          All Categories
+          All
         </button>
 
         {events.map((ev) => (

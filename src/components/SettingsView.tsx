@@ -198,7 +198,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [ollamaVerifyResult, setOllamaVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showAdvancedAi, setShowAdvancedAi] = useState(false); // Groq/Deepgram/Ollama hidden until expanded
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false); // permanently buried — Google only in simple AI
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
