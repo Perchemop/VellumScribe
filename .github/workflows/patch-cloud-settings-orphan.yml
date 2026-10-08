@@ -1,0 +1,54 @@
+name: Patch Cloud Settings Orphan
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/patch-cloud-settings-orphan.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Mount CloudSettingsPanel in SettingsView
+        run: |
+          set -euo pipefail
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path('src/components/SettingsView.tsx')
+          t = p.read_text()
+          changed = False
+          if "from './settings/CloudSettingsPanel'" not in t:
+              t = t.replace(
+                  "import { BackupPassphrasePanel } from './settings/BackupPassphrasePanel';",
+                  "import { CloudSettingsPanel } from './settings/CloudSettingsPanel';",
+                  1,
+              )
+              changed = True
+          if '<BackupPassphrasePanel' in t:
+              t = t.replace('<BackupPassphrasePanel />', '<CloudSettingsPanel />')
+              t = t.replace('<BackupPassphrasePanel/>', '<CloudSettingsPanel />')
+              t = t.replace('<BackupPassphrasePanel>', '<CloudSettingsPanel>')
+              t = t.replace('</BackupPassphrasePanel>', '</CloudSettingsPanel>')
+              changed = True
+          if changed:
+              p.write_text(t)
+              print('SettingsView updated')
+          else:
+              print('no changes needed')
+          assert "CloudSettingsPanel" in p.read_text()
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/SettingsView.tsx
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "fix(settings): mount CloudSettingsPanel (clears orphan check)"
+            git push
+          fi
