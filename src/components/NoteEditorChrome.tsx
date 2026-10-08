@@ -166,20 +166,6 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           {/* Quick Voice memo — always visible so users do not miss attach sheet */}
           <button
             type="button"
-            id="note-voice-quick-btn"
-            aria-label="Record voice memo"
-            title="Voice memo"
-            onClick={() => {
-              setShowMoreActionsSheet(false);
-              setShowAttachSheet(false);
-              setShowAudioStudioModal(true);
-            }}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <Mic className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
             id="note-attach-btn"
             aria-label="Add to note"
             aria-expanded={showAttachSheet}
