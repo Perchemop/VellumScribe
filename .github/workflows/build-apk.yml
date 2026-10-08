@@ -12,11 +12,11 @@ on:
       whisper_mode:
         description: 'Native Whisper build mode'
         required: true
-        default: 'stub'
+        default: 'real'
         type: choice
         options:
-          - stub
           - real
+          - stub
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: 'true'
@@ -100,11 +100,11 @@ jobs:
       - name: Configure Whisper STUB vs REAL
         id: whisper
         run: |
-          MODE="${{ github.event.inputs.whisper_mode || 'stub' }}"
+          MODE="${{ github.event.inputs.whisper_mode || 'real' }}"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - name: Apply STUB CMake flag when requested
-        if: ${{ (github.event.inputs.whisper_mode || 'stub') == 'stub' }}
+        if: ${{ (github.event.inputs.whisper_mode || 'real') == 'stub' }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
