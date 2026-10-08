@@ -22,11 +22,17 @@ import {
   NotesPageResult,
 } from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
-import { hashPin, verifyPin, encryptNotePayload, NotePayloadData } from './cryptoUtils';
+import {
+  hashPin,
+  verifyPin,
+  encryptNotePayload,
+  decryptNotePayload,
+  NotePayloadData,
+  generateSalt,
+} from './cryptoUtils';
 
 /**
  * StorageManager — SQLite gateway with in-memory caches for UI.
- * Full API surface expected by editor, settings, security, and tests.
  */
 export class StorageManager {
   private static get db() {
@@ -89,7 +95,6 @@ export class StorageManager {
     }
   }
 
-  // --- Preferences ---
   public static getItem<T = string>(key: string, fallback: T | null = null): T | null {
     try {
       const val = localStorage.getItem(key);
@@ -139,7 +144,6 @@ export class StorageManager {
     }
   }
 
-  // --- Events ---
   public static getEvents(): EventRecord[] {
     if (this.eventsCache !== null) return this.eventsCache;
     try {
@@ -182,7 +186,6 @@ export class StorageManager {
 
   public static deleteEvent(id: number): boolean {
     try {
-      // Move notes to General instead of cascade-delete
       const notes = this.getNotes().filter((n) => n.event_id === id);
       if (notes.length > 0) {
         let general = this.getEvents().find((e) => e.title.toLowerCase() === 'general' && e.id !== id);
@@ -204,7 +207,6 @@ export class StorageManager {
     }
   }
 
-  // --- Notes ---
   public static async getNotesPage(options: NotesPageOptions = {}): Promise<NotesPageResult> {
     try {
       return await NoteRepository.list(options);
@@ -328,7 +330,6 @@ export class StorageManager {
     return updated;
   }
 
-  /** Fast path for editor typing — title/body only. */
   public static updateNoteText(
     id: number,
     title?: string,
@@ -472,7 +473,8 @@ export class StorageManager {
       const n = this.getNoteById(id);
       if (!n || n.is_locked) continue;
       try {
-        this.setNotePinLock(n, pin);
+        // fire-and-forget sync path for batch
+        void this.setNotePinLock(id, pin);
         count++;
       } catch {
         /* skip */
@@ -492,34 +494,71 @@ export class StorageManager {
     return count;
   }
 
-  // --- Security / PIN ---
-  public static setNotePinLock(note: NoteRecord, pin: string): NoteRecord | null {
-    const salt = `salt_${note.id}_${Date.now()}`;
-    const pin_hash = hashPin(pin, salt);
-    const payload: NotePayloadData = {
+  /** Match NoteSecurityModal: setNotePinLock(noteId, pin, payload?, lockMode?, securityType?) */
+  public static async setNotePinLock(
+    noteOrId: NoteRecord | number,
+    pin: string,
+    currentPayload?: NotePayloadData,
+    lockMode: 'standard' | 'private' = 'standard',
+    securityType: 'pin' | 'passphrase' = 'pin'
+  ): Promise<NoteRecord | null> {
+    const note = typeof noteOrId === 'number' ? this.getNoteById(noteOrId) : noteOrId;
+    if (!note) return null;
+
+    const salt = generateSalt();
+    const { hash: pin_hash } = await hashPin(pin, salt);
+    const payload: NotePayloadData = currentPayload || {
       title: note.title || '',
       body: note.body || '',
       checklist_items: note.checklist_items || [],
     };
+
     let encrypted_payload: string | undefined;
     try {
-      encrypted_payload = encryptNotePayload(payload, pin);
+      encrypted_payload = await encryptNotePayload(payload, pin, salt);
     } catch (e) {
       AppLogger.warn('StorageManager', 'encryptNotePayload failed', e);
+      throw e;
     }
+
+    const clearTitle = lockMode === 'private';
     return this.updateNote(note.id, {
       is_locked: true,
-      lock_mode: note.lock_mode || 'standard',
-      security_type: 'pin',
+      lock_mode: lockMode,
+      security_type: securityType,
       pin_salt: salt,
       pin_hash,
       encrypted_payload,
-      title: note.lock_mode === 'private' ? '' : note.title,
-      body: note.lock_mode === 'private' ? '' : note.body,
+      title: clearTitle ? '' : payload.title || note.title,
+      body: clearTitle ? '' : '',
+      checklist_items: [],
     });
   }
 
-  public static removeNotePinLock(note: NoteRecord): NoteRecord | null {
+  /** Match NoteSecurityModal: removeNotePinLock(noteId, pin) */
+  public static async removeNotePinLock(
+    noteOrId: NoteRecord | number,
+    pin?: string
+  ): Promise<NoteRecord | null> {
+    const note = typeof noteOrId === 'number' ? this.getNoteById(noteOrId) : noteOrId;
+    if (!note) return null;
+
+    if (pin && note.is_locked) {
+      const verified = await this.verifyAndUnlockNote(note, pin);
+      if (!verified.success) return null;
+      if (verified.payload) {
+        return this.updateNote(note.id, {
+          is_locked: false,
+          pin_hash: undefined as any,
+          pin_salt: undefined as any,
+          encrypted_payload: undefined as any,
+          title: verified.payload.title || note.title,
+          body: verified.payload.body || '',
+          checklist_items: verified.payload.checklist_items || [],
+        });
+      }
+    }
+
     return this.updateNote(note.id, {
       is_locked: false,
       pin_hash: undefined as any,
@@ -531,7 +570,7 @@ export class StorageManager {
   public static async verifyAndUnlockNote(
     note: NoteRecord,
     pin: string
-  ): Promise<{ success: boolean; payload?: NotePayloadData; message?: string }> {
+  ): Promise<{ success: boolean; payload?: NotePayloadData; errorMessage?: string; message?: string }> {
     if (!note.is_locked) {
       return {
         success: true,
@@ -543,10 +582,20 @@ export class StorageManager {
       };
     }
     if (!note.pin_hash || !note.pin_salt) {
-      return { success: false, message: 'Note has no PIN credentials' };
+      return { success: false, errorMessage: 'Note has no PIN credentials' };
     }
-    const ok = verifyPin(pin, note.pin_salt, note.pin_hash);
-    if (!ok) return { success: false, message: 'Incorrect PIN' };
+    const ok = await verifyPin(pin, note.pin_hash, note.pin_salt);
+    if (!ok) return { success: false, errorMessage: 'Incorrect PIN' };
+
+    if (note.encrypted_payload) {
+      try {
+        const payload = await decryptNotePayload(note.encrypted_payload, pin, note.pin_salt);
+        if (payload) return { success: true, payload };
+      } catch (e) {
+        AppLogger.warn('StorageManager', 'decrypt failed', e);
+      }
+    }
+
     return {
       success: true,
       payload: {
@@ -570,13 +619,10 @@ export class StorageManager {
     });
   }
 
-  public static lockNoteTransactionally(noteId: number, pin: string): NoteRecord | null {
-    const n = this.getNoteById(noteId);
-    if (!n) return null;
-    return this.setNotePinLock(n, pin);
+  public static async lockNoteTransactionally(noteId: number, pin: string): Promise<NoteRecord | null> {
+    return this.setNotePinLock(noteId, pin);
   }
 
-  // --- Revisions ---
   public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
     try {
       return typeof (SqliteRepository as any).getNoteRevisions === 'function'
@@ -594,7 +640,6 @@ export class StorageManager {
     return this.updateNote(noteId, { title: target.title, body: target.body });
   }
 
-  // --- Media: recordings / OCR / transcripts ---
   public static getRecordings(): RecordingRecord[] {
     if (this.recordingsCache) return this.recordingsCache;
     try {
@@ -612,11 +657,8 @@ export class StorageManager {
     return this.getRecordings().filter((r) => r.note_id === noteId);
   }
 
-  public static addRecording(rec: Omit<RecordingRecord, 'id'> & { id?: string }): RecordingRecord {
-    const row = {
-      ...rec,
-      id: rec.id || `rec_${Date.now()}`,
-    } as RecordingRecord;
+  public static addRecording(rec: any): any {
+    const row = { ...rec, id: rec.id ?? Date.now() };
     try {
       if (typeof (SqliteRepository as any).saveRecording === 'function') {
         (SqliteRepository as any).saveRecording(row);
@@ -628,7 +670,7 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteRecording(id: string): void {
+  public static deleteRecording(id: string | number): void {
     try {
       if (typeof (SqliteRepository as any).deleteRecording === 'function') {
         (SqliteRepository as any).deleteRecording(id);
@@ -652,12 +694,12 @@ export class StorageManager {
     return this.transcriptsCache ?? [];
   }
 
-  public static getTranscriptForRecording(recordingId: string): TranscriptRecord | undefined {
-    return this.getTranscripts().find((t) => t.recording_id === recordingId);
+  public static getTranscriptForRecording(recordingId: string | number): TranscriptRecord | undefined {
+    return this.getTranscripts().find((t) => String(t.recording_id) === String(recordingId));
   }
 
-  public static addTranscript(t: Omit<TranscriptRecord, 'id'> & { id?: string }): TranscriptRecord {
-    const row = { ...t, id: t.id || `tr_${Date.now()}` } as TranscriptRecord;
+  public static addTranscript(t: any): any {
+    const row = { ...t, id: t.id ?? Date.now() };
     try {
       if (typeof (SqliteRepository as any).saveTranscript === 'function') {
         (SqliteRepository as any).saveTranscript(row);
@@ -686,8 +728,8 @@ export class StorageManager {
     return this.getOcrScans().filter((s) => s.note_id === noteId);
   }
 
-  public static addOcrScan(scan: Omit<OcrScanRecord, 'id'> & { id?: string }): OcrScanRecord {
-    const row = { ...scan, id: scan.id || `ocr_${Date.now()}` } as OcrScanRecord;
+  public static addOcrScan(scan: any): any {
+    const row = { ...scan, id: scan.id ?? Date.now() };
     try {
       if (typeof (SqliteRepository as any).saveOcrScan === 'function') {
         (SqliteRepository as any).saveOcrScan(row);
@@ -699,7 +741,7 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteOcrScan(id: string): void {
+  public static deleteOcrScan(id: string | number): void {
     try {
       if (typeof (SqliteRepository as any).deleteOcrScan === 'function') {
         (SqliteRepository as any).deleteOcrScan(id);
@@ -710,7 +752,6 @@ export class StorageManager {
     this.ocrScansCache = null;
   }
 
-  // --- Sync conflicts ---
   public static getSyncConflicts(status: 'open' | 'resolved' | 'ignored' = 'open'): SyncConflictRecord[] {
     try {
       return typeof (SqliteRepository as any).getSyncConflicts === 'function'
@@ -731,7 +772,6 @@ export class StorageManager {
     }
   }
 
-  // --- Stats / maintenance ---
   public static getSqliteStats(): SqliteStats {
     try {
       if (typeof (SqliteRepository as any).getStats === 'function') {
@@ -761,22 +801,47 @@ export class StorageManager {
     recordings: number;
     ocrScans: number;
     approximateBytes: number;
+    totalNotes: number;
+    totalRecordings: number;
+    activeNotes: number;
+    archivedNotes: number;
   } {
     const s = this.getSqliteStats();
+    const notes = this.getNotes();
     return {
       notes: s.notesCount,
       events: s.eventsCount,
       recordings: s.recordingsCount,
       ocrScans: s.ocrScansCount,
       approximateBytes: s.databaseSizeBytes,
+      totalNotes: notes.length,
+      totalRecordings: s.recordingsCount,
+      activeNotes: notes.filter((n) => !n.status || n.status === 'active').length,
+      archivedNotes: notes.filter((n) => n.status === 'archived').length,
     };
   }
 
-  public static async checkDatabaseIntegrity(): Promise<{ ok: boolean; result: string }> {
+  public static async checkDatabaseIntegrity(): Promise<{
+    ok: boolean;
+    result: string;
+    status: 'ok' | 'corrupted';
+    details: string;
+  }> {
     try {
-      return await this.db.checkIntegrity();
+      const r = await this.db.checkIntegrity();
+      return {
+        ok: r.ok,
+        result: r.result,
+        status: r.ok ? 'ok' : 'corrupted',
+        details: r.result,
+      };
     } catch (e: any) {
-      return { ok: false, result: e?.message || 'integrity check failed' };
+      return {
+        ok: false,
+        result: e?.message || 'integrity check failed',
+        status: 'corrupted',
+        details: e?.message || 'integrity check failed',
+      };
     }
   }
 
@@ -792,16 +857,16 @@ export class StorageManager {
     }
   }
 
-  public static async cleanOrphanedMedia(): Promise<number> {
-    // Best-effort no-op if repo helper missing
+  public static async cleanOrphanedMedia(): Promise<{ cleanedCount: number } | number> {
     try {
       if (typeof (SqliteRepository as any).cleanOrphanedMedia === 'function') {
-        return await (SqliteRepository as any).cleanOrphanedMedia();
+        const n = await (SqliteRepository as any).cleanOrphanedMedia();
+        return typeof n === 'number' ? { cleanedCount: n } : n;
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'cleanOrphanedMedia failed', e);
     }
-    return 0;
+    return { cleanedCount: 0 };
   }
 
   public static getLastDurableSaveTime(): number | null {
@@ -837,7 +902,6 @@ export class StorageManager {
     }
   }
 
-  // --- Search ---
   public static searchNotes(options: SearchOptions): SearchResult {
     try {
       if (typeof (SqliteRepository as any).searchNotes === 'function') {
@@ -861,7 +925,6 @@ export class StorageManager {
     return { notes: notes.slice(offset, offset + limit), totalCount: notes.length };
   }
 
-  // --- Backup / export / import ---
   public static exportSqliteBinary(): Uint8Array {
     try {
       if (this.db.exportBinary) return this.db.exportBinary();
@@ -916,12 +979,16 @@ export class StorageManager {
     return this.importFullDump(json);
   }
 
-  public static exportCloudBackupArchive(): string {
-    return this.exportFullDump();
+  public static exportCloudBackupArchive(): Blob {
+    return new Blob([this.exportFullDump()], { type: 'application/json' });
   }
 
-  public static importCloudBackupArchive(payload: string): { success: boolean; error?: string } {
-    return this.importFullDump(payload);
+  public static importCloudBackupArchive(
+    payload: string | Blob,
+    _opts?: unknown
+  ): { success: boolean; error?: string } {
+    if (typeof payload === 'string') return this.importFullDump(payload);
+    return { success: false, error: 'Async blob import not supported in sync path' };
   }
 
   public static exportCloudBackup(): string {
@@ -938,9 +1005,7 @@ export class StorageManager {
       .join('\n\n---\n\n');
   }
 
-  public static importLegacyUnencryptedBackup(
-    json: string
-  ): { success: boolean; error?: string } {
+  public static importLegacyUnencryptedBackup(json: string): { success: boolean; error?: string } {
     return this.importFullDump(json);
   }
 
