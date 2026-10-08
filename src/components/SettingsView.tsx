@@ -686,10 +686,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Speech &amp; AI Intelligence</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500" title="Offline-First Active" />
+          <span>AI</span>
         </button>
-        )}
 
         <button
           id="subtab-storage-btn"
@@ -706,7 +704,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <HardDrive className="w-4 h-4" />
           <span>Storage</span>
         </button>
-        )}
 
         <button
           id="subtab-security-btn"
