@@ -5,8 +5,11 @@ import {
 } from '../types';
 import { StorageManager } from '../lib/storage';
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 interface AppContextValue {
-  // State
   events: EventRecord[];
   notes: NoteRecord[];
   selectedEventId: number | null;
@@ -22,7 +25,6 @@ interface AppContextValue {
   showToast: (msg: string, action?: { label: string; onClick: () => void }) => void;
   dismissToast: () => void;
 
-  // Setters
   setSelectedEventId: (id: number | null) => void;
   setSelectedNoteId: (id: number | null) => void;
   setActiveView: (view: 'all' | 'recent' | 'archive' | 'trash' | 'tag' | 'security_log' | 'version_history') => void;
@@ -31,7 +33,6 @@ interface AppContextValue {
   setFilterType: (f: 'all' | 'text' | 'checklist' | 'sketch') => void;
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
 
-  // Data Actions
   refreshData: () => void;
   createEvent: (title: string) => EventRecord;
   updateEvent: (id: number, updates: Partial<EventRecord>) => void;
@@ -48,11 +49,13 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [events, setEvents] = useState<EventRecord[]>(() => StorageManager.getEvents());
-  const [notes, setNotes] = useState<NoteRecord[]>(() => StorageManager.getNotes());
+  const [events, setEvents] = useState<EventRecord[]>(() => asArray(StorageManager.getEvents()));
+  const [notes, setNotes] = useState<NoteRecord[]>(() => asArray(StorageManager.getNotes()));
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null);
-  const [activeView, setActiveView] = useState<'all' | 'recent' | 'archive' | 'trash' | 'tag' | 'security_log' | 'version_history'>('all');
+  const [activeView, setActiveView] = useState<
+    'all' | 'recent' | 'archive' | 'trash' | 'tag' | 'security_log' | 'version_history'
+  >('all');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'checklist' | 'sketch'>('all');
@@ -82,7 +85,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 4500);
   }, []);
 
-  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
   const [darkMode, setDarkModeState] = useState<boolean>(() => {
     try {
@@ -106,13 +111,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
-
   const refreshData = useCallback(() => {
-    setEvents(StorageManager.getEvents());
-    setNotes(StorageManager.getNotes());
+    setEvents(asArray(StorageManager.getEvents()));
+    setNotes(asArray(StorageManager.getNotes()));
   }, []);
 
-  // Online / Offline listener
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -131,7 +134,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [showToast]);
 
-  // Dark mode class sync on DOM root
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -140,99 +142,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [darkMode]);
 
-  const createEvent = useCallback((title: string): EventRecord => {
-    const newEv = StorageManager.addEvent({
-      title: title.trim(),
-      event_date: new Date().toISOString().slice(0, 10),
-    });
-    setEvents(StorageManager.getEvents());
-    showToast(`Category "${title.trim()}" created`);
-    return newEv;
-  }, [showToast]);
-
-  const updateEvent = useCallback((id: number, updates: Partial<EventRecord>) => {
-    StorageManager.updateEvent(id, updates);
-    setEvents(StorageManager.getEvents());
-    showToast('Event updated.');
-  }, [showToast]);
-
-  const deleteEvent = useCallback((id: number) => {
-    StorageManager.deleteEvent(id);
-    refreshData();
-    if (selectedEventId === id) setSelectedEventId(null);
-    showToast('Category and its notes removed.');
-  }, [refreshData, selectedEventId, showToast]);
-
-  const createNote = useCallback((params?: Partial<NoteRecord>): NoteRecord => {
-    const targetEventId = params?.event_id ?? selectedEventId ?? (events[0]?.id || 1);
-    try {
-      const newNote = StorageManager.addNote({
-        event_id: targetEventId,
-        title: params?.title || '',
-        body: params?.body || '',
-        note_type: params?.note_type || 'text',
-        checklist_items: params?.checklist_items || [],
-        tags: params?.tags || [],
-        created_at: new Date().toISOString(),
+  const createEvent = useCallback(
+    (title: string): EventRecord => {
+      const newEv = StorageManager.addEvent({
+        title: title.trim(),
+        event_date: new Date().toISOString().slice(0, 10),
       });
-      setNotes(StorageManager.getNotes());
-      setSelectedNoteId(newNote.id);
-      showToast('New note created.');
-      return newNote;
-    } catch (e: any) {
-      console.error('Failed to create note:', e);
-      showToast(`Storage Error: ${e.message}`);
-      throw e;
-    }
-  }, [events, selectedEventId, showToast]);
+      setEvents(asArray(StorageManager.getEvents()));
+      showToast(`Category "${title.trim()}" created`);
+      return newEv;
+    },
+    [showToast]
+  );
+
+  const updateEvent = useCallback(
+    (id: number, updates: Partial<EventRecord>) => {
+      StorageManager.updateEvent(id, updates);
+      setEvents(asArray(StorageManager.getEvents()));
+      showToast('Event updated.');
+    },
+    [showToast]
+  );
+
+  const deleteEvent = useCallback(
+    (id: number) => {
+      StorageManager.deleteEvent(id);
+      refreshData();
+      if (selectedEventId === id) setSelectedEventId(null);
+      showToast('Category and its notes removed.');
+    },
+    [refreshData, selectedEventId, showToast]
+  );
+
+  const createNote = useCallback(
+    (params?: Partial<NoteRecord>): NoteRecord => {
+      const targetEventId = params?.event_id ?? selectedEventId ?? (events[0]?.id || 1);
+      try {
+        const newNote = StorageManager.addNote({
+          event_id: targetEventId,
+          title: params?.title || '',
+          body: params?.body || '',
+          note_type: params?.note_type || 'text',
+          checklist_items: params?.checklist_items || [],
+          tags: params?.tags || [],
+          created_at: new Date().toISOString(),
+        });
+        setNotes(asArray(StorageManager.getNotes()));
+        setSelectedNoteId(newNote.id);
+        showToast('New note created.');
+        return newNote;
+      } catch (e: any) {
+        console.error('Failed to create note:', e);
+        showToast(`Storage Error: ${e.message}`);
+        throw e;
+      }
+    },
+    [events, selectedEventId, showToast]
+  );
 
   const updateNote = useCallback((id: number, updates: Partial<NoteRecord>): NoteRecord | null => {
     const updated = StorageManager.updateNote(id, updates);
     if (updated) {
-      setNotes(StorageManager.getNotes());
+      setNotes(asArray(StorageManager.getNotes()));
     }
     return updated;
   }, []);
 
-  const deleteNote = useCallback((id: number) => {
-    StorageManager.deleteNote(id);
-    setNotes(StorageManager.getNotes());
-    if (selectedNoteId === id) setSelectedNoteId(null);
-    showToast('Note deleted.');
-  }, [selectedNoteId, showToast]);
+  const deleteNote = useCallback(
+    (id: number) => {
+      StorageManager.deleteNote(id);
+      setNotes(asArray(StorageManager.getNotes()));
+      if (selectedNoteId === id) setSelectedNoteId(null);
+      showToast('Note deleted.');
+    },
+    [selectedNoteId, showToast]
+  );
 
-  const archiveNote = useCallback((id: number) => {
-    StorageManager.archiveNote(id);
-    setNotes(StorageManager.getNotes());
-    if (selectedNoteId === id) setSelectedNoteId(null);
-    showToast('Note moved to Archive.');
-  }, [selectedNoteId, showToast]);
+  const archiveNote = useCallback(
+    (id: number) => {
+      StorageManager.archiveNote(id);
+      setNotes(asArray(StorageManager.getNotes()));
+      if (selectedNoteId === id) setSelectedNoteId(null);
+      showToast('Note moved to Archive.');
+    },
+    [selectedNoteId, showToast]
+  );
 
-  const unarchiveNote = useCallback((id: number) => {
-    StorageManager.unarchiveNote(id);
-    setNotes(StorageManager.getNotes());
-    showToast('Note restored to active.');
-  }, [showToast]);
+  const unarchiveNote = useCallback(
+    (id: number) => {
+      StorageManager.unarchiveNote(id);
+      setNotes(asArray(StorageManager.getNotes()));
+      showToast('Note restored to active.');
+    },
+    [showToast]
+  );
 
-  const trashNote = useCallback((id: number) => {
-    StorageManager.trashNote(id);
-    setNotes(StorageManager.getNotes());
-    if (selectedNoteId === id) setSelectedNoteId(null);
-    showToast('Note moved to Trash.', {
-      label: 'Undo',
-      onClick: () => {
-        StorageManager.restoreNote(id);
-        setNotes(StorageManager.getNotes());
-        setSelectedNoteId(id);
-      },
-    });
-  }, [selectedNoteId, showToast]);
+  const trashNote = useCallback(
+    (id: number) => {
+      StorageManager.trashNote(id);
+      setNotes(asArray(StorageManager.getNotes()));
+      if (selectedNoteId === id) setSelectedNoteId(null);
+      showToast('Note moved to Trash.', {
+        label: 'Undo',
+        onClick: () => {
+          StorageManager.restoreNote(id);
+          setNotes(asArray(StorageManager.getNotes()));
+          setSelectedNoteId(id);
+        },
+      });
+    },
+    [selectedNoteId, showToast]
+  );
 
-  const restoreNote = useCallback((id: number) => {
-    StorageManager.restoreNote(id);
-    setNotes(StorageManager.getNotes());
-    showToast('Note restored to active.');
-  }, [showToast]);
+  const restoreNote = useCallback(
+    (id: number) => {
+      StorageManager.restoreNote(id);
+      setNotes(asArray(StorageManager.getNotes()));
+      showToast('Note restored to active.');
+    },
+    [showToast]
+  );
 
   const value = useMemo<AppContextValue>(
     () => ({
