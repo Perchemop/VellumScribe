@@ -309,7 +309,7 @@ export class TranscriptionOrchestrator {
     input: TranscriptionInput,
     options: TranscriptionOptions = {}
   ): Promise<TranscriptionResult> {
-    const policy: TranscriptionPolicy = options.policy || 'local_first';
+    const policy: TranscriptionPolicy = options.policy || 'offline_only';
 
     let recording: RecordingRecord | null = null;
     if (input.recordingId) {

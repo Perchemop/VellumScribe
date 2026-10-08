@@ -142,7 +142,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       refreshRecordings();
       if (result.recording) {
         setImportStatus('Transcribing…');
-        const policy = PrivacyManager.isNetworkAllowed() ? 'local_first' : 'offline_only';
+        const policy = 'offline_only';
         try {
           const tr = await TranscriptionOrchestrator.getInstance().orchestrate(
             {

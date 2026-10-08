@@ -58,13 +58,13 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           setInferenceReady(ready);
           setEngineLabel(
             ready
-              ? 'On-device Whisper ready'
-              : 'Live dictation + offline fallback (Whisper runtime not ready)'
+              ? 'On-device'
+              : 'Microphone only'
           );
         })
         .catch(() => {
           setInferenceReady(false);
-          setEngineLabel('Live dictation + offline fallback');
+          setEngineLabel('Microphone');
         });
     } else {
       handleCleanup();
@@ -133,7 +133,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         const controller = new AbortController();
         abortRef.current = controller;
 
-        const policy = PrivacyManager.isNetworkAllowed() ? 'local_first' : 'offline_only';
+        const policy = 'offline_only';
 
         try {
           const orchestrator = TranscriptionOrchestrator.getInstance();
@@ -221,7 +221,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
             </div>
             <div>
               <h3 className="font-semibold text-sm text-stone-900 dark:text-stone-100">
-                {transcribing ? 'Transcribing' : 'Record Audio Memo'}
+                {transcribing ? 'Transcribing' : 'Recording'}
               </h3>
               <span className="text-[11px] text-stone-500">{engineLabel}</span>
             </div>
@@ -287,7 +287,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 className="w-full p-3 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs text-stone-700 dark:text-stone-300 max-h-24 overflow-y-auto"
               >
                 <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block mb-1">
-                  Live dictation (device speech recognizer)
+                  Live
                 </span>
                 <p className="italic">{liveTranscript}</p>
               </div>
@@ -320,7 +320,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 className="px-6 py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-medium text-xs flex items-center gap-2 shadow-lg shadow-red-600/20 transition-all hover:scale-102"
               >
                 <Square className="w-4 h-4 fill-current" />
-                Stop & Transcribe
+                Stop
               </button>
             </div>
           </div>
