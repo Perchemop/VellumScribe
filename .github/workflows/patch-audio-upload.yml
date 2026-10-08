@@ -1,0 +1,326 @@
+name: Patch Audio Upload
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/patch-audio-upload.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add importAudioFile + wire upload UI
+        run: |
+          set -euo pipefail
+          python3 << 'PY'
+          from pathlib import Path
+
+          # --- 1) AudioRecordingManager.importAudioFile ---
+          arm = Path('src/services/AudioRecordingManager.ts')
+          t = arm.read_text()
+          if 'importAudioFile' not in t:
+              method = r'''
+  /**
+   * Import a pre-recorded audio file (mp3/wav/m4a/webm/ogg), persist as a Recording,
+   * and return a result suitable for TranscriptionOrchestrator.
+   */
+  public async importAudioFile(
+    noteId: number,
+    file: File | Blob,
+    originalName?: string,
+    onProgress?: (percent: number, status: string) => void
+  ): Promise<RecordedAudioResult> {
+    onProgress?.(5, 'Reading audio file…');
+    const mimeType = (file as File).type || 'audio/mpeg';
+    let finalBlob: Blob = file;
+    let wasConverted = false;
+    let pcmWavBlob: Blob | undefined;
+
+    try {
+      onProgress?.(20, 'Converting to 16kHz mono WAV for transcription…');
+      pcmWavBlob = await this.convertTo16kHzMonoWavAsync(file, (pct) => {
+        onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
+      });
+      if (pcmWavBlob && pcmWavBlob.size > 0) {
+        finalBlob = pcmWavBlob;
+        wasConverted = true;
+      }
+    } catch (e) {
+      AppLogger.warn('AudioRecordingManager', 'Import WAV conversion fallback to original file', e);
+    }
+
+    onProgress?.(70, 'Computing checksum…');
+    const arrayBuffer = await finalBlob.arrayBuffer();
+    const checksum = await this.calculateSha256(arrayBuffer);
+    const base64 = await this.blobToBase64(finalBlob);
+
+    // Estimate duration from decoded audio when possible
+    let durationSeconds = 1;
+    let durationMs = 1000;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        durationSeconds = Math.max(1, Math.round(decoded.duration));
+        durationMs = Math.round(decoded.duration * 1000);
+        await ctx.close();
+      }
+    } catch {
+      /* keep defaults */
+    }
+
+    onProgress?.(85, 'Saving to on-device storage…');
+    const ext = wasConverted ? 'wav' : ((originalName || (file as File).name || 'audio').split('.').pop() || 'bin');
+    const mediaKey = `${generatePrefixedId('imp')}.${ext}`;
+    const fileName = originalName || (file as File).name || `import_${Date.now()}.${ext}`;
+    await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type || mimeType, noteId);
+
+    const recording = RecordingRepository.save({
+      note_id: noteId,
+      file_path: fileName,
+      media_key: mediaKey,
+      duration_seconds: durationSeconds,
+      duration_ms: durationMs,
+      file_size: finalBlob.size,
+      sample_rate: wasConverted ? 16000 : undefined,
+      channels: wasConverted ? 1 : undefined,
+      checksum,
+      mime_type: finalBlob.type || mimeType,
+      status: 'ready',
+    });
+
+    onProgress?.(100, 'Import complete');
+    return {
+      recording,
+      blob: finalBlob,
+      base64,
+      durationSeconds,
+      durationMs,
+      fileSizeBytes: finalBlob.size,
+      mimeType: finalBlob.type || mimeType,
+      checksum,
+      wavBlob: pcmWavBlob,
+      wasConverted,
+    };
+  }
+
+'''
+              # insert before private cleanup
+              marker = '  private cleanup(): void {'
+              if marker not in t:
+                  raise SystemExit('cleanup marker missing')
+              t = t.replace(marker, method + marker, 1)
+              arm.write_text(t)
+              print('importAudioFile added')
+          else:
+              print('importAudioFile already present')
+
+          # --- 2) NoteEditorChrome: remove quick mic, add Upload menu item ---
+          chrome = Path('src/components/NoteEditorChrome.tsx')
+          c = chrome.read_text()
+          # Remove quick voice toolbar button block if present
+          import re
+          c2 = re.sub(
+              r'\s*/\* Quick Voice memo[\s\S]*?id="note-voice-quick-btn"[\s\S]*?</button>\n',
+              '\n',
+              c,
+              count=1,
+          )
+          if c2 == c:
+              # alternate pattern
+              c2 = re.sub(
+                  r'\s*\{}/\* Quick Voice[\s\S]*?note-voice-quick-btn[\s\S]*?</button>\n',
+                  '\n',
+                  c,
+                  count=1,
+              )
+          c = c2
+          # Ensure Upload icon imported
+          if 'Upload' not in c.split('from \'lucide-react\'')[0]:
+              c = c.replace(
+                  '  Camera,\n',
+                  '  Camera,\n  Upload,\n',
+                  1,
+              )
+          if 'Upload audio' not in c and 'id="note-upload-audio-btn"' not in c:
+              # Insert after Voice memo button
+              voice_btn_end = '''              <button type="button" className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]" onClick={() => { setShowAttachSheet(false); setShowAudioStudioModal(true); }}>
+                <Mic className="w-5 h-5 text-zinc-500" />
+                <span>Voice memo / recording</span>
+              </button>'''
+              upload_btn = voice_btn_end + '''
+              <button type="button" id="note-upload-audio-btn" className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]" onClick={() => { setShowAttachSheet(false); (window as any).__vellumScribePickAudio?.(); }}>
+                <Upload className="w-5 h-5 text-zinc-500" />
+                <span>Upload audio to transcribe</span>
+              </button>'''
+              if voice_btn_end in c:
+                  c = c.replace(voice_btn_end, upload_btn, 1)
+              else:
+                  # older shorter label
+                  old = '''              <button type="button" className="w-full px-4 py-3 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm" onClick={() => { setShowAttachSheet(false); setShowAudioStudioModal(true); }}>
+                <Mic className="w-5 h-5 text-zinc-500" /><span>Voice memo</span>
+              </button>'''
+                  new = '''              <button type="button" className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]" onClick={() => { setShowAttachSheet(false); setShowAudioStudioModal(true); }}>
+                <Mic className="w-5 h-5 text-zinc-500" /><span>Voice memo</span>
+              </button>
+              <button type="button" id="note-upload-audio-btn" className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]" onClick={() => { setShowAttachSheet(false); (window as any).__vellumScribePickAudio?.(); }}>
+                <Upload className="w-5 h-5 text-zinc-500" /><span>Upload audio to transcribe</span>
+              </button>'''
+                  if old in c:
+                      c = c.replace(old, new, 1)
+                  else:
+                      print('WARNING: voice button pattern not found for upload insert')
+          chrome.write_text(c)
+          print('chrome updated')
+
+          # --- 3) NoteEditorWriteFirst: hidden file input + import+transcribe ---
+          ne = Path('src/components/NoteEditorWriteFirst.tsx')
+          n = ne.read_text()
+          if 'AudioRecordingManager' not in n:
+              n = n.replace(
+                  "import { StorageManager } from '../lib/storage';",
+                  "import { StorageManager } from '../lib/storage';\nimport { AudioRecordingManager } from '../services/AudioRecordingManager';\nimport { TranscriptionOrchestrator } from '../services/TranscriptionOrchestrator';\nimport { PrivacyManager } from '../lib/privacyManager';",
+                  1,
+              )
+              # PrivacyManager may already be imported
+              if n.count("from '../lib/privacyManager'") > 1:
+                  # leave as is; duplicate import is bad
+                  parts = n.split("import { PrivacyManager } from '../lib/privacyManager';")
+                  if len(parts) > 2:
+                      n = parts[0] + "import { PrivacyManager } from '../lib/privacyManager';" + ''.join(parts[1:]).replace("import { PrivacyManager } from '../lib/privacyManager';", '', 1)
+
+          if 'audioFileInputRef' not in n:
+              n = n.replace(
+                  '  const debounceTimerRef = useRef<number | null>(null);',
+                  '''  const debounceTimerRef = useRef<number | null>(null);
+  const audioFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImportingAudio, setIsImportingAudio] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);''',
+                  1,
+              )
+
+          if 'handleUploadAudioFile' not in n:
+              helper = r'''
+  const handleUploadAudioFile = async (file: File) => {
+    if (!file) return;
+    setIsImportingAudio(true);
+    setImportStatus('Importing audio…');
+    try {
+      const mgr = new AudioRecordingManager();
+      const result = await mgr.importAudioFile(note.id, file, file.name, (pct, status) => {
+        setImportStatus(status || `Importing… ${pct}%`);
+      });
+      refreshRecordings();
+      if (result.recording) {
+        setImportStatus('Transcribing…');
+        const policy = PrivacyManager.isNetworkAllowed() ? 'local_first' : 'offline_only';
+        try {
+          const tr = await TranscriptionOrchestrator.getInstance().orchestrate(
+            {
+              recordingId: result.recording.id,
+              noteId: note.id,
+              audioBlob: result.blob,
+              mediaKey: result.recording.media_key,
+              mimeType: result.mimeType,
+              durationSeconds: result.durationSeconds,
+            },
+            {
+              policy,
+              onProgress: (p) => setImportStatus(p.status || `Transcribing… ${p.percent}%`),
+            }
+          );
+          if (tr?.transcript) {
+            const newBody = body ? `${body}\n\n${tr.transcript}` : tr.transcript;
+            setBody(newBody);
+            persistText(title, newBody);
+          }
+        } catch (txErr: any) {
+          setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
+          setShowRecoverySheet(true);
+        }
+      }
+      const refreshed = StorageManager.getNoteById(note.id);
+      if (refreshed) onNoteUpdated(refreshed);
+      refreshRecordings();
+      setImportStatus(null);
+    } catch (e: any) {
+      setImportStatus(e?.message || 'Could not import audio file');
+    } finally {
+      setIsImportingAudio(false);
+      setTimeout(() => setImportStatus(null), 4000);
+    }
+  };
+
+  useEffect(() => {
+    (window as any).__vellumScribePickAudio = () => {
+      audioFileInputRef.current?.click();
+    };
+    return () => {
+      try {
+        delete (window as any).__vellumScribePickAudio;
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
+
+'''
+              n = n.replace(
+                  '  const refreshRecordings = () => {
+',
+                  helper + '  const refreshRecordings = () => {
+',
+                  1,
+              )
+
+          if 'id="note-audio-file-input"' not in n:
+              # inject hidden input near top of return
+              needle = '    <div\n      id="note-editor-container"'
+              inject = '''    <>
+      <input
+        id="note-audio-file-input"
+        ref={audioFileInputRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void handleUploadAudioFile(f);
+        }}
+      />
+      {importStatus && (
+        <div className="px-4 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shrink-0">
+          {isImportingAudio ? importStatus : importStatus}
+        </div>
+      )}
+'''
+              # Actually wrap is messy; put input as first child inside container
+              n = n.replace(
+                  '    <div\n      id="note-editor-container"\n      className="h-full flex flex-col bg-white dark:bg-[#0c0c0e] overflow-hidden select-text relative"\n    >',
+                  '    <div\n      id="note-editor-container"\n      className="h-full flex flex-col bg-white dark:bg-[#0c0c0e] overflow-hidden select-text relative"\n    >\n      <input\n        id="note-audio-file-input"\n        ref={audioFileInputRef}\n        type="file"\n        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"\n        className="hidden"\n        onChange={(e) => {\n          const f = e.target.files?.[0];\n          e.target.value = \'\';\n          if (f) void handleUploadAudioFile(f);\n        }}\n      />\n      {importStatus && (\n        <div role="status" className="px-4 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shrink-0">\n          {importStatus}\n        </div>\n      )}',
+                  1,
+              )
+
+          ne.write_text(n)
+          print('NoteEditorWriteFirst patched')
+          print('done')
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/services/AudioRecordingManager.ts src/components/NoteEditorChrome.tsx src/components/NoteEditorWriteFirst.tsx
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "feat(audio): upload pre-recorded file + transcribe; drop extra mic toolbar button"
+            git push
+          fi
