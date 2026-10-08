@@ -470,6 +470,91 @@ export class AudioRecordingManager {
     });
   }
 
+
+  /**
+   * Import a pre-recorded audio file and persist as a Recording for transcription.
+   */
+  public async importAudioFile(
+    noteId: number,
+    file: File | Blob,
+    originalName?: string,
+    onProgress?: (percent: number, status: string) => void
+  ): Promise<RecordedAudioResult> {
+    onProgress?.(5, 'Reading audio file…');
+    const mimeType = (file as File).type || 'audio/mpeg';
+    let finalBlob: Blob = file;
+    let wasConverted = false;
+    let pcmWavBlob: Blob | undefined;
+
+    try {
+      onProgress?.(20, 'Converting to 16kHz mono WAV…');
+      pcmWavBlob = await this.convertTo16kHzMonoWavAsync(file, (pct) => {
+        onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
+      });
+      if (pcmWavBlob && pcmWavBlob.size > 0) {
+        finalBlob = pcmWavBlob;
+        wasConverted = true;
+      }
+    } catch (e) {
+      AppLogger.warn('AudioRecordingManager', 'Import WAV conversion fallback', e);
+    }
+
+    onProgress?.(70, 'Computing checksum…');
+    const arrayBuffer = await finalBlob.arrayBuffer();
+    const checksum = await this.calculateSha256(arrayBuffer);
+    const base64 = await this.blobToBase64(finalBlob);
+
+    let durationSeconds = 1;
+    let durationMs = 1000;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        durationSeconds = Math.max(1, Math.round(decoded.duration));
+        durationMs = Math.round(decoded.duration * 1000);
+        await ctx.close();
+      }
+    } catch {
+      /* defaults */
+    }
+
+    onProgress?.(85, 'Saving to on-device storage…');
+    const nameHint = originalName || (file as File).name || 'audio';
+    const ext = wasConverted ? 'wav' : (nameHint.split('.').pop() || 'bin');
+    const mediaKey = `${generatePrefixedId('imp')}.${ext}`;
+    const fileName = nameHint.includes('.') ? nameHint : `import_${Date.now()}.${ext}`;
+    await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type || mimeType, noteId);
+
+    const recording = RecordingRepository.save({
+      note_id: noteId,
+      file_path: fileName,
+      media_key: mediaKey,
+      duration_seconds: durationSeconds,
+      duration_ms: durationMs,
+      file_size: finalBlob.size,
+      sample_rate: wasConverted ? 16000 : undefined,
+      channels: wasConverted ? 1 : undefined,
+      checksum,
+      mime_type: finalBlob.type || mimeType,
+      status: 'ready',
+    });
+
+    onProgress?.(100, 'Import complete');
+    return {
+      recording,
+      blob: finalBlob,
+      base64,
+      durationSeconds,
+      durationMs,
+      fileSizeBytes: finalBlob.size,
+      mimeType: finalBlob.type || mimeType,
+      checksum,
+      wavBlob: pcmWavBlob,
+      wasConverted,
+    };
+  }
+
   private cleanup(): void {
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);

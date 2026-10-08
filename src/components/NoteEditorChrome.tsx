@@ -7,6 +7,7 @@ import {
   Mic,
   PenTool,
   Camera,
+  Upload,
   Pin,
   Bell,
   MapPin,
@@ -256,6 +257,22 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               >
                 <Mic className="w-5 h-5 text-zinc-500" />
                 <span>Voice memo / recording</span>
+              </button>
+              <button
+                type="button"
+                id="note-upload-audio-btn"
+                className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left text-sm min-h-[48px]"
+                onClick={() => {
+                  setShowAttachSheet(false);
+                  try {
+                    (window as any).__vellumScribePickAudio?.();
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                <Upload className="w-5 h-5 text-zinc-500" />
+                <span>Upload audio to transcribe</span>
               </button>
               <button
                 type="button"
