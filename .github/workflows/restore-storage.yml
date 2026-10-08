@@ -1,9 +1,11 @@
 name: Restore storage.ts
+
 on:
   push:
     paths:
       - '.github/workflows/restore-storage.yml'
   workflow_dispatch:
+
 jobs:
   restore:
     runs-on: ubuntu-latest
@@ -11,14 +13,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore storage.ts from b5cbe3ea and patch initPromise
+
+      - name: Download known-good storage.ts
         run: |
-          git show b5cbe3ea23f7d122eee654a3e71da656590897f9:src/lib/storage.ts > src/lib/storage.ts
-          python3 << 'PY'
+          set -e
+          URL1="https://cdn.jsdelivr.net/gh/Perchemop/VellumScribe@b5cbe3ea23f7d122eee654a3e71da656590897f9/src/lib/storage.ts"
+          URL2="https://raw.githubusercontent.com/Perchemop/VellumScribe/b5cbe3ea23f7d122eee654a3e71da656590897f9/src/lib/storage.ts"
+          curl -fsSL "$URL1" -o src/lib/storage.ts || curl -fsSL "$URL2" -o src/lib/storage.ts
+          wc -c src/lib/storage.ts
+          grep -q StorageManager src/lib/storage.ts
+
+      - name: Patch initPromise reset on failure
+        run: |
+          python3 - <<'PY'
           from pathlib import Path
-          t = Path('src/lib/storage.ts').read_text()
+          path = Path('src/lib/storage.ts')
+          t = path.read_text()
           old = """      } catch (err: any) {
         AppLogger.error('StorageManager', 'Initialization failed', err);
         throw err;
@@ -30,11 +40,12 @@ jobs:
         throw err;
       }"""
           if old not in t:
-              raise SystemExit('pattern not found')
-          Path('src/lib/storage.ts').write_text(t.replace(old, new, 1))
-          print('restored+patched', Path('src/lib/storage.ts').stat().st_size)
+              raise SystemExit('pattern not found in storage.ts')
+          path.write_text(t.replace(old, new, 1))
+          print('patched ok', path.stat().st_size)
           PY
-      - name: Commit
+
+      - name: Commit and push
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
