@@ -1,0 +1,26 @@
+name: Fix Settings Tabs
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/fix_settings_tabs.py
+      - .github/workflows/fix-settings-tabs.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/fix_settings_tabs.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "fix(ui): Settings tab JSX + AI label"
+            git push
+          fi
