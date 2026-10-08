@@ -1,0 +1,40 @@
+name: Restore storage.ts
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore storage.ts from b5cbe3ea and patch initPromise
+        run: |
+          git show b5cbe3ea23f7d122eee654a3e71da656590897f9:src/lib/storage.ts > src/lib/storage.ts
+          python3 << 'PY'
+          from pathlib import Path
+          t = Path('src/lib/storage.ts').read_text()
+          old = """      } catch (err: any) {
+        AppLogger.error('StorageManager', 'Initialization failed', err);
+        throw err;
+      }"""
+          new = """      } catch (err: any) {
+        AppLogger.error('StorageManager', 'Initialization failed', err);
+        this.initPromise = null;
+        this.isInitialized = false;
+        throw err;
+      }"""
+          if old not in t:
+              raise SystemExit('pattern not found')
+          Path('src/lib/storage.ts').write_text(t.replace(old, new, 1))
+          print('restored+patched', Path('src/lib/storage.ts').stat().st_size)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/storage.ts
+          git commit -m 'fix(boot): restore storage.ts and allow init retry after failure' || echo 'no change'
+          git push
