@@ -7,55 +7,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  restore-storage-if-needed:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore full storage.ts when truncated
-        run: |
-          set -euo pipefail
-          SIZE=$(wc -c < src/lib/storage.ts || echo 0)
-          echo "storage.ts size=$SIZE"
-          if [ "$SIZE" -lt 20000 ]; then
-            git show b5cbe3ea23f7d122eee654a3e71da656590897f9:src/lib/storage.ts > src/lib/storage.ts
-            python3 << 'PY'
-          from pathlib import Path
-          path = Path('src/lib/storage.ts')
-          t = path.read_text()
-          old = """      } catch (err: any) {
-        AppLogger.error('StorageManager', 'Initialization failed', err);
-        throw err;
-      }"""
-          new = """      } catch (err: any) {
-        AppLogger.error('StorageManager', 'Initialization failed', err);
-        this.initPromise = null;
-        this.isInitialized = false;
-        throw err;
-      }"""
-          if old in t:
-              path.write_text(t.replace(old, new, 1))
-          assert path.stat().st_size > 50000, path.stat().st_size
-          assert 'verifyAndUnlockNote' in path.read_text()
-          print('restored', path.stat().st_size)
-          PY
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/lib/storage.ts
-            git commit -m "fix(storage): restore full StorageManager API from history" || true
-            git push || true
-          else
-            echo "storage.ts OK"
-          fi
-
   build:
     runs-on: ubuntu-latest
-    needs: [restore-storage-if-needed]
-    if: always()
     steps:
     - uses: actions/checkout@v4
 
