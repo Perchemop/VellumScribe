@@ -11,11 +11,15 @@ import { DEMO_SAMPLE_EVENTS, DEMO_SAMPLE_NOTES } from './sampleData';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
+import {
+  NoteRepository,
+  NotesPageOptions,
+  NotesPageResult,
+} from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
 
 /**
  * StorageManager — SQLite gateway with in-memory caches for UI.
- * Restored compact implementation after an accidental file wipe.
  */
 export class StorageManager {
   private static get db() {
@@ -79,7 +83,7 @@ export class StorageManager {
     }
   }
 
-  // --- Preferences (localStorage) ---
+  // --- Preferences ---
   public static getItem<T = string>(key: string, fallback: T | null = null): T | null {
     try {
       const val = localStorage.getItem(key);
@@ -170,6 +174,46 @@ export class StorageManager {
   }
 
   // --- Notes ---
+
+  /**
+   * Async paginated notes (used by EventNotesList).
+   * Accepts NoteRepository options shape: limit, eventId, searchQuery, etc.
+   */
+  public static async getNotesPage(options: NotesPageOptions = {}): Promise<NotesPageResult> {
+    try {
+      return await NoteRepository.list(options);
+    } catch (e) {
+      AppLogger.error('StorageManager', 'getNotesPage failed', e);
+      // Fallback to in-memory filter so UI can still render
+      let notes = this.getNotes();
+      if (options.status) {
+        notes = notes.filter((n) => n.status === options.status);
+      } else {
+        notes = notes.filter((n) => !n.status || n.status === 'active');
+      }
+      if (options.eventId != null) {
+        notes = notes.filter((n) => n.event_id === options.eventId);
+      }
+      if (options.searchQuery?.trim()) {
+        const q = options.searchQuery.toLowerCase().trim();
+        notes = notes.filter(
+          (n) =>
+            (n.title || '').toLowerCase().includes(q) ||
+            (n.body || '').toLowerCase().includes(q)
+        );
+      }
+      const limit = options.limit ?? 50;
+      const offset = options.offset ?? 0;
+      const slice = notes.slice(offset, offset + limit);
+      return {
+        notes: slice,
+        totalCount: notes.length,
+        hasMore: offset + slice.length < notes.length,
+        nextOffset: offset + slice.length < notes.length ? offset + limit : undefined,
+      };
+    }
+  }
+
   public static getNotes(): NoteRecord[] {
     if (this.notesCache !== null && this.notesCacheFullyHydrated) return this.notesCache;
     try {
@@ -252,26 +296,38 @@ export class StorageManager {
   }
 
   public static archiveNote(id: number): void {
-    this.updateNote(id, { status: 'archived' });
+    this.updateNote(id, { status: 'archived', archived_at: new Date().toISOString() });
   }
 
   public static unarchiveNote(id: number): void {
-    this.updateNote(id, { status: 'active' });
+    this.updateNote(id, { status: 'active', archived_at: undefined });
   }
 
   public static trashNote(id: number): void {
-    this.updateNote(id, { status: 'trash' });
+    this.updateNote(id, { status: 'trash', trashed_at: new Date().toISOString() });
   }
 
   public static restoreNote(id: number): void {
-    this.updateNote(id, { status: 'active' });
+    this.updateNote(id, { status: 'active', trashed_at: undefined });
   }
 
-  // --- Media / ancillary (lazy stubs that load from repo when needed) ---
+  /** Permanently delete all notes in trash. */
+  public static emptyTrash(): void {
+    const trash = this.getTrashNotes();
+    for (const n of trash) {
+      this.deleteNote(n.id);
+    }
+    this.refreshCaches();
+  }
+
+  // --- Media / ancillary ---
   public static getRecordings(): RecordingRecord[] {
     if (this.recordingsCache) return this.recordingsCache;
     try {
-      this.recordingsCache = SqliteRepository.getAllRecordings?.() ?? [];
+      this.recordingsCache =
+        typeof (SqliteRepository as any).getAllRecordings === 'function'
+          ? (SqliteRepository as any).getAllRecordings()
+          : [];
     } catch {
       this.recordingsCache = [];
     }
@@ -281,7 +337,10 @@ export class StorageManager {
   public static getTranscripts(): TranscriptRecord[] {
     if (this.transcriptsCache) return this.transcriptsCache;
     try {
-      this.transcriptsCache = SqliteRepository.getAllTranscripts?.() ?? [];
+      this.transcriptsCache =
+        typeof (SqliteRepository as any).getAllTranscripts === 'function'
+          ? (SqliteRepository as any).getAllTranscripts()
+          : [];
     } catch {
       this.transcriptsCache = [];
     }
@@ -291,7 +350,10 @@ export class StorageManager {
   public static getOcrScans(): OcrScanRecord[] {
     if (this.ocrScansCache) return this.ocrScansCache;
     try {
-      this.ocrScansCache = SqliteRepository.getAllOcrScans?.() ?? [];
+      this.ocrScansCache =
+        typeof (SqliteRepository as any).getAllOcrScans === 'function'
+          ? (SqliteRepository as any).getAllOcrScans()
+          : [];
     } catch {
       this.ocrScansCache = [];
     }
@@ -300,7 +362,9 @@ export class StorageManager {
 
   public static getSyncConflicts(_status?: string): SyncConflictRecord[] {
     try {
-      return SqliteRepository.getSyncConflicts?.('open') ?? [];
+      return typeof (SqliteRepository as any).getSyncConflicts === 'function'
+        ? (SqliteRepository as any).getSyncConflicts('open')
+        : [];
     } catch {
       return [];
     }
@@ -308,20 +372,16 @@ export class StorageManager {
 
   public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
     try {
-      return SqliteRepository.getNoteRevisions?.(noteId) ?? [];
+      return typeof (SqliteRepository as any).getNoteRevisions === 'function'
+        ? (SqliteRepository as any).getNoteRevisions(noteId)
+        : [];
     } catch {
       return [];
     }
   }
 
-  /** Optional cold-start integrity (no-op if missing upstream helpers). */
-  public static async checkColdStartIntegrity(): Promise<void> {
-    /* intentional no-op in compact restore */
-  }
-
-  public static async autoMaintenanceIfNeeded(): Promise<void> {
-    /* intentional no-op in compact restore */
-  }
+  public static async checkColdStartIntegrity(): Promise<void> {}
+  public static async autoMaintenanceIfNeeded(): Promise<void> {}
 }
 
 export const SQLiteDatabase = StorageManager;
