@@ -1,0 +1,26 @@
+name: Remove Quick Mic
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/remove_quick_mic.py
+      - .github/workflows/remove-quick-mic.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/remove_quick_mic.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/NoteEditorChrome.tsx
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "fix(ui): remove extra mic toolbar button (keep upload in + menu)"
+            git push
+          fi
