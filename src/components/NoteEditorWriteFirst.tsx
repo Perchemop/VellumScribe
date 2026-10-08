@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Lock, FileText } from 'lucide-react';
 import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { AudioRecordingManager } from '../services/AudioRecordingManager';
+import { TranscriptionOrchestrator } from '../services/TranscriptionOrchestrator';
 import { MediaRepository } from '../lib/MediaRepository';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { AiProvenanceBadge } from './AiProvenanceBadge';
@@ -123,6 +125,75 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   );
   const [heldPin, setHeldPin] = useState<string | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
+  const audioFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImportingAudio, setIsImportingAudio] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+
+
+  const handleUploadAudioFile = async (file: File) => {
+    if (!file) return;
+    setIsImportingAudio(true);
+    setImportStatus('Importing audio…');
+    try {
+      const mgr = new AudioRecordingManager();
+      const result = await mgr.importAudioFile(note.id, file, file.name, (pct, status) => {
+        setImportStatus(status || `Importing… ${pct}%`);
+      });
+      refreshRecordings();
+      if (result.recording) {
+        setImportStatus('Transcribing…');
+        const policy = PrivacyManager.isNetworkAllowed() ? 'local_first' : 'offline_only';
+        try {
+          const tr = await TranscriptionOrchestrator.getInstance().orchestrate(
+            {
+              recordingId: result.recording.id,
+              noteId: note.id,
+              audioBlob: result.blob,
+              mediaKey: result.recording.media_key,
+              mimeType: result.mimeType,
+              durationSeconds: result.durationSeconds,
+            },
+            {
+              policy,
+              onProgress: (p) => setImportStatus(p.status || `Transcribing… ${p.percent}%`),
+            }
+          );
+          if (tr?.transcript) {
+            const newBody = body ? `${body}
+
+${tr.transcript}` : tr.transcript;
+            setBody(newBody);
+            persistText(title, newBody);
+          }
+        } catch (txErr: any) {
+          setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
+          setShowRecoverySheet(true);
+        }
+      }
+      const refreshed = StorageManager.getNoteById(note.id);
+      if (refreshed) onNoteUpdated(refreshed);
+      refreshRecordings();
+      setImportStatus(null);
+    } catch (e: any) {
+      setImportStatus(e?.message || 'Could not import audio file');
+    } finally {
+      setIsImportingAudio(false);
+      setTimeout(() => setImportStatus(null), 4000);
+    }
+  };
+
+  useEffect(() => {
+    (window as any).__vellumScribePickAudio = () => {
+      audioFileInputRef.current?.click();
+    };
+    return () => {
+      try {
+        delete (window as any).__vellumScribePickAudio;
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
 
   const refreshRecordings = () => {
     setRecordings(StorageManager.getRecordingsForNote(note.id));
@@ -352,6 +423,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       id="note-editor-container"
       className="h-full flex flex-col bg-white dark:bg-[#0c0c0e] overflow-hidden select-text relative"
     >
+      <input
+        id="note-audio-file-input"
+        ref={audioFileInputRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm,.flac"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void handleUploadAudioFile(f);
+        }}
+      />
+      {importStatus && (
+        <div role="status" className="px-4 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shrink-0">
+          {importStatus}
+        </div>
+      )}
       {!focusMode && (
         <NoteEditorChrome
           note={note}
