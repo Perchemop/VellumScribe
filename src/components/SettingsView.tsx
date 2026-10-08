@@ -134,7 +134,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } catch {
       /* ignore */
     }
-    if (mode === 'simple' && !['cloud', 'security', 'about'].includes(activeTab)) {
+    if (mode === 'simple' && !['cloud', 'ai', 'storage', 'security', 'about'].includes(activeTab)) {
       setActiveTab('cloud');
     }
   };
@@ -198,7 +198,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [ollamaVerifyResult, setOllamaVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showAdvancedAi, setShowAdvancedAi] = useState(false);
+  const [showAdvancedAi, setShowAdvancedAi] = useState(false); // Groq/Deepgram/Ollama hidden until expanded
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
@@ -641,8 +641,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
         <span className="text-[11px] text-zinc-400 hidden sm:inline">
           {settingsMode === 'simple'
-            ? 'Backup, security, and about'
-            : 'AI keys, Whisper, storage, diagnostics'}
+            ? 'Cloud, AI, storage, security'
+            : 'Includes diagnostics'}
         </span>
       </div>
 
@@ -665,7 +665,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Cloud className="w-4 h-4" />
-          <span>Cloud Backup &amp; Providers</span>
+          <span>Cloud</span>
           {activeAccounts.length > 0 && (
             <span className="px-1.5 py-0.2 text-xs rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold">
               {activeAccounts.length}
@@ -673,25 +673,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           )}
         </button>
 
-        {settingsMode === 'advanced' && (
-        <button
-          id="subtab-offline-ai-btn"
-          role="tab"
-          aria-selected={activeTab === 'ai' && false /* merged into ai */}
-          aria-controls="panel-offline-ai"
-          onClick={() => setActiveTab('offline-ai')}
-          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
-            activeTab === 'ai' && false /* merged into ai */
-              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-          }`}
-        >
-          <Cpu className="w-4 h-4" />
-          <span>Offline Whisper AI</span>
-        </button>
-        )}
-
-        {settingsMode === 'advanced' && (
         <button
           id="subtab-ai-key-btn"
           role="tab"
@@ -710,7 +691,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
         )}
 
-        {settingsMode === 'advanced' && (
         <button
           id="subtab-storage-btn"
           role="tab"
@@ -724,7 +704,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <HardDrive className="w-4 h-4" />
-          <span>Storage &amp; Backups</span>
+          <span>Storage</span>
         </button>
         )}
 
@@ -741,7 +721,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           }`}
         >
           <Shield className="w-4 h-4" />
-          <span>Security &amp; Keystore</span>
+          <span>Security</span>
         </button>
 
         {settingsMode === 'advanced' && (
@@ -781,12 +761,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Main Tab Content Body */}
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
-        {/* TAB: OFFLINE WHISPER AI */}
-        {activeTab === 'ai' && false /* merged into ai */ && (
-          <div id="panel-offline-ai" role="tabpanel" aria-labelledby="subtab-offline-ai-btn" className="max-w-5xl mx-auto space-y-6">
-            <OfflineAiPanel />
-          </div>
-        )}
 
         {/* TAB: ABOUT & GUIDE */}
         {activeTab === 'about' && (
@@ -1283,6 +1257,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         {/* TAB 2: AI PROVIDERS, BYOK & LOCAL OFFLINE */}
         {activeTab === 'ai' && (
           <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
+            <OfflineAiPanel />
+            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Cloud AI (optional)</h3>
+              <p className="text-xs text-zinc-500 mb-3">Google API key for summaries when you allow network.</p>
             {/* Offline-First Primary Showcase */}
             <div className="p-5 rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/30 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
