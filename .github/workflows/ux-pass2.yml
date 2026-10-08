@@ -1,0 +1,26 @@
+name: UX Pass 2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/ux_pass2.py
+      - .github/workflows/ux-pass2.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/ux_pass2.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "ux: merge AI settings, remove command bar, simplify batch bar, skip returning onboarding"
+            git push
+          fi
