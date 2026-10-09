@@ -23,6 +23,14 @@ export interface StorageBreakdown {
   totalBytes: number;
 }
 
+function normalizeModelList(raw: unknown): SpeechModelProfile[] {
+  if (Array.isArray(raw)) return raw as SpeechModelProfile[];
+  if (raw && typeof raw === 'object' && Array.isArray((raw as any).models)) {
+    return (raw as any).models as SpeechModelProfile[];
+  }
+  return [];
+}
+
 export class OfflineAiManager {
   private static instance: OfflineAiManager;
 
@@ -73,10 +81,12 @@ export class OfflineAiManager {
 
   /**
    * List all speech recognition models
+   * Native Android returns `{ models: [...] }`; web returns a bare array.
    */
   public async listSpeechModels(): Promise<SpeechModelProfile[]> {
     try {
-      return await OfflineAi.listSpeechModels();
+      const raw = await OfflineAi.listSpeechModels();
+      return normalizeModelList(raw);
     } catch (e) {
       AppLogger.error('OfflineAiManager', 'Failed to list models', e);
       return [];
@@ -173,8 +183,9 @@ export class OfflineAiManager {
 
     const selectedLanguage = options?.language && options.language.trim().length > 0 ? options.language.trim() : 'auto';
 
+    // Native plugin reads recordingId via getString — always pass a string.
     return await OfflineAi.startTranscription({
-      recordingId,
+      recordingId: String(recordingId),
       modelId: targetModelId,
       language: selectedLanguage,
       mediaKey: recording.media_key,
