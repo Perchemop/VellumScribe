@@ -51,13 +51,13 @@ public class ModelManager {
 
     public static final Map<String, ModelMeta> VERIFIED_MODELS = new HashMap<>();
     static {
-        // Verified whisper.cpp GGML Q5_1 quantized models from official repository
+        // Official ggerganov/whisper.cpp GGML Q5_1 models (SHA updated 2026-10 when HF re-published tiny)
         VERIFIED_MODELS.put("whisper-tiny", new ModelMeta(
             "whisper-tiny",
             "ggml-tiny-q5_1.bin",
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin",
-            31452000L,
-            "313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a"
+            32152673L,
+            "818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7"
         ));
         VERIFIED_MODELS.put("whisper-base", new ModelMeta(
             "whisper-base",
@@ -87,9 +87,6 @@ public class ModelManager {
         return dir;
     }
 
-    /**
-     * Resolves model file by ID or canonical filename (e.g., ggml-base-q5_1.bin or whisper-base.bin)
-     */
     public File getModelFile(String modelId) {
         ModelMeta meta = VERIFIED_MODELS.get(modelId);
         File dir = getModelsDir();
@@ -103,7 +100,6 @@ public class ModelManager {
         if (byId.exists()) {
             return byId;
         }
-        // Default target file
         return meta != null ? new File(dir, meta.filename) : byId;
     }
 
@@ -114,7 +110,6 @@ public class ModelManager {
         }
         ModelMeta meta = VERIFIED_MODELS.get(modelId);
         if (meta != null) {
-            // Fast path: size within 5% of expected — full SHA only if size looks wrong
             if (meta.expectedBytes > 0) {
                 long len = f.length();
                 long min = (long) (meta.expectedBytes * 0.95);
@@ -130,7 +125,6 @@ public class ModelManager {
 
     /**
      * Copy a model shipped inside the APK (assets/models/whisper/*.bin) into app-private storage.
-     * Returns true if the model is installed after this call (already present or freshly extracted).
      */
     public boolean ensureBundledModelInstalled(String modelId) {
         if (isModelInstalled(modelId)) {
@@ -151,7 +145,6 @@ public class ModelManager {
             }
             return ok && isModelInstalled(modelId);
         } catch (Exception e) {
-            // Asset missing is normal for local debug builds that skip CI packing.
             Log.i(TAG, "No bundled asset for " + modelId + " (" + assetPath + "): " + e.getMessage());
             return false;
         }
@@ -194,10 +187,6 @@ public class ModelManager {
         }
     }
 
-    /**
-     * Downloads model with HTTP range resume support, exponential backoff retries,
-     * SHA-256 integrity verification, and cancellation support.
-     */
     public DownloadResult downloadAndInstallModel(
         String modelId,
         DownloadProgressListener listener,
@@ -208,13 +197,11 @@ public class ModelManager {
             return new DownloadResult(false, false, 0, "Unknown model identifier: " + modelId);
         }
 
-        // Prefer bundled asset when present (no network).
         if (ensureBundledModelInstalled(modelId)) {
             File f = getModelFile(modelId);
             return new DownloadResult(true, true, f.length(), null);
         }
 
-        // Storage space pre-check with 50MB safety headroom
         long usableBytes = context.getFilesDir().getUsableSpace();
         long neededBytes = meta.expectedBytes + (50L * 1024 * 1024);
         if (usableBytes < neededBytes) {
@@ -257,7 +244,6 @@ public class ModelManager {
                 }
 
                 int responseCode = conn.getResponseCode();
-                // 301/302 redirect handling
                 if (responseCode == HttpURLConnection.HTTP_MOVED_PERM || responseCode == HttpURLConnection.HTTP_MOVED_TEMP) {
                     String newUrl = conn.getHeaderField("Location");
                     conn.disconnect();
@@ -271,7 +257,7 @@ public class ModelManager {
                 }
 
                 if (responseCode != HttpURLConnection.HTTP_OK && responseCode != HttpURLConnection.HTTP_PARTIAL) {
-                    if (responseCode == 416) { // Range not satisfiable, restart from 0
+                    if (responseCode == 416) {
                         tempFile.delete();
                         existingBytes = 0;
                         append = false;
@@ -315,7 +301,7 @@ public class ModelManager {
                     return new DownloadResult(false, false, tempFile.length(), "Download failed after " + maxRetries + " attempts: " + e.getMessage());
                 }
                 try {
-                    Thread.sleep(1000L * attempt); // Exponential backoff
+                    Thread.sleep(1000L * attempt);
                 } catch (InterruptedException ignored) {}
             } finally {
                 if (conn != null) {
@@ -324,7 +310,6 @@ public class ModelManager {
             }
         }
 
-        // Verify SHA-256 of completed download
         try (FileInputStream fis = new FileInputStream(tempFile)) {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[32768];
@@ -345,7 +330,6 @@ public class ModelManager {
                 return new DownloadResult(false, false, 0, "Integrity verification failed: SHA-256 mismatch.");
             }
 
-            // Atomic rename to destination
             if (targetFile.exists()) {
                 targetFile.delete();
             }
