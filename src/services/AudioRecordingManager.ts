@@ -240,6 +240,115 @@ export class AudioRecordingManager {
     });
   }
 
+  /**
+   * Import a pre-recorded audio file (WAV/MP3/M4A/etc) and persist as a Recording.
+   * Always materializes the picker File via FileReader first to avoid Android
+   * WebView process-kills on content-URI objects.
+   */
+  public async importAudioFile(
+    noteId: number,
+    file: File | Blob,
+    originalName?: string,
+    onProgress?: (percent: number, status: string) => void
+  ): Promise<RecordedAudioResult> {
+    onProgress?.(5, 'Reading audio file…');
+
+    if (!file || (file as Blob).size === 0) {
+      throw new Error('Selected file is empty.');
+    }
+    if ((file as Blob).size > 50 * 1024 * 1024) {
+      throw new Error('Audio file is too large (max 50 MB).');
+    }
+
+    // Materialize content-URI File into a plain Blob (critical on Android)
+    let safeBlob: Blob;
+    try {
+      const ab = await this.safeReadAsArrayBuffer(file as Blob);
+      safeBlob = new Blob([ab], { type: (file as File).type || 'audio/wav' });
+    } catch (e) {
+      throw new Error('Could not read the selected audio file. Try a different file or format.');
+    }
+
+    const mimeType = (file as File).type || safeBlob.type || 'audio/mpeg';
+    let finalBlob: Blob = safeBlob;
+    let wasConverted = false;
+    let pcmWavBlob: Blob | undefined;
+
+    try {
+      onProgress?.(20, 'Converting to 16kHz mono WAV…');
+      pcmWavBlob = await this.convertTo16kHzMonoWavAsync(safeBlob, (pct) => {
+        onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
+      });
+      if (pcmWavBlob && pcmWavBlob.size > 0) {
+        finalBlob = pcmWavBlob;
+        wasConverted = true;
+      }
+    } catch (e) {
+      AppLogger.warn('AudioRecordingManager', 'Import WAV conversion fallback', e);
+    }
+
+    onProgress?.(70, 'Computing checksum…');
+    const arrayBuffer = await this.safeReadAsArrayBuffer(finalBlob);
+    const checksum = await this.calculateSha256(arrayBuffer);
+    const base64 = await this.blobToBase64(finalBlob);
+
+    let durationSeconds = 1;
+    let durationMs = 1000;
+    try {
+      // Rough estimate from PCM size if converted; otherwise try decode
+      if (wasConverted) {
+        durationSeconds = Math.max(1, Math.round(finalBlob.size / 32000));
+        durationMs = durationSeconds * 1000;
+      } else {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+          durationSeconds = Math.max(1, Math.round(decoded.duration));
+          durationMs = Math.round(decoded.duration * 1000);
+          await ctx.close();
+        }
+      }
+    } catch {
+      /* keep defaults */
+    }
+
+    onProgress?.(85, 'Saving to on-device storage…');
+    const nameHint = originalName || (file as File).name || 'audio';
+    const ext = wasConverted ? 'wav' : (nameHint.split('.').pop() || 'bin');
+    const mediaKey = `${generatePrefixedId('imp')}.${ext}`;
+    const fileName = nameHint.includes('.') ? nameHint : `import_${Date.now()}.${ext}`;
+    await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type || mimeType, noteId);
+
+    const recording = RecordingRepository.save({
+      note_id: noteId,
+      file_path: fileName,
+      media_key: mediaKey,
+      duration_seconds: durationSeconds,
+      duration_ms: durationMs,
+      file_size: finalBlob.size,
+      sample_rate: wasConverted ? 16000 : undefined,
+      channels: wasConverted ? 1 : undefined,
+      checksum,
+      mime_type: finalBlob.type || mimeType,
+      status: 'ready',
+    });
+
+    onProgress?.(100, 'Import complete');
+    return {
+      recording,
+      blob: finalBlob,
+      base64,
+      durationSeconds,
+      durationMs,
+      fileSizeBytes: finalBlob.size,
+      mimeType: finalBlob.type || mimeType,
+      checksum,
+      wavBlob: pcmWavBlob,
+      wasConverted,
+    };
+  }
+
   public async safeReadAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
