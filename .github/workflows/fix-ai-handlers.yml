@@ -1,0 +1,26 @@
+name: Fix AI Handlers
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/fix_ai_handlers.py
+      - .github/workflows/fix-ai-handlers.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/fix_ai_handlers.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/SettingsView.tsx
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "fix: Google key handlers in Settings AI panel"
+            git push
+          fi
