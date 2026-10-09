@@ -1266,6 +1266,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
 
         {/* TAB 2: AI — offline Whisper first + optional Google key */}
+                {/* TAB 2: AI — offline Whisper first + optional Google key */}
         {activeTab === 'ai' && (
           <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
             <OfflineAiPanel />
@@ -1299,7 +1300,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={handleSaveGoogleKey}
+                    onClick={() => handleUpdateAiSettings({ googleApiKey: googleKeyInput.trim() })}
                     className="px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                   >
                     Save key
@@ -1315,7 +1316,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {googleKeyInput ? (
                     <button
                       type="button"
-                      onClick={handleClearGoogleKey}
+                      onClick={() => {
+                        setGoogleKeyInput('');
+                        handleUpdateAiSettings({ googleApiKey: '' });
+                      }}
                       className="px-3 py-2 rounded-xl text-xs font-medium text-rose-600"
                     >
                       Clear
