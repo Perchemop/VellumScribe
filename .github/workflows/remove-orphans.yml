@@ -1,0 +1,37 @@
+name: Remove orphan components
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/remove-orphans.yml
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete orphaned declutter leftovers
+        run: |
+          set -euo pipefail
+          rm -f src/components/AiCommandBar.tsx \
+                src/components/AiProposalPreviewModal.tsx \
+                src/components/PrivacyBadge.tsx \
+                src/services/AiCommandService.ts
+          # ensure nothing still imports them
+          if grep -R --include='*.ts' --include='*.tsx' -n "AiCommandBar\|AiProposalPreviewModal\|PrivacyBadge\|AiCommandService" src 2>/dev/null; then
+            echo "WARNING: still referenced"
+          else
+            echo "No remaining imports"
+          fi
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then echo No changes; else
+            git commit -m "chore: delete orphan AI command bar / privacy badge files"
+            git push
+          fi
