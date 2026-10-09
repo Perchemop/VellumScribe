@@ -26,7 +26,7 @@
     "setup:whisper": "bash scripts/setup-whisper-third-party.sh"
   },
   "dependencies": {
-    "@aparajita/capacitor-secure-storage": "^8.0.0",
+    "@aparajita/capacitor-secure-storage": "^8.0.1",
     "@capacitor-community/sqlite": "^8.1.1",
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
