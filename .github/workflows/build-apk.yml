@@ -43,28 +43,6 @@ jobs:
           test -f "$ROOT/ggml/src/ggml.c"
           echo "WHISPER_TREE_OK"
 
-      - name: Bundle Whisper Tiny model into APK assets
-        if: ${{ (github.event.inputs.whisper_mode || 'real') == 'real' }}
-        run: |
-          set -euo pipefail
-          DEST="android/app/src/main/assets/models/whisper"
-          mkdir -p "$DEST"
-          URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin"
-          echo "Downloading Whisper Tiny (~30MB) into APK assets…"
-          curl -fsSL -L --retry 5 --retry-delay 3 -o "$DEST/ggml-tiny-q5_1.bin" "$URL"
-          # Official q5_1 tiny checksum used by ModelManager
-          EXPECTED="313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a"
-          ACTUAL=$(sha256sum "$DEST/ggml-tiny-q5_1.bin" | awk '{print $1}')
-          echo "sha256=$ACTUAL"
-          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
-            echo "ERROR: bundled model checksum mismatch"
-            echo "expected $EXPECTED"
-            echo "got      $ACTUAL"
-            exit 1
-          fi
-          ls -lh "$DEST/ggml-tiny-q5_1.bin"
-          echo "BUNDLED_WHISPER_TINY_OK"
-
       - name: Setup Node.js Environment (Node 22)
         uses: actions/setup-node@v4
         with:
@@ -115,6 +93,27 @@ jobs:
 
       - name: Sync Capacitor Android
         run: npx cap sync android
+
+      - name: Bundle Whisper Tiny model into APK assets
+        if: ${{ (github.event.inputs.whisper_mode || 'real') == 'real' }}
+        run: |
+          set -euo pipefail
+          DEST="android/app/src/main/assets/models/whisper"
+          mkdir -p "$DEST"
+          URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin"
+          echo "Downloading Whisper Tiny (~30MB) into APK assets…"
+          curl -fsSL -L --retry 5 --retry-delay 3 -o "$DEST/ggml-tiny-q5_1.bin" "$URL"
+          EXPECTED="313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a"
+          ACTUAL=$(sha256sum "$DEST/ggml-tiny-q5_1.bin" | awk '{print $1}')
+          echo "sha256=$ACTUAL"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "ERROR: bundled model checksum mismatch"
+            echo "expected $EXPECTED"
+            echo "got      $ACTUAL"
+            exit 1
+          fi
+          ls -lh "$DEST/ggml-tiny-q5_1.bin"
+          echo "BUNDLED_WHISPER_TINY_OK"
 
       - name: Make Gradle Executable
         run: chmod +x android/gradlew
