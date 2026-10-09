@@ -103,9 +103,10 @@ jobs:
           URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin"
           echo "Downloading Whisper Tiny (~30MB) into APK assets…"
           curl -fsSL -L --retry 5 --retry-delay 3 -o "$DEST/ggml-tiny-q5_1.bin" "$URL"
-          EXPECTED="313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a"
+          # Must match ModelManager.VERIFIED_MODELS whisper-tiny expectedSha256
+          EXPECTED="818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7"
           ACTUAL=$(sha256sum "$DEST/ggml-tiny-q5_1.bin" | awk '{print $1}')
-          echo "sha256=$ACTUAL"
+          echo "sha256=$ACTUAL size=$(stat -c%s "$DEST/ggml-tiny-q5_1.bin")"
           if [[ "$ACTUAL" != "$EXPECTED" ]]; then
             echo "ERROR: bundled model checksum mismatch"
             echo "expected $EXPECTED"
