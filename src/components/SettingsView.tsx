@@ -425,7 +425,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setGoogleVerifyResult(null);
     setFileUploadFeedback('Google AI Studio key removed.');
     setTimeout(() => setFileUploadFeedback(null), 3000);
-  };
+  }
+
+  const handleVerifyGoogle = async () => {
+    const key = googleKeyInput.trim();
+    if (!key) return;
+    setIsVerifyingGoogle(true);
+    setGoogleVerifyResult(null);
+    try {
+      AiSettingsManager.setGoogleApiKey(key);
+      setGoogleVerifyResult({ success: true, message: 'Key saved.' });
+    } catch (e: any) {
+      setGoogleVerifyResult({ success: false, message: e?.message || 'Could not save key' });
+    } finally {
+      setIsVerifyingGoogle(false);
+    }
+  };;
 
   const handleSaveGroqKey = () => {
     AiSettingsManager.setGroqApiKey(groqKeyInput.trim());
@@ -1284,7 +1299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => handleUpdateAiSettings({ googleApiKey: googleKeyInput.trim() })}
+                    onClick={handleSaveGoogleKey}
                     className="px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
                   >
                     Save key
@@ -1300,10 +1315,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   {googleKeyInput ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setGoogleKeyInput('');
-                        handleUpdateAiSettings({ googleApiKey: '' });
-                      }}
+                      onClick={handleClearGoogleKey}
                       className="px-3 py-2 rounded-xl text-xs font-medium text-rose-600"
                     >
                       Clear
