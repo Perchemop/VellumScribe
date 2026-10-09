@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Robust Model Manager for on-device speech models (whisper.cpp).
  * Features:
+ * - Bundled asset install (Whisper Tiny shipped in APK assets)
  * - Resumable HTTP downloads with Range header support
  * - Transient failure retry mechanism with exponential backoff
  * - Progress notification callbacks & active cancellation
@@ -25,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ModelManager {
     private static final String TAG = "ModelManager";
+    private static final String ASSET_MODELS_PREFIX = "models/whisper/";
     private final Context context;
 
     public interface DownloadProgressListener {
@@ -112,9 +114,47 @@ public class ModelManager {
         }
         ModelMeta meta = VERIFIED_MODELS.get(modelId);
         if (meta != null) {
+            // Fast path: size within 5% of expected — full SHA only if size looks wrong
+            if (meta.expectedBytes > 0) {
+                long len = f.length();
+                long min = (long) (meta.expectedBytes * 0.95);
+                long max = (long) (meta.expectedBytes * 1.05) + 1024 * 1024;
+                if (len >= min && len <= max) {
+                    return true;
+                }
+            }
             return verifyChecksum(modelId, meta.expectedSha256);
         }
         return true;
+    }
+
+    /**
+     * Copy a model shipped inside the APK (assets/models/whisper/*.bin) into app-private storage.
+     * Returns true if the model is installed after this call (already present or freshly extracted).
+     */
+    public boolean ensureBundledModelInstalled(String modelId) {
+        if (isModelInstalled(modelId)) {
+            return true;
+        }
+        ModelMeta meta = VERIFIED_MODELS.get(modelId);
+        if (meta == null) {
+            return false;
+        }
+        String assetPath = ASSET_MODELS_PREFIX + meta.filename;
+        try (InputStream in = context.getAssets().open(assetPath)) {
+            Log.i(TAG, "Installing bundled model from assets: " + assetPath);
+            boolean ok = installModelFromStream(modelId, in, meta.expectedSha256);
+            if (ok) {
+                Log.i(TAG, "Bundled model installed: " + modelId);
+            } else {
+                Log.w(TAG, "Bundled model install failed verification: " + modelId);
+            }
+            return ok && isModelInstalled(modelId);
+        } catch (Exception e) {
+            // Asset missing is normal for local debug builds that skip CI packing.
+            Log.i(TAG, "No bundled asset for " + modelId + " (" + assetPath + "): " + e.getMessage());
+            return false;
+        }
     }
 
     public boolean verifyChecksum(String modelId, String expectedSha256) {
@@ -166,6 +206,12 @@ public class ModelManager {
         ModelMeta meta = VERIFIED_MODELS.get(modelId);
         if (meta == null) {
             return new DownloadResult(false, false, 0, "Unknown model identifier: " + modelId);
+        }
+
+        // Prefer bundled asset when present (no network).
+        if (ensureBundledModelInstalled(modelId)) {
+            File f = getModelFile(modelId);
+            return new DownloadResult(true, true, f.length(), null);
         }
 
         // Storage space pre-check with 50MB safety headroom
