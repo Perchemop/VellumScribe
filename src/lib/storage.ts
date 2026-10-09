@@ -310,10 +310,26 @@ export class StorageManager {
   public static updateNote(
     id: number,
     updates: Partial<NoteRecord>,
-    _expectedVersion?: number
+    expectedVersion?: number
   ): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
+    if (expectedVersion !== undefined && existing.version !== undefined && existing.version !== expectedVersion) {
+      try {
+        SqliteRepository.recordSyncConflict({
+          entity_type: 'note',
+          entity_id: String(id),
+          local_version_id: String(existing.version),
+          remote_version_id: String(expectedVersion),
+          local_payload: JSON.stringify(existing),
+          remote_payload: JSON.stringify(updates),
+        });
+      } catch (e) {
+        AppLogger.warn('StorageManager', 'Failed to record sync conflict', e);
+      }
+      AppLogger.warn('StorageManager', `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`);
+      return null;
+    }
     const updated: NoteRecord = {
       ...existing,
       ...updates,
@@ -355,13 +371,15 @@ export class StorageManager {
     return this.updateNote(id, patch);
   }
 
-  public static deleteNote(id: number): void {
+  public static deleteNote(id: number): boolean {
     try {
       SqliteRepository.deleteNote(id);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      AppLogger.error('StorageManager', `Failed to delete note ${id}`, e);
+      return false;
     }
     if (this.notesCache) this.notesCache = this.notesCache.filter((n) => n.id !== id);
+    return true;
   }
 
   public static archiveNote(id: number): void {
@@ -815,8 +833,8 @@ export class StorageManager {
 
   public static getSqliteStats(): SqliteStats {
     try {
-      if (typeof (SqliteRepository as any).getStats === 'function') {
-        return (SqliteRepository as any).getStats();
+      if (typeof (SqliteRepository as any).getDatabaseStats === 'function') {
+        return (SqliteRepository as any).getDatabaseStats();
       }
     } catch {
       /* fall through */
@@ -946,8 +964,12 @@ export class StorageManager {
 
   public static searchNotes(options: SearchOptions): SearchResult {
     try {
+      if (typeof (SqliteRepository as any).searchNotesWithCount === 'function') {
+        return (SqliteRepository as any).searchNotesWithCount(options);
+      }
       if (typeof (SqliteRepository as any).searchNotes === 'function') {
-        return (SqliteRepository as any).searchNotes(options);
+        const arr = (SqliteRepository as any).searchNotes(options);
+        return Array.isArray(arr) ? { notes: arr, totalCount: arr.length } : arr;
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'searchNotes failed', e);
