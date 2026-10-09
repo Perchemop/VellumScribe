@@ -390,7 +390,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   React.useEffect(() => {
-              <CloudSettingsPanel />
     if (activeTab === 'cloud') {
       accounts.forEach((acc) => {
         handleLoadRemoteBackups(acc.provider);
@@ -1251,647 +1250,75 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         )}
 
-        {/* TAB 2: AI PROVIDERS, BYOK & LOCAL OFFLINE */}
+        {/* TAB 2: AI — offline Whisper first + optional Google key */}
         {activeTab === 'ai' && (
           <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
             <OfflineAiPanel />
-            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4">
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Cloud AI (optional)</h3>
-              <p className="text-xs text-zinc-500 mb-3">Google API key for summaries when you allow network.</p>
-            {/* Offline-First Primary Showcase */}
-            <div className="p-5 rounded-3xl border border-emerald-300/80 dark:border-emerald-800/80 bg-emerald-50/60 dark:bg-emerald-950/30 space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
-                    <Shield className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
-                      Default Built-In Offline Engines
-                    </h3>
-                    <p className="text-xs text-emerald-800/90 dark:text-emerald-300/80">
-                      Zero accounts, zero external API keys, zero network lag.
-                    </p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 text-xs font-semibold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 rounded-full flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Offline-First Active
-                </span>
+
+            <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#121216] space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Cloud AI (optional)</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">Google API key for summaries when network is allowed.</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-white/80 dark:bg-[#121216]/80 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    <Mic className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Native Speech Transcription</span>
-                  </div>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Uses Web Speech and Web Audio APIs for instant, on-device audio transcription while recording.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-white/80 dark:bg-[#121216]/80 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl space-y-1">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>Local Rule Intelligence</span>
-                  </div>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                    Synthesizes executive summaries, action item checklists, and key takeaways completely offline.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Provider Selection Configuration */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Active Engine Preferences
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Primary Speech Transcription Selector */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                    <Mic className="w-4 h-4 text-emerald-500" />
-                    <span>Primary Speech Transcription</span>
-                  </label>
-                  <select
-                    value={aiSettings.primaryTranscriptionProvider || 'browser_speech'}
-                    onChange={(e) => handleUpdateAiSettings({ primaryTranscriptionProvider: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="browser_speech">Native Device Recognition (Offline - Recommended)</option>
-                    <option value="local_whisper">Local Whisper Server (Offline on Local Network)</option>
-                    <option value="google">Google AI Studio Gemini (Cloud Opt-in)</option>
-                    <option value="groq_whisper">Groq Cloud Whisper Large v3 (Cloud Opt-in)</option>
-                    <option value="deepgram">Deepgram Speech Platform (Cloud Opt-in)</option>
-                  </select>
-                  <p className="text-xs text-zinc-400">
-                    Determines how meeting voice recordings and live speech are transcribed.
-                  </p>
-                </div>
-
-                {/* Primary LLM Selector */}
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-indigo-500" />
-                    <span>Primary Intelligence / Summarizer</span>
-                  </label>
-                  <select
-                    value={aiSettings.primaryLlmProvider || 'offline_rules'}
-                    onChange={(e) => handleUpdateAiSettings({ primaryLlmProvider: e.target.value as any })}
-                    className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  >
-                    <option value="offline_rules">Offline Rule Engine (100% On-Device - Recommended)</option>
-                    <option value="ollama">Local Ollama Daemon (Local Network)</option>
-                    <option value="google">Google AI Studio Gemini (Cloud Opt-in)</option>
-                    <option value="groq">Groq Cloud Llama 3.3 70B (Cloud Opt-in)</option>
-                  </select>
-                  <p className="text-xs text-zinc-400">
-                    Powers meeting minutes synthesis, key action extraction, and document summaries.
-                  </p>
-                </div>
-              </div>
-
-              {/* Automatic fallback toggle */}
-              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                    Automatic Offline Fallback
-                  </p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    If an external cloud provider fails or device is disconnected, seamlessly fall back to the native offline engines.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleUpdateAiSettings({ autoFallbackToLocal: !aiSettings.autoFallbackToLocal })}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    aiSettings.autoFallbackToLocal ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-700'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      aiSettings.autoFallbackToLocal ? 'translate-x-5' : 'translate-x-0'
-                    }`}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Google API key</label>
+                <div className="flex gap-2">
+                  <input
+                    type={showGoogleKey ? 'text' : 'password'}
+                    value={googleKeyInput}
+                    onChange={(e) => setGoogleKeyInput(e.target.value)}
+                    placeholder="AIza…"
+                    className="flex-1 min-h-[44px] px-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-sm"
+                    autoComplete="off"
                   />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleKey((v) => !v)}
+                    className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl border border-zinc-200 dark:border-zinc-700"
+                    aria-label={showGoogleKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showGoogleKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateAiSettings({ googleApiKey: googleKeyInput.trim() })}
+                    className="px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  >
+                    Save key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleVerifyGoogle}
+                    disabled={isVerifyingGoogle || !googleKeyInput.trim()}
+                    className="px-3 py-2 rounded-xl text-xs font-medium border border-zinc-200 dark:border-zinc-700 disabled:opacity-40"
+                  >
+                    {isVerifyingGoogle ? 'Checking…' : 'Test'}
+                  </button>
+                  {googleKeyInput ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGoogleKeyInput('');
+                        handleUpdateAiSettings({ googleApiKey: '' });
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-medium text-rose-600"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                {googleVerifyResult && (
+                  <p className={`text-xs ${googleVerifyResult.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {googleVerifyResult.message}
+                  </p>
+                )}
               </div>
             </div>
-
-            {/* Opt-in External Services Header */}
-            <div className="space-y-1 pt-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                  External APIs &amp; Remote Servers (Opt-In)
-                </h3>
-                <span className="px-2 py-0.5 text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-full">
-                  Optional
-                </span>
-              </div>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                External keys and remote endpoints are completely optional. Keys remain strictly on your device in local encrypted storage.
-              </p>
-            </div>
-
-            {/* Provider 1: Google AI Studio Key */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Key className="w-4 h-4 text-indigo-500" />
-                    <span>Google AI Studio API Key</span>
-                    {googleKeyInput ? (
-                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
-                        Configured
-                      </span>
-                    ) : (
-                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
-                        Not configured (Using Offline Engine)
-                      </span>
-                    )}
-                  </label>
-                  <p className="text-xs text-zinc-400">Optional: For Gemini 2.5 / 1.5 cloud summaries and multimodal OCR.</p>
-                </div>
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium shrink-0"
-                >
-                  <span>Get Free Key</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              <div className="relative">
-                <input
-                  id="settings-google-key-input"
-                  type={showGoogleKey ? 'text' : 'password'}
-                  value={googleKeyInput}
-                  onChange={(e) => setGoogleKeyInput(e.target.value)}
-                  placeholder="Paste Google AI Studio API key (AIzaSy...)"
-                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowGoogleKey(!showGoogleKey)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    {showGoogleKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              {googleVerifyResult && (
-                <div
-                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
-                    googleVerifyResult.success
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                  }`}
-                >
-                  {googleVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
-                  <span>{googleVerifyResult.message}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                {googleKeyInput ? (
-                  <button
-                    type="button"
-                    onClick={handleClearGoogleKey}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remove Key</span>
-                  </button>
-                ) : <span />}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestGoogleKey}
-                    disabled={!googleKeyInput.trim() || isVerifyingGoogle}
-                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                  >
-                    {isVerifyingGoogle ? 'Testing...' : 'Test Connection'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveGoogleKey}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                  >
-                    Save Key
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Advanced External Providers Toggle (UX-P2.4) */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowAdvancedAi((prev) => !prev)}
-                className="w-full p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl flex items-center justify-between text-xs text-zinc-700 dark:text-zinc-300 font-semibold hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-zinc-500" />
-                  <span>Advanced Providers &amp; Local Daemons (Groq, Deepgram, Ollama, Local Whisper)</span>
-                </div>
-                <span className="text-[11px] font-medium text-zinc-400">
-                  {showAdvancedAi ? 'Hide Advanced ▲' : 'Show Advanced ▼'}
-                </span>
-              </button>
-            </div>
-
-            {showAdvancedAi && (
-              <>
-            {/* Provider 2: Groq Cloud Key */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Key className="w-4 h-4 text-orange-500" />
-                    <span>Groq Cloud API Key</span>
-                    {groqKeyInput ? (
-                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
-                        Configured
-                      </span>
-                    ) : (
-                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
-                        Not configured
-                      </span>
-                    )}
-                  </label>
-                  <p className="text-xs text-zinc-400">Optional: For ultra-fast Llama 3.3 70B and Whisper Large v3 cloud processing.</p>
-                </div>
-                <a
-                  href="https://console.groq.com/keys"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-orange-600 dark:text-orange-400 hover:underline flex items-center gap-1 font-medium shrink-0"
-                >
-                  <span>Get Free Key</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              <div className="relative">
-                <input
-                  id="settings-groq-key-input"
-                  type={showGroqKey ? 'text' : 'password'}
-                  value={groqKeyInput}
-                  onChange={(e) => setGroqKeyInput(e.target.value)}
-                  placeholder="Paste Groq key (gsk_...)"
-                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowGroqKey(!showGroqKey)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    {showGroqKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              {groqVerifyResult && (
-                <div
-                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
-                    groqVerifyResult.success
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                  }`}
-                >
-                  {groqVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
-                  <span>{groqVerifyResult.message}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                {groqKeyInput ? (
-                  <button
-                    type="button"
-                    onClick={handleClearGroqKey}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remove Key</span>
-                  </button>
-                ) : <span />}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestGroqKey}
-                    disabled={!groqKeyInput.trim() || isVerifyingGroq}
-                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                  >
-                    {isVerifyingGroq ? 'Testing...' : 'Test Connection'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveGroqKey}
-                    className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                  >
-                    Save Key
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Provider 3: Deepgram Key */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                    <Key className="w-4 h-4 text-cyan-500" />
-                    <span>Deepgram API Key</span>
-                    {deepgramKeyInput ? (
-                      <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
-                        Configured
-                      </span>
-                    ) : (
-                      <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
-                        Not configured
-                      </span>
-                    )}
-                  </label>
-                  <p className="text-xs text-zinc-400">Optional: For Deepgram Nova-3 speech intelligence cloud API.</p>
-                </div>
-                <a
-                  href="https://console.deepgram.com/"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1 font-medium shrink-0"
-                >
-                  <span>Get Key</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              <div className="relative">
-                <input
-                  id="settings-deepgram-key-input"
-                  type={showDeepgramKey ? 'text' : 'password'}
-                  value={deepgramKeyInput}
-                  onChange={(e) => setDeepgramKeyInput(e.target.value)}
-                  placeholder="Paste Deepgram API key..."
-                  className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-24"
-                />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowDeepgramKey(!showDeepgramKey)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
-                  >
-                    {showDeepgramKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              {deepgramVerifyResult && (
-                <div
-                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
-                    deepgramVerifyResult.success
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-                  }`}
-                >
-                  {deepgramVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />}
-                  <span>{deepgramVerifyResult.message}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                {deepgramKeyInput ? (
-                  <button
-                    type="button"
-                    onClick={handleClearDeepgramKey}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remove Key</span>
-                  </button>
-                ) : <span />}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestDeepgramKey}
-                    disabled={!deepgramKeyInput.trim() || isVerifyingDeepgram}
-                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-semibold hover:bg-zinc-50 dark:hover:bg-zinc-900 disabled:opacity-40"
-                  >
-                    {isVerifyingDeepgram ? 'Testing...' : 'Test Connection'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveDeepgramKey}
-                    className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                  >
-                    Save Key
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Provider 4: Local Ollama Daemon Settings */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <div className="space-y-0.5">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-emerald-500" />
-                  <span>Self-Hosted Ollama Daemon</span>
-                  {ollamaEndpointInput ? (
-                    <span className="text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold rounded-md">
-                      Endpoint Set
-                    </span>
-                  ) : (
-                    <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
-                      Optional LAN / PC
-                    </span>
-                  )}
-                </label>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  On mobile devices, <code>localhost</code> refers to your phone. To connect to Ollama on your PC, enter your computer's local Wi-Fi IP address (e.g. <code>http://192.168.1.150:11434</code>).
-                </p>
-              </div>
-
-              <input
-                type="text"
-                value={ollamaEndpointInput}
-                onChange={(e) => setOllamaEndpointInput(e.target.value)}
-                placeholder="http://192.168.1.X:11434 (PC IP) or http://localhost:11434"
-                className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-
-              {ollamaVerifyResult && (
-                <div
-                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
-                    ollamaVerifyResult.success
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                  }`}
-                >
-                  {ollamaVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />}
-                  <span>{ollamaVerifyResult.message}</span>
-                </div>
-              )}
-
-              {ollamaModels.length > 0 && (
-                <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl">
-                  <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                    Detected Local Models:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {ollamaModels.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => handleUpdateAiSettings({ ollamaModel: m })}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-colors ${
-                          aiSettings.ollamaModel === m
-                            ? 'bg-emerald-600 text-white font-bold'
-                            : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                {ollamaEndpointInput ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOllamaEndpointInput('');
-                      AiSettingsManager.setOllamaEndpoint('');
-                      setOllamaVerifyResult(null);
-                    }}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Endpoint</span>
-                  </button>
-                ) : <span />}
-
-                <button
-                  type="button"
-                  onClick={handleProbeOllama}
-                  disabled={isProbingOllama || !ollamaEndpointInput.trim()}
-                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5"
-                >
-                  {isProbingOllama ? 'Probing Ollama...' : 'Probe & Test Ollama'}
-                </button>
-              </div>
-            </div>
-
-            {/* Provider 5: Local Whisper Daemon Settings */}
-            <div className="p-6 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xs space-y-3">
-              <div className="space-y-0.5">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-purple-500" />
-                  <span>Self-Hosted Local Whisper Speech Server</span>
-                  {localWhisperEndpointInput ? (
-                    <span className="text-xs px-1.5 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold rounded-md">
-                      Endpoint Set
-                    </span>
-                  ) : (
-                    <span className="text-xs px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal rounded-md">
-                      Optional LAN / PC
-                    </span>
-                  )}
-                </label>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Optional: If running <code>whisper.cpp</code> or Faster-Whisper on your PC, enter its network URL (e.g. <code>http://192.168.1.150:8080/v1/audio/transcriptions</code>).
-                </p>
-              </div>
-
-              <input
-                type="text"
-                value={localWhisperEndpointInput}
-                onChange={(e) => setLocalWhisperEndpointInput(e.target.value)}
-                placeholder="http://192.168.1.X:8080/v1/audio/transcriptions"
-                className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-
-              {whisperVerifyResult && (
-                <div
-                  className={`p-3 rounded-xl flex items-center gap-2 text-xs ${
-                    whisperVerifyResult.success
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                  }`}
-                >
-                  {whisperVerifyResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />}
-                  <span>{whisperVerifyResult.message}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between pt-1">
-                {localWhisperEndpointInput ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLocalWhisperEndpointInput('');
-                      AiSettingsManager.setLocalWhisperEndpoint('');
-                      setWhisperVerifyResult(null);
-                    }}
-                    className="text-xs text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Endpoint</span>
-                  </button>
-                ) : <span />}
-
-                <button
-                  type="button"
-                  onClick={handleProbeLocalWhisper}
-                  disabled={isProbingWhisper || !localWhisperEndpointInput.trim()}
-                  className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors"
-                >
-                  {isProbingWhisper ? 'Testing Whisper...' : 'Probe Local Whisper'}
-                </button>
-              </div>
-            </div>
-              </>
-            )}
-
-            {/* Import from .env / JSON */}
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-2xl flex items-center justify-between">
-              <div className="space-y-0.5">
-                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Bulk Key Import</span>
-                <p className="text-xs text-zinc-400">Import keys from .env or JSON files directly.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-medium bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Import File</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".env,.json,.txt"
-                onChange={handleKeyFileUpload}
-                className="hidden"
-              />
-            </div>
-
-            {fileUploadFeedback && (
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium text-center">{fileUploadFeedback}</p>
-            )}
           </div>
         )}
-
 
         {/* TAB 3: STORAGE & BACKUPS */}
         {activeTab === 'storage' && (
