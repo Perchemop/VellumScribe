@@ -30,8 +30,14 @@ import {
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { BatchActionBar } from './BatchActionBar';
-import { NoteShareModal } from './NoteShareModal';
 import { useModalBackHandler } from '../lib/modalBackStack';
+
+// Lazily loaded so the share modal is only fetched when opened (it is also
+// lazily imported in NoteEditorWriteFirst; keeping both sites lazy lets Vite
+// split it into its own chunk instead of inlining it in the main bundle).
+const NoteShareModal = React.lazy(() =>
+  import('./NoteShareModal').then((m) => ({ default: m.NoteShareModal }))
+);
 import { ReminderService } from '../services/ReminderService';
 import { VirtualizedNotesList } from './VirtualizedNotesList';
 import { AppLogger } from '../lib/logger';
@@ -1078,11 +1084,13 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
       {/* Quick Note Share Modal */}
       {shareNoteTarget && (
-        <NoteShareModal
-          note={shareNoteTarget}
-          event={events.find((e) => e.id === shareNoteTarget.event_id)}
-          onClose={() => setShareNoteTarget(null)}
-        />
+        <React.Suspense fallback={null}>
+          <NoteShareModal
+            note={shareNoteTarget}
+            event={events.find((e) => e.id === shareNoteTarget.event_id)}
+            onClose={() => setShareNoteTarget(null)}
+          />
+        </React.Suspense>
       )}
     </div>
   );
