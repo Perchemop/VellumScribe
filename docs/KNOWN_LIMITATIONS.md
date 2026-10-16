@@ -55,3 +55,11 @@ Then NDK-build a **real** APK and smoke-test offline transcription on device.
 - **Downsample limit:** files up to **40 MB** (`MAX_CONVERSION_BYTES`) are decoded and converted to 16 kHz mono PCM WAV. Larger accepted files keep their source format, so offline Whisper may not process them; the UI surfaces this explicitly instead of failing silently.
 - **30-minute cap:** imports/recordings longer than 30 minutes (`MAX_RESAMPLE_SECONDS`) are transcoded only for their first 30 minutes. The app now reports this via a visible warning rather than dropping audio silently.
 - **Metadata honesty:** `sample_rate`/`channels` are only recorded as `16000`/`1` when a genuine conversion happened. Unconverted audio keeps its real container extension (`.m4a`, `.mp3`, `.ogg`, `.webm`) and MIME type.
+
+## 8. Android install & update (sideloading)
+
+- **ABI**: the APK ships `arm64-v8a` only (`ndk.abiFilters`). 32-bit-only (`armeabi-v7a`) and x86 devices cannot install it. This keeps the APK small given the bundled Whisper runtime.
+- **In-place updates require a stable signing key.** A newly downloaded APK can replace an installed copy only when it shares the same `applicationId`, the same signing certificate, and a `versionCode` ≥ the installed one. If the key changes, Android refuses the install ("App not installed") until the old app is uninstalled.
+- **Bump the version before releasing.** `versionCode` is derived from `package.json` (`major*10000 + minor*100 + patch`); leaving the version unchanged still installs, but bumping is the reliable way to force an upgrade prompt.
+- Debug and release builds are both signed with the configured key (when present) so a sideloaded debug build stays upgradable to a release build.
+
