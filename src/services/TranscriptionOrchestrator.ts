@@ -26,6 +26,18 @@ import {
 
 export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed' | 'cloud_only';
 
+/**
+ * Choose a policy for automatic (non-interactive) runs such as audio import.
+ * Offline-first is the default; cloud is only used when the user has both
+ * allowed network access and granted explicit Cloud AI consent.
+ */
+export function resolveTranscriptionPolicy(opts: {
+  networkAllowed: boolean;
+  hasCloudAiConsent: boolean;
+}): TranscriptionPolicy {
+  return opts.networkAllowed && opts.hasCloudAiConsent ? 'local_first' : 'offline_only';
+}
+
 export interface TranscriptionInput {
   recordingId?: number;
   noteId?: number;

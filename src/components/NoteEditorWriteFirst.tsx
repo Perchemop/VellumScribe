@@ -3,7 +3,7 @@ import { Lock, FileText } from 'lucide-react';
 import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { AudioRecordingManager } from '../services/AudioRecordingManager';
-import { TranscriptionOrchestrator } from '../services/TranscriptionOrchestrator';
+import { TranscriptionOrchestrator, resolveTranscriptionPolicy } from '../services/TranscriptionOrchestrator';
 import { MediaRepository } from '../lib/MediaRepository';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { AiProvenanceBadge } from './AiProvenanceBadge';
@@ -142,7 +142,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       refreshRecordings();
       if (result.recording) {
         setImportStatus('Transcribing…');
-        const policy = 'offline_only';
+        const policy = resolveTranscriptionPolicy({
+          networkAllowed: PrivacyManager.isNetworkAllowed(),
+          hasCloudAiConsent: PrivacyManager.hasCloudAiConsent(),
+        });
         try {
           const tr = await TranscriptionOrchestrator.getInstance().orchestrate(
             {
