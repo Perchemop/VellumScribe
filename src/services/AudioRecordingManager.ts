@@ -593,15 +593,6 @@ export class AudioRecordingManager {
     return Math.abs(hash).toString(16).padStart(64, '0');
   }
 
-  public async blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => { const res = reader.result as string; resolve(res.split(',')[1] || ''); };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
   private cleanup(): void {
     if (this.animationFrameId) { cancelAnimationFrame(this.animationFrameId); this.animationFrameId = null; }
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
