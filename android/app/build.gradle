@@ -1,14 +1,52 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// Versioning
+// ---------------------------------------------------------------------------
+// Single source of truth is package.json. versionName comes from it (override
+// with VELLUM_VERSION_NAME); versionCode is derived as major*10000 +
+// minor*100 + patch so it always increases monotonically with the version.
+// A strictly greater versionCode is what lets a freshly downloaded APK
+// upgrade an already-installed copy on the device.
+def vellumPackageJson = new groovy.json.JsonSlurper().parseText(file('../../package.json').text)
+def vellumSemverMatcher = (vellumPackageJson.version.toString() =~ /^(\d+)\.(\d+)\.(\d+)/)
+def vellumDerivedVersionCode = 1
+if (vellumSemverMatcher.find()) {
+    vellumDerivedVersionCode = (vellumSemverMatcher.group(1) as int) * 10000 +
+        (vellumSemverMatcher.group(2) as int) * 100 +
+        (vellumSemverMatcher.group(3) as int)
+}
+def vellumVersionName = System.getenv('VELLUM_VERSION_NAME') ?: vellumPackageJson.version
+def vellumVersionCode = (System.getenv('VELLUM_VERSION_CODE') ?: vellumDerivedVersionCode.toString()) as int
+
+// ---------------------------------------------------------------------------
+// Signing
+// ---------------------------------------------------------------------------
+// A stable key is required for a downloaded APK to replace an already-installed
+// copy (same applicationId + same certificate + versionCode >= installed).
+// Precedence: android/keystore.properties, then VELLUM_* env vars (CI).
+// Without either, the release APK stays unsigned and cannot be installed.
+def vellumKeystoreFile = rootProject.file('keystore.properties')
+def vellumKeystoreProps = new Properties()
+def vellumHasProps = vellumKeystoreFile.exists()
+if (vellumHasProps) {
+    vellumKeystoreFile.withInputStream { vellumKeystoreProps.load(it) }
+}
+def vellumHasEnvSigning = System.getenv('VELLUM_KEYSTORE_PATH') && System.getenv('VELLUM_STORE_PASSWORD') && System.getenv('VELLUM_KEY_ALIAS') && System.getenv('VELLUM_KEY_PASSWORD')
+def vellumHasSigning = vellumHasProps || vellumHasEnvSigning
+
 android {
     namespace = "com.vellumscribe.app"
     compileSdk = rootProject.ext.compileSdkVersion
+    // Pinned to the NDK the CI installs (see .github/workflows/build-apk.yml) so
+    // Gradle does not silently fetch a different toolchain per runner.
+    ndkVersion = "26.1.10909125"
     defaultConfig {
         applicationId "com.vellumscribe.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 31
-        versionName "3.1.0"
+        versionCode vellumVersionCode
+        versionName vellumVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
@@ -23,8 +61,33 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    buildTypes {
+    signingConfigs {
         release {
+            if (vellumHasProps) {
+                storeFile file(vellumKeystoreProps['storeFile'])
+                storePassword vellumKeystoreProps['storePassword']
+                keyAlias vellumKeystoreProps['keyAlias']
+                keyPassword vellumKeystoreProps['keyPassword']
+            } else if (vellumHasEnvSigning) {
+                storeFile file(System.getenv('VELLUM_KEYSTORE_PATH'))
+                storePassword System.getenv('VELLUM_STORE_PASSWORD')
+                keyAlias System.getenv('VELLUM_KEY_ALIAS')
+                keyPassword System.getenv('VELLUM_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            // Use the same key as release so a sideloaded debug build can be
+            // replaced later by a release build on the same device.
+            if (vellumHasSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+        release {
+            if (vellumHasSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -38,6 +101,17 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+}
+
+// Log the install/update-relevant coordinates and warn when a release build
+// would be unsigned (and therefore unable to replace an installed copy).
+tasks.matching { it.name == 'assembleRelease' || it.name == 'assembleDebug' }.configureEach {
+    doFirst {
+        logger.lifecycle("VELLUM: ${name} -> versionName=${vellumVersionName} versionCode=${vellumVersionCode} signed=${vellumHasSigning}")
+        if (!vellumHasSigning && name == 'assembleRelease') {
+            logger.warn("VELLUM: release APK is UNSIGNED. Add android/keystore.properties or VELLUM_KEYSTORE_* env vars so a newer build can replace an installed copy.")
         }
     }
 }
