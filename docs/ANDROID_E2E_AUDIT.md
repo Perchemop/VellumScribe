@@ -140,6 +140,30 @@ an avoidable write path to `main`. Recommend deleting the disabled no-ops and
 converting the auto-commit bots to `workflow_dispatch` only. Left in place here
 because they are pre-existing repo configuration.
 
+## 4c. Actions runs are failing before any step starts ⚠️ BLOCKER
+
+Every run on `main` fails in 2–4 s with `steps: []` and no logs
+(`BlobNotFound`) — including `CI` and `Security Scanning`, which were failing
+before this pass:
+
+```
+completed  failure  Security Scanning  main  push  38830247074  3s
+completed  failure  Build Android APK  main  push  38830247073  3s
+completed  failure  CI                 main  push  38830247036  2s
+```
+
+Jobs that die with zero steps never reach the checkout, so this is not a code
+problem — it points at the account/repo runner side (Actions spending limit or
+billing, or runner allocation). **Nothing, including the APK, will build until
+it is resolved.** Check *Settings → Billing → Actions* (spending limit / usage)
+and re-run a workflow; the `Build Android APK` job should then get past
+"Set up job".
+
+One real bug was also fixed here: `build-apk.yml` used the `secrets` context
+inside `if:`, which is not allowed and made GitHub treat the workflow as
+invalid (it was listed by file path instead of by name). The presence checks
+now happen in the shell.
+
 ---
 
 ## 5. Not verifiable in this workspace
