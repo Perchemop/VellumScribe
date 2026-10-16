@@ -18,9 +18,6 @@ import { TranscriptService } from '../../services/TranscriptService';
 import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
-import { MediaRepository } from '../../lib/MediaRepository';
-import { RecordingRepository } from '../../repositories/RecordingRepository';
-import { generatePrefixedId } from '../../lib/uuid';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -195,46 +192,10 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         if (timerRef.current) clearInterval(timerRef.current);
       }
 
-      // Size guard (prevent accidental huge files; 546 KB is fine)
-      if (file.size > 50 * 1024 * 1024) {
-        throw new Error('Audio file is too large (max 50 MB).');
-      }
-
-      // Convert to 16 kHz mono PCM WAV (same path as live recording)
-      let finalBlob: Blob = file;
-      let wasConverted = false;
-      try {
-        const pcm = await recordingManager.convertTo16kHzMonoWavAsync(file);
-        if (pcm && pcm.size > 0) {
-          finalBlob = pcm;
-          wasConverted = true;
-        }
-      } catch (convErr: any) {
-        // Non-fatal: keep original if decode fails (native worker will reject later with clear error)
-        console.warn('16 kHz conversion failed, keeping original format', convErr);
-      }
-
-      // Persist via MediaRepository → media/${key} under Directory.Data
-      const mediaKey = `${generatePrefixedId('rec')}.${wasConverted ? 'wav' : (file.name.split('.').pop() || 'webm')}`;
-      await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type || 'audio/wav', noteId);
-
-      // Create recording record so OfflineAiManager.transcribeRecording can find it
-      // For PCM 16 kHz mono: bytes ≈ duration * 32000; fall back to 30 s estimate
-      const durationSeconds = Math.max(1, Math.round(finalBlob.size / 32000) || 30);
-      const recording = RecordingRepository.save({
-        note_id: noteId,
-        media_key: mediaKey,
-        file_path: mediaKey,
-        duration_seconds: durationSeconds,
-        file_size: finalBlob.size,
-        mime_type: finalBlob.type || 'audio/wav',
-        checksum: '',
-        sample_rate: 16000,
-        channels: 1,
-        status: 'ready',
-      });
-
-      if (!recording?.id) {
+      // Single import pipeline: FileReader materialization, 16 kHz mono
+      // conversion, checksum, and MediaRepository persistence.
+      const result = await recordingManager.importAudioFile(noteId, file, file.name);
+      if (!result.recording?.id) {
         throw new Error('Failed to create recording record for imported audio.');
       }
 
@@ -242,7 +203,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       setTranscribing(true);
       setIsImporting(false);
       const aiManager = OfflineAiManager.getInstance();
-      const { jobId } = await aiManager.transcribeRecording(recording.id);
+      const { jobId } = await aiManager.transcribeRecording(result.recording.id);
       setActiveJobId(jobId);
 
       // Poll status (reuse existing logic pattern)
@@ -253,17 +214,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
             setTranscribing(false);
             if (status.status === 'COMPLETED') {
-              onRecordingComplete({
-                recording,
-                blob: finalBlob,
-                base64: '',
-                durationSeconds,
-                durationMs: durationSeconds * 1000,
-                fileSizeBytes: finalBlob.size,
-                mimeType: finalBlob.type || 'audio/wav',
-                checksum: '',
-                wasConverted,
-              } as any);
+              onRecordingComplete(result);
               onClose();
             } else if (status.status === 'FAILED') {
               setErrorMessage(status.error || 'Transcription failed.');
