@@ -24,6 +24,8 @@ interface AudioRecordingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRecordingComplete: (result: RecordedAudioResult) => void;
+  /** Fired when offline transcription could not complete, so the host can offer recovery. */
+  onTranscriptionUnavailable?: (errorText: string) => void;
 }
 
 export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
@@ -31,6 +33,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   isOpen,
   onClose,
   onRecordingComplete,
+  onTranscriptionUnavailable,
 }) => {
   useModalBackHandler(isOpen, onClose, 'audio-recording-modal');
 
@@ -127,14 +130,18 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 onRecordingComplete(result);
                 onClose();
               } else if (status.status === 'FAILED') {
-                setErrorMessage(status.error || 'Transcription failed.');
+                const message = status.error || 'Transcription failed.';
+                setErrorMessage(message);
+                onTranscriptionUnavailable?.(message);
               }
               return;
             }
             setTimeout(poll, 800);
           } catch (e: any) {
             setTranscribing(false);
-            setErrorMessage(e?.message || 'Status poll failed.');
+            const message = e?.message || 'Status poll failed.';
+            setErrorMessage(message);
+            onTranscriptionUnavailable?.(message);
           }
         };
         setTimeout(poll, 600);
@@ -217,14 +224,18 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
               onRecordingComplete(result);
               onClose();
             } else if (status.status === 'FAILED') {
-              setErrorMessage(status.error || 'Transcription failed.');
+              const message = status.error || 'Transcription failed.';
+              setErrorMessage(message);
+              onTranscriptionUnavailable?.(message);
             }
             return;
           }
           setTimeout(poll, 800);
         } catch (e: any) {
           setTranscribing(false);
-          setErrorMessage(e?.message || 'Status poll failed.');
+          const message = e?.message || 'Status poll failed.';
+          setErrorMessage(message);
+          onTranscriptionUnavailable?.(message);
         }
       };
       setTimeout(poll, 600);

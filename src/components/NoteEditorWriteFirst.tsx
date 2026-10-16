@@ -128,6 +128,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const audioFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isImportingAudio, setIsImportingAudio] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const pendingTranscriptionErrorRef = useRef<string | null>(null);
 
 
   const handleUploadAudioFile = async (file: File) => {
@@ -170,6 +172,7 @@ ${tr.transcript}` : tr.transcript;
           }
         } catch (txErr: any) {
           setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
+          setRecoveryError(txErr?.message || 'Transcription failed');
           setShowRecoverySheet(true);
         }
       }
@@ -704,16 +707,28 @@ ${tr.transcript}` : tr.transcript;
               if (refreshed) onNoteUpdated(refreshed);
               refreshRecordings();
             }}
+            onTranscriptionUnavailable={(message) => {
+              pendingTranscriptionErrorRef.current = message;
+            }}
             onClose={() => {
               setShowAudioStudioModal(false);
-              setShowRecoverySheet(true);
+              const message = pendingTranscriptionErrorRef.current;
+              pendingTranscriptionErrorRef.current = null;
+              if (message) {
+                setRecoveryError(message);
+                setShowRecoverySheet(true);
+              }
             }}
           />
         )}
         {showRecoverySheet && (
           <TranscriptionRecoverySheet
             isOpen={showRecoverySheet}
-            onClose={() => setShowRecoverySheet(false)}
+            errorText={recoveryError || undefined}
+            onClose={() => {
+              setShowRecoverySheet(false);
+              setRecoveryError(null);
+            }}
             recordingId={recordings.length > 0 ? recordings[recordings.length - 1].id : undefined}
             onTranscribeSuccess={(transcript) => {
               if (transcript) {
