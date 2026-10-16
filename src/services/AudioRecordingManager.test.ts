@@ -24,6 +24,7 @@ import {
   AudioRecordingManager,
   MAX_RESAMPLE_SECONDS,
   computeResampleLength,
+  extensionForAudioMime,
 } from './AudioRecordingManager';
 
 const { saveBinary, saveRecording } = mocks;
@@ -206,3 +207,56 @@ describe('computeResampleLength truncation boundary', () => {
     expect(targetLength).toBe(16000 * MAX_RESAMPLE_SECONDS);
   });
 });
+
+describe('extensionForAudioMime', () => {
+  it('always uses wav for converted audio', () => {
+    expect(extensionForAudioMime('audio/webm', true)).toBe('wav');
+    expect(extensionForAudioMime(undefined, true)).toBe('wav');
+  });
+
+  it('keeps the recorded container when not converted', () => {
+    expect(extensionForAudioMime('audio/mp4;codecs=mp4a.40.2', false)).toBe('m4a');
+    expect(extensionForAudioMime('audio/mpeg', false)).toBe('mp3');
+    expect(extensionForAudioMime('audio/ogg;codecs=opus', false)).toBe('ogg');
+    expect(extensionForAudioMime('audio/webm;codecs=opus', false)).toBe('webm');
+    expect(extensionForAudioMime(undefined, false)).toBe('webm');
+  });
+});
+
+describe('AudioRecordingManager.stopRecording metadata', () => {
+  it('keeps the source container and omits PCM metadata when conversion fails', async () => {
+    installAudioContext('reject');
+    const mgr = new AudioRecordingManager() as unknown as {
+      startTime: number;
+      pausedDuration: number;
+      audioChunks: Blob[];
+      mediaRecorder: unknown;
+      stopRecording: (noteId?: number) => Promise<{
+        wasConverted?: boolean;
+        recording?: { media_key: string; sample_rate?: number; channels?: number; mime_type: string };
+      }>;
+    };
+
+    mgr.startTime = Date.now() - 5000;
+    mgr.pausedDuration = 0;
+    mgr.audioChunks = [new Blob([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], { type: 'audio/mp4' })];
+    mgr.mediaRecorder = {
+      mimeType: 'audio/mp4',
+      state: 'recording',
+      onstop: null,
+      stop(this: { state: string }) {
+        this.state = 'inactive';
+        queueMicrotask(() => (mgr.mediaRecorder as { onstop?: () => void }).onstop?.());
+      },
+    };
+
+    const result = await mgr.stopRecording(5);
+
+    expect(result.wasConverted).toBe(false);
+    expect(result.recording?.media_key).toMatch(/^rec_.*\.m4a$/);
+    expect(result.recording?.mime_type).toBe('audio/mp4');
+    expect(result.recording?.sample_rate).toBeUndefined();
+    expect(result.recording?.channels).toBeUndefined();
+  });
+});
+

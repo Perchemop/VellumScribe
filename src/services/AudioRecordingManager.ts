@@ -43,6 +43,22 @@ export function computeResampleLength(
   return { targetLength: Math.min(desired, maxSamples), truncated: desired > maxSamples };
 }
 
+/**
+ * Pick a file extension that matches the stored container. Converted audio is
+ * always WAV; unresolved audio keeps its recorded/source container instead of
+ * being mislabeled as `.webm`.
+ */
+export function extensionForAudioMime(mimeType: string | undefined, converted: boolean): string {
+  if (converted) return 'wav';
+  const m = (mimeType || '').toLowerCase();
+  if (m.includes('wav')) return 'wav';
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
+  if (m.includes('mp4') || m.includes('m4a') || m.includes('aac')) return 'm4a';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('ogg') || m.includes('oga') || m.includes('opus')) return 'ogg';
+  return 'webm';
+}
+
 export interface AudioRecordingOptions {
   onAudioLevel?: (level: number) => void;
   onLiveTranscript?: (text: string) => void;
@@ -224,12 +240,28 @@ export class AudioRecordingManager {
           let finalBlob = rawBlob;
           let pcmWavBlob: Blob | undefined;
           let wasConverted = false;
+          let wasTruncated = false;
           try {
             onProgress?.(30, 'Resampling to 16kHz speech standard...');
-            pcmWavBlob = await this.convertTo16kHzMonoWavAsync(rawBlob, (pct) => {
-              onProgress?.(30 + Math.round(pct * 0.4), 'Encoding 16-bit PCM audio...');
-            });
-            if (pcmWavBlob && pcmWavBlob.size > 0) { finalBlob = pcmWavBlob; wasConverted = true; }
+            pcmWavBlob = await this.convertTo16kHzMonoWavAsync(
+              rawBlob,
+              (pct) => {
+                onProgress?.(30 + Math.round(pct * 0.4), 'Encoding 16-bit PCM audio...');
+              },
+              {
+                onConverted: () => {
+                  wasConverted = true;
+                },
+                onTruncated: (info) => {
+                  wasTruncated = true;
+                  AppLogger.warn(
+                    'AudioRecordingManager',
+                    `Recording truncated from ${Math.round(info.originalSeconds)}s to ${info.keptSeconds}s for on-device transcription.`
+                  );
+                },
+              }
+            );
+            if (pcmWavBlob && pcmWavBlob.size > 0) finalBlob = pcmWavBlob;
           } catch (convErr) {
             AppLogger.warn('AudioRecordingManager', '16kHz PCM WAV conversion notice, fallback to raw audio', convErr);
           }
@@ -240,18 +272,21 @@ export class AudioRecordingManager {
           let recording: RecordingRecord | undefined;
           if (noteId) {
             onProgress?.(90, 'Saving to secure on-device storage...');
-            const mediaKey = `${generatePrefixedId('rec')}.${wasConverted ? 'wav' : 'webm'}`;
-            const fileName = `recording_${Date.now()}.${wasConverted ? 'wav' : 'webm'}`;
+            const ext = extensionForAudioMime(finalBlob.type || mimeType, wasConverted);
+            const mediaKey = `${generatePrefixedId('rec')}.${ext}`;
+            const fileName = `recording_${Date.now()}.${ext}`;
             await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type, noteId);
             recording = RecordingRepository.save({
               note_id: noteId, file_path: fileName, media_key: mediaKey,
               duration_seconds: durationSeconds, duration_ms: totalMs, file_size: finalBlob.size,
-              sample_rate: 16000, channels: 1, checksum, mime_type: finalBlob.type, status: 'ready',
+              sample_rate: wasConverted ? 16000 : undefined,
+              channels: wasConverted ? 1 : undefined,
+              checksum, mime_type: finalBlob.type, status: 'ready',
             });
           }
           onProgress?.(100, 'Complete');
           this.cleanup();
-          resolve({ recording, blob: finalBlob, base64, durationSeconds, durationMs: totalMs, fileSizeBytes: finalBlob.size, mimeType: finalBlob.type, checksum, wavBlob: pcmWavBlob, liveTranscript: capturedLiveTranscript, wasConverted });
+          resolve({ recording, blob: finalBlob, base64, durationSeconds, durationMs: totalMs, fileSizeBytes: finalBlob.size, mimeType: finalBlob.type, checksum, wavBlob: pcmWavBlob, liveTranscript: capturedLiveTranscript, wasConverted, wasTruncated });
         } catch (err) {
           AppLogger.error('AudioRecordingManager', 'Failed to finalize recording', err);
           this.cleanup();
