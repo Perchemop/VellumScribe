@@ -6,6 +6,7 @@ import { AudioRecordingManager } from '../services/AudioRecordingManager';
 import { TranscriptionOrchestrator, resolveTranscriptionPolicy } from '../services/TranscriptionOrchestrator';
 import { MediaRepository } from '../lib/MediaRepository';
 import { NotePayloadData } from '../lib/cryptoUtils';
+import { describeAudioImport } from '../lib/audioImportNotices';
 import { AiProvenanceBadge } from './AiProvenanceBadge';
 import { AudioPlayerWidget } from './AudioPlayerWidget';
 import { DraftStore, type NoteDraft } from '../lib/DraftStore';
@@ -136,11 +137,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     if (!file) return;
     setIsImportingAudio(true);
     setImportStatus('Importing audio…');
+    let importWarning: string | null = null;
     try {
       const mgr = new AudioRecordingManager();
       const result = await mgr.importAudioFile(note.id, file, file.name, (pct, status) => {
         setImportStatus(status || `Importing… ${pct}%`);
       });
+      importWarning = describeAudioImport(result);
       refreshRecordings();
       if (result.recording) {
         setImportStatus('Transcribing…');
@@ -179,12 +182,17 @@ ${tr.transcript}` : tr.transcript;
       const refreshed = StorageManager.getNoteById(note.id);
       if (refreshed) onNoteUpdated(refreshed);
       refreshRecordings();
-      setImportStatus(null);
     } catch (e: any) {
       setImportStatus(e?.message || 'Could not import audio file');
     } finally {
       setIsImportingAudio(false);
-      setTimeout(() => setImportStatus(null), 4000);
+      if (importWarning) {
+        // Keep the limitation visible instead of clearing it with the
+        // transient progress message.
+        setImportStatus(importWarning);
+      } else {
+        setTimeout(() => setImportStatus(null), 4000);
+      }
     }
   };
 
