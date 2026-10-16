@@ -18,6 +18,7 @@ import { TranscriptService } from '../../services/TranscriptService';
 import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
+import { describeAudioImport } from '../../lib/audioImportNotices';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -43,6 +44,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const [elapsedSec, setElapsedSec] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
 
   // Post-recording offline transcription pipeline state
   const [transcribing, setTranscribing] = useState(false);
@@ -185,6 +187,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const handleImportAudioFile = async (file: File) => {
     if (!file || isImporting || transcribing) return;
     setErrorMessage(null);
+    setImportNotice(null);
     setIsImporting(true);
     setMode('uploading');
 
@@ -205,6 +208,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       if (!result.recording?.id) {
         throw new Error('Failed to create recording record for imported audio.');
       }
+      setImportNotice(describeAudioImport(result));
 
       // Kick off offline transcription (same as stopRecording path)
       setTranscribing(true);
@@ -289,6 +293,13 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
+          </div>
+        )}
+
+        {importNotice && !errorMessage && (
+          <div role="status" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{importNotice}</span>
           </div>
         )}
 

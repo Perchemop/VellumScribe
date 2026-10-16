@@ -23,6 +23,8 @@ vi.mock('../repositories/RecordingRepository', () => ({
 import {
   AudioRecordingManager,
   MAX_RESAMPLE_SECONDS,
+  MAX_IMPORT_BYTES,
+  MAX_CONVERSION_BYTES,
   computeResampleLength,
   extensionForAudioMime,
 } from './AudioRecordingManager';
@@ -205,6 +207,25 @@ describe('computeResampleLength truncation boundary', () => {
     const { targetLength, truncated } = computeResampleLength(MAX_RESAMPLE_SECONDS + 90, 16000);
     expect(truncated).toBe(true);
     expect(targetLength).toBe(16000 * MAX_RESAMPLE_SECONDS);
+  });
+});
+
+describe('conversion size limits', () => {
+  it('keeps import larger than the conversion cap but smaller than the import cap', () => {
+    expect(MAX_CONVERSION_BYTES).toBeLessThan(MAX_IMPORT_BYTES);
+  });
+
+  it('reports a skipped downsample for oversized blobs instead of failing silently', async () => {
+    const mgr = new AudioRecordingManager();
+    const oversized = { size: MAX_CONVERSION_BYTES + 1, type: 'audio/mpeg' } as unknown as Blob;
+    const skipped: Array<{ reason: string; sizeBytes: number }> = [];
+
+    const out = await mgr.convertTo16kHzMonoWavAsync(oversized, undefined, {
+      onSkipped: (info) => skipped.push(info),
+    });
+
+    expect(out).toBe(oversized);
+    expect(skipped).toEqual([{ reason: 'too_large', sizeBytes: MAX_CONVERSION_BYTES + 1 }]);
   });
 });
 

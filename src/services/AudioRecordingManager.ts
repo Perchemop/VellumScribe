@@ -10,7 +10,6 @@ import { generatePrefixedId } from '../lib/uuid';
 export interface RecordedAudioResult {
   recording?: RecordingRecord;
   blob: Blob;
-  base64: string;
   durationSeconds: number;
   durationMs: number;
   fileSizeBytes: number;
@@ -21,6 +20,8 @@ export interface RecordedAudioResult {
   wasConverted?: boolean;
   /** True when resampling capped the audio (see MAX_RESAMPLE_SECONDS). */
   wasTruncated?: boolean;
+  /** True when the file was too large to downsample and the source format was kept. */
+  wasConversionSkipped?: boolean;
 }
 
 /**
@@ -29,6 +30,15 @@ export interface RecordedAudioResult {
  * are notified via the truncation callback so the cut is never silent.
  */
 export const MAX_RESAMPLE_SECONDS = 30 * 60;
+
+/** Largest file the import flow will accept at all. */
+export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+
+/**
+ * Largest file we will decode+downsample. Bigger inputs are kept in their
+ * source format (see wasConversionSkipped) to bound memory on mobile.
+ */
+export const MAX_CONVERSION_BYTES = 40 * 1024 * 1024;
 
 /**
  * Decide how many 16 kHz samples to render for a decoded buffer.
@@ -241,6 +251,7 @@ export class AudioRecordingManager {
           let pcmWavBlob: Blob | undefined;
           let wasConverted = false;
           let wasTruncated = false;
+          let wasConversionSkipped = false;
           try {
             onProgress?.(30, 'Resampling to 16kHz speech standard...');
             pcmWavBlob = await this.convertTo16kHzMonoWavAsync(
@@ -251,6 +262,9 @@ export class AudioRecordingManager {
               {
                 onConverted: () => {
                   wasConverted = true;
+                },
+                onSkipped: () => {
+                  wasConversionSkipped = true;
                 },
                 onTruncated: (info) => {
                   wasTruncated = true;
@@ -268,7 +282,6 @@ export class AudioRecordingManager {
           onProgress?.(75, 'Computing audio integrity checksum...');
           const arrayBuffer = await this.safeReadAsArrayBuffer(finalBlob);
           const checksum = await this.calculateSha256(arrayBuffer);
-          const base64 = await this.blobToBase64(finalBlob);
           let recording: RecordingRecord | undefined;
           if (noteId) {
             onProgress?.(90, 'Saving to secure on-device storage...');
@@ -286,7 +299,7 @@ export class AudioRecordingManager {
           }
           onProgress?.(100, 'Complete');
           this.cleanup();
-          resolve({ recording, blob: finalBlob, base64, durationSeconds, durationMs: totalMs, fileSizeBytes: finalBlob.size, mimeType: finalBlob.type, checksum, wavBlob: pcmWavBlob, liveTranscript: capturedLiveTranscript, wasConverted, wasTruncated });
+          resolve({ recording, blob: finalBlob, durationSeconds, durationMs: totalMs, fileSizeBytes: finalBlob.size, mimeType: finalBlob.type, checksum, wavBlob: pcmWavBlob, liveTranscript: capturedLiveTranscript, wasConverted, wasTruncated, wasConversionSkipped });
         } catch (err) {
           AppLogger.error('AudioRecordingManager', 'Failed to finalize recording', err);
           this.cleanup();
@@ -313,8 +326,8 @@ export class AudioRecordingManager {
     if (!file || (file as Blob).size === 0) {
       throw new Error('Selected file is empty.');
     }
-    if ((file as Blob).size > 50 * 1024 * 1024) {
-      throw new Error('Audio file is too large (max 50 MB).');
+    if ((file as Blob).size > MAX_IMPORT_BYTES) {
+      throw new Error(`Audio file is too large (max ${MAX_IMPORT_BYTES / (1024 * 1024)} MB).`);
     }
 
     // Materialize content-URI File into a plain Blob (critical on Android)
@@ -330,6 +343,7 @@ export class AudioRecordingManager {
     let finalBlob: Blob = safeBlob;
     let wasConverted = false;
     let wasTruncated = false;
+    let wasConversionSkipped = false;
     let pcmWavBlob: Blob | undefined;
 
     try {
@@ -342,6 +356,9 @@ export class AudioRecordingManager {
         {
           onConverted: () => {
             wasConverted = true;
+          },
+          onSkipped: () => {
+            wasConversionSkipped = true;
           },
           onTruncated: (info) => {
             wasTruncated = true;
@@ -362,7 +379,6 @@ export class AudioRecordingManager {
     onProgress?.(70, 'Computing checksum…');
     const arrayBuffer = await this.safeReadAsArrayBuffer(finalBlob);
     const checksum = await this.calculateSha256(arrayBuffer);
-    const base64 = await this.blobToBase64(finalBlob);
 
     let durationSeconds = 1;
     let durationMs = 1000;
@@ -392,7 +408,11 @@ export class AudioRecordingManager {
 
     onProgress?.(85, 'Saving to on-device storage…');
     const nameHint = originalName || (file as File).name || 'audio';
-    const ext = wasConverted ? 'wav' : (nameHint.split('.').pop() || 'bin');
+    const ext = wasConverted
+      ? 'wav'
+      : nameHint.includes('.')
+        ? (nameHint.split('.').pop() as string)
+        : extensionForAudioMime(finalBlob.type || mimeType, false);
     const mediaKey = `${generatePrefixedId('imp')}.${ext}`;
     const fileName = nameHint.includes('.') ? nameHint : `import_${Date.now()}.${ext}`;
     await MediaRepository.saveBinary(mediaKey, finalBlob, finalBlob.type || mimeType, noteId);
@@ -415,7 +435,6 @@ export class AudioRecordingManager {
     return {
       recording,
       blob: finalBlob,
-      base64,
       durationSeconds,
       durationMs,
       fileSizeBytes: finalBlob.size,
@@ -424,6 +443,7 @@ export class AudioRecordingManager {
       wavBlob: pcmWavBlob,
       wasConverted,
       wasTruncated,
+      wasConversionSkipped,
     };
   }
 
@@ -470,11 +490,16 @@ export class AudioRecordingManager {
       onTruncated?: (info: { originalSeconds: number; keptSeconds: number }) => void;
       /** Fired only when the audio was genuinely resampled to 16 kHz mono 16-bit WAV. */
       onConverted?: () => void;
+      /** Fired when the input exceeds MAX_CONVERSION_BYTES and is kept as-is. */
+      onSkipped?: (info: { reason: 'too_large'; sizeBytes: number }) => void;
     }
   ): Promise<Blob> {
     if (!audioBlob || audioBlob.size === 0) return audioBlob;
-    if (audioBlob.size > 40 * 1024 * 1024) {
-      console.warn('AudioRecordingManager: skipping conversion for >40 MB blob');
+    if (audioBlob.size > MAX_CONVERSION_BYTES) {
+      console.warn(
+        `AudioRecordingManager: skipping conversion for ${Math.round(audioBlob.size / (1024 * 1024))} MB blob (> ${MAX_CONVERSION_BYTES / (1024 * 1024)} MB)`
+      );
+      options?.onSkipped?.({ reason: 'too_large', sizeBytes: audioBlob.size });
       return audioBlob;
     }
     let rawBuffer: ArrayBuffer;

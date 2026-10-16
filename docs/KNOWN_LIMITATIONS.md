@@ -48,3 +48,10 @@ npm run setup:whisper
 ```
 
 Then NDK-build a **real** APK and smoke-test offline transcription on device.
+
+## 7. Audio import & recording limits
+
+- **Accepted import size:** up to **50 MB** (`MAX_IMPORT_BYTES`). Larger files are rejected with a clear error.
+- **Downsample limit:** files up to **40 MB** (`MAX_CONVERSION_BYTES`) are decoded and converted to 16 kHz mono PCM WAV. Larger accepted files keep their source format, so offline Whisper may not process them; the UI surfaces this explicitly instead of failing silently.
+- **30-minute cap:** imports/recordings longer than 30 minutes (`MAX_RESAMPLE_SECONDS`) are transcoded only for their first 30 minutes. The app now reports this via a visible warning rather than dropping audio silently.
+- **Metadata honesty:** `sample_rate`/`channels` are only recorded as `16000`/`1` when a genuine conversion happened. Unconverted audio keeps its real container extension (`.m4a`, `.mp3`, `.ogg`, `.webm`) and MIME type.
