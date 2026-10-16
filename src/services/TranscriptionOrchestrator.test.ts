@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { TranscriptionOrchestrator } from './TranscriptionOrchestrator';
+import { TranscriptionOrchestrator, resolveTranscriptionPolicy } from './TranscriptionOrchestrator';
+
+describe('resolveTranscriptionPolicy (automatic import runs)', () => {
+  it('stays offline_only when network is blocked', () => {
+    expect(resolveTranscriptionPolicy({ networkAllowed: false, hasCloudAiConsent: true })).toBe(
+      'offline_only'
+    );
+  });
+
+  it('stays offline_only when cloud consent has not been granted', () => {
+    expect(resolveTranscriptionPolicy({ networkAllowed: true, hasCloudAiConsent: false })).toBe(
+      'offline_only'
+    );
+  });
+
+  it('prefers local_first only when network and consent are both allowed', () => {
+    expect(resolveTranscriptionPolicy({ networkAllowed: true, hasCloudAiConsent: true })).toBe(
+      'local_first'
+    );
+  });
+});
 
 describe('TranscriptionOrchestrator Selection & Honesty Matrix', () => {
   it('rejects offline_only policy when no live dictation text is provided and native inference is unavailable', async () => {

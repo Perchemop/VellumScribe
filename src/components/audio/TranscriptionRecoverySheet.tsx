@@ -88,13 +88,16 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
       }
 
       let targetBlob = audioBlob;
-      if (!targetBlob && recordingId) {
+      let targetMimeType: string | undefined;
+      let targetMediaKey: string | undefined;
+      if (recordingId) {
         const rec = await RecordingRepository.getByIdAsync(recordingId);
         if (rec) {
-          const { MediaRepository } = await import('../../lib/MediaRepository');
-          const key = rec.media_key || rec.file_path;
-          if (key) {
-            targetBlob = (await MediaRepository.getBinary(key)) || undefined;
+          targetMimeType = rec.mime_type || undefined;
+          targetMediaKey = rec.media_key || rec.file_path || undefined;
+          if (!targetBlob && targetMediaKey) {
+            const { MediaRepository } = await import('../../lib/MediaRepository');
+            targetBlob = (await MediaRepository.getBinary(targetMediaKey)) || undefined;
           }
         }
       }
@@ -104,7 +107,9 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
         {
           recordingId,
           audioBlob: targetBlob,
-          mimeType: 'audio/webm',
+          mediaKey: targetMediaKey,
+          // Preserve the real container: imports can be WAV/M4A/MP3, not only webm.
+          mimeType: targetMimeType,
         },
         {
           policy: 'cloud_only',

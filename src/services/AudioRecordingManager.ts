@@ -19,6 +19,28 @@ export interface RecordedAudioResult {
   wavBlob?: Blob;
   liveTranscript?: string;
   wasConverted?: boolean;
+  /** True when resampling capped the audio (see MAX_RESAMPLE_SECONDS). */
+  wasTruncated?: boolean;
+}
+
+/**
+ * Maximum audio length retained when resampling to 16 kHz mono.
+ * Longer input is deliberately truncated (bounded memory on mobile) — callers
+ * are notified via the truncation callback so the cut is never silent.
+ */
+export const MAX_RESAMPLE_SECONDS = 30 * 60;
+
+/**
+ * Decide how many 16 kHz samples to render for a decoded buffer.
+ * Pure helper so the truncation boundary is unit-testable without Web Audio.
+ */
+export function computeResampleLength(
+  durationSeconds: number,
+  sampleRate: number
+): { targetLength: number; truncated: boolean } {
+  const desired = Math.ceil(durationSeconds * sampleRate);
+  const maxSamples = sampleRate * MAX_RESAMPLE_SECONDS;
+  return { targetLength: Math.min(desired, maxSamples), truncated: desired > maxSamples };
 }
 
 export interface AudioRecordingOptions {
@@ -272,16 +294,31 @@ export class AudioRecordingManager {
     const mimeType = (file as File).type || safeBlob.type || 'audio/mpeg';
     let finalBlob: Blob = safeBlob;
     let wasConverted = false;
+    let wasTruncated = false;
     let pcmWavBlob: Blob | undefined;
 
     try {
       onProgress?.(20, 'Converting to 16kHz mono WAV…');
-      pcmWavBlob = await this.convertTo16kHzMonoWavAsync(safeBlob, (pct) => {
-        onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
-      });
+      pcmWavBlob = await this.convertTo16kHzMonoWavAsync(
+        safeBlob,
+        (pct) => {
+          onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
+        },
+        {
+          onConverted: () => {
+            wasConverted = true;
+          },
+          onTruncated: (info) => {
+            wasTruncated = true;
+            AppLogger.warn(
+              'AudioRecordingManager',
+              `Imported audio truncated from ${Math.round(info.originalSeconds)}s to ${info.keptSeconds}s for on-device transcription.`
+            );
+          },
+        }
+      );
       if (pcmWavBlob && pcmWavBlob.size > 0) {
         finalBlob = pcmWavBlob;
-        wasConverted = true;
       }
     } catch (e) {
       AppLogger.warn('AudioRecordingManager', 'Import WAV conversion fallback', e);
@@ -299,14 +336,19 @@ export class AudioRecordingManager {
       if (wasConverted) {
         durationSeconds = Math.max(1, Math.round(finalBlob.size / 32000));
         durationMs = durationSeconds * 1000;
-      } else {
+      } else if (typeof window !== 'undefined') {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtx) {
           const ctx = new AudioCtx();
-          const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
-          durationSeconds = Math.max(1, Math.round(decoded.duration));
-          durationMs = Math.round(decoded.duration * 1000);
-          await ctx.close();
+          // Always release the context, even when decoding rejects, so the
+          // limited Android WebView AudioContext pool is never exhausted.
+          try {
+            const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+            durationSeconds = Math.max(1, Math.round(decoded.duration));
+            durationMs = Math.round(decoded.duration * 1000);
+          } finally {
+            try { await ctx.close(); } catch { /* ignore */ }
+          }
         }
       }
     } catch {
@@ -346,6 +388,7 @@ export class AudioRecordingManager {
       checksum,
       wavBlob: pcmWavBlob,
       wasConverted,
+      wasTruncated,
     };
   }
 
@@ -385,7 +428,15 @@ export class AudioRecordingManager {
     return { dataOffset, sampleRate, channels, bitsPerSample };
   }
 
-  public async convertTo16kHzMonoWavAsync(audioBlob: Blob, onProgress?: (percent: number) => void): Promise<Blob> {
+  public async convertTo16kHzMonoWavAsync(
+    audioBlob: Blob,
+    onProgress?: (percent: number) => void,
+    options?: {
+      onTruncated?: (info: { originalSeconds: number; keptSeconds: number }) => void;
+      /** Fired only when the audio was genuinely resampled to 16 kHz mono 16-bit WAV. */
+      onConverted?: () => void;
+    }
+  ): Promise<Blob> {
     if (!audioBlob || audioBlob.size === 0) return audioBlob;
     if (audioBlob.size > 40 * 1024 * 1024) {
       console.warn('AudioRecordingManager: skipping conversion for >40 MB blob');
@@ -401,9 +452,11 @@ export class AudioRecordingManager {
     const wavInfo = this.inspectWavHeader(rawBuffer);
     if (wavInfo && wavInfo.channels === 1 && wavInfo.bitsPerSample === 16 && wavInfo.sampleRate === 16000) {
       onProgress?.(100);
+      options?.onConverted?.();
       return new Blob([rawBuffer], { type: 'audio/wav' });
     }
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioCtx =
+      typeof window !== 'undefined' ? window.AudioContext || (window as any).webkitAudioContext : undefined;
     if (!AudioCtx) return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
     let audioCtx: AudioContext | null = null;
     try {
@@ -412,9 +465,11 @@ export class AudioRecordingManager {
       const buffer = await this.safeReadAsArrayBuffer(safeBlob);
       const decoded = await audioCtx.decodeAudioData(buffer.slice(0));
       const targetSampleRate = 16000;
-      const maxSamples = targetSampleRate * 30 * 60;
-      const targetLength = Math.min(Math.ceil(decoded.duration * targetSampleRate), maxSamples);
+      const { targetLength, truncated } = computeResampleLength(decoded.duration, targetSampleRate);
       if (targetLength <= 0) return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
+      if (truncated) {
+        options?.onTruncated?.({ originalSeconds: decoded.duration, keptSeconds: MAX_RESAMPLE_SECONDS });
+      }
       const offlineCtx = new OfflineAudioContext(1, targetLength, targetSampleRate);
       const source = offlineCtx.createBufferSource();
       source.buffer = decoded;
@@ -423,6 +478,7 @@ export class AudioRecordingManager {
       const renderedBuffer = await offlineCtx.startRendering();
       const channelData = renderedBuffer.getChannelData(0);
       const wavBuffer = await this.encodeWavAsync(channelData, targetSampleRate, onProgress);
+      options?.onConverted?.();
       return new Blob([wavBuffer], { type: 'audio/wav' });
     } catch (e) {
       console.warn('AudioRecordingManager.convertTo16kHzMonoWavAsync failed, returning safe copy', e);
