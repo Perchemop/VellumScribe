@@ -710,10 +710,12 @@ ${tr.transcript}` : tr.transcript;
           <AudioRecordingModal
             isOpen={showAudioStudioModal}
             noteId={note.id}
-            onRecordingComplete={() => {
+            onRecordingComplete={(result) => {
               const refreshed = StorageManager.getNoteById(note.id);
               if (refreshed) onNoteUpdated(refreshed);
               refreshRecordings();
+              const warning = result ? describeAudioImport(result) : null;
+              if (warning) setImportStatus(warning);
             }}
             onTranscriptionUnavailable={(message) => {
               pendingTranscriptionErrorRef.current = message;

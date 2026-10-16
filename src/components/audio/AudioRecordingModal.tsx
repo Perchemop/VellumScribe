@@ -63,6 +63,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       // Do NOT auto-start the microphone. Show choice screen instead.
       setMode('idle');
       setErrorMessage(null);
+      setImportNotice(null);
       setIsImporting(false);
       setTranscribing(false);
       setJobStatus(null);
@@ -77,6 +78,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
 
   const handleStart = async () => {
     setErrorMessage(null);
+    setImportNotice(null);
     setElapsedSec(0);
     setLiveTranscript('');
     setMode('recording');
