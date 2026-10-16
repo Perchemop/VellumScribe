@@ -25,8 +25,13 @@ import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { OfflineAiManager } from '../services/OfflineAiManager';
 import { TranscriptService, FullTranscriptView } from '../services/TranscriptService';
 import { TranscriptViewer } from './transcription/TranscriptViewer';
-import { TranscriptionRecoverySheet } from './audio/TranscriptionRecoverySheet';
 import { LiveRegion } from './common/LiveRegion';
+
+// Lazily loaded so the recovery sheet is only fetched when actually opened —
+// keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
+const TranscriptionRecoverySheet = React.lazy(() =>
+  import('./audio/TranscriptionRecoverySheet').then((m) => ({ default: m.TranscriptionRecoverySheet }))
+);
 
 interface AudioPlayerWidgetProps {
   recording: RecordingRecord;
@@ -550,19 +555,23 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       )}
 
       {/* Dedicated Transcription Recovery & Alternatives Sheet */}
-      <TranscriptionRecoverySheet
-        isOpen={showRecoverySheet}
-        onClose={() => setShowRecoverySheet(false)}
-        errorText={transcribeError || undefined}
-        recordingId={recording.id}
-        onTranscribeSuccess={() => {
-          refreshTranscriptData();
-          setShowTranscript(true);
-          setTranscribeError(null);
-          setShowRecoverySheet(false);
-        }}
-        onRetryOffline={handleTranscribeWithOfflineAi}
-      />
+      {showRecoverySheet && (
+        <React.Suspense fallback={null}>
+          <TranscriptionRecoverySheet
+            isOpen={showRecoverySheet}
+            onClose={() => setShowRecoverySheet(false)}
+            errorText={transcribeError || undefined}
+            recordingId={recording.id}
+            onTranscribeSuccess={() => {
+              refreshTranscriptData();
+              setShowTranscript(true);
+              setTranscribeError(null);
+              setShowRecoverySheet(false);
+            }}
+            onRetryOffline={handleTranscribeWithOfflineAi}
+          />
+        </React.Suspense>
+      )}
 
       {/* Timestamped Segments Transcript Viewer */}
       {showTranscript && fullTranscript && (
