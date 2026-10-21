@@ -127,18 +127,17 @@ Android-side performance settings already in place and verified:
 
 ## 4b. CI hygiene findings (recommendation only — not changed)
 
-`.github/workflows/` contains **15 disabled one-shot patch workflows**
-(`patch-*.yml`, `restore-*.yml`, `ux-*.yml`, `fix-settings-*.yml`,
-`remove-*.yml`, …) that are permanent no-ops, plus several `push`-triggered
-bot workflows that **auto-commit to `main`**:
+`.github/workflows/` previously contained 19 permanent no-op stubs
+(`if: false` jobs named "(disabled)") plus four `push`-triggered bots
+(`fix-ai-handlers.yml`, `fix-settings-jsx.yml`, `remove-orphans.yml`,
+`ux-residual.yml`) holding `contents: write` and auto-committing to `main`.
 
-- `fix-ai-handlers.yml`, `fix-settings-jsx.yml`, `remove-orphans.yml`,
-  `ux-residual.yml` — `contents: write` + `git push` on path-triggered pushes.
-
-They are inert unless their trigger files change, but they are dead weight and
-an avoidable write path to `main`. Recommend deleting the disabled no-ops and
-converting the auto-commit bots to `workflow_dispatch` only. Left in place here
-because they are pre-existing repo configuration.
+**Status: resolved 2026-10-21 (Q-008).** The 19 stubs were deleted and the
+four bots were converted to `workflow_dispatch` only, so no workflow now
+fires on `push` except `build-apk.yml`, `ci.yml` and `security-scan.yml`.
+`vendor-whisper.yml` was left untouched (dispatch-only, legitimate
+vendor-fetch tool). `.github/workflows/` is now 8 files. See
+`DECISIONS.md` D-304.
 
 ## 4c. Actions runs were failing before any step starts ✅ RESOLVED
 

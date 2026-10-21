@@ -2,10 +2,6 @@ name: Fix SettingsView JSX
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/fix_settings_view_jsx.py
-      - .github/workflows/fix-settings-jsx.yml
 
 jobs:
   patch:

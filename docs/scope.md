@@ -85,6 +85,7 @@ Confirmed by the owner on 2026-10-21:
 | **Real-time collaboration** | Requires a server, presence and conflict resolution — the opposite of the offline-first, no-account premise. |
 | **Multi-user / teams** | Same reason: multi-tenancy, invites and shared workspaces need accounts and a server. |
 | **Open-ended AI chat** | The product offers *bounded* AI actions (a summary of a specific note, a transcription of specific audio). A free-form chat assistant is a different product and would undermine the "no cloud unless you ask" promise. |
+| **Continuous cross-device sync** | The product has encrypted backup-and-restore. Live sync (conflict resolution, multi-device presence) is a different, server-shaped feature and is out of scope for this major version. |
 
 These are recorded so that no one silently adds them later. Adding any of them
 requires an explicit scope change recorded in this file *and* a decision in
@@ -96,8 +97,8 @@ requires an explicit scope change recorded in this file *and* a decision in
 
 Listed honestly as **undecided**, not as in or out of scope:
 
-- Plugin marketplace / user-installable extensions.
-- Continuous cross-device sync (as distinct from the existing
-  backup-and-restore).
+- Plugin marketplace / user-installable extensions. **Deferred to a later
+  phase** by the owner (2026-10-21): "plugin can wait until later in the
+  project". Not rejected — deliberately not decided for this major version.
 
 See `docs/assumptions-and-questions.md` Q-006 and Q-007.

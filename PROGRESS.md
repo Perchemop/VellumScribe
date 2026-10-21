@@ -136,6 +136,25 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 
 ---
 
+## 2026-10-21 — Slice B-2 + D-1: workflow cleanup and scope decisions
+
+**Owner approval received** (Q-008, Q-006, Q-007).
+
+- **Workflows.** Deleted 19 permanent no-op stubs (`if: false` jobs named
+  "(disabled)"). Converted the 4 push-triggered auto-commit bots
+  (`fix-ai-handlers`, `fix-settings-jsx`, `remove-orphans`, `ux-residual`)
+  to `workflow_dispatch` only. `vendor-whisper.yml` untouched.
+  `.github/workflows/` is now 8 files; no workflow fires on `push` except
+  `build-apk`, `ci` and `security-scan`. Decision D-304.
+- **Scope.** Continuous cross-device sync → explicitly out of scope for this
+  major version (Q-007). Plugin marketplace → deferred to a later phase
+  (Q-006; "plugin can wait until later in the project"). Recorded in
+  `docs/scope.md` and D-004.
+- `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
+  orphan-clean, 86 tests). Workflow YAML parses cleanly.
+
+---
+
 ## Open blockers (carry into next session)
 
 1. **Q-002 — no release keystore (the last release blocker).** Generate it
@@ -144,8 +163,6 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 2. **A-3 — update-in-place proof** on a physical `arm64` device (needs a
    signed APK from blocker 1).
 3. **Q-003 — `assetlinks.json` placeholder** once the keystore exists.
-4. **Q-008 — legacy workflows** (15 stubs + 4 auto-commit bots): awaiting the
-   owner's approval to remove / restrict.
-5. **Q-006 / Q-007 — scope undecided:** plugin marketplace, continuous sync.
-6. **Q-004 / Q-005 — quality debt:** 194 unformatted files, 656 lint warnings.
-7. **C-1…C-5 — test coverage gaps** (R-2 has no tests at all).
+4. **Q-003 — `assetlinks.json` placeholder** once the keystore exists.
+5. **Q-004 / Q-005 — quality debt:** 194 unformatted files, 656 lint warnings.
+6. **C-1…C-5 — test coverage gaps** (R-2 has no tests at all).
