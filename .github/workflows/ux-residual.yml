@@ -2,10 +2,6 @@ name: UX Residual Complete
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/ux_residual_complete.py
-      - .github/workflows/ux-residual.yml
 
 jobs:
   patch:

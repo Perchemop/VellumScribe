@@ -40,8 +40,8 @@ from each.
 **Decision.** Real-time collaboration, multi-user/teams and open-ended AI
 chat are out of scope for the next major version.
 **Rejected.** Leaving them implicit — implicit scope always expands.
-**Consequences.** `docs/scope.md`. Plugin marketplace and continuous sync
-deliberately left **undecided** (Q-006, Q-007), not silently excluded.
+**Consequences.** `docs/scope.md`. Continuous sync is now explicitly out of
+scope; the plugin marketplace is deferred to a later phase (Q-006).
 
 ### D-005 · 2026-10-21 · Make the repository public
 **Context.** Local machine cannot build the APK; every Actions run fails; the
@@ -147,12 +147,17 @@ dedicated formatting slice (B-3) before enforcement.
 **Rejected.** Enabling it now (CI red) and silently skipping it (hides debt).
 **Consequences.** The gate is listed in CI as staged until B-3 lands.
 
-### D-304 · 2026-10-21 · Keep the legacy CI workflows, pending approval
-**Context.** 15 one-shot `patch-*`/`restore-*`/`ux-*` stubs and 4
-push-triggered auto-commit bots holding `contents: write`.
-**Decision.** Document only; removal awaits owner approval (Q-008).
-**Rejected.** Deleting them unilaterally — they are pre-existing work of the
-owner's that may still be intentional.
+### D-304 · 2026-10-21 · Clean up the legacy CI workflows
+**Context.** 19 permanent no-op stubs (`if: false`) and 4 push-triggered
+auto-commit bots holding `contents: write` were left in
+`.github/workflows/`.
+**Decision.** Owner approved removal/restriction (Q-008 resolved): delete all
+19 stubs; convert the 4 bots to `workflow_dispatch` only. `vendor-whisper.yml`
+is untouched (dispatch-only, legitimate vendor-fetch tool).
+**Rejected.** Leaving them (dead write path to `main`, noise in the Actions UI)
+and deleting the bots entirely (they remain useful for manual one-off runs).
+**Consequences.** `.github/workflows/` is now 8 files. No workflow fires on
+`push` except `build-apk.yml`, `ci.yml` and `security-scan.yml`.
 
 ---
 

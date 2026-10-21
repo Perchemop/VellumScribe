@@ -2,9 +2,6 @@ name: Remove orphan components
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/remove-orphans.yml
 
 jobs:
   patch:

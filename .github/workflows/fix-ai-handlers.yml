@@ -2,10 +2,6 @@ name: Fix AI Handlers
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - scripts/fix_ai_handlers.py
-      - .github/workflows/fix-ai-handlers.yml
 
 jobs:
   patch:

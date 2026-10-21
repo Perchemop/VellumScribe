@@ -66,12 +66,13 @@ Acceptance criteria:
 - The guide file itself is never committed (guarded in `.gitignore`).
 
 ### B-2 · Remove legacy one-shot CI workflows
-**Status: Backlog, awaiting owner approval (Q-008)**
+**Status: Done (2026-10-21)** — Q-008 resolved.
 
 Acceptance criteria:
-- 15 permanent no-op stub workflows deleted.
-- 4 auto-commit bots restricted to `workflow_dispatch`.
-- No workflow holds `contents: write` on `push`.
+- ✅ 19 permanent no-op stubs deleted.
+- ✅ 4 auto-commit bots restricted to `workflow_dispatch`.
+- ✅ No workflow holds `contents: write` on `push` (only `build-apk.yml`,
+  `ci.yml`, `security-scan.yml` still fire on push).
 
 ### B-3 · Formatting baseline + enforced format gate
 **Status: Backlog (Q-004)**
@@ -130,11 +131,11 @@ provenance badge, offline (airplane mode).
 ## Track D — Scope decisions
 
 ### D-1 · Settle Q-006 and Q-007
-**Status: Needs owner decision**
+**Status: Done (2026-10-21)** — Q-006 deferred, Q-007 out of scope.
 
-Plugin marketplace and continuous cross-device sync are currently neither in
-nor out of scope. Resolve in `docs/scope.md` + `DECISIONS.md` before any
-architectural work that would be shaped by them.
+- Plugin marketplace → deferred to a later phase (owner: "plugin can wait
+  until later in the project").
+- Continuous cross-device sync → out of scope for this major version.
 
 ### D-2 · Settle Q-009 / Q-010
 **Status: Needs owner decision**

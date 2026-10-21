@@ -72,24 +72,31 @@ required CI step.
 The guide prefers warnings denied. *Action:* burn the warnings down, then drop
 the ceiling to 0.
 
-**Q-008. Legacy one-shot CI workflows remain in `.github/workflows/`.**
-15 are permanent no-op stubs (`patch-*.yml`, `restore-*.yml`, `ux-*.yml`,
-`fix-settings-*.yml`, `remove-*.yml`), and four push-triggered bots hold
-`contents: write` and auto-commit to `main` (`fix-ai-handlers.yml`,
-`fix-settings-jsx.yml`, `remove-orphans.yml`, `ux-residual.yml`).
-*Action pending owner approval:* delete the no-ops and restrict the bots to
-`workflow_dispatch`.
+**Q-008. ✅ Resolved 2026-10-21 — legacy one-shot CI workflows cleaned up.**
+There were 19 permanent no-op stubs (`if: false` jobs named "(disabled)")
+plus four push-triggered bots holding `contents: write`.
+*Action taken:* deleted all 19 stubs; removed the `push:` trigger from the
+four bots so they now run on `workflow_dispatch` only. `vendor-whisper.yml`
+was left alone — it is dispatch-only and is a legitimate vendor-fetch tool,
+not a patch bot.
+*Result:* `.github/workflows/` went from 27 files to 8:
+build-apk, ci, fix-ai-handlers, fix-settings-jsx, remove-orphans,
+security-scan, ux-residual, vendor-whisper. No workflow now fires on `push`
+except `build-apk.yml`, `ci.yml` and `security-scan.yml`.
 
 ### Scope decisions not yet made
 
-**Q-006. Plugin marketplace / user-installable extensions — in or out?**
-Inspired by Obsidian's public behaviour but deliberately left undecided in
-`docs/scope.md`. Needs an explicit decision.
+**Q-006. ✅ Resolved 2026-10-21 — deferred to a later phase.**
+Plugin marketplace / user-installable extensions. The owner decided this is
+not in scope for this major version but is not permanently excluded: "plugin
+can wait until later in the project". Recorded as **deferred** in
+`docs/scope.md` (Inspired but not yet decided). Revisit in a later phase
+before any architectural work that would be shaped by it.
 
-**Q-007. Continuous cross-device sync — in or out?**
-The app has backup-and-restore. Continuous sync (conflict resolution,
-presence of multiple devices) is a different feature and was not selected as
-out of scope. Needs an explicit decision.
+**Q-007. ✅ Resolved 2026-10-21 — out of scope for this major version.**
+Continuous cross-device sync (as distinct from the existing encrypted
+backup-and-restore). Recorded in `docs/scope.md` (Explicitly out of scope).
+Adding it later requires a scope change in that file plus a decision entry.
 
 ### Product decisions to confirm
 
