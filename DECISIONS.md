@@ -50,7 +50,8 @@ guide requires a public repo + Actions when local resources are constrained.
 **Rejected.** Staying private (loses free Actions minutes) and building only
 locally (impossible without JDK/SDK and 4–6 GiB RAM).
 **Consequences.** Code and history become publicly visible — a secret scan
-(clean) was run first. Q-001 remains the thing to verify after the change.
+(clean) was run first. **Verified:** after the change, Actions runs execute
+normally (Q-001 resolved; CI, Security Scanning and the APK build all green).
 
 ### D-006 · 2026-10-21 · Use `docs/ARCHITECTURE.md`, do not create `docs/architecture.md`
 **Context.** The guide asks for `docs/architecture.md`. This repo already has

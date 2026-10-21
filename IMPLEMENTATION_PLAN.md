@@ -10,20 +10,27 @@ Last reviewed: 2026-10-21.
 
 ---
 
-## Track A — Unblock the verification signal (must come first)
+## Track A — Ship a signed, updatable APK
 
 ### A-1 · Restore GitHub Actions
-**Status: Blocked on owner action (Q-001)**
+**Status: Done (2026-10-21)** — repository made public; runs execute normally.
 
-Acceptance criteria:
-- A run on `main` gets past **Set up job** and executes checkout.
-- `CI` workflow runs format/lint/orphan/typecheck/test/build steps.
-- A green run is linked from `PROGRESS.md`.
+Evidence:
+- CI run `39566612176` — green on Linux, Windows and macOS
+  (typecheck, lint, orphan check, tests, build).
+- Security Scanning run `39566612217` — green.
+- Android APK run `39566612127` — green, artifact
+  `VellumScribe-Android-APKs-real`.
+- Recorded as fact F-007 and as resolved question Q-001.
 
-Depends on: repository visibility change to public, and Actions billing check.
+Note: the `format (staged, non-blocking)` job fails by design until slice B-3
+lands (Q-004); it is `continue-on-error` so the workflow still concludes
+success.
 
 ### A-2 · First signed release build
-**Status: Blocked on A-1 and Q-002**
+**Status: Ready — only Q-002 (keystore) blocks it.** The pipeline itself is
+proven: CI already builds `assembleDebug` and `assembleRelease`, logging
+`versionName=3.1.0 versionCode=30100 signed=false`.
 
 Acceptance criteria:
 - Release keystore generated and backed up outside the repo.
@@ -31,8 +38,8 @@ Acceptance criteria:
   locally).
 - `assembleRelease` logs `VELLUM: assembleRelease -> versionName=3.1.0
   versionCode=30100 signed=true`.
-- `app-release.apk` artifact downloadable and `apksigner verify` reports the
-  expected certificate.
+- The release APK inside the artifact passes `apksigner verify --print-certs`
+  and reports the expected certificate.
 
 ### A-3 · Update-in-place proof
 **Status: Backlog** (depends on A-2)
@@ -78,7 +85,7 @@ Acceptance criteria:
 **Status: Backlog (Q-005)**
 
 Acceptance criteria:
-- Warning count reduced from 664 to 0 in slices of ≤50.
+- Warning count reduced from 656 to 0 in slices of ≤50.
 - `--max-warnings=0` set in `package.json`.
 
 ---

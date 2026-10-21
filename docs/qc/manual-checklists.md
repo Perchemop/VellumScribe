@@ -77,12 +77,15 @@ Record the result of each pass in `PROGRESS.md`.
 - [ ] Favicon, PWA icon and Android launcher icon are the same mark.
 - [ ] `npm run build` succeeds; `dist/` has an `index.html` with hashed assets.
 
-## 7. CI (when available — currently blocked, Q-001)
+## 7. CI (verified working 2026-10-21)
 
-- [ ] A run gets past **Set up job** (today every run dies in 2–4 s with
-      `steps: []`).
-- [ ] Format, lint, orphan, typecheck, test and build steps all green.
+- [ ] A run completes its steps (baseline: run `39566612176`, three OS
+      runners green).
+- [ ] Lint, orphan, typecheck, test and build steps all green on
+      Linux, Windows and macOS.
+- [ ] The staged format job is allowed to fail without failing the workflow
+      (Q-004) — confirm the workflow conclusion is still `success`.
 - [ ] The Android workflow logs `VELLUM: <task> -> versionName=… versionCode=…
-      signed=…`.
+      signed=…` and currently reports `signed=false` until Q-002 is closed.
 - [ ] Tagged releases fail loudly if no signing key is configured.
-- [ ] Artifacts include `app-release.apk`.
+- [ ] Artifact `VellumScribe-Android-APKs-real` is attached to the run.

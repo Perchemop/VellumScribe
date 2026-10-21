@@ -89,11 +89,12 @@ Last reviewed: 2026-10-21. Test suite: **12 files / 86 tests**, all passing.
 
 | Capability | Status | Evidence |
 | --- | --- | --- |
-| Signed APK able to update an installed copy | Implemented | `android/app/build.gradle`; **not verified** — no keystore yet (Q-002) |
-| Derived `versionCode` from `package.json` | Implemented | `android/app/build.gradle`; **not verified** — no build yet (Q-001) |
+| Signed APK able to update an installed copy | Implemented | `android/app/build.gradle`; CI build reports `signed=false` — **blocked on Q-002** (no keystore) |
+| Derived `versionCode` from `package.json` | **Verified** | CI run `39566612127`: `versionName=3.1.0 versionCode=30100` logged for both `assembleDebug` and `assembleRelease` |
+| APK build in CI (debug + release) | **Verified** | CI run `39566612127` green; artifact `VellumScribe-Android-APKs-real` |
 | Brand-consistent launcher icons + splash | **Polished** | `npm run assets:brand`; 26 PNGs + 11 XMLs validated |
 | PWA manifest + brand favicon | **Polished** | `public/manifest.json`, `public/favicon.svg` |
-| CI verification signal | Implemented | **Blocked** — Actions runs die before any step (Q-001) |
+| CI verification signal | **Verified** | CI run `39566612176` green on Linux + Windows + macOS; Security Scanning `39566612217` green |
 
 ---
 
@@ -104,5 +105,6 @@ Last reviewed: 2026-10-21. Test suite: **12 files / 86 tests**, all passing.
    restore, and the Android media-key recovery path.
 2. **Native inference is unverified on hardware** — requires a signed APK and
    a physical `arm64` device.
-3. **CI is the primary verification signal and it is currently down** (Q-001).
-   Until it is fixed, "CI is green" cannot be claimed for any slice.
+3. ~~**CI is down**~~ — **resolved 2026-10-21.** CI, Security Scanning and
+   the Android APK workflow all run green. The remaining release blocker is
+   the missing signing key (Q-002), not the pipeline.

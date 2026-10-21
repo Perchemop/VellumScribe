@@ -11,16 +11,18 @@ Append here for every slice; never rewrite history.
 
 | Signal | State |
 | --- | --- |
-| `npm run verify` | ✅ green locally (typecheck clean, lint 0 errors / ~664 warnings, orphan check clean across 118 files, 86 tests passing) |
+| `npm run verify` | ✅ green locally (typecheck clean, lint 0 errors / 656 warnings, orphan check clean across 118 files, 86 tests passing) |
 | Test suite | ✅ 12 files / 86 tests |
 | Working tree | clean, committed and pushed |
-| GitHub Actions | ❌ **every run fails in 2–4 s with `steps: []` and no logs** (Q-001) — nothing reaches checkout |
+| GitHub Actions | ✅ **operational** (verified 2026-10-21) — CI `39566612176` green on Linux + Windows + macOS, Security Scanning `39566612217` green |
+| Android APK | ✅ **built in CI** — run `39566612127`, artifact `VellumScribe-Android-APKs-real`, `versionName=3.1.0 versionCode=30100`, **`signed=false`** |
 | Signed APK | ⛔ not produced — no keystore yet (Q-002) |
-| Guide adoption | ✅ documentation set + agent definitions added (slice B-1) |
+| Guide adoption | ✅ documentation set + agent definitions added (slice B-1), commit `5d68e2b` |
 
-**Honest status sentence:** the code and tests are green *locally*; the
-primary verification signal (CI) is down, so **"CI is green" cannot be claimed
-for any slice** until Q-001 is resolved.
+**Status sentence:** code and tests are green locally *and* CI is green on
+three OS runners, with a real (unsigned) APK produced. The one remaining
+release blocker is the missing signing key (Q-002) — without it no build can
+ever be installed or update an installed copy.
 
 ---
 
@@ -96,19 +98,54 @@ Committed in order: `cd6fdab`, `db1ba53`, `d5cd3e0`, `aaf968c`, `4599431`,
 - **Docs:** `docs/ANDROID_E2E_AUDIT.md`, `BUILD_RELEASE.md` §2/2b/5,
   `KNOWN_LIMITATIONS.md` §7–8.
 
-**Known failure carried forward:** Actions runs fail before any step (Q-001).
+**Carried forward at the time:** Actions runs failed before any step
+(Q-001) — **since resolved, see below.**
+
+---
+
+## 2026-10-21 — Slice A-1: Actions restored, first APK built
+
+Pushed as `5d68e2b`. This was the first time this repository's own commits
+ran through the pipeline (the 2026-10-16 pushes produced no runs at all —
+Actions was down then).
+
+| Run | Workflow | Result |
+| --- | --- | --- |
+| `39566612176` | CI | ✅ `verify (ubuntu-latest)`, `verify (windows-latest)`, `verify (macos-latest)` all green |
+| `39566612176` | CI · `format (staged, non-blocking)` | ❌ red **by design** (Q-004); `continue-on-error`, workflow still `success` |
+| `39566612217` | Security Scanning | ✅ Dependency Audit + CodeQL green |
+| `39566612127` | Build Android APK | ✅ artifact `VellumScribe-Android-APKs-real` |
+
+The Android build logged, for both tasks:
+
+```
+VELLUM: assembleDebug   -> versionName=3.1.0 versionCode=30100 signed=false
+VELLUM: assembleRelease -> versionName=3.1.0 versionCode=30100 signed=false
+VELLUM: release APK is UNSIGNED. Add android/keystore.properties or
+        VELLUM_KEYSTORE_* env vars so a newer build can replace an installed copy.
+```
+
+**What this proves:** the derived `versionCode` (D-201) works, the SDK 36 +
+pinned NDK toolchain install works, and the whole pipeline runs on all three
+OSes. **What it does not prove:** anything about signing — the APK is
+unsigned, so it cannot be installed (Q-002). The multi-OS matrix was new in
+this commit and Windows/macOS both passed with the explicit `shell: bash`
+override, confirming the `check:orphans` and vitest steps are portable.
+
+Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 
 ---
 
 ## Open blockers (carry into next session)
 
-1. **Q-001 — Actions down.** Check Settings → Billing → Actions spending
-   limit, re-run a workflow, confirm it passes *Set up job*. Making the repo
-   public should also restore free minutes.
-2. **Q-002 — no release keystore.** Generate it, set the four
-   `ANDROID_KEYSTORE_*` secrets, then run slice A-2.
-3. **A-3 — update-in-place proof** on a physical `arm64` device.
+1. **Q-002 — no release keystore (the last release blocker).** Generate it
+   per `docs/BUILD_RELEASE.md` §1, set the four `ANDROID_KEYSTORE_*` secrets,
+   then re-run slice A-2 and confirm `signed=true`.
+2. **A-3 — update-in-place proof** on a physical `arm64` device (needs a
+   signed APK from blocker 1).
+3. **Q-003 — `assetlinks.json` placeholder** once the keystore exists.
 4. **Q-008 — legacy workflows** (15 stubs + 4 auto-commit bots): awaiting the
    owner's approval to remove / restrict.
 5. **Q-006 / Q-007 — scope undecided:** plugin marketplace, continuous sync.
-6. **Q-004 / Q-005 — quality debt:** 194 unformatted files, 664 lint warnings.
+6. **Q-004 / Q-005 — quality debt:** 194 unformatted files, 656 lint warnings.
+7. **C-1…C-5 — test coverage gaps** (R-2 has no tests at all).

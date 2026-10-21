@@ -140,11 +140,12 @@ an avoidable write path to `main`. Recommend deleting the disabled no-ops and
 converting the auto-commit bots to `workflow_dispatch` only. Left in place here
 because they are pre-existing repo configuration.
 
-## 4c. Actions runs are failing before any step starts ⚠️ BLOCKER
+## 4c. Actions runs were failing before any step starts ✅ RESOLVED
 
-Every run on `main` fails in 2–4 s with `steps: []` and no logs
-(`BlobNotFound`) — including `CI` and `Security Scanning`, which were failing
-before this pass:
+*Status: resolved 2026-10-21.*
+
+Originally, every run on `main` failed in 2–4 s with `steps: []` and no logs
+(`BlobNotFound`):
 
 ```
 completed  failure  Security Scanning  main  push  38830247074  3s
@@ -152,12 +153,25 @@ completed  failure  Build Android APK  main  push  38830247073  3s
 completed  failure  CI                 main  push  38830247036  2s
 ```
 
-Jobs that die with zero steps never reach the checkout, so this is not a code
-problem — it points at the account/repo runner side (Actions spending limit or
-billing, or runner allocation). **Nothing, including the APK, will build until
-it is resolved.** Check *Settings → Billing → Actions* (spending limit / usage)
-and re-run a workflow; the `Build Android APK` job should then get past
-"Set up job".
+Jobs dying with zero steps never reached checkout, so this was not a code
+problem — it was the account/repo runner side (Actions spending limit /
+billing on a private repository). The repository is now public and runs
+execute normally:
+
+```
+39566612176  CI                 success  verify (ubuntu / windows / macos)
+39566612217  Security Scanning  success  Dependency Audit + CodeQL
+39566612127  Build Android APK  success  artifact VellumScribe-Android-APKs-real
+```
+
+The Android build logged `versionName=3.1.0 versionCode=30100 signed=false`
+for both `assembleDebug` and `assembleRelease`, plus an explicit warning that
+the release APK is unsigned until a keystore is configured.
+
+One real bug was also fixed here: `build-apk.yml` used the `secrets` context
+inside `if:`, which is not allowed and made GitHub treat the workflow as
+invalid (it was listed by file path instead of by name). The presence checks
+now happen in the shell.
 
 One real bug was also fixed here: `build-apk.yml` used the `secrets` context
 inside `if:`, which is not allowed and made GitHub treat the workflow as

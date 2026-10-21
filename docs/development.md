@@ -119,7 +119,7 @@ left to guess requirements.
 `.github/workflows/ci.yml` is the required verification signal:
 
 1. Format check — **staged, not yet enforced** (Q-004).
-2. Lint — enforced at `--max-warnings=700` (real ceiling is 664, Q-005).
+2. Lint — enforced at `--max-warnings=700` (real ceiling is 656, Q-005).
 3. Orphan check — enforced, fails on dead code.
 4. Typecheck — enforced.
 5. Full test suite — enforced.
@@ -128,9 +128,14 @@ left to guess requirements.
 Runs on Linux, Windows and macOS. All shell steps declare `shell: bash` so the
 same commands work on every runner.
 
-**Current state: GitHub Actions runs fail before any step starts (Q-001).**
-Until that is fixed, "CI is green" cannot be claimed for any slice — verify
-locally and say so.
+**Verified 2026-10-21:** CI run `39566612176` passed on all three OS runners,
+Security Scanning (`39566612217`) passed, and the Android APK workflow
+(`39566612127`) produced `VellumScribe-Android-APKs-real` with
+`versionName=3.1.0 versionCode=30100` — **unsigned**, because no keystore
+exists yet (Q-002). The format job failed as designed; it is
+`continue-on-error` and does not fail the workflow.
+
+Always cite a run ID you actually inspected, or state what you ran locally.
 
 ---
 
