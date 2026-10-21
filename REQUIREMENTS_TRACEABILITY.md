@@ -3,7 +3,7 @@
 Every requirement maps to **the file that implements it** and **the test that
 proves it**. A requirement with no test may not be marked Verified.
 
-Legend: ✅ automated test · ⚠ implemented, untested · 🚫 blocked
+Legend: ✅ automated test · 🟢 proven by an inspected CI run (not a unit test) · ⚠ implemented, untested · 🚫 blocked
 
 Last updated: 2026-10-21.
 
@@ -66,9 +66,9 @@ Last updated: 2026-10-21.
 | # | Requirement | Implements | Test |
 | --- | --- | --- | --- |
 | R-6.1 | A new APK updates an already-installed copy | `android/app/build.gradle` signing configs | 🚫 no keystore yet (Q-002) |
-| R-6.2 | `versionCode` is derived and monotonically increasing | `android/app/build.gradle` | 🚫 no build yet (Q-001) |
+| R-6.2 | `versionCode` is derived and monotonically increasing | `android/app/build.gradle` | 🟢 CI run `39566612127` logged `versionName=3.1.0 versionCode=30100` |
 | R-6.3 | Launcher icons and splash match the web brand | `scripts/generate-brand-assets.mjs` | ✅ asset validation in `npm run assets:brand` |
-| R-6.4 | CI enforces format, lint, orphan, typecheck, test, build | `.github/workflows/ci.yml` | 🚫 Actions failing (Q-001) |
+| R-6.4 | CI enforces lint, orphan, typecheck, test, build | `.github/workflows/ci.yml` | 🟢 CI run `39566612176` green on Linux + Windows + macOS (format gate still staged, Q-004) |
 
 ---
 

@@ -51,9 +51,11 @@ npm run verify   # typecheck + lint + orphan check + tests
 You may also run `npm test`, `npm run typecheck`, `npm run lint`,
 `npm run check:orphans` and `npm run build`.
 
-**Never claim CI results.** GitHub Actions currently fails before any step
-starts (Q-001), so "CI is green" is not an available claim. If the gate is
-red locally, say exactly which step failed and how.
+**Never invent CI results.** Verify locally yourself and paste the real
+output. CI is the required signal: as of 2026-10-21 it runs green on Linux,
+Windows and macOS (run `39566612176`), so you may cite a run you actually
+inspected — never a run you did not look at. The format job is deliberately
+staged and non-blocking (Q-004); it failing does not fail the workflow.
 
 ## What to look for
 

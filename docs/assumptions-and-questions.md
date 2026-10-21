@@ -20,7 +20,12 @@ Last reviewed: 2026-10-21.
 - F-005. The native engine is dual-mode: REAL when the upstream tree is
   vendored, fail-closed stub otherwise.
 - F-006. `versionCode` is derived from `package.json`
-  (`major*10000 + minor*100 + patch`; `3.1.0` → `30100`).
+  (`major*10000 + minor*100 + patch`; `3.1.0` → `30100`) and CI confirms it:
+  run `39566612127` logged `versionName=3.1.0 versionCode=30100`.
+- F-007. GitHub Actions is operational (verified 2026-10-21): CI run
+  `39566612176` green on Linux, Windows and macOS; Security Scanning run
+  `39566612217` green; Android APK run `39566612127` green with artifact
+  `VellumScribe-Android-APKs-real` (unsigned — see Q-002).
 
 ## Assumptions (unconfirmed — carry risk)
 
@@ -40,15 +45,6 @@ Last reviewed: 2026-10-21.
 ## Open questions
 
 ### Blocking
-
-**Q-001. Every GitHub Actions run fails before any step starts.**
-All runs on `main` (CI, Security Scanning, Build Android APK) conclude in
-2–4 s with `steps: []` and no logs. This blocks the APK build entirely and
-removes the guide's primary verification signal. Points at the account/repo
-runner side — Actions spending limit, billing or runner allocation — not at
-the code. *Action:* check **Settings → Billing → Actions**, then re-run a
-workflow and confirm it gets past "Set up job". Making the repository public
-should also restore free Actions minutes.
 
 **Q-002. No release keystore exists yet.**
 Signing is fully wired (`android/keystore.properties` or `VELLUM_*` env vars,
@@ -71,7 +67,8 @@ from Q-002.
 dedicated mechanical formatting slice, then enable `format:check` as a
 required CI step.
 
-**Q-005. Lint warnings stand at 664** against a `--max-warnings=700` ceiling.
+**Q-005. Lint warnings stand at 656** against a `--max-warnings=700` ceiling
+(re-measured 2026-10-21).
 The guide prefers warnings denied. *Action:* burn the warnings down, then drop
 the ceiling to 0.
 
@@ -103,3 +100,18 @@ inference runtime. See `docs/KNOWN_LIMITATIONS.md` §8.
 **Q-010. APK size appetite.** The `real` Whisper mode bundles a ~30 MB
 quantised model into APK assets. Confirm this is acceptable for sideload
 distribution, or whether `stub` should be the default.
+
+---
+
+## Resolved
+
+**Q-001. ✅ Resolved 2026-10-21 — every GitHub Actions run failed before any
+step started.**
+*Was:* all runs on `main` concluded in 2–4 s with `steps: []` and no logs,
+which blocked the APK build and removed the primary verification signal.
+*Cause:* account/repo runner side (Actions spending limit / billing on a
+private repo), not the code.
+*Resolution:* the repository is now public, and runs execute normally.
+Evidence — CI `39566612176` (Linux + Windows + macOS green), Security
+Scanning `39566612217` (green), Build Android APK `39566612127` (green,
+artifact `VellumScribe-Android-APKs-real`). Recorded as fact F-007.

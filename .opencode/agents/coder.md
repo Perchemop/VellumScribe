@@ -67,8 +67,9 @@ npm run verify   # typecheck + lint + orphan check + tests
 ```
 
 If something fails, fix it or report it honestly — never round a failure up
-into "passing". Do not claim CI results: CI currently fails before any step
-starts (Q-001), so only local verification counts.
+into "passing". Cite CI only when you have actually looked at the run: the
+workflow runs on Linux, Windows and macOS, and its format job is intentionally
+staged and non-blocking (Q-004).
 
 Update `REQUIREMENTS_TRACEABILITY.md` with the file you changed and the test
 that proves it, and report back which `docs/parity.md` row moved and to what

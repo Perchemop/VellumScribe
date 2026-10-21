@@ -39,8 +39,11 @@ truth, not your memory of this conversation:
    `IMPLEMENTATION_PLAN.md` with acceptance criteria first.
 2. **Never claim unverified work.** A slice is Done only when
    `npm run verify` is green locally *and* the QC checklist has been walked.
-   GitHub Actions currently fails before any step starts (Q-001) — while that
-   is true you must never say "CI is green"; say what you actually ran.
+   GitHub Actions is operational and is the required signal (verified
+   2026-10-21: three-OS CI, Security Scanning and the Android APK build all
+   green). Still — never say "CI is green" about work you have not seen a run
+   for; cite the run ID or say what you ran locally. The format job is
+   deliberately staged and non-blocking (Q-004).
 3. **Never invent requirements.** Anything unresolved goes to
    `docs/assumptions-and-questions.md` as a question for the human. Do not
    decide scope questions (Q-006, Q-007, Q-009, Q-010) yourself.
