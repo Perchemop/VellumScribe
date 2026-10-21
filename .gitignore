@@ -24,3 +24,8 @@ android/*.keystore
 .idea/
 *.iml
 .vscode/
+
+# The local operating guide lives outside this repository and must never be
+# committed, pushed, or uploaded anywhere. Never copy it into the tree.
+guide.md
+**/guide.md

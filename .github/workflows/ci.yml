@@ -7,8 +7,41 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  # Format baseline does not exist yet (194 files differ — Q-004).
+  # This job is intentionally non-blocking until slice B-3 lands, then it
+  # becomes a required gate. See DECISIONS.md D-303.
+  format:
+    name: format (staged, non-blocking)
     runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci --no-fund --no-audit
+
+    - name: Prettier check
+      run: npm run format:check
+
+  build:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # All shell steps below are bash-only commands (`set -euo pipefail`,
+    # `wc -c`, `[[ ]]`), so bash must be the shell on every runner —
+    # Windows defaults to pwsh and macOS to bash, hence this override.
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
     steps:
     - uses: actions/checkout@v4
 
