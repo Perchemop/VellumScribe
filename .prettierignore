@@ -1,0 +1,22 @@
+# Prettier ignore — vendored, generated, or archived content that must not be
+# reformatted. See DECISIONS.md D-303 (format gate is staged, slice B-3).
+
+node_modules
+dist
+build
+coverage
+package-lock.json
+
+# Vendored third-party source (MIT) — never reformat upstream trees.
+android/app/src/main/cpp/third_party
+public/sql-wasm.js
+public/sql-wasm.wasm
+
+# Generated / fixture content.
+scripts/restore-payloads
+scripts/storage_restore
+*.min.js
+*.min.css
+
+# Archived release history — formatting old records rewrites history for no gain.
+docs/history
