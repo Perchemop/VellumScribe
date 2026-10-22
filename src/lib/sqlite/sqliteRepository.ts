@@ -75,7 +75,7 @@ export interface NotesPageResult {
 
 /** Raw rows from the `checklists` table, hydrated into ChecklistItem entries. */
 interface ChecklistRow {
-  id: number;
+  id: string; // checklists.id is TEXT PRIMARY KEY (see schema.ts)
   note_id: number;
   text: string;
   completed: unknown; // stored as 0/1 in SQLite
