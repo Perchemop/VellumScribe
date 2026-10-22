@@ -12,7 +12,7 @@ Append here for every slice; never rewrite history.
 | Signal | State |
 | --- | --- |
 | `npm run verify` | ⚠ **last known green locally:** typecheck clean, lint 0 errors / 656 warnings, orphan check clean across 118 files, 86 tests passing. Heavy verification no longer runs on this machine (guide §4) — it runs on GitHub Actions via `ci.sh`. |
-| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 275 warnings (down from 656; slices B-4 and B-5) — this is the active blocker (see Q-005). |
+| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 229 warnings (all `no-explicit-any`; 656 → 229 via slices B-4…B-6) — this is the active blocker (see Q-005). |
 | Test suite | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`). |
 | Working tree | clean, committed and pushed |
 | GitHub Actions | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green. |
@@ -23,8 +23,8 @@ Append here for every slice; never rewrite history.
 **Status sentence:** code compiles and tests pass; CI is operational on three
 OS runners with a real (unsigned) APK. The active blocker is lint:
 `--max-warnings=0` now denies warnings (guide §4), so CI lint fails until the
-remaining 275 warnings are burned down via `ci.sh` iterations (B-4: 656 → 332,
-B-5: 332 → 275). Per guide §4,
+remaining 229 `no-explicit-any` warnings are burned down via `ci.sh` iterations
+(B-4: 656 → 332, B-5: 332 → 275, B-6: 275 → 229). Per guide §4,
 fixing CI is the first task.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
@@ -169,6 +169,44 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
+## 2026-10-23 — Slice B-6: a11y, hook facts, rule scope (275 → 229)
+
+**Every warning now is `@typescript-eslint/no-explicit-any` (229).** 0 errors.
+
+- **`jsx-a11y/click-events-have-key-events` (15 → 0).** Clickable cards/rows
+  (`ArchiveSection`, `RecentNotesSection`, `TranscriptViewer`, the sketch
+  thumbnail) got real button semantics — `role="button"`, `tabIndex={0}` and an
+  Enter/Space `onKeyDown`. Modal backdrops/dialogs (`CloudConnectModal`,
+  `EventNotesList` ×3, `FirstTimeUserGuideModal`,
+  `TranscriptionRecoverySheet`, `NoteRevisionsModal`) got an Escape handler, and
+  two `stopPropagation`-only handlers were removed (one was dead — its parent
+  had no click handler; the other became redundant once the backdrop guarded on
+  the event target).
+- **`react-hooks/immutability` (6 → 0).** The effects referenced helpers
+  declared below them; the helpers now come first.
+- **`react-hooks/exhaustive-deps` (10 → 0).** Honest fixes: `useCallback` around
+  `refreshTranscriptData`, `handleDismiss`, `handleCleanup` and
+  `saveHistoryState` so the effects can depend on them; a stable setter added to
+  a dep list; `EventNotesList`'s count memos now genuinely project onto `notes`
+  (the stored media is not reactive, so `notes` really is the dependency, and
+  consumers only ever look up rendered notes); missing `note.*` fields and
+  `sketchData`/`initialDataUrl` added where they co-change with the existing
+  keys; the `App` bootstrap effect reads `notes`/`showToast` through refs
+  instead of re-running migrations on every render.
+- **`no-useless-assignment` (3 → 0).** Removed dead initialisers
+  (`cloudBackupCrypto`'s envelope, `geminiService`'s `sessionId`/`serverSegments`).
+- **`react-hooks/set-state-in-effect` (14) scoped off** — owner decision,
+  recorded as `D-406`: it flags idiomatic hydrate/reset effects and the app does
+  not use the React Compiler. `exhaustive-deps` and `immutability` stay on.
+- `AiProvenanceBadge` now derives provenance with `useMemo` instead of
+  state+effect (the lookup is synchronous).
+- Fixed one regression caught by CI: I had dropped `setStats` from
+  `SettingsView` although line 1604 still calls it.
+
+**Verification** — local `eslint src` → 229 warnings / 0 errors, matching CI.
+
+---
+
 ## 2026-10-22 — Slice B-5: eliminate every unused variable (332 → 275)
 
 **Goal:** remove the whole `@typescript-eslint/no-unused-vars` class (57 warnings).
@@ -281,8 +319,8 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 ## Open blockers (carry into next session)
 
 1. **Q-005 (ACTIVE) — lint warnings denied, CI failing.** `--max-warnings=0`
-   fails on the remaining 275 warnings (B-4 656 → 332, B-5 332 → 275). Burn
-   down in slices of ≤50 via
+   fails on the remaining 229 `no-explicit-any` warnings (656 → 229 across
+   B-4…B-6). Burn down in slices of ≤50 via
    `ci.sh` iterations (edit locally, verify on CI). Until this is resolved,
    CI lint is red and per guide §4 this is the first task to fix.
 2. **Q-002 — no release keystore (release blocker).** Generate it per

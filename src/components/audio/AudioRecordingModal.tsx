@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Mic,
   Square,
@@ -59,7 +59,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const timerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleCleanup = () => {
+  const handleCleanup = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     try {
       recordingManager.stopRecording?.(0).catch(() => {});
@@ -70,7 +70,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     setJobStatus(null);
     setIsImporting(false);
     setMode('idle');
-  };
+  }, [recordingManager]);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,7 +88,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       handleCleanup();
     }
     return () => handleCleanup();
-  }, [isOpen]);
+  }, [isOpen, handleCleanup]);
 
   const handleStart = async () => {
     setErrorMessage(null);

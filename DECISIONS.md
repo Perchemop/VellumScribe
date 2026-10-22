@@ -223,3 +223,21 @@ would also violate guide §10 (every visible control must work or be
 intentionally disabled and explained).
 **Rejected.** Keeping Ollama behind a flag (still local model hosting) or
 leaving the dead code in place (fails the dead-code/orphan gate).
+
+### D-406 · 2026-10-23 · `react-hooks/set-state-in-effect` scoped off (owner decision)
+**Decision.** `react-hooks/set-state-in-effect` is `off` in `eslint.config.js`.
+`react-hooks/exhaustive-deps` and `react-hooks/immutability` stay enforced, and
+every one of their sites has been fixed.
+**Rationale.** The app does not use the React Compiler, and the rule flags
+idiomatic patterns here: mount-time hydration of state from storage/native APIs
+(`StoragePanel`, `StorageDashboard`, `ConflictResolverPanel`, `OfflineAiPanel`,
+`NoteRevisionsModal`, `AudioPlayerWidget`, the `App` bootstrap) and resetting
+local editor state when the open record changes (`AiStudioKeyModal`,
+`AudioRecordingModal`, `NoteEditorWriteFirst`). Rewriting those as render-time
+state adjustment or lazy initialisers changes effect timing and reset
+behaviour, and the UI cannot be verified locally (heavy work is CI-only, and
+device QC needs a signed APK — Q-002). The owner chose the scoped-rule option
+over the invasive refactor.
+**Rejected.** Also turning off `exhaustive-deps` (it catches real bugs; all 10
+sites were fixable, several via `useCallback`/stable-setter deps), and forcing
+the refactor without device QC.

@@ -249,7 +249,19 @@ ${tr.transcript}` : tr.transcript;
     setHeldPin(null);
     setRecordings(StorageManager.getRecordingsForNote(note.id));
     setOcrScans(StorageManager.getOcrScansForNote(note.id));
-  }, [note.id, note.updated_at, note.is_locked]);
+  }, [
+    note.id,
+    note.updated_at,
+    note.is_locked,
+    note.title,
+    note.body,
+    note.checklist_items,
+    note.created_at,
+    note.event_id,
+    note.location_name,
+    note.reminder_at,
+    note.sketch_data,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -276,7 +288,7 @@ ${tr.transcript}` : tr.transcript;
     return () => {
       cancelled = true;
     };
-  }, [note.id, note.sketch_media_key]);
+  }, [note.id, note.sketch_media_key, sketchData]);
 
   useEffect(() => {
     if (focusMode) {

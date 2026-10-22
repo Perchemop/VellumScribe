@@ -636,9 +636,9 @@ export class GeminiApiService {
     initHeaders['Content-Type'] = 'application/json';
 
     let initData: any;
-    let sessionId: string = '';
+    let sessionId: string;
     let totalSegments: number = 1;
-    let serverSegments: any[] = [];
+    let serverSegments: any[];
 
     try {
       const initRes = await fetch('/api/audio/transcribe-session/init', {
