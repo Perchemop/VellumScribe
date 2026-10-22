@@ -1,5 +1,6 @@
 import { toHex, fromHex, generateSalt } from './cryptoUtils';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 const CLIENT_VAULT_KEY_STORAGE = 'vs_client_vault_key_v1';
 const PBKDF2_ITERATIONS = 210000;
@@ -85,7 +86,8 @@ export class CloudBackupCrypto {
       }
       this.cachedVaultKey = key;
       return key;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       if (err?.message?.includes('Failing closed')) {
         throw err;
       }
@@ -102,7 +104,8 @@ export class CloudBackupCrypto {
           'Device master vault key is registered in secure storage metadata but could not be retrieved synchronously. Refusing to create ephemeral key.'
         );
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       if (e?.message?.includes('Refusing')) throw e;
     }
 
@@ -243,7 +246,7 @@ export class CloudBackupCrypto {
     const allowLegacy =
       typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
 
-    let rawText = '';
+    let rawText: string;
     if (typeof data === 'string') {
       rawText = data;
     } else if (data instanceof Blob) {

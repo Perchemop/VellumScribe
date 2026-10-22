@@ -8,6 +8,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Browser } from '@capacitor/browser';
 import { App } from '@capacitor/app';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -165,7 +166,8 @@ export class NativeBridge {
           return { success: true, message: 'Shared successfully via Android share sheet.' };
         }
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.warn('NativeBridge', 'Native share failed, falling back to browser download', err);
     }
 
@@ -182,7 +184,8 @@ export class NativeBridge {
       URL.revokeObjectURL(url);
       this.hapticImpact('light');
       return { success: true, message: `File "${fileName}" saved successfully.` };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { success: false, message: `Download failed: ${e.message}` };
     }
   }

@@ -16,6 +16,7 @@ import {
 import { StorageManager } from '../lib/storage';
 import { SqliteStats, SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { PrivacyManager, PrivacySettings } from '../lib/privacyManager';
+import { asErrorLike } from '../lib/errorLike';
 
 interface StorageDashboardProps {
   onRefreshNotes?: () => void;
@@ -49,7 +50,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           ? 'SQLite PRAGMA integrity_check PASSED: Database is healthy.'
           : `Integrity check failed: ${result.details}`
       );
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Integrity check failed: ${e?.message || 'Unknown error'}`);
     } finally {
       setIsCheckingIntegrity(false);
@@ -73,7 +75,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           `SQLite VACUUM complete: Database is already fully optimized (${formatBytes(res.compactedSizeBytes)}).`
         );
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Vacuum failed: ${e?.message || 'Unknown error'}`);
     } finally {
       setIsVacuuming(false);
@@ -112,7 +115,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
       URL.revokeObjectURL(url);
       setFeedbackMessage('SQLite database (.sqlite) exported successfully.');
       setTimeout(() => setFeedbackMessage(null), 3000);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Export failed: ${e.message}`);
     }
   };
@@ -131,7 +135,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         if (onRefreshNotes) onRefreshNotes();
         setFeedbackMessage('SQLite database successfully imported and verified!');
         setTimeout(() => setFeedbackMessage(null), 4000);
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         setFeedbackMessage(`Import failed: ${err.message}`);
       }
     };

@@ -1,6 +1,7 @@
 import { getDatabaseAdapter } from '../sqlite/databaseAdapter';
 import { AppLogger } from '../logger';
 import { generatePrefixedId } from '../uuid';
+import { asErrorLike } from '../../lib/errorLike';
 
 export interface NotebookLMConnection {
   id: number;
@@ -539,7 +540,8 @@ ${note.content || '(Empty content)'}
         return true;
       }
       return false;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       const errMsg = err?.message || 'Sync failed';
       const newRetries = (job.retry_count || 0) + 1;
       await db.run(

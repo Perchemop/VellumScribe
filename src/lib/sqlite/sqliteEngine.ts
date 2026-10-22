@@ -1,8 +1,9 @@
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
 import { AppLogger } from '../logger';
-import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from './schema';
+import { MIGRATIONS } from './schema';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { asErrorLike } from '../../lib/errorLike';
 
 const DB_INDEXED_DB_NAME = 'vellumscribe_sqlite_db';
 const DB_STORE_NAME = 'sqlite_binary';
@@ -264,12 +265,7 @@ export class SqliteEngine {
       locateFile: (file) => {
         if (file.endsWith('.wasm')) {
           if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-            try {
-              const path = require('path');
-              return path.resolve(process.cwd(), 'node_modules/sql.js/dist', file);
-            } catch {
-              return `node_modules/sql.js/dist/${file}`;
-            }
+            return `${process.cwd()}/node_modules/sql.js/dist/${file}`;
           }
           return '/sql-wasm.wasm';
         }
@@ -445,7 +441,8 @@ export class SqliteEngine {
 
         this.isInitialized = true;
         AppLogger.info('SqliteEngine', 'SQLite Engine successfully initialized and migrations applied');
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         AppLogger.error('SqliteEngine', 'Fatal SQLite initialization error', err);
         throw err;
       }
@@ -531,7 +528,8 @@ export class SqliteEngine {
       }
       stmt.free();
       return rows;
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('SqliteEngine', `Query execution error: "${sql}"`, { params, error: e?.message });
       throw e;
     }
@@ -545,7 +543,8 @@ export class SqliteEngine {
     try {
       db.run(sql, params);
       this.markDirty();
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('SqliteEngine', `Run execution error: "${sql}"`, { params, error: e?.message });
       throw e;
     }
@@ -860,7 +859,8 @@ export class SqliteEngine {
         };
       }
       return { status: 'corrupted', details: 'No response from PRAGMA integrity_check' };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { status: 'corrupted', details: e?.message || 'Check failed' };
     }
   }

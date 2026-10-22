@@ -68,7 +68,9 @@ export async function hashPin(pin: string, salt?: string, iterations = PBKDF2_IT
       // PBKDF2 itself failed (e.g. restricted in a locked-down WebView). Do not
       // silently downgrade to a weaker scheme - surface the failure so the
       // caller can tell the user PIN protection is unavailable here.
-      throw new Error('Secure PIN hashing (PBKDF2) failed on this device: ' + (e instanceof Error ? e.message : String(e)));
+      throw new Error('Secure PIN hashing (PBKDF2) failed on this device: ' + (e instanceof Error ? e.message : String(e)), {
+        cause: e,
+      });
     }
   }
 

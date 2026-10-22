@@ -6,6 +6,7 @@ import { generatePKCE } from '../lib/pkce';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { NativeBridge } from '../lib/nativeBridge';
 import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 interface CloudConnectModalProps {
   provider: CloudStorageProvider;
@@ -144,7 +145,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
             if (connected) {
               onConnected(connected);
             }
-          } catch (e: any) {
+          } catch (_e) {
+            const e = asErrorLike(_e);
             AppLogger.warn('CloudConnectModal', 'Native OAuth completion error:', e);
           } finally {
             setLoading(false);
@@ -267,7 +269,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         setLoading(false);
         setError('Authentication timed out. Please try again.');
       }, 5 * 60 * 1000);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('CloudConnectModal', 'Failed OAuth authentication:', e);
       setError(e.message || 'Failed to authenticate. Please verify server configuration and network connectivity.');
       setLoading(false);
@@ -294,7 +297,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         }
       );
       onConnected(account);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('CloudConnectModal', 'Failed credential connect:', e);
       setError(e.message || 'Failed to authenticate with WebDAV server. Check URL and credentials.');
     } finally {
@@ -310,7 +314,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       await CloudSyncEngine.disconnectAccount(provider);
       onDisconnected(provider);
       onClose();
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('CloudConnectModal', 'Failed to disconnect:', e);
       CloudSyncEngine.removeAccount(provider);
       onDisconnected(provider);
@@ -333,7 +338,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       } else {
         setSyncStatus('Upload encountered an issue. See logs in Diagnostics.');
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setSyncStatus(`Sync failed: ${e.message}`);
     } finally {
       setIsSyncingNow(false);

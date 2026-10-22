@@ -336,7 +336,7 @@ export class AudioRecordingManager {
       const ab = await this.safeReadAsArrayBuffer(file as Blob);
       safeBlob = new Blob([ab], { type: (file as File).type || 'audio/wav' });
     } catch (e) {
-      throw new Error('Could not read the selected audio file. Try a different file or format.');
+      throw new Error('Could not read the selected audio file. Try a different file or format.', { cause: e });
     }
 
     const mimeType = (file as File).type || safeBlob.type || 'audio/mpeg';

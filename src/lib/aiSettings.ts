@@ -1,10 +1,11 @@
 import { StorageManager } from './storage';
 import { AndroidKeystoreManager } from './keystore';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
 
-export type LlmProvider = 'google' | 'groq' | 'ollama' | 'offline_rules';
+export type LlmProvider = 'google' | 'groq' | 'offline_rules';
 export type TranscriptionProvider = 'google' | 'groq_whisper' | 'deepgram' | 'local_whisper' | 'browser_speech';
 export type OcrProvider = 'google' | 'offline_rules';
 
@@ -23,8 +24,6 @@ export interface AiIntegrationSettings {
   googleModel: string;
   groqModel: string;
   deepgramModel: string;
-  ollamaEndpoint: string;
-  ollamaModel: string;
   localWhisperEndpoint: string;
 
   // Backward-compatible properties
@@ -93,15 +92,6 @@ export const AI_PROVIDERS_META = {
     keyPlaceholder: '••••••••',
     keyPrefix: '',
   },
-  ollama: {
-    id: 'ollama',
-    name: 'Local Ollama (100% Offline)',
-    category: 'Local Self-Hosted (No Account)',
-    description: 'Connect directly to your local Ollama daemon (e.g. llama3.2, mistral, deepseek-r1). Zero telemetry, 100% private.',
-    defaultEndpoint: 'http://localhost:11434',
-    defaultModel: 'llama3.2',
-    models: ['llama3.2', 'mistral', 'qwen2.5', 'phi3', 'deepseek-r1:1.5b', 'gemma2'],
-  },
   local_whisper: {
     id: 'local_whisper',
     name: 'Local Whisper Server (100% Offline)',
@@ -143,8 +133,6 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
   googleModel: 'gemini-3.6-flash',
   groqModel: 'llama-3.3-70b-versatile',
   deepgramModel: 'nova-3',
-  ollamaEndpoint: '',
-  ollamaModel: 'llama3.2',
   localWhisperEndpoint: '',
 
   apiKey: '',
@@ -322,7 +310,7 @@ export class AiSettingsManager {
 
   public static hasLocalKey(): boolean {
     const s = this.getSettings();
-    if (s.primaryLlmProvider === 'offline_rules' || s.primaryLlmProvider === 'ollama') {
+    if (s.primaryLlmProvider === 'offline_rules') {
       return true; // Local inference doesn't require cloud key
     }
     if (s.primaryLlmProvider === 'groq') {
@@ -351,7 +339,6 @@ export class AiSettingsManager {
       ...(parsed || {}),
       primaryLlmProvider: parsed?.primaryLlmProvider || 'offline_rules',
       primaryTranscriptionProvider: parsed?.primaryTranscriptionProvider || 'browser_speech',
-      ollamaEndpoint: parsed?.ollamaEndpoint !== undefined ? parsed.ollamaEndpoint : '',
       localWhisperEndpoint: parsed?.localWhisperEndpoint !== undefined ? parsed.localWhisperEndpoint : '',
       googleApiKey: googleKey,
       groqApiKey: groqKey,
@@ -500,7 +487,7 @@ export class AiSettingsManager {
         if (data?.error) {
           return { success: false, message: data.error.message || 'Authentication rejected by Google AI Studio.' };
         }
-      } catch (err) {
+      } catch {
         // Fallback to server verification
       }
 
@@ -515,7 +502,8 @@ export class AiSettingsManager {
           return { success: true, message: data.message || 'Google AI Studio key verified via proxy.' };
         }
         return { success: false, message: data?.error || 'Unable to connect to Google AI Studio.' };
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         return { success: false, message: err?.message || 'Network error connecting to Google AI Studio.' };
       }
     }
@@ -562,7 +550,8 @@ export class AiSettingsManager {
           return { success: true, message: data.message || 'Groq API Key verified.' };
         }
         return { success: false, message: data?.error || 'Failed to verify Groq API key.' };
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         return { success: false, message: err?.message || 'Network error connecting to Groq.' };
       }
     }
@@ -585,82 +574,13 @@ export class AiSettingsManager {
           return { success: true, message: data.message || 'Deepgram API key verified.' };
         }
         return { success: false, message: data?.error || 'Failed to verify Deepgram API key.' };
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         return { success: false, message: err?.message || 'Network error connecting to Deepgram.' };
       }
     }
 
-    // 4. Local Ollama (Opt-in)
-    if (provider === 'ollama') {
-      const endpoint = (options?.endpoint !== undefined ? options.endpoint : (this.getSettings().ollamaEndpoint || '')).trim().replace(/\/+$/, '');
-      if (!endpoint) {
-        return {
-          success: false,
-          message: 'Ollama is opt-in. Enter your server URL (e.g. http://192.168.1.X:11434 on mobile or http://localhost:11434 on PC), or use the Built-in Offline Engine.',
-        };
-      }
-
-      const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const isLocalhost = endpoint.includes('localhost') || endpoint.includes('127.0.0.1');
-
-      // Direct probe to local Ollama daemon from browser
-      try {
-        const res = await fetch(`${endpoint}/api/tags`, { method: 'GET' });
-        const data = await res.json().catch(() => null);
-        const latency = Date.now() - startTime;
-
-        if (res.ok && data?.models) {
-          const models = (data.models as Array<{ name: string }>).map((m) => m.name);
-          return {
-            success: true,
-            message: `Ollama detected locally (${models.length} model${models.length !== 1 ? 's' : ''} installed: ${models.slice(0, 3).join(', ')}${models.length > 3 ? '...' : ''}). Zero telemetry, 100% offline.`,
-            availableModels: models,
-            latencyMs: latency,
-          };
-        }
-      } catch {
-        // Direct browser fetch may fail if CORS is not enabled or on HTTPS pages due to mixed content. Try server proxy.
-      }
-
-      try {
-        const res = await fetch('/api/ollama/tags', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint }),
-        });
-        const data = await res.json().catch(() => null);
-        if (res.ok && data?.success) {
-          return {
-            success: true,
-            message: `Ollama daemon reachable at ${endpoint}! Models: ${(data.models || []).join(', ') || 'No local models pulled yet'}.`,
-            availableModels: data.models,
-          };
-        }
-        
-        let customHelp = `Could not connect to Ollama daemon at ${endpoint}.`;
-        if (isMobile && isLocalhost) {
-          customHelp += ` On mobile devices, "localhost" refers to your phone. To connect to Ollama running on your PC, enter your computer's local Wi-Fi IP (e.g. http://192.168.1.X:11434) or activate the Built-in Offline Engine.`;
-        } else {
-          customHelp += ` For local machines, start with: OLLAMA_ORIGINS="*" ollama serve. For HTTPS cloud preview, use an HTTPS tunnel (e.g. ngrok http 11434) or switch to the Built-in Offline Engine.`;
-        }
-
-        return {
-          success: false,
-          message: data?.error || customHelp,
-        };
-      } catch (err: any) {
-        let customHelp = `Ollama connection failed: Ensure "ollama serve" is running with OLLAMA_ORIGINS="*" or use an HTTPS tunnel / Built-in Offline Engine.`;
-        if (isMobile && isLocalhost) {
-          customHelp = `Could not connect to localhost:11434 on your mobile device. Enter your PC's local Wi-Fi IP (e.g. http://192.168.1.X:11434) or use the Built-in Offline Engine.`;
-        }
-        return {
-          success: false,
-          message: customHelp,
-        };
-      }
-    }
-
-    // 5. Local Whisper (Opt-in)
+    // 4. Local Whisper (Opt-in)
     if (provider === 'local_whisper') {
       const endpoint = (options?.endpoint !== undefined ? options.endpoint : (this.getSettings().localWhisperEndpoint || '')).trim();
       if (!endpoint) {
@@ -683,7 +603,8 @@ export class AiSettingsManager {
           success: false,
           message: data?.error || `Could not connect to Local Whisper server at ${endpoint}.`,
         };
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         return { success: false, message: `Local Whisper check failed: ${err?.message || 'Server unreachable'}` };
       }
     }
@@ -704,10 +625,6 @@ export class AiSettingsManager {
     return this.getSettings();
   }
 
-  public static setOllamaEndpoint(endpoint: string): void {
-    this.saveSettings({ ollamaEndpoint: endpoint.trim() });
-  }
-
   public static setLocalWhisperEndpoint(endpoint: string): void {
     this.saveSettings({ localWhisperEndpoint: endpoint.trim() });
   }
@@ -718,15 +635,6 @@ export class AiSettingsManager {
 
   public static async testDeepgramKey(key?: string): Promise<{ success: boolean; message: string }> {
     return this.testProviderConnection('deepgram', { key });
-  }
-
-  public static async probeOllamaEndpoint(endpoint?: string): Promise<{ success: boolean; message: string; models?: string[] }> {
-    const res = await this.testProviderConnection('ollama', { endpoint });
-    return {
-      success: res.success,
-      message: res.message,
-      models: res.availableModels,
-    };
   }
 
   public static async probeLocalWhisperEndpoint(endpoint?: string): Promise<{ success: boolean; message: string }> {

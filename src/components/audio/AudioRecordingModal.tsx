@@ -19,6 +19,7 @@ import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
 import { describeAudioImport } from '../../lib/audioImportNotices';
 import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -93,7 +94,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         const st = recordingManager.getStatus();
         setElapsedSec(Math.floor(st.elapsedMs / 1000));
       }, 500);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err?.message || 'Could not access microphone.');
       setIsRecording(false);
       setMode('idle');
@@ -141,7 +143,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
               return;
             }
             setTimeout(poll, 800);
-          } catch (e: any) {
+          } catch (_e) {
+            const e = asErrorLike(_e);
             setTranscribing(false);
             const message = e?.message || 'Status poll failed.';
             setErrorMessage(message);
@@ -153,7 +156,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         onRecordingComplete(result);
         onClose();
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err?.message || 'Failed to stop and save recording.');
       setIsRecording(false);
     }
@@ -237,7 +241,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
             return;
           }
           setTimeout(poll, 800);
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           setTranscribing(false);
           const message = e?.message || 'Status poll failed.';
           setErrorMessage(message);
@@ -245,7 +250,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         }
       };
       setTimeout(poll, 600);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.error('AudioRecordingModal', 'Import audio failed', err);
       setIsImporting(false);
       setTranscribing(false);

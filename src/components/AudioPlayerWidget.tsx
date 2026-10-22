@@ -12,15 +12,15 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
-  
   Mic,
-  HelpCircle} from 'lucide-react';
+} from 'lucide-react';
 import { RecordingRecord, TranscriptionJobStatus } from '../types';
 import { OfflineAiManager } from '../services/OfflineAiManager';
 import { TranscriptService, FullTranscriptView } from '../services/TranscriptService';
 import { TranscriptViewer } from './transcription/TranscriptViewer';
 import { LiveRegion } from './common/LiveRegion';
 import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
 // keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
@@ -116,14 +116,16 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             clearInterval(pollInterval);
             setIsTranscribing(false);
           }
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           clearInterval(pollInterval);
           setIsTranscribing(false);
           setTranscribeError(e?.message || 'Could not verify speech recognition job status.');
           setShowRecoverySheet(true);
         }
       }, 300);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setIsTranscribing(false);
       const errorMsg = OfflineAiManager.mapErrorCodeToUserMessage(err?.message);
       setTranscribeError(errorMsg);

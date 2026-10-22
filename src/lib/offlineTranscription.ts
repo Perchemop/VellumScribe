@@ -1,4 +1,5 @@
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 /**
  * Offline Transcription Engine
  * 
@@ -128,7 +129,8 @@ export class OfflineTranscriptionEngine {
           throw new Error('OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.');
         }
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       if (e?.message?.includes('OFFLINE_AI_NO_SPEECH')) {
         throw e;
       }
