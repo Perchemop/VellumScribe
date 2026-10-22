@@ -205,3 +205,21 @@ session (§5.2/§5.6). Agent definitions live in `.opencode/agents/` with V2
 permissions; orchestrator is edit:deny/bash:deny (plans and delegates only).
 **Rejected.** Hard-coding a single model ID (it will go stale), using Ollama or
 any local model hosting (§5.1.4).
+
+### D-405 · 2026-10-22 · Remove the local-Ollama LLM provider (guide §5.1.4)
+**Decision.** Remove Ollama end to end. The LLM providers are now Google
+(Gemini), Groq, and the Built-in Offline Engine only. Removed: the `'ollama'`
+member of `LlmProvider`, its provider metadata, the `ollamaEndpoint` /
+`ollamaModel` settings, `AiSettingsManager.setOllamaEndpoint` and
+`probeOllamaEndpoint`, `GeminiApiService.executeOllama` and the Ollama
+synthesis route, the "Local Ollama" tab / endpoint presets / troubleshooting
+box / model list / failure shortcuts in `AiStudioKeyModal`, the dead Ollama
+state and handlers in `SettingsView`, the provider label in
+`NoteEditorWriteFirst`, and the `/api/ollama/tags` + `/api/ollama/generate`
+server proxies with their rate-limiter mount.
+**Rationale.** Guide §5.1.4 — "Do not use Ollama or any local model hosting" —
+and the owner confirmed the provider is unused. A wired-but-unused provider
+would also violate guide §10 (every visible control must work or be
+intentionally disabled and explained).
+**Rejected.** Keeping Ollama behind a flag (still local model hosting) or
+leaving the dead code in place (fails the dead-code/orphan gate).
