@@ -1,7 +1,6 @@
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { RecordingRepository } from '../repositories/RecordingRepository';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
-import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import {
   TranscriptionEntity,
   TranscriptionSegmentRecord,

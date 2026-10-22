@@ -2,17 +2,15 @@ import React, { useState } from 'react';
 import {
   X,
   Sparkles,
-  Download,
+  
   CheckCircle2,
   RefreshCw,
-  Layers,
+  
   Database,
   ShieldCheck,
   Smartphone,
   Check,
-  ChevronRight,
-  ExternalLink,
-} from 'lucide-react';
+  ChevronRight} from 'lucide-react';
 import { AppUpdateManager, APP_CHANGELOGS, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, ReleaseInfo } from '../lib/appUpdateManager';
 import { NativeBridge } from '../lib/nativeBridge';
 import { useModalBackHandler } from '../lib/modalBackStack';

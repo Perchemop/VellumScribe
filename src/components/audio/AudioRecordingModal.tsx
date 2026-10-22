@@ -5,13 +5,12 @@ import {
   Pause,
   Play,
   X,
-  Sparkles,
+  
   AlertCircle,
-  RefreshCw,
-  HardDrive,
+  
+  
   WifiOff,
-  Upload,
-} from 'lucide-react';
+  Upload} from 'lucide-react';
 import { AudioRecordingManager, RecordedAudioResult } from '../../services/AudioRecordingManager';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { TranscriptService } from '../../services/TranscriptService';
@@ -19,6 +18,7 @@ import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
 import { describeAudioImport } from '../../lib/audioImportNotices';
+import { AppLogger } from '../../lib/logger';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -171,7 +171,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     if (timerRef.current) clearInterval(timerRef.current);
     try {
       recordingManager.stopRecording?.(0).catch(() => {});
-    } catch {}
+    } catch { /* ignore */ }
     setIsRecording(false);
     setIsPaused(false);
     setTranscribing(false);
@@ -198,7 +198,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       if (isRecording) {
         try {
           await recordingManager.stopRecording(noteId).catch(() => {});
-        } catch {}
+        } catch { /* ignore */ }
         setIsRecording(false);
         setIsPaused(false);
         if (timerRef.current) clearInterval(timerRef.current);
@@ -246,7 +246,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       };
       setTimeout(poll, 600);
     } catch (err: any) {
-      console.error('Import audio failed', err);
+      AppLogger.error('AudioRecordingModal', 'Import audio failed', err);
       setIsImporting(false);
       setTranscribing(false);
       setErrorMessage(err?.message || 'Could not import audio file. Try a different format (WAV/MP3/M4A).');
@@ -357,7 +357,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                     // Defer off the native file-chooser callback to avoid WebView process kills
                     setTimeout(() => {
                       handleImportAudioFile(f).catch((err) => {
-                        console.error('handleImportAudioFile uncaught', err);
+                        AppLogger.error('AudioRecordingModal', 'handleImportAudioFile uncaught', err);
                         setErrorMessage(err?.message || 'Import failed');
                         setIsImporting(false);
                         setMode('idle');

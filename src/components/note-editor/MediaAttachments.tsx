@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, Camera, PenTool, Image, Trash2 } from 'lucide-react';
+import { Mic, Camera, PenTool,  Trash2 } from 'lucide-react';
 import { RecordingRecord, OcrScanRecord } from '../../types';
 
 interface MediaAttachmentsProps {

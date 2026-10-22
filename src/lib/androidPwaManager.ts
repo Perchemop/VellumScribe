@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { AppLogger } from './logger';
 
 export interface AndroidInstallGuide {
   browser: string;
@@ -65,7 +66,7 @@ class AndroidPwaManagerClass {
       }
       return { outcome: 'dismissed' };
     } catch (err) {
-      console.warn('Install prompt error:', err);
+      AppLogger.warn('AndroidPwaManager', 'Install prompt error:', err);
       return { outcome: 'unavailable' };
     }
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Unlock, X, AlertCircle, ShieldAlert, KeyRound, EyeOff, ShieldCheck } from 'lucide-react';
+import { Lock,  X, AlertCircle, ShieldAlert, KeyRound, EyeOff, ShieldCheck } from 'lucide-react';
 import { NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { NotePayloadData } from '../lib/cryptoUtils';

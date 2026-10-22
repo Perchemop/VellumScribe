@@ -9,11 +9,10 @@ import {
   Clock,
   Settings,
   Archive,
-  Key,
-  Sparkles,
+  
+  
   X,
-  Info,
-} from 'lucide-react';
+  Info} from 'lucide-react';
 import { EventRecord, NoteRecord } from './types';
 import { StorageManager } from './lib/storage';
 import { NativeBridge } from './lib/nativeBridge';
@@ -36,6 +35,7 @@ import { AppLogo } from './components/AppLogo';
 import { SyncStatus } from './components/SyncStatus';
 import { ReminderService } from './services/ReminderService';
 import { ListDensityProvider } from './context/ListDensityContext';
+import { AppLogger } from './lib/logger';
 
 export default function App() {
   const {
@@ -100,7 +100,7 @@ export default function App() {
         .catch(() => {});
     }
 
-    ReminderService.reconcileReminders(notes).catch((e) => console.warn('Reminder reconciliation', e));
+    ReminderService.reconcileReminders(notes).catch((e) => AppLogger.warn('App', 'Reminder reconciliation', e));
   }, []);
 
   useEffect(() => {
@@ -167,10 +167,10 @@ export default function App() {
                 body: note.body ? note.body.slice(0, 100) : 'Note reminder due',
                 icon: '/favicon.ico',
               });
-            } catch {}
+            } catch { /* ignore */ }
           }
         }
-      } catch {}
+      } catch { /* ignore */ }
     };
 
     checkReminders();
@@ -270,7 +270,7 @@ export default function App() {
         showToast('Created note under new "General" category');
       }
     } catch (e: any) {
-      console.error('Failed to create new note:', e);
+      AppLogger.error('App', 'Failed to create new note:', e);
       showToast(
         e.message
           ? `Could not create note: ${e.message}`

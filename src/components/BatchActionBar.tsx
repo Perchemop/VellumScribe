@@ -12,11 +12,8 @@ import {
   Copy,
   Lock,
   Unlock,
-  CheckSquare,
   RotateCcw,
   MoreVertical,
-  ChevronDown,
-  Share2,
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';

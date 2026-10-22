@@ -7,16 +7,15 @@ import {
   FileText,
   CheckSquare,
   PenTool,
-  Clock,
-  Tag,
-  AlertCircle,
+  
+  
+  
   FolderArchive,
-  ArrowRight,
-  Shield,
-  Layers,
+  
+  
+  
   LayoutGrid,
-  List as ListIcon,
-} from 'lucide-react';
+  List as ListIcon} from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { useModalBackHandler } from '../lib/modalBackStack';

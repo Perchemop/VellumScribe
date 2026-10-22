@@ -7,12 +7,11 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  Shield,
+  
   WifiOff,
-  Sparkles,
+  
   Sliders,
-  RefreshCw,
-} from 'lucide-react';
+  RefreshCw} from 'lucide-react';
 import { OfflineAiManager, StorageBreakdown } from '../../services/OfflineAiManager';
 import { SpeechModelProfile, AiCapabilities } from '../../types';
 

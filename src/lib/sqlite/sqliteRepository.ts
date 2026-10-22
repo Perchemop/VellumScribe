@@ -1190,7 +1190,7 @@ export class SqliteRepository {
       if (vRes.length > 0 && typeof vRes[0].version === 'number' && vRes[0].version > 0) {
         activeVersion = vRes[0].version;
       }
-    } catch {}
+    } catch { /* ignore */ }
 
     const integrity = (this.db.checkIntegritySync ? this.db.checkIntegritySync() : true);
 

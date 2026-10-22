@@ -6,7 +6,7 @@ import {
   EyeOff,
   CheckCircle2,
   AlertCircle,
-  Upload,
+  
   Clipboard,
   X,
   Sparkles,
@@ -18,11 +18,10 @@ import {
   Copy,
   Check,
   Terminal,
-  HelpCircle,
+  
   ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
-import { AiSettingsManager, LlmProvider, TranscriptionProvider } from '../lib/aiSettings';
+  ChevronUp} from 'lucide-react';
+import { AiSettingsManager,  TranscriptionProvider } from '../lib/aiSettings';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface AiStudioKeyModalProps {

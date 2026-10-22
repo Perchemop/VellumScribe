@@ -18,9 +18,8 @@ import {
   Mic,
   Image,
 } from 'lucide-react';
-import { NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../types';
+import { NoteRecord,  TranscriptRecord, OcrScanRecord } from '../types';
 import { GeminiApiService, SummaryFormat, SummaryResult } from '../lib/geminiService';
-import { SummaryService } from '../services/ai';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { useModalBackHandler } from '../lib/modalBackStack';

@@ -1,5 +1,6 @@
 import { StorageManager } from './storage';
 import { AndroidKeystoreManager } from './keystore';
+import { AppLogger } from './logger';
 
 export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
 
@@ -217,7 +218,7 @@ export class AiSettingsManager {
           }
           this.cachedDeepgramKey = deepgramKey || '';
         } catch (e) {
-          console.warn('[AiSettingsManager] Failed during secure key initialization:', e);
+          AppLogger.warn('AiSettings', '[AiSettingsManager] Failed during secure key initialization:', e);
         }
         this.getSettings();
       })();
@@ -237,11 +238,11 @@ export class AiSettingsManager {
     StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
     if (trimmed) {
       AndroidKeystoreManager.saveSecret('google_api_key', trimmed, 'api_key').catch((e) => {
-        console.warn('Failed to save Google API key to keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to save Google API key to keystore', e);
       });
     } else {
       AndroidKeystoreManager.deleteSecret('google_api_key').catch((e) => {
-        console.warn('Failed to delete Google API key from keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to delete Google API key from keystore', e);
       });
     }
   }
@@ -257,11 +258,11 @@ export class AiSettingsManager {
     StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
     if (trimmed) {
       AndroidKeystoreManager.saveSecret('groq_api_key', trimmed, 'api_key').catch((e) => {
-        console.warn('Failed to save Groq API key to keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to save Groq API key to keystore', e);
       });
     } else {
       AndroidKeystoreManager.deleteSecret('groq_api_key').catch((e) => {
-        console.warn('Failed to delete Groq API key from keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to delete Groq API key from keystore', e);
       });
     }
   }
@@ -277,11 +278,11 @@ export class AiSettingsManager {
     StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
     if (trimmed) {
       AndroidKeystoreManager.saveSecret('deepgram_api_key', trimmed, 'api_key').catch((e) => {
-        console.warn('Failed to save Deepgram API key to keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to save Deepgram API key to keystore', e);
       });
     } else {
       AndroidKeystoreManager.deleteSecret('deepgram_api_key').catch((e) => {
-        console.warn('Failed to delete Deepgram API key from keystore', e);
+        AppLogger.warn('AiSettings', 'Failed to delete Deepgram API key from keystore', e);
       });
     }
   }
@@ -387,7 +388,7 @@ export class AiSettingsManager {
 
       StorageManager.setItem(STORAGE_KEYS.SETTINGS, toSave);
     } catch (e) {
-      console.error('Failed to save AI settings', e);
+      AppLogger.error('AiSettings', 'Failed to save AI settings', e);
     }
   }
 
@@ -443,7 +444,7 @@ export class AiSettingsManager {
       if (parsed.GEMINI_API_KEY || parsed.googleApiKey || parsed.apiKey) {
         return { key: String(parsed.GEMINI_API_KEY || parsed.googleApiKey || parsed.apiKey).trim(), provider: 'google' };
       }
-    } catch {}
+    } catch { /* ignore */ }
 
     // 5. Pattern search anywhere in content
     const gskRegex = /gsk_[A-Za-z0-9]{30,80}/;

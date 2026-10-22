@@ -4,9 +4,7 @@ import {
   AiCapabilities,
   SpeechModelProfile,
   ModelInstallResult,
-  TranscriptionJobStatus,
-  TranscriptionDurableStatus,
-} from '../../types';
+  TranscriptionJobStatus} from '../../types';
 import { RecordingRepository } from '../../repositories/RecordingRepository';
 import { TranscriptionRepository } from '../../repositories/TranscriptionRepository';
 import { AppLogger } from '../../lib/logger';
@@ -137,14 +135,14 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
           if (est.quota && est.usage) {
             availableStorageMb = Math.round((est.quota - est.usage) / (1024 * 1024));
           }
-        } catch {}
+        } catch { /* ignore */ }
       }
       if ('getBattery' in navigator) {
         try {
           const b = await (navigator as any).getBattery();
           batteryLevel = Math.round(b.level * 100);
           isCharging = b.charging;
-        } catch {}
+        } catch { /* ignore */ }
       }
     }
 

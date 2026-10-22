@@ -4,6 +4,7 @@ import {
   NoteRecord,
 } from '../types';
 import { StorageManager } from '../lib/storage';
+import { AppLogger } from '../lib/logger';
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -105,7 +106,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         localStorage.setItem('omninote_dark_mode_v1', JSON.stringify(next));
       } catch (e) {
-        console.error('Failed to save dark mode preference', e);
+        AppLogger.error('AppContext', 'Failed to save dark mode preference', e);
       }
       return next;
     });
@@ -192,7 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast('New note created.');
         return newNote;
       } catch (e: any) {
-        console.error('Failed to create note:', e);
+        AppLogger.error('AppContext', 'Failed to create note:', e);
         showToast(`Storage Error: ${e.message}`);
         throw e;
       }
