@@ -20,12 +20,11 @@ export const OfflineAiSettings: React.FC = () => {
   const [capabilities, setCapabilities] = useState<AiCapabilities | null>(null);
   const [models, setModels] = useState<SpeechModelProfile[]>([]);
   const [storage, setStorage] = useState<StorageBreakdown | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [installingModelId, setInstallingModelId] = useState<string | null>(null);
 
   // User preferences
-  const [speechRecognitionEnabled, setSpeechRecognitionEnabled] = useState(true);
   const [autoTranscribe, setAutoTranscribe] = useState(true);
   const [speakerDetection, setSpeakerDetection] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);

@@ -9,7 +9,7 @@ interface StoragePanelProps {
   onRefreshNotes?: () => void;
 }
 
-export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) => {
+export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes: _onRefreshNotes }) => {
   const [stats, setStats] = useState<SqliteStats | null>(null);
   const [lastDurableSave, setLastDurableSave] = useState<number | null>(null);
   const [isVacuuming, setIsVacuuming] = useState(false);

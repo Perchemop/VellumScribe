@@ -21,7 +21,7 @@ import {
   
   
   Mic} from 'lucide-react';
-import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
+import { AiSettingsManager } from '../lib/aiSettings';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
@@ -52,7 +52,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   // AI Settings state
-  const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => AiSettingsManager.getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -60,11 +59,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
 
   // Backup & Storage state
-  const [backupFeedback, setBackupFeedback] = useState<string | null>(null);
-  const [stats, setStats] = useState(() => StorageManager.getStorageStats());
+  const [stats] = useState(() => StorageManager.getStorageStats());
 
   // Keystore secrets
-  const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
+  const [secrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 

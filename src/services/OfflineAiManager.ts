@@ -68,14 +68,7 @@ export class OfflineAiManager {
   /**
    * Recommend speech recognition model based on device capabilities
    */
-  public recommendSpeechModel(capabilities: AiCapabilities): SpeechModelProfile | null {
-    const ram = capabilities.availableRamMb;
-    let targetId = 'whisper-base';
-    if (ram !== null && ram < 3000) {
-      targetId = 'whisper-tiny';
-    } else if (ram !== null && ram >= 6000 && (capabilities.cpuCores || 4) >= 8) {
-      targetId = 'whisper-small';
-    }
+  public recommendSpeechModel(_capabilities: AiCapabilities): SpeechModelProfile | null {
     return null; // Evaluated dynamically against listSpeechModels
   }
 

@@ -65,7 +65,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   onSelectNote,
   onCreateEvent,
   onCreateNote,
-  onDeleteEvent,
+  onDeleteEvent: _onDeleteEvent,
   onDeleteNote,
   onRefresh,
 }) => {
@@ -77,7 +77,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   const [viewLayout, setViewLayout] = useState<'list' | 'grid'>('list');
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventCategory, setNewEventCategory] = useState<EventRecord['category']>('meeting');
+  const [newEventCategory] = useState<EventRecord['category']>('meeting');
   const [newEventColor, setNewEventColor] = useState('#3b82f6');
 
   // Debounce search query input (180ms) to avoid stuttering on large note collections

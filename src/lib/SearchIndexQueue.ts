@@ -62,7 +62,7 @@ export class SearchIndexQueue {
           [noteId, now, now, now]
         ).catch((err) => AppLogger.warn('SearchIndexQueue', `Failed to enqueue note ${noteId} asynchronously`, err));
       }
-    } catch (err) {
+    } catch {
       db.run(
         `INSERT INTO search_index_jobs (note_id, status, attempts, created_at, updated_at)
          VALUES (?, 'pending', 0, ?, ?)
