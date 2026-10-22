@@ -1,7 +1,7 @@
 import { getDatabaseAdapter } from '../sqlite/databaseAdapter';
 import { AppLogger } from '../logger';
 import { generatePrefixedId } from '../uuid';
-import { asErrorLike } from '../../lib/errorLike';
+import { asErrorLike } from '../errorLike';
 
 export interface NotebookLMConnection {
   id: number;

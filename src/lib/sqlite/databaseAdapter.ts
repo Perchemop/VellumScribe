@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { AppLogger } from '../logger';
 import { SqliteEngine, base64ToUint8Array } from './sqliteEngine';
 import { MIGRATIONS, DB_SCHEMA_VERSION } from './schema';
-import { asErrorLike } from '../../lib/errorLike';
+import { asErrorLike } from '../errorLike';
 
 export type DurabilityStatus = 'saved' | 'saving' | 'pending' | 'failed';
 
