@@ -19,6 +19,7 @@ import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { NativeBridge } from '../lib/nativeBridge';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { asErrorLike } from '../lib/errorLike';
 
 interface BatchActionBarProps {
   selectedNoteIds: number[];
@@ -204,7 +205,8 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       setShowMoreMenu(false);
       onClearSelection();
       onRefresh();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setLockError(err?.message || 'Failed to lock selected notes with PIN.');
     } finally {
       setIsLocking(false);

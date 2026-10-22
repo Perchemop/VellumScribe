@@ -20,6 +20,7 @@ import { ReminderService } from '../services/ReminderService';
 import { ModalLoadingFallback } from './ModalLoadingFallback';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ModalErrorFallback } from './ModalErrorFallback';
+import { asErrorLike } from '../lib/errorLike';
 
 const SketchCanvasModal = lazy(() =>
   import('./SketchCanvasModal').then((m) => ({ default: m.SketchCanvasModal }))
@@ -60,7 +61,6 @@ const TranscriptionRecoverySheet = lazy(() =>
 const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
   google: 'Google Gemini',
   groq: 'Groq',
-  ollama: 'Ollama (self-hosted endpoint)',
   offline_rules: 'Offline rules engine',
 };
 
@@ -173,7 +173,8 @@ ${tr.transcript}` : tr.transcript;
             setBody(newBody);
             persistText(title, newBody);
           }
-        } catch (txErr: any) {
+        } catch (_txErr) {
+          const txErr = asErrorLike(_txErr);
           setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
           setRecoveryError(txErr?.message || 'Transcription failed');
           setShowRecoverySheet(true);
@@ -182,7 +183,8 @@ ${tr.transcript}` : tr.transcript;
       const refreshed = StorageManager.getNoteById(note.id);
       if (refreshed) onNoteUpdated(refreshed);
       refreshRecordings();
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setImportStatus(e?.message || 'Could not import audio file');
     } finally {
       setIsImportingAudio(false);
@@ -800,7 +802,7 @@ ${transcript}` : transcript;
             note={{ ...note, title, body }}
             onClose={() => setShowAiSummaryModal(false)}
             onApplySummary={(summaryText: string, mode: 'append' | 'prepend' | 'replace') => {
-              let newBody = body;
+              let newBody: string;
               if (mode === 'replace') newBody = summaryText;
               else if (mode === 'prepend') newBody = `${summaryText}\n\n---\n\n${body}`;
               else newBody = body ? `${body}\n\n${summaryText}` : summaryText;

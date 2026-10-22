@@ -3,6 +3,7 @@ import { Database, RefreshCw, CheckCircle2, AlertCircle, Download, ShieldCheck }
 import { StorageManager } from '../../lib/storage';
 import { SqliteStats } from '../../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
 
 interface StoragePanelProps {
   onRefreshNotes?: () => void;
@@ -107,7 +108,8 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
                 type: 'success',
                 text: `Compacted · reclaimed ${(result.bytesReclaimed / 1024).toFixed(0)} KB`,
               });
-            } catch (err: any) {
+            } catch (_err) {
+              const err = asErrorLike(_err);
               setMessage({ type: 'error', text: err.message || 'Compact failed' });
             } finally {
               setIsVacuuming(false);

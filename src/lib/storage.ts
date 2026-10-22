@@ -22,6 +22,7 @@ import {
   NotesPageResult,
 } from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 import {
   hashPin,
   verifyPin,
@@ -67,7 +68,8 @@ export class StorageManager {
         this.refreshCaches();
         this.isInitialized = true;
         AppLogger.info('StorageManager', 'Storage gateway ready');
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         AppLogger.error('StorageManager', 'Initialization failed', err);
         this.initPromise = null;
         this.isInitialized = false;
@@ -894,7 +896,8 @@ export class StorageManager {
         status: r.ok ? 'ok' : 'corrupted',
         details: r.result,
       };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return {
         ok: false,
         result: e?.message || 'integrity check failed',
@@ -1024,7 +1027,8 @@ export class StorageManager {
       if (Array.isArray(data.notes)) this.saveNotes(data.notes);
       this.refreshCaches();
       return { success: true };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { success: false, error: e?.message || 'import failed' };
     }
   }

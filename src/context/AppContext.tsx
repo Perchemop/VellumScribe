@@ -5,6 +5,7 @@ import {
 } from '../types';
 import { StorageManager } from '../lib/storage';
 import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -192,7 +193,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedNoteId(newNote.id);
         showToast('New note created.');
         return newNote;
-      } catch (e: any) {
+      } catch (_e) {
+        const e = asErrorLike(_e);
         AppLogger.error('AppContext', 'Failed to create note:', e);
         showToast(`Storage Error: ${e.message}`);
         throw e;

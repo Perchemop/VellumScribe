@@ -23,6 +23,7 @@ import { PrivacyManager, CloudAiConsentRequiredError } from '../lib/privacyManag
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { generatePrefixedId } from '../lib/uuid';
 import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -86,7 +87,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         videoRef.current.play();
         setCameraActive(true);
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.warn('OcrScannerModal', 'Camera stream could not start, fallback to native camera intent:', e);
       setCameraActive(false);
       setCameraError('Live viewfinder unavailable. Click "Take Photo with Camera" below to capture using your device camera.');
@@ -127,7 +129,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         stopCameraStream();
         return;
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.warn('OcrScannerModal', 'Capacitor camera failed or dismissed, falling back to input capture:', err);
       // If permission was denied or cancelled, try native file capture input
       if (nativeFileInputRef.current) {
@@ -191,7 +194,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       setOcrStatus(`Extracted via ${res.source || 'Gemini AI'}`);
       setHasKeyError(false);
       setIsQuotaError(false);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.error('OcrScannerModal', 'OCR scan failed', err);
       if (err instanceof CloudAiConsentRequiredError) {
         setOcrStatus('Privacy consent required before sending image to Cloud AI.');
@@ -250,7 +254,8 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
 
       onOcrExtracted(ocrText, scanRecord, mode);
       onClose();
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('OcrScannerModal', 'Failed to save OCR scan to database:', e);
       setOcrStatus(`Storage Error: ${e.message}`);
     }

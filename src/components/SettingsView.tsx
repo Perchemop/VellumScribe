@@ -53,6 +53,7 @@ import { AboutPanel } from './settings/AboutPanel';
 import { DiagnosticsTools } from './settings/DiagnosticsTools';
 import { ConflictResolverPanel } from './settings/ConflictResolverPanel';
 import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'offline-ai' | 'about';
@@ -180,21 +181,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [googleKeyInput, setGoogleKeyInput] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
   const [groqKeyInput, setGroqKeyInput] = useState<string>(() => AiSettingsManager.getGroqApiKey());
   const [deepgramKeyInput, setDeepgramKeyInput] = useState<string>(() => AiSettingsManager.getDeepgramApiKey());
-  const [ollamaEndpointInput, setOllamaEndpointInput] = useState<string>(() => aiSettings.ollamaEndpoint || 'http://localhost:11434');
   const [localWhisperEndpointInput, setLocalWhisperEndpointInput] = useState<string>(() => aiSettings.localWhisperEndpoint || 'http://localhost:8080/v1/audio/transcriptions');
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
   const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [showGroqKey, setShowGroqKey] = useState(false);
   const [showDeepgramKey, setShowDeepgramKey] = useState(false);
   const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
   const [isVerifyingGroq, setIsVerifyingGroq] = useState(false);
   const [isVerifyingDeepgram, setIsVerifyingDeepgram] = useState(false);
-  const [isProbingOllama, setIsProbingOllama] = useState(false);
   const [isProbingWhisper, setIsProbingWhisper] = useState(false);
   const [googleVerifyResult, setGoogleVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [groqVerifyResult, setGroqVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [ollamaVerifyResult, setOllamaVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showAdvancedAi, setShowAdvancedAi] = useState(false); // permanently buried — Google only in simple AI
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
@@ -351,7 +348,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         );
         setQuickConnectingProvider(null);
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setSyncFeedback(`SSO connection notice: ${e.message || 'Unable to connect'}.`);
       setQuickConnectingProvider(null);
     } finally {
@@ -379,7 +377,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       } else {
         setSyncFeedback(`Could not restore backup: ${res.message || 'Snapshot verification failed'}. Your local notes remain safe.`);
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setSyncFeedback(`Restore failed: ${e.message || 'Error occurred while decrypting'}. Your existing local notes remain completely safe.`);
     } finally {
       setIsRestoringBackupId(null);
@@ -433,7 +432,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       AiSettingsManager.setGoogleApiKey(key);
       setGoogleVerifyResult({ success: true, message: 'Key saved.' });
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setGoogleVerifyResult({ success: false, message: e?.message || 'Could not save key' });
     } finally {
       setIsVerifyingGoogle(false);
@@ -476,7 +476,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       const res = await AiSettingsManager.testApiKey(googleKeyInput.trim());
       setGoogleVerifyResult(res);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setGoogleVerifyResult({ success: false, message: err?.message || 'Verification failed.' });
     } finally {
       setIsVerifyingGoogle(false);
@@ -489,7 +490,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       const res = await AiSettingsManager.testGroqKey(groqKeyInput.trim());
       setGroqVerifyResult(res);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setGroqVerifyResult({ success: false, message: err?.message || 'Groq verification failed.' });
     } finally {
       setIsVerifyingGroq(false);
@@ -502,28 +504,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       const res = await AiSettingsManager.testDeepgramKey(deepgramKeyInput.trim());
       setDeepgramVerifyResult(res);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setDeepgramVerifyResult({ success: false, message: err?.message || 'Deepgram verification failed.' });
     } finally {
       setIsVerifyingDeepgram(false);
-    }
-  };
-
-  const handleProbeOllama = async () => {
-    setIsProbingOllama(true);
-    setOllamaVerifyResult(null);
-    try {
-      const res = await AiSettingsManager.probeOllamaEndpoint(ollamaEndpointInput.trim());
-      setOllamaVerifyResult({ success: res.success, message: res.message || (res.success ? 'Ollama daemon ready' : 'Not reachable') });
-      if (res.models) setOllamaModels(res.models);
-      if (res.success) {
-        AiSettingsManager.setOllamaEndpoint(ollamaEndpointInput.trim());
-        setAiSettings(AiSettingsManager.getSettings());
-      }
-    } catch (err: any) {
-      setOllamaVerifyResult({ success: false, message: err?.message || 'Ollama connection failed.' });
-    } finally {
-      setIsProbingOllama(false);
     }
   };
 
@@ -537,7 +522,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         AiSettingsManager.setLocalWhisperEndpoint(localWhisperEndpointInput.trim());
         setAiSettings(AiSettingsManager.getSettings());
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setWhisperVerifyResult({ success: false, message: err?.message || 'Local Whisper connection failed.' });
     } finally {
       setIsProbingWhisper(false);
@@ -1764,7 +1750,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       } else {
                         setSyncFeedback(res.message);
                       }
-                    } catch (err: any) {
+                    } catch (_err) {
+                      const err = asErrorLike(_err);
                       setSyncFeedback(err?.message || 'Restore failed.');
                     } finally {
                       setIsExecutingImport(false);

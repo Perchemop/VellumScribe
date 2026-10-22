@@ -23,6 +23,7 @@ import { GeminiApiService, SummaryFormat, SummaryResult } from '../lib/geminiSer
 import { AiSettingsManager } from '../lib/aiSettings';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { asErrorLike } from '../lib/errorLike';
 
 interface AiSummaryModalProps {
   isOpen: boolean;
@@ -121,7 +122,8 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
       });
 
       setGeneratedResult(result);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setError(err.message || 'Failed to generate AI summary.');
     } finally {
       setIsLoading(false);

@@ -14,6 +14,7 @@ import {
   RefreshCw} from 'lucide-react';
 import { OfflineAiManager, StorageBreakdown } from '../../services/OfflineAiManager';
 import { SpeechModelProfile, AiCapabilities } from '../../types';
+import { asErrorLike } from '../../lib/errorLike';
 
 export const OfflineAiSettings: React.FC = () => {
   const [capabilities, setCapabilities] = useState<AiCapabilities | null>(null);
@@ -61,7 +62,8 @@ export const OfflineAiSettings: React.FC = () => {
         setActionFeedback(`Installation failed: ${res.error}`);
       }
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setActionFeedback(`Error installing model: ${err?.message}`);
     } finally {
       setInstallingModelId(null);
@@ -73,7 +75,8 @@ export const OfflineAiSettings: React.FC = () => {
       await OfflineAiManager.getInstance().deleteModel(modelId);
       setActionFeedback(`Model '${modelId}' removed.`);
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setActionFeedback(`Error deleting model: ${err?.message}`);
     }
   };

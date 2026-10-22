@@ -1,5 +1,5 @@
 import { StorageManager } from './storage';
-import { NoteRecord, EventRecord } from '../types';
+import { NoteRecord } from '../types';
 import { PrivacyManager } from './privacyManager';
 
 export interface ReleaseInfo {
@@ -34,6 +34,7 @@ const STORAGE_KEYS = {
 
 import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/schema';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export const CURRENT_APP_VERSION = '3.1.0';
 export const CURRENT_BUILD_NUMBER = 31000;
@@ -340,7 +341,8 @@ export class AppUpdateManager {
       localStorage.setItem(STORAGE_KEYS.INSTALLED_VERSION, CURRENT_APP_VERSION);
       localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, CURRENT_SCHEMA_VERSION.toString());
       AppLogger.info('AppUpdateManager', `[AppUpdateManager] Migration completed successfully. ${modifiedNotesCount} notes refreshed.`);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('AppUpdateManager', '[AppUpdateManager] Migration error:', e);
       const log: MigrationLog = {
         fromVersion: localStorage.getItem(STORAGE_KEYS.INSTALLED_VERSION) || 'unknown',
@@ -411,7 +413,8 @@ export class AppUpdateManager {
           : 'You are running the latest version.',
         release: latestRelease,
       };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return {
         isUpToDate: true,
         currentVersion: CURRENT_APP_VERSION,

@@ -14,6 +14,7 @@ import { AiResultValidator } from './AiResultValidator';
 import { AppLogger } from '../lib/logger';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { MediaRepository } from '../lib/MediaRepository';
+import { asErrorLike } from '../lib/errorLike';
 
 export interface StorageBreakdown {
   modelsBytes: number;
@@ -163,7 +164,8 @@ export class OfflineAiManager {
         if (!mediaBlob && !recording.file_path) {
           throw new Error('OFFLINE_AI_AUDIO_INVALID: Recording audio data could not be located in local media storage.');
         }
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         if (err?.message?.includes('OFFLINE_AI')) throw err;
         AppLogger.warn('OfflineAiManager', 'Could not verify media key binary: ' + recording.media_key, err);
       }

@@ -142,7 +142,7 @@ export class MediaRepository {
           path: `media/${key}`,
           directory: Directory.Data,
         });
-      } catch (e) {}
+      } catch { /* ignore */ }
     } else {
       await idb.delete(key);
     }

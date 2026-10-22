@@ -18,6 +18,7 @@ import { RecordingRepository } from '../repositories/RecordingRepository';
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { MediaRepository } from '../lib/MediaRepository';
 import { GeminiService } from '../lib/geminiService';
+import { asErrorLike } from '../lib/errorLike';
 import {
   RecordingRecord,
   TranscriptionEntity,
@@ -407,7 +408,8 @@ export class TranscriptionOrchestrator {
       }
 
       return result;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.error('TranscriptionOrchestrator', 'Transcription failed', err);
       if (durableRecord?.id) {
         try {

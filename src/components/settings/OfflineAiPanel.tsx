@@ -4,6 +4,7 @@ import { OfflineAi, VERIFIED_SPEECH_MODELS } from '../../plugins/offline-ai';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { AiCapabilities, SpeechModelProfile } from '../../types';
 import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
 
 /** Compact on-device Whisper status + model install. */
 export const OfflineAiPanel: React.FC = () => {
@@ -33,7 +34,8 @@ export const OfflineAiPanel: React.FC = () => {
           };
         })
       );
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.warn('OfflineAiPanel', 'Failed to load offline AI status', err);
       setErrorMessage(err.message || 'Could not query on-device AI.');
     } finally {
@@ -55,7 +57,8 @@ export const OfflineAiPanel: React.FC = () => {
       if (!res.installed) throw new Error(res.error || 'Install failed');
       setSuccessMessage(`${model.displayName} installed`);
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err.message || 'Download failed');
     } finally {
       setDownloadingModelId(null);
@@ -69,7 +72,8 @@ export const OfflineAiPanel: React.FC = () => {
       await OfflineAi.deleteSpeechModel({ modelId });
       setSuccessMessage('Model removed');
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err.message || 'Remove failed');
     }
   };

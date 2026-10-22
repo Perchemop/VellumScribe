@@ -1,6 +1,7 @@
 import { AppLogger } from './logger';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
+import { asErrorLike } from './errorLike';
 
 /**
  * SearchIndexQueue
@@ -151,7 +152,8 @@ export class SearchIndexQueue {
       );
 
       AppLogger.info('SearchIndexQueue', `Successfully indexed ${ids.length} note(s) into SQLite FTS`);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('SearchIndexQueue', 'Failed to batch reindex notes in FTS', e);
       try {
         await db.run(

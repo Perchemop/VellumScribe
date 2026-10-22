@@ -27,6 +27,7 @@ import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { OfflineAiSettings } from '../pages/settings/OfflineAiSettings';
+import { asErrorLike } from '../lib/errorLike';
 
 interface SettingsModalProps {
   initialTab?: 'ai' | 'backup' | 'security' | 'offline-ai';
@@ -92,7 +93,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const res = await AiSettingsManager.testApiKey(apiKeyInput.trim());
       setVerifyResult(res);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setVerifyResult({
         success: false,
         message: err?.message || 'Verification request failed.',
