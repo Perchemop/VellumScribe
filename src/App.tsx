@@ -36,7 +36,7 @@ import { SyncStatus } from './components/SyncStatus';
 import { ReminderService } from './services/ReminderService';
 import { ListDensityProvider } from './context/ListDensityContext';
 import { AppLogger } from './lib/logger';
-import { asErrorLike } from 'lib/errorLike';
+import { asErrorLike } from './lib/errorLike';
 
 export default function App() {
   const {
