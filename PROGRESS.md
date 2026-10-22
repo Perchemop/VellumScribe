@@ -12,7 +12,7 @@ Append here for every slice; never rewrite history.
 | Signal | State |
 | --- | --- |
 | `npm run verify` | ⚠ **last known green locally:** typecheck clean, lint 0 errors / 656 warnings, orphan check clean across 118 files, 86 tests passing. Heavy verification no longer runs on this machine (guide §4) — it runs on GitHub Actions via `ci.sh`. |
-| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 332 warnings (down from 656 in slice B-4) — this is the active blocker (see Q-005). |
+| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 275 warnings (down from 656; slices B-4 and B-5) — this is the active blocker (see Q-005). |
 | Test suite | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`). |
 | Working tree | clean, committed and pushed |
 | GitHub Actions | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green. |
@@ -23,8 +23,8 @@ Append here for every slice; never rewrite history.
 **Status sentence:** code compiles and tests pass; CI is operational on three
 OS runners with a real (unsigned) APK. The active blocker is lint:
 `--max-warnings=0` now denies warnings (guide §4), so CI lint fails until the
-remaining 332 warnings are burned down via `ci.sh` iterations (slice B-4 took
-656 → 332). Per guide §4,
+remaining 275 warnings are burned down via `ci.sh` iterations (B-4: 656 → 332,
+B-5: 332 → 275). Per guide §4,
 fixing CI is the first task.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
@@ -169,6 +169,41 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
+## 2026-10-22 — Slice B-5: eliminate every unused variable (332 → 275)
+
+**Goal:** remove the whole `@typescript-eslint/no-unused-vars` class (57 warnings).
+
+- **`SettingsView`'s advanced-AI cluster was dead code.** Ten handlers
+  (`handleSaveGroqKey`, `handleClearGroqKey`, `handleSaveDeepgramKey`,
+  `handleClearDeepgramKey`, `handleTestGoogleKey`, `handleTestGroqKey`,
+  `handleTestDeepgramKey`, `handleProbeLocalWhisper`, `handleKeyFileUpload`,
+  `handleUpdateAiSettings`) plus `handleCopyCmd` were unreachable, as were the
+  `serverProvidersConfig` fetch effect and the Groq/Deepgram/Whisper verify
+  state they fed. Removed them; the states whose setter was only reachable from
+  that dead code were reduced to their rendered value (or dropped), which is
+  behaviour-identical because those setters never executed. `SettingsView.tsx`
+  is now **fully warning-free**.
+- Unused props/params are prefixed (`_onDeleteEvent`, `_reminderAt`,
+  `_locationName`, `_onRefreshNotes`, `_mimeType`, `_noteId`); unused catch
+  bindings dropped; remaining dead locals removed (`currentRelease`,
+  `hasExistingSqliteData` + its count queries, `lastEndMs`, `targetId`, unused
+  `loading`/`speechRecognitionEnabled` state, the dead `recommendSpeechModel`
+  body).
+
+**Verification** — `ci.sh run`, run on `opencode/ci`:
+
+| Check | Result |
+| --- | --- |
+| `typecheck` | ✅ pass (one regression caught and fixed: `setStats` is used at line 1604) |
+| `lint` | ❌ 275 warnings (0 errors) — down from 332; `no-unused-vars` now 0 |
+| `format (staged, non-blocking)` | ❌ (expected; slice B-3 owns the baseline) |
+
+Remaining mix: `no-explicit-any` 229, `jsx-a11y/click-events-have-key-events`
+15, `react-hooks/set-state-in-effect` 12, `react-hooks/exhaustive-deps` 10,
+`react-hooks/immutability` 6, `no-useless-assignment` 3.
+
+---
+
 ## 2026-10-22 — Slice B-4: lint burn-down batch 1 + remove local-Ollama provider
 
 **Owner decision:** remove Ollama entirely (guide §5.1.4 "Do not use Ollama or
@@ -246,8 +281,8 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 ## Open blockers (carry into next session)
 
 1. **Q-005 (ACTIVE) — lint warnings denied, CI failing.** `--max-warnings=0`
-   fails on the remaining 332 warnings (slice B-4 reduced 656 → 332). Burn down
-   in slices of ≤50 via
+   fails on the remaining 275 warnings (B-4 656 → 332, B-5 332 → 275). Burn
+   down in slices of ≤50 via
    `ci.sh` iterations (edit locally, verify on CI). Until this is resolved,
    CI lint is red and per guide §4 this is the first task to fix.
 2. **Q-002 — no release keystore (release blocker).** Generate it per
