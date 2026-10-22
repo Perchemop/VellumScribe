@@ -372,7 +372,7 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
       ciphertext as any
     );
     return new Uint8Array(decryptedBuffer);
-  } catch (e) {
+  } catch {
     return null;
   }
 }

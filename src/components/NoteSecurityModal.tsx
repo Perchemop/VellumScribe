@@ -28,7 +28,7 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
   const isCurrentlyLocked = note.is_locked;
   const effectiveMode = initialMode || (isCurrentlyLocked ? 'gate' : 'set');
 
-  const [mode, setMode] = useState<'gate' | 'manage' | 'set'>(effectiveMode);
+  const [mode] = useState<'gate' | 'manage' | 'set'>(effectiveMode);
   const [securityType, setSecurityType] = useState<'pin' | 'passphrase'>('pin');
   const [lockMode, setLockMode] = useState<'standard' | 'private'>('standard');
   const [pin, setPin] = useState('');

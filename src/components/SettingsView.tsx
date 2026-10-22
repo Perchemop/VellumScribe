@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Sparkles,
   Cloud,
@@ -33,7 +33,7 @@ import {
   Server} from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
-import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
+import { AiSettingsManager } from '../lib/aiSettings';
 import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate, RemoteBackupItem, QueuedSyncItem } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
@@ -164,48 +164,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   useModalBackHandler(!!restoreConfirmTarget, () => setRestoreConfirmTarget(null), 'settings-restore-backup-modal');
   const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
   const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() => CloudSyncEngine.getSyncQueue());
-  const [serverProvidersConfig, setServerProvidersConfig] = useState<Record<string, { hasOAuthEnv?: boolean; isConfigured?: boolean }>>({});
-
-  React.useEffect(() => {
-    CloudSyncEngine.fetchConfig()
-      .then((cfg) => {
-        if (cfg?.providers) {
-          setServerProvidersConfig(cfg.providers);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   // AI State
-  const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
   const [googleKeyInput, setGoogleKeyInput] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
-  const [groqKeyInput, setGroqKeyInput] = useState<string>(() => AiSettingsManager.getGroqApiKey());
-  const [deepgramKeyInput, setDeepgramKeyInput] = useState<string>(() => AiSettingsManager.getDeepgramApiKey());
-  const [localWhisperEndpointInput, setLocalWhisperEndpointInput] = useState<string>(() => aiSettings.localWhisperEndpoint || 'http://localhost:8080/v1/audio/transcriptions');
   const [showGoogleKey, setShowGoogleKey] = useState(false);
-  const [showGroqKey, setShowGroqKey] = useState(false);
-  const [showDeepgramKey, setShowDeepgramKey] = useState(false);
   const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
-  const [isVerifyingGroq, setIsVerifyingGroq] = useState(false);
-  const [isVerifyingDeepgram, setIsVerifyingDeepgram] = useState(false);
-  const [isProbingWhisper, setIsProbingWhisper] = useState(false);
   const [googleVerifyResult, setGoogleVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [groqVerifyResult, setGroqVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [deepgramVerifyResult, setDeepgramVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [whisperVerifyResult, setWhisperVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [showAdvancedAi, setShowAdvancedAi] = useState(false); // permanently buried — Google only in simple AI
-  const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
-  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const [, setFileUploadFeedback] = useState<string | null>(null);
 
-  const handleCopyCmd = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCmd(id);
-    setTimeout(() => setCopiedCmd(null), 2500);
-  };
 
   // Storage stats & Keystore
-  const [stats, setStats] = useState(() => StorageManager.getStorageStats());
-  const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
+  const [secrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
   // Import pipeline state
   const [importPreviewData, setImportPreviewData] = useState<ImportPreviewResult | null>(null);
@@ -221,7 +190,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     'settings-import-preview-modal'
   );
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAirGapped = backupFrequency === 'off';
   const activeAccounts = accounts; // Everyone connected is active now
@@ -404,10 +372,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   // AI Key & Provider actions
-  const handleUpdateAiSettings = (updates: Partial<AiIntegrationSettings>) => {
-    const updated = AiSettingsManager.updateSettings(updates);
-    setAiSettings(updated);
-  };
 
   const handleSaveGoogleKey = () => {
     AiSettingsManager.setGoogleApiKey(googleKeyInput.trim());
@@ -440,120 +404,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };;
 
-  const handleSaveGroqKey = () => {
-    AiSettingsManager.setGroqApiKey(groqKeyInput.trim());
-    setGroqVerifyResult(null);
-    setFileUploadFeedback('Groq API key saved locally.');
-    setTimeout(() => setFileUploadFeedback(null), 3000);
-  };
 
-  const handleClearGroqKey = () => {
-    setGroqKeyInput('');
-    AiSettingsManager.setGroqApiKey('');
-    setGroqVerifyResult(null);
-    setFileUploadFeedback('Groq API key removed.');
-    setTimeout(() => setFileUploadFeedback(null), 3000);
-  };
 
-  const handleSaveDeepgramKey = () => {
-    AiSettingsManager.setDeepgramApiKey(deepgramKeyInput.trim());
-    setDeepgramVerifyResult(null);
-    setFileUploadFeedback('Deepgram API key saved locally.');
-    setTimeout(() => setFileUploadFeedback(null), 3000);
-  };
 
-  const handleClearDeepgramKey = () => {
-    setDeepgramKeyInput('');
-    AiSettingsManager.setDeepgramApiKey('');
-    setDeepgramVerifyResult(null);
-    setFileUploadFeedback('Deepgram API key removed.');
-    setTimeout(() => setFileUploadFeedback(null), 3000);
-  };
 
-  const handleTestGoogleKey = async () => {
-    setIsVerifyingGoogle(true);
-    setGoogleVerifyResult(null);
-    try {
-      const res = await AiSettingsManager.testApiKey(googleKeyInput.trim());
-      setGoogleVerifyResult(res);
-    } catch (_err) {
-      const err = asErrorLike(_err);
-      setGoogleVerifyResult({ success: false, message: err?.message || 'Verification failed.' });
-    } finally {
-      setIsVerifyingGoogle(false);
-    }
-  };
 
-  const handleTestGroqKey = async () => {
-    setIsVerifyingGroq(true);
-    setGroqVerifyResult(null);
-    try {
-      const res = await AiSettingsManager.testGroqKey(groqKeyInput.trim());
-      setGroqVerifyResult(res);
-    } catch (_err) {
-      const err = asErrorLike(_err);
-      setGroqVerifyResult({ success: false, message: err?.message || 'Groq verification failed.' });
-    } finally {
-      setIsVerifyingGroq(false);
-    }
-  };
 
-  const handleTestDeepgramKey = async () => {
-    setIsVerifyingDeepgram(true);
-    setDeepgramVerifyResult(null);
-    try {
-      const res = await AiSettingsManager.testDeepgramKey(deepgramKeyInput.trim());
-      setDeepgramVerifyResult(res);
-    } catch (_err) {
-      const err = asErrorLike(_err);
-      setDeepgramVerifyResult({ success: false, message: err?.message || 'Deepgram verification failed.' });
-    } finally {
-      setIsVerifyingDeepgram(false);
-    }
-  };
 
-  const handleProbeLocalWhisper = async () => {
-    setIsProbingWhisper(true);
-    setWhisperVerifyResult(null);
-    try {
-      const res = await AiSettingsManager.probeLocalWhisperEndpoint(localWhisperEndpointInput.trim());
-      setWhisperVerifyResult({ success: res.success, message: res.message || (res.success ? 'Local Whisper server reachable' : 'Not reachable') });
-      if (res.success) {
-        AiSettingsManager.setLocalWhisperEndpoint(localWhisperEndpointInput.trim());
-        setAiSettings(AiSettingsManager.getSettings());
-      }
-    } catch (_err) {
-      const err = asErrorLike(_err);
-      setWhisperVerifyResult({ success: false, message: err?.message || 'Local Whisper connection failed.' });
-    } finally {
-      setIsProbingWhisper(false);
-    }
-  };
 
-  const handleKeyFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const extracted = AiSettingsManager.extractApiKeyFromFile(content);
-      if (extracted.key) {
-        if (extracted.key.startsWith('gsk_')) {
-          setGroqKeyInput(extracted.key);
-          AiSettingsManager.setGroqApiKey(extracted.key);
-          setFileUploadFeedback(`Successfully loaded Groq key from ${file.name}!`);
-        } else {
-          setGoogleKeyInput(extracted.key);
-          AiSettingsManager.setGoogleApiKey(extracted.key);
-          setFileUploadFeedback(`Successfully loaded Google AI key from ${file.name}!`);
-        }
-      } else {
-        setFileUploadFeedback(extracted.error || 'Failed to find a valid API key in file.');
-      }
-    };
-    reader.readAsText(file);
-  };
 
 
   return (

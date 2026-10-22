@@ -43,11 +43,6 @@ export class MigrationManager {
       return null; // Already migrated
     }
 
-    // Check if SQLite already contains user notes
-    const existingNotesCount = await db.query<{ count: number }>('SELECT COUNT(*) as count FROM notes');
-    const existingEventsCount = await db.query<{ count: number }>('SELECT COUNT(*) as count FROM events');
-    const hasExistingSqliteData = (existingNotesCount[0]?.count || 0) > 0 || (existingEventsCount[0]?.count || 0) > 0;
-
     // Read legacy localStorage items
     const rawEvents = localStorage.getItem(LEGACY_STORAGE_KEYS.EVENTS);
     const rawNotes = localStorage.getItem(LEGACY_STORAGE_KEYS.NOTES);
