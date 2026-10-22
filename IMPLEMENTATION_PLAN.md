@@ -83,11 +83,16 @@ Acceptance criteria:
 - Documented in `DECISIONS.md`.
 
 ### B-4 · Burn lint warnings to zero
-**Status: Backlog (Q-005)**
+**Status: Active — blocker #1 (Q-005). First task per guide §4.**
+
+`--max-warnings=0` is set in `package.json` (D-403); CI lint is currently
+FAILING on 656 pre-existing warnings.
 
 Acceptance criteria:
-- Warning count reduced from 656 to 0 in slices of ≤50.
-- `--max-warnings=0` set in `package.json`.
+- Warning count reduced from 656 to 0 in slices of ≤50, each verified on CI
+  via `ci.sh run` (never locally).
+- `--max-warnings=0` set in `package.json` ✅ (done).
+- `npm run lint` passes on all three OS runners.
 
 ---
 

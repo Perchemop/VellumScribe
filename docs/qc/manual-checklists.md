@@ -10,7 +10,10 @@ Record the result of each pass in `PROGRESS.md`.
 ## 1. Slice-level (walk per slice)
 
 - [ ] The slice's acceptance criteria in `IMPLEMENTATION_PLAN.md` are met.
-- [ ] `npm run verify` is green locally.
+- [ ] CI is green via `~/.config/opencode/scripts/ci.sh run "<description>"`
+      (typecheck, lint with warnings denied, orphan check, tests, build on
+      Linux/Windows/macOS). Never claim a gate passed without inspecting the
+      CI run output.
 - [ ] New behaviour has at least one test that fails without the change.
 - [ ] `REQUIREMENTS_TRACEABILITY.md` updated (requirement → file → test).
 - [ ] No new orphaned files (`npm run check:orphans`).
@@ -75,17 +78,26 @@ Record the result of each pass in `PROGRESS.md`.
 - [ ] PWA `manifest.json` background matches the launcher background
       (`#09090B`).
 - [ ] Favicon, PWA icon and Android launcher icon are the same mark.
-- [ ] `npm run build` succeeds; `dist/` has an `index.html` with hashed assets.
+- [ ] Production build succeeds via CI (`ci.sh`); `dist/` has an `index.html`
+      with hashed assets. (`npm run build` is CI-only — guide §4.)
 
-## 7. CI (verified working 2026-10-21)
+## 7. CI (verified working 2026-10-21; lint gate now denied-warnings)
 
-- [ ] A run completes its steps (baseline: run `39566612176`, three OS
-      runners green).
-- [ ] Lint, orphan, typecheck, test and build steps all green on
-      Linux, Windows and macOS.
+Run verification via `~/.config/opencode/scripts/ci.sh run "<description>"`
+(CI-first, guide §4 — never run the toolchain locally).
+
+- [ ] CI run completes on Linux, Windows and macOS (baseline runs
+      `39566612176` / `39574556505`, three OS runners green).
+- [ ] Lint **denies warnings** (`--max-warnings=0`): currently FAILING on 656
+      pre-existing warnings — active blocker Q-005; burn down in slices of ≤50
+      until lint passes on all three OS runners.
+- [ ] Orphan, typecheck, test and build steps all green on Linux, Windows
+      and macOS.
 - [ ] The staged format job is allowed to fail without failing the workflow
-      (Q-004) — confirm the workflow conclusion is still `success`.
+      (Q-004) — confirm the workflow conclusion is still `success` while format
+      is non-blocking.
 - [ ] The Android workflow logs `VELLUM: <task> -> versionName=… versionCode=…
       signed=…` and currently reports `signed=false` until Q-002 is closed.
 - [ ] Tagged releases fail loudly if no signing key is configured.
 - [ ] Artifact `VellumScribe-Android-APKs-real` is attached to the run.
+- [ ] Never claim a gate passed without inspecting the CI run output.
