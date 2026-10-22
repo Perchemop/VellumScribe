@@ -170,3 +170,38 @@ structure (orchestrator/coder/explorer/reviewer) is built so that swapping in
 Gemini or Groq later is a one-line `model:` change per file.
 **Rejected.** Writing `model: gemini/...` references for providers with no
 key configured — those agents would simply fail to run.
+
+---
+
+### D-402 · 2026-10-22 · CI-first: no heavy toolchain runs on this machine (guide §4)
+**Decision.** All heavy/RAM-intensive work (`npm ci`, `npm install`, `npm test`,
+`npm run build`, `npm run lint`, `npx tsc`, `vitest`, `vite build`, and the
+full `npm run verify`) runs exclusively on GitHub Actions via
+`~/.config/opencode/scripts/ci.sh`, never locally. Local work is limited to
+editing, read-only checks, git operations, and reviewing CI results. After
+every meaningful change the agent commits and pushes and treats the GitHub
+Actions result as the source of truth.
+**Rejected.** Running "just this once" a local build/test to save a CI cycle
+— the guide §4 is NON-NEGOTIABLE and overrides every other instruction.
+**Consequences.** `npm run verify` is no longer executed locally. Verification
+is requested through `ci.sh run "<description>"`, which pushes to the
+`opencode/ci` branch, opens a PR to `main`, and runs the repository's CI.
+
+### D-403 · 2026-10-22 · Lint denies warnings (`--max-warnings=0`) (guide §4 Required CI)
+**Decision.** `eslint src --max-warnings=0` — any lint warning fails CI.
+**Rejected.** The previous transitional ceiling `--max-warnings=700` with 656
+warnings — the guide requires warnings denied.
+**Consequences.** CI lint is **currently FAILING** on 656 pre-existing warnings
+until they are burned down (Q-005, active blocker #1). Burn-down happens in
+slices of ≤50 via `ci.sh` iterations: edit locally, verify on CI. Until
+resolved, CI lint is red and per guide §4 this is the first task to fix.
+
+### D-404 · 2026-10-22 · Free-model policy + dynamic model selection (guide §5)
+**Decision.** Provider order: OpenCode free first → NVIDIA free second. The
+orchestrator discovers available free models at session start and assigns the
+best one per role; exact model IDs are not hard-coded as permanent pins.
+The mapping is recorded in `docs/current-model-map.md` and re-validated each
+session (§5.2/§5.6). Agent definitions live in `.opencode/agents/` with V2
+permissions; orchestrator is edit:deny/bash:deny (plans and delegates only).
+**Rejected.** Hard-coding a single model ID (it will go stale), using Ollama or
+any local model hosting (§5.1.4).

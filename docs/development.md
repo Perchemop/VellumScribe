@@ -13,36 +13,63 @@ concrete commands, files and rules that apply here.
    `IMPLEMENTATION_PLAN.md` and every requirement in
    `REQUIREMENTS_TRACEABILITY.md`.
 2. **Never claim unverified work is complete.** A slice is Done only when
-   `npm run verify` is green *and* the QC checklist for it has been walked.
-   If CI is down, say so explicitly rather than implying CI passed.
+   CI is green via `ci.sh` *and* the QC checklist for it has been walked.
+   If CI is down or a gate is failing, say so explicitly rather than implying
+   CI passed.
 3. **Never invent requirements.** Open questions live in
    `docs/assumptions-and-questions.md`; unresolved ones are not silently
    decided by an agent.
 4. **Never break update-in-place.** Application ID, package name, signing key
    and version monotonicity must not regress (see §4).
 5. **Clean-room.** `docs/inspiration.md` rules are non-negotiable.
+6. **CI-first: no heavy toolchain runs locally.** `npm ci`, `npm install`,
+   `npm test`, `npm run build`, `npm run lint`, `npx tsc`, `vitest`, and the
+   full `npm run verify` run exclusively on GitHub Actions via
+   `~/.config/opencode/scripts/ci.sh` (guide §4). The host is memory-constrained
+   and restarts under load. Local work is editing, read-only checks, git
+   operations, and reviewing CI results.
 
 ---
 
 ## 2. Commands
 
+Light / read-only (safe on this machine):
 ```bash
-npm install --legacy-peer-deps     # .npmrc already sets legacy-peer-deps
+git status          # read-only
+git diff            # read-only
+git log             # read-only
+npm run format      # light formatting script (coder/fixer/tester may run)
+npm run format:check
+```
 
-npm run verify                     # typecheck + lint + orphan check + tests
-npm test                           # vitest (12 files / 86 tests)
-npm run typecheck
-npm run lint
-npm run check:orphans              # fails on any unreferenced file
-npm run build                      # vite build + esbuild server bundle
-npm run assets:brand               # regenerate brand PNGs from favicon mark
+Heavy / CI-only (never run on this machine — guide §4):
+```bash
+npm install --legacy-peer-deps   # heavy; blocked locally
+npm ci                           # heavy; blocked locally
+npm run verify                   # typecheck + lint + orphan check + tests
+npm test                         # vitest
+npm run typecheck                # tsc
+npm run lint                     # eslint --max-warnings=0
+npm run check:orphans
+npm run build                    # vite build + esbuild
+./gradlew assembleDebug assembleRelease   # Android; CI only
+```
 
-# Android (CI only on this machine — see §3)
+Verify a change with CI:
+```bash
+~/.config/opencode/scripts/ci.sh run "<short description>"
+# commits the working tree to opencode/ci, opens a PR to main,
+# runs the repository's CI, waits, and prints the result.
+```
+
+Android (CI only — see §3):
+```bash
 npx cap sync android
 ./gradlew assembleDebug assembleRelease
 ```
 
-`npm run verify` is the Definition of Done gate. Run it before every commit.
+`npm run verify` via CI is the Definition of Done gate. Confirm CI is green
+before every commit; never run it locally.
 
 > `check:orphans` exits 1 on **any** unreferenced file, and it is a CI step —
 > dead code breaks the build even if it compiles.
@@ -87,7 +114,9 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
 4. Append the outcome to `PROGRESS.md`; log any non-obvious choice in
    `DECISIONS.md`.
 5. Walk the matching checklist in `docs/qc/manual-checklists.md`.
-6. Run `npm run verify`, then commit with a message that names the slice.
+6. Verify via `~/.config/opencode/scripts/ci.sh run "<description>"`
+   (CI-first, guide §4), then commit and push with a message that names the
+   slice. Never run `npm run verify` locally.
 7. Update `CHANGELOG.md` only for user-visible change.
 
 ---
@@ -116,26 +145,31 @@ left to guess requirements.
 
 ## 7. Continuous integration
 
-`.github/workflows/ci.yml` is the required verification signal:
+`.github/workflows/ci.yml` is the required verification signal and runs on
+Linux, Windows and macOS (all shell steps declare `shell: bash`):
 
-1. Format check — **staged, not yet enforced** (Q-004).
-2. Lint — enforced at `--max-warnings=700` (real ceiling is 656, Q-005).
+1. Format check — **staged, not yet enforced** (Q-004; 194 unformatted files).
+   `continue-on-error` until slice B-3 establishes the baseline.
+2. Lint — **enforced with warnings denied** (`--max-warnings=0`, guide §4).
+   **Currently FAILING** on 656 pre-existing warnings — active blocker Q-005.
+   Burn down in slices of ≤50 via `ci.sh` iterations.
 3. Orphan check — enforced, fails on dead code.
 4. Typecheck — enforced.
 5. Full test suite — enforced.
 6. Production build — enforced.
 
-Runs on Linux, Windows and macOS. All shell steps declare `shell: bash` so the
-same commands work on every runner.
+**Verified 2026-10-21 (before the lint-denied flip):** CI run `39566612176`
+passed on all three OS runners, Security Scanning (`39566612217`) passed, and
+the Android APK workflow (`39566612127`) produced `VellumScribe-Android-APKs-real`
+with `versionName=3.1.0 versionCode=30100` — **unsigned**, because no keystore
+exists yet (Q-002).
 
-**Verified 2026-10-21:** CI run `39566612176` passed on all three OS runners,
-Security Scanning (`39566612217`) passed, and the Android APK workflow
-(`39566612127`) produced `VellumScribe-Android-APKs-real` with
-`versionName=3.1.0 versionCode=30100` — **unsigned**, because no keystore
-exists yet (Q-002). The format job failed as designed; it is
-`continue-on-error` and does not fail the workflow.
-
-Always cite a run ID you actually inspected, or state what you ran locally.
+**Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
+`npm run lint`, `npx tsc`, `vitest`, or `npm ci` runs on this machine — the
+host is memory-constrained and restarts under load. Verify changes with
+`~/.config/opencode/scripts/ci.sh run "<description>"`, which commits the
+working tree to the `opencode/ci` branch, pushes it, opens a PR to `main`, and
+runs the repository's CI. Always cite a run ID you actually inspected.
 
 ---
 

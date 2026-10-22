@@ -1,0 +1,42 @@
+# Current free-model map
+
+Per guide §5 (Free Model Policy) and §5.6 (Working Protocol), the lead agent
+discovers the currently available free models at the start of each session and
+assigns the best one to each role. This file records the mapping for the
+session that last touched it; it is **not** a hard-coded pin and must be
+re-validated when models become unavailable.
+
+Provider order: **OpenCode free first → NVIDIA free second** (§5.1). Switch to
+NVIDIA free only when OpenCode free is exhausted, and record the switch in
+`PROGRESS.md`.
+
+Role → capability → current model (OpenCode free), reviewed 2026-10-22:
+
+| Role | Capability needed | Current model | Selection guidance |
+| --- | --- | --- | --- |
+| Orchestrator / Lead | Strong reasoning + tool calling | `opencode/big-pickle` | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
+| Coder / Executor | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high` | Best available free coding model; writes code + tests, never runs the toolchain locally. |
+| Explorer | Speed + good search | `opencode/mimo-v2.6-flash-free` | Fastest free model with decent quality; read-only, no builds. |
+| Reviewer | Competent analysis, read-only | `opencode/beam-free#high` | Solid free model, prefer fast/cheap; read-only, no builds. |
+| Tester / Bulk | High volume, lower stakes | `opencode/deepseek-v4.1-flash-free#high` | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`. |
+| CI runner | GitHub interaction, read results | `opencode/beam-free#high` | Any capable free model; runs `ci.sh`, never changes source. |
+| Fixer | Fix CI-reported failures | `opencode/glm-5.3-flash-free#high` | Good coding model; reads CI logs, applies minimal fixes. |
+| Docs writer | Process docs up to date | `opencode/big-pickle` | Reasoning model; edits Markdown only. |
+
+## How to re-select
+
+At session start, the orchestrator discovers available free models (OpenCode
+free first) and picks the most suitable per the nature of the work:
+
+- Strong reasoning / planning / multi-file coding → best high-quality free model.
+- Fast exploration, search, simple reads, bulk review → fastest / highest-throughput free model.
+- Read-only review → any capable free model (prefer cheaper/faster).
+- Prefer models that support reliable tool calling when the task requires it.
+
+Record any change here and in `PROGRESS.md`.
+
+## Do not
+
+- Do not use Ollama or any local model hosting (§5.1.4).
+- Do not hard-code model IDs as permanent — they change over time (§5.2).
+- Do not run heavy toolchains locally regardless of model (§4).

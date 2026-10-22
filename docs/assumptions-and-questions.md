@@ -67,10 +67,12 @@ from Q-002.
 dedicated mechanical formatting slice, then enable `format:check` as a
 required CI step.
 
-**Q-005. Lint warnings stand at 656** against a `--max-warnings=700` ceiling
-(re-measured 2026-10-21).
-The guide prefers warnings denied. *Action:* burn the warnings down, then drop
-the ceiling to 0.
+**Q-005. ✅ Resolved in part — lint now denies warnings (`--max-warnings=0`,
+set 2026-10-22, guide §4 Required CI).**
+Lint warnings stand at **656** against the now-zero ceiling, so CI lint is
+**currently FAILING** until they are burned down — active blocker #1 (Q-005,
+see `PROGRESS.md`). Burn down in slices of ≤50 via `ci.sh` iterations; never
+run `npm run lint` locally.
 
 **Q-008. ✅ Resolved 2026-10-21 — legacy one-shot CI workflows cleaned up.**
 There were 19 permanent no-op stubs (`if: false` jobs named "(disabled)")

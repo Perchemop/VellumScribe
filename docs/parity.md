@@ -94,7 +94,8 @@ Last reviewed: 2026-10-21. Test suite: **12 files / 86 tests**, all passing.
 | APK build in CI (debug + release) | **Verified** | CI run `39566612127` green; artifact `VellumScribe-Android-APKs-real` |
 | Brand-consistent launcher icons + splash | **Polished** | `npm run assets:brand`; 26 PNGs + 11 XMLs validated |
 | PWA manifest + brand favicon | **Polished** | `public/manifest.json`, `public/favicon.svg` |
-| CI verification signal | **Verified** | CI run `39566612176` green on Linux + Windows + macOS; Security Scanning `39566612217` green |
+| CI verification signal | **Verified (pre-flip)** | CI run `39566612176` green on Linux + Windows + macOS; Security Scanning `39566612217` green. Re-verified after each lint burn-down slice. |
+| Lint gate — warnings denied (`--max-warnings=0`) | **Failing until burn-down** | 656 pre-existing warnings fail CI lint — active blocker Q-005; burn down via `ci.sh` iterations (guide §4). |
 
 ---
 
@@ -106,5 +107,9 @@ Last reviewed: 2026-10-21. Test suite: **12 files / 86 tests**, all passing.
 2. **Native inference is unverified on hardware** — requires a signed APK and
    a physical `arm64` device.
 3. ~~**CI is down**~~ — **resolved 2026-10-21.** CI, Security Scanning and
-   the Android APK workflow all run green. The remaining release blocker is
-   the missing signing key (Q-002), not the pipeline.
+   the Android APK workflow all run green. The release blocker is now the
+   missing signing key (Q-002).
+4. **Lint gate denies warnings** (`--max-warnings=0`, guide §4) — **currently
+   failing** on 656 pre-existing warnings (Q-005, active blocker #1). Burn
+   down via `ci.sh` iterations; CI lint must be green before any slice claims
+   Done.
