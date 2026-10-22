@@ -3,7 +3,7 @@ import { AppLogger } from '../logger';
 import { MIGRATIONS } from './schema';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { asErrorLike } from '../../lib/errorLike';
+import { asErrorLike } from '../errorLike';
 
 const DB_INDEXED_DB_NAME = 'vellumscribe_sqlite_db';
 const DB_STORE_NAME = 'sqlite_binary';
