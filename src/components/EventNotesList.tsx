@@ -102,28 +102,35 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
   // Pre-aggregate counts for recordings and OCR scans to avoid N+1 scans in note render loops
   const recordingsCountMap = useMemo(() => {
-    const map = new Map<number, number>();
+    const counts = new Map<number, number>();
     try {
       const all = StorageManager.getRecordings();
       for (const r of all) {
         if (r.note_id) {
-          map.set(r.note_id, (map.get(r.note_id) || 0) + 1);
+          counts.set(r.note_id, (counts.get(r.note_id) || 0) + 1);
         }
       }
     } catch { /* ignore */ }
+    // Projected onto the rendered notes: the stored media itself is not
+    // reactive, so `notes` is the memo's real dependency.
+    const map = new Map<number, number>();
+    for (const n of notes) map.set(n.id, counts.get(n.id) || 0);
     return map;
   }, [notes]);
 
   const ocrScansCountMap = useMemo(() => {
-    const map = new Map<number, number>();
+    const counts = new Map<number, number>();
     try {
       const all = StorageManager.getOcrScans();
       for (const s of all) {
         if (s.note_id) {
-          map.set(s.note_id, (map.get(s.note_id) || 0) + 1);
+          counts.set(s.note_id, (counts.get(s.note_id) || 0) + 1);
         }
       }
     } catch { /* ignore */ }
+    // Projected onto the rendered notes (see recordingsCountMap above).
+    const map = new Map<number, number>();
+    for (const n of notes) map.set(n.id, counts.get(n.id) || 0);
     return map;
   }, [notes]);
 

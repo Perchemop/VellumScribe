@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Bot } from 'lucide-react';
-import { AiProvenanceService, AiProvenanceRecord } from '../services/AiProvenanceService';
+import { AiProvenanceService } from '../services/AiProvenanceService';
 
 interface AiProvenanceBadgeProps {
   entityType: 'note' | 'checklist' | 'transcript' | 'summary';
@@ -14,13 +14,12 @@ export const AiProvenanceBadge: React.FC<AiProvenanceBadgeProps> = ({
   entityId,
   className = '',
 }) => {
-  const [provenance, setProvenance] = useState<AiProvenanceRecord | null>(null);
-
-  useEffect(() => {
-    if (entityId) {
-      setProvenance(AiProvenanceService.getProvenance(entityType, entityId));
-    }
-  }, [entityType, entityId]);
+  // Derived, not state: the provenance row is a synchronous lookup, so a memo
+  // keeps it in sync without a state-sync effect.
+  const provenance = useMemo(
+    () => (entityId ? AiProvenanceService.getProvenance(entityType, entityId) : null),
+    [entityType, entityId]
+  );
 
   if (!provenance) return null;
 

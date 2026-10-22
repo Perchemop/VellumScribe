@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Download,
   Share2,
@@ -86,10 +86,10 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
   isOpen,
   onClose,
 }) => {
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     markOnboardingCompleted();
     onClose();
-  };
+  }, [onClose]);
 
   useModalBackHandler(isOpen, handleDismiss, 'first-time-user-guide');
 
@@ -120,7 +120,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen]);
+  }, [isOpen, handleDismiss]);
 
   if (!isOpen) return null;
 

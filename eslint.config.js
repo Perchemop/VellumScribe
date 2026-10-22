@@ -31,7 +31,12 @@ export default tseslint.config(
       'prefer-const': 'warn',
       'no-useless-escape': 'warn',
       '@typescript-eslint/no-require-imports': 'warn',
-      'react-hooks/set-state-in-effect': 'warn',
+      // Off by design: this app does not use the React Compiler, and the rule
+      // flags idiomatic patterns here — mount-time hydration of state from
+      // storage/native APIs, and resetting local editor state when the open
+      // record changes. See DECISIONS.md D-406. `react-hooks/exhaustive-deps`
+      // and `react-hooks/immutability` remain enforced.
+      'react-hooks/set-state-in-effect': 'off',
       'react-hooks/immutability': 'warn',
       'react-hooks/purity': 'warn',
       '@typescript-eslint/no-empty-object-type': 'warn',

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -63,14 +63,14 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const synthTimerRef = useRef<number | null>(null);
   const hasRealUrl = !!(recording.audio_url && recording.audio_url.startsWith('blob:'));
 
-  const refreshTranscriptData = () => {
+  const refreshTranscriptData = useCallback(() => {
     const updated = TranscriptService.getFullTranscriptForRecording(recording.id);
     setFullTranscript(updated);
-  };
+  }, [recording.id]);
 
   useEffect(() => {
     refreshTranscriptData();
-  }, [recording.id]);
+  }, [refreshTranscriptData]);
 
   useEffect(() => {
     return () => {

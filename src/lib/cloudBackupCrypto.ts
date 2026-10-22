@@ -255,7 +255,7 @@ export class CloudBackupCrypto {
       rawText = new TextDecoder().decode(data);
     }
 
-    let envelope: any = null;
+    let envelope: any;
     try {
       envelope = JSON.parse(rawText);
     } catch {
