@@ -32,10 +32,6 @@ export const OfflineAiSettings: React.FC = () => {
   const [vadSensitivity, setVadSensitivity] = useState('medium');
   const [chunkDurationSec, setChunkDurationSec] = useState(20);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     setLoading(true);
     const mgr = OfflineAiManager.getInstance();
@@ -49,6 +45,11 @@ export const OfflineAiSettings: React.FC = () => {
     setStorage(storageData);
     setLoading(false);
   };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
 
   const handleInstallModel = async (modelId: string) => {
     setInstallingModelId(modelId);

@@ -261,6 +261,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                       ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-xs'
                       : 'bg-stone-50/70 dark:bg-stone-900/50 border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
                   }`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (onSeekAudio) onSeekAudio(seg.start_ms / 1000) } }}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2">

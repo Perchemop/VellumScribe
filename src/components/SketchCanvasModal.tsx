@@ -37,6 +37,15 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [history, setHistory] = useState<ImageData[]>([]);
 
+  const saveHistoryState = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setHistory((prev) => [...prev.slice(-15), snapshot]);
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -67,14 +76,6 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
     }
   }, []);
 
-  const saveHistoryState = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory((prev) => [...prev.slice(-15), snapshot]);
-  };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
