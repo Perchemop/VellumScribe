@@ -2,11 +2,46 @@ import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
 import { PrivacyManager } from './privacyManager';
-import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
+import {
+  ChecklistItem,
+  OcrScanRecord,
+  PartialTranscriptionSession,
+  TranscriptionProgress,
+  TranscriptRecord,
+} from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
 import { generatePrefixedId } from './uuid';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
+
+/** One part of a Google AI `generateContent` request. */
+export interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType?: string; data?: string };
+}
+
+/** Shape of the fields the app reads from a `generateContent` response. */
+interface GeminiGenerateResponse {
+  candidates?: Array<{ text?: string; content?: { parts?: Array<{ text?: string }> } }>;
+  error?: { code?: number; status?: string; message?: string };
+}
+
+/** Shape of the fields the app reads from the transcription-session init response. */
+interface TranscribeSessionInit {
+  sessionId: string;
+  totalSegments?: number;
+  durationSec?: number;
+  segments?: Array<{ startStr: string; endStr: string }>;
+}
+
+/** Shape of the fields the app reads from the server summary proxy response. */
+interface ServerSummaryResponse {
+  summary?: string;
+  format?: SummaryFormat;
+  source?: string;
+  keyUsed?: SummaryResult['keyUsed'];
+  error?: string;
+}
 
 export interface OcrResult {
   ocrText: string;
@@ -27,6 +62,8 @@ export interface TranscribeAudioOptions {
   resumeSession?: PartialTranscriptionSession | null;
   recordingId?: number | string;
   signal?: AbortSignal;
+  mimeType?: string;
+  originalFileName?: string;
 }
 
 export interface MeetingMinutesResult {
@@ -41,9 +78,9 @@ export interface SummaryRequestOptions {
   format?: SummaryFormat;
   eventTitle?: string;
   currentBody?: string;
-  transcripts?: any[];
-  ocrScans?: any[];
-  checklists?: any[];
+  transcripts?: Array<string | TranscriptRecord>;
+  ocrScans?: Array<string | OcrScanRecord>;
+  checklists?: Array<string | ChecklistItem>;
   customInstructions?: string;
 }
 
@@ -90,7 +127,7 @@ class OfflineSynthesisEngine {
     let allTranscripts = '';
     if (Array.isArray(options.transcripts)) {
       allTranscripts = options.transcripts
-        .map((t: any) => (typeof t === 'string' ? t : t?.transcript_text || ''))
+        .map((t) => (typeof t === 'string' ? t : t?.transcript_text || ''))
         .filter(Boolean)
         .join(' ');
     }
@@ -98,7 +135,7 @@ class OfflineSynthesisEngine {
     let allOcr = '';
     if (Array.isArray(options.ocrScans)) {
       allOcr = options.ocrScans
-        .map((s: any) => (typeof s === 'string' ? s : s?.ocr_text || ''))
+        .map((s) => (typeof s === 'string' ? s : s?.ocr_text || ''))
         .filter(Boolean)
         .join(' ');
     }
@@ -187,7 +224,7 @@ class OfflineSynthesisEngine {
 export class GeminiApiService {
   public static getInstance() {
     return {
-      transcribeAudio: (audioBlob: Blob | string, options?: any) => {
+      transcribeAudio: (audioBlob: Blob | string, options?: TranscribeAudioOptions) => {
         return GeminiApiService.transcribeAudio(
           audioBlob,
           options?.mimeType || 'audio/webm',
@@ -216,7 +253,7 @@ export class GeminiApiService {
    * Direct Google AI Studio REST API call (runs on-device in Android APK, iOS, Web, Standalone)
    */
   private static async executeDirectGoogleAi(
-    parts: Array<any>,
+    parts: GeminiPart[],
     preferredModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
   ): Promise<{ text: string; model: string }> {
     PrivacyManager.assertNetworkAllowed('Google AI Studio');
@@ -226,7 +263,7 @@ export class GeminiApiService {
       throw new Error('Google AI Studio API key not configured.');
     }
 
-    let lastError: any = null;
+    let lastError: unknown = null;
 
     for (const model of preferredModels) {
       try {
@@ -246,11 +283,11 @@ export class GeminiApiService {
           }),
         });
 
-        const data = await res.json().catch(() => null);
+        const data = (await res.json().catch(() => null)) as GeminiGenerateResponse | null;
 
         if (res.ok && data) {
           const rawText =
-            data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') ||
+            data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') ||
             data.candidates?.[0]?.text ||
             '';
           return {
@@ -443,7 +480,7 @@ export class GeminiApiService {
             chunkIndex: i,
             totalChunks,
             chunkBase64: sliceBase64,
-            originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+            originalFileName: originalFileName || (blob instanceof File ? blob.name : undefined) || 'recording.wav',
             mimeType,
           }),
         });
@@ -564,7 +601,7 @@ export class GeminiApiService {
               chunkIndex: i,
               totalChunks,
               chunkBase64: sliceBase64,
-              originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+              originalFileName: originalFileName || (blob instanceof File ? blob.name : undefined) || 'recording.wav',
               mimeType: sanitizedMime,
               assembleOnly: true,
             }),
@@ -635,10 +672,10 @@ export class GeminiApiService {
     const initHeaders = await this.getHeaders();
     initHeaders['Content-Type'] = 'application/json';
 
-    let initData: any;
+    let initData: TranscribeSessionInit;
     let sessionId: string;
     let totalSegments: number = 1;
-    let serverSegments: any[];
+    let serverSegments: Array<{ startStr: string; endStr: string }>;
 
     try {
       const initRes = await fetch('/api/audio/transcribe-session/init', {
@@ -1137,7 +1174,7 @@ export class GeminiApiService {
     let transcriptsText = '';
     if (Array.isArray(options.transcripts)) {
       transcriptsText = options.transcripts
-        .map((t: any) => (typeof t === 'string' ? t : t?.transcript_text || ''))
+        .map((t) => (typeof t === 'string' ? t : t?.transcript_text || ''))
         .filter(Boolean)
         .join('\n\n');
     }
@@ -1145,7 +1182,7 @@ export class GeminiApiService {
     let ocrText = '';
     if (Array.isArray(options.ocrScans)) {
       ocrText = options.ocrScans
-        .map((s: any) => (typeof s === 'string' ? s : s?.ocr_text || ''))
+        .map((s) => (typeof s === 'string' ? s : s?.ocr_text || ''))
         .filter(Boolean)
         .join('\n\n');
     }
@@ -1153,7 +1190,7 @@ export class GeminiApiService {
     let checklistText = '';
     if (Array.isArray(options.checklists)) {
       checklistText = options.checklists
-        .map((c: any) => (typeof c === 'string' ? c : `[${c.is_completed ? 'x' : ' '}] ${c.text || ''}`))
+        .map((c) => (typeof c === 'string' ? c : `[${c.is_completed ? 'x' : ' '}] ${c.text || ''}`))
         .filter(Boolean)
         .join('\n');
     }
@@ -1265,11 +1302,11 @@ Formatting Directives:
 
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
-      let data: any = {};
+      let data: ServerSummaryResponse = {};
 
       if (contentType.includes('application/json') || (!text.trim().startsWith('<') && text.trim().startsWith('{'))) {
         try {
-          data = JSON.parse(text);
+          data = JSON.parse(text) as ServerSummaryResponse;
         } catch { /* ignore */ }
       }
 

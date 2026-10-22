@@ -73,6 +73,20 @@ export interface NotesPageResult {
   hasMore: boolean;
 }
 
+/** Raw rows from the `checklists` table, hydrated into ChecklistItem entries. */
+interface ChecklistRow {
+  id: number;
+  note_id: number;
+  text: string;
+  completed: unknown; // stored as 0/1 in SQLite
+}
+
+/** Raw rows from the `note_tags` table. */
+interface TagRow {
+  note_id: number;
+  tag_name: string;
+}
+
 export class SqliteRepository {
   private static get db() {
     return getDatabaseAdapter();
@@ -128,13 +142,13 @@ export class SqliteRepository {
    * Efficient batch hydrator for note items (checklists and tags)
    * Prevents full database loading and eliminates N+1 query overhead
    */
-  private static populateNotesBatch(noteRows: any[]): NoteRecord[] {
+  private static populateNotesBatch(noteRows: NoteRecord[]): NoteRecord[] {
     if (!noteRows || noteRows.length === 0) return [];
     const noteIds = noteRows.map((r) => r.id);
     const placeholders = noteIds.map(() => '?').join(',');
 
     // Fetch checklists only for this batch
-    const chkRows = this.query<any>(
+    const chkRows = this.query<ChecklistRow>(
       `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
       noteIds
     );
@@ -149,7 +163,7 @@ export class SqliteRepository {
     }
 
     // Fetch tags only for this batch
-    const tagRows = this.query<any>(
+    const tagRows = this.query<TagRow>(
       `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
       noteIds
     );
@@ -193,7 +207,7 @@ export class SqliteRepository {
   // --- NOTES CRUD ---
 
   public static getAllNotes(): NoteRecord[] {
-    const rawNotes = this.query<any>(`
+    const rawNotes = this.query<NoteRecord>(`
       SELECT n.*, e.title as event_title, e.color as event_color
       FROM notes n
       LEFT JOIN events e ON n.event_id = e.id
@@ -203,7 +217,7 @@ export class SqliteRepository {
   }
 
   public static getNoteById(id: number): NoteRecord | null {
-    const rawNotes = this.query<any>('SELECT * FROM notes WHERE id = ?', [id]);
+    const rawNotes = this.query<NoteRecord>('SELECT * FROM notes WHERE id = ?', [id]);
     if (rawNotes.length === 0) return null;
     const populated = this.populateNotesBatch(rawNotes);
     return populated.length > 0 ? populated[0] : null;
@@ -546,7 +560,7 @@ export class SqliteRepository {
     } = options;
 
     const trimmed = (query || '').trim();
-    const params: any[] = [];
+    const params: unknown[] = [];
     let whereClause = '1=1';
 
     if (status) {
@@ -632,7 +646,7 @@ export class SqliteRepository {
             ORDER BY n.is_pinned DESC, n.updated_at DESC
             LIMIT ? OFFSET ?
           `;
-          const rows = this.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          const rows = this.query<NoteRecord>(matchSql, [ftsExpression, ...params, limit, offset]);
           return {
             notes: this.populateNotesBatch(rows),
             totalCount,
@@ -672,7 +686,7 @@ export class SqliteRepository {
         ORDER BY n.is_pinned DESC, n.updated_at DESC
         LIMIT ? OFFSET ?
       `;
-      const rows = this.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      const rows = this.query<NoteRecord>(fallbackSql, [...likeParams, limit, offset]);
       return {
         notes: this.populateNotesBatch(rows),
         totalCount,
@@ -699,7 +713,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = this.query<any>(sql, [...params, limit, offset]);
+    const rows = this.query<NoteRecord>(sql, [...params, limit, offset]);
     return {
       notes: this.populateNotesBatch(rows),
       totalCount,
@@ -744,7 +758,7 @@ export class SqliteRepository {
       };
     }
 
-    const params: any[] = [];
+    const params: unknown[] = [];
     let where = '1=1';
 
     if (status) {
@@ -789,7 +803,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, ${safeSortCol} ${safeDirection}
       LIMIT ? OFFSET ?
     `;
-    const rows = this.query<any>(sql, [...params, pageSize, offset]);
+    const rows = this.query<NoteRecord>(sql, [...params, pageSize, offset]);
     const notes = this.populateNotesBatch(rows);
 
     return {
@@ -805,7 +819,7 @@ export class SqliteRepository {
   // --- EVENTS / NOTEBOOKS CRUD ---
 
   public static getAllEvents(): EventRecord[] {
-    const rawEvents = this.query<any>('SELECT * FROM events ORDER BY event_date DESC, created_at DESC');
+    const rawEvents = this.query<EventRecord>('SELECT * FROM events ORDER BY event_date DESC, created_at DESC');
     return rawEvents.map((r) => ({
       id: r.id,
       title: r.title,
@@ -872,7 +886,7 @@ export class SqliteRepository {
   // --- VERSION CONTROL & RETENTION POLICY ---
 
   public static getNoteVersions(noteId: number): DocumentVersion[] {
-    const rows = this.query<any>(
+    const rows = this.query<DocumentVersion>(
       'SELECT * FROM note_versions WHERE note_id = ? ORDER BY version_number DESC',
       [noteId]
     );
@@ -898,7 +912,7 @@ export class SqliteRepository {
       const verId = version.id || `ver_${noteId}_${verNum}`;
 
       // Deduplication: Check if latest version has identical body
-      const latest = this.query<any>(
+      const latest = this.query<{ body: string }>(
         'SELECT body FROM note_versions WHERE note_id = ? ORDER BY version_number DESC LIMIT 1',
         [noteId]
       );
@@ -980,7 +994,7 @@ export class SqliteRepository {
   // --- RECORDINGS, TRANSCRIPTS & OCR ---
 
   public static getAllRecordings(): RecordingRecord[] {
-    const rows = this.query<any>('SELECT * FROM recordings ORDER BY created_at DESC');
+    const rows = this.query<RecordingRecord>('SELECT * FROM recordings ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -1042,7 +1056,7 @@ export class SqliteRepository {
   }
 
   public static getAllTranscripts(): TranscriptRecord[] {
-    const rows = this.query<any>('SELECT * FROM transcripts ORDER BY created_at DESC');
+    const rows = this.query<TranscriptRecord>('SELECT * FROM transcripts ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       recording_id: r.recording_id,
@@ -1086,7 +1100,7 @@ export class SqliteRepository {
   }
 
   public static getAllOcrScans(): OcrScanRecord[] {
-    const rows = this.query<any>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
+    const rows = this.query<OcrScanRecord>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -1233,7 +1247,7 @@ export class SqliteRepository {
     entityId: string | number,
     operation: 'create' | 'update' | 'delete',
     version: number,
-    payload: any
+    payload: unknown
   ): void {
     try {
       const id = generatePrefixedId(`chg_${Date.now()}`);
