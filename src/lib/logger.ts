@@ -1,3 +1,5 @@
+/* eslint-disable no-console -- AppLogger is the single console sink; every other
+   module must log through AppLogger so output is redacted and in-app visible. */
 import { generatePrefixedId } from './uuid';
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';

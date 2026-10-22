@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Smartphone,
-  Zap,
   Download,
   Share2,
   Sparkles,
@@ -18,6 +16,7 @@ import { StorageManager } from '../lib/storage';
 import { AndroidPwaManager } from '../lib/androidPwaManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { OfflineAiManager } from '../services/OfflineAiManager';
+import { AppLogger } from '../lib/logger';
 
 interface FirstTimeUserGuideModalProps {
   isOpen: boolean;
@@ -69,7 +68,7 @@ export function markOnboardingCompleted(): void {
     }
     StorageManager.setItem(STORAGE_KEY, 'true');
   } catch (err) {
-    console.warn('Failed to write onboarding completion state:', err);
+    AppLogger.warn('FirstTimeUserGuideModal', 'Failed to write onboarding completion state:', err);
   }
 }
 
@@ -80,7 +79,7 @@ export function resetOnboardingState(): void {
       localStorage.removeItem(SPLASH_SEEN_KEY);
     }
     StorageManager.removeItem(STORAGE_KEY);
-  } catch {}
+  } catch { /* ignore */ }
 }
 
 export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = ({

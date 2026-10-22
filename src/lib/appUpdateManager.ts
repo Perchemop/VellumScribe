@@ -33,6 +33,7 @@ const STORAGE_KEYS = {
 };
 
 import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/schema';
+import { AppLogger } from './logger';
 
 export const CURRENT_APP_VERSION = '3.1.0';
 export const CURRENT_BUILD_NUMBER = 31000;
@@ -268,7 +269,7 @@ export class AppUpdateManager {
    */
   private static runIncrementalMigrations(fromSchema: number, toSchema: number) {
     try {
-      console.log(`[AppUpdateManager] Migrating database from schema v${fromSchema} to v${toSchema}...`);
+      AppLogger.info('AppUpdateManager', `[AppUpdateManager] Migrating database from schema v${fromSchema} to v${toSchema}...`);
       
       // Step 1: Create an automated safety snapshot before altering records
       const notes = StorageManager.getNotes();
@@ -338,9 +339,9 @@ export class AppUpdateManager {
       // Update storage version keys
       localStorage.setItem(STORAGE_KEYS.INSTALLED_VERSION, CURRENT_APP_VERSION);
       localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, CURRENT_SCHEMA_VERSION.toString());
-      console.log(`[AppUpdateManager] Migration completed successfully. ${modifiedNotesCount} notes refreshed.`);
+      AppLogger.info('AppUpdateManager', `[AppUpdateManager] Migration completed successfully. ${modifiedNotesCount} notes refreshed.`);
     } catch (e: any) {
-      console.error('[AppUpdateManager] Migration error:', e);
+      AppLogger.error('AppUpdateManager', '[AppUpdateManager] Migration error:', e);
       const log: MigrationLog = {
         fromVersion: localStorage.getItem(STORAGE_KEYS.INSTALLED_VERSION) || 'unknown',
         toVersion: CURRENT_APP_VERSION,

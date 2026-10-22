@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, Cloud, Lock, CheckCircle, ExternalLink } from 'lucide-react';
+import { ShieldAlert, Cloud, Lock, CheckCircle } from 'lucide-react';
 import { PrivacyManager } from '../lib/privacyManager';
 
 interface CloudAiConsentModalProps {

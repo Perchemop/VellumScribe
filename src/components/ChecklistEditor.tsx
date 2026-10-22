@@ -4,8 +4,6 @@ import {
   Trash2,
   CheckSquare,
   Square,
-  GripVertical,
-  Check,
 } from 'lucide-react';
 import { ChecklistItem } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';

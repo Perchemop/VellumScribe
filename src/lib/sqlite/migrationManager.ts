@@ -108,7 +108,7 @@ export class MigrationManager {
 
     let migratedChecklists = 0;
     let migratedTags = 0;
-    let migratedVersions = 0;
+    const migratedVersions = 0;
 
     // 2. Perform Atomic Migration inside SQLite Transaction via DatabaseAdapter
     try {

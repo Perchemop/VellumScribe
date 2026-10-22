@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, ExternalLink, Trash2, ShieldCheck, Cloud, RefreshCw, Zap, Server, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, Trash2, ShieldCheck, Cloud, RefreshCw, Zap, Server, KeyRound, AlertCircle } from 'lucide-react';
 import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { generatePKCE } from '../lib/pkce';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { NativeBridge } from '../lib/nativeBridge';
+import { AppLogger } from '../lib/logger';
 
 interface CloudConnectModalProps {
   provider: CloudStorageProvider;
@@ -144,7 +145,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
               onConnected(connected);
             }
           } catch (e: any) {
-            console.warn('Native OAuth completion error:', e);
+            AppLogger.warn('CloudConnectModal', 'Native OAuth completion error:', e);
           } finally {
             setLoading(false);
           }
@@ -177,7 +178,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
               setLoading(false);
               onConnected(connected);
             }
-          } catch {}
+          } catch { /* ignore */ }
         }, 2500);
 
         return;
@@ -267,7 +268,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         setError('Authentication timed out. Please try again.');
       }, 5 * 60 * 1000);
     } catch (e: any) {
-      console.error('Failed OAuth authentication:', e);
+      AppLogger.error('CloudConnectModal', 'Failed OAuth authentication:', e);
       setError(e.message || 'Failed to authenticate. Please verify server configuration and network connectivity.');
       setLoading(false);
     }
@@ -294,7 +295,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       );
       onConnected(account);
     } catch (e: any) {
-      console.error('Failed credential connect:', e);
+      AppLogger.error('CloudConnectModal', 'Failed credential connect:', e);
       setError(e.message || 'Failed to authenticate with WebDAV server. Check URL and credentials.');
     } finally {
       setLoading(false);
@@ -310,7 +311,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       onDisconnected(provider);
       onClose();
     } catch (e: any) {
-      console.error('Failed to disconnect:', e);
+      AppLogger.error('CloudConnectModal', 'Failed to disconnect:', e);
       CloudSyncEngine.removeAccount(provider);
       onDisconnected(provider);
       onClose();

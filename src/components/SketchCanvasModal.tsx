@@ -5,9 +5,7 @@ import {
   Trash2,
   Check,
   PenTool,
-  Eraser,
-  Download,
-} from 'lucide-react';
+  Eraser} from 'lucide-react';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SketchCanvasModalProps {

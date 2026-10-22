@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import {
   Play,
-  Clock,
+  
   User,
-  CheckCircle2,
+  
   Copy,
   Check,
   Sparkles,
   Edit2,
   FileText,
   ListTodo,
-  Share2,
+  
   BookOpen,
-  Mic,
-} from 'lucide-react';
+  Mic} from 'lucide-react';
 import {
   TranscriptionEntity,
   TranscriptionSegmentRecord,

@@ -227,13 +227,13 @@ export class AudioRecordingManager {
 
   public async stopRecording(noteId?: number, onProgress?: (percent: number, status: string) => void): Promise<RecordedAudioResult> {
     if (this.animationFrameId) { cancelAnimationFrame(this.animationFrameId); this.animationFrameId = null; }
-    if (this.speechRecognizer) { try { this.speechRecognizer.stop(); } catch {} this.speechRecognizer = null; }
+    if (this.speechRecognizer) { try { this.speechRecognizer.stop(); } catch { /* ignore */ } this.speechRecognizer = null; }
     if (this.nativeSpeechListener) {
       try {
         const { OfflineAi } = await import('../plugins/offline-ai');
         await OfflineAi.stopListening().catch(() => {});
         this.nativeSpeechListener.remove();
-      } catch {}
+      } catch { /* ignore */ }
       this.nativeSpeechListener = null;
     }
     const capturedLiveTranscript = this.liveTranscript.trim();
@@ -496,7 +496,7 @@ export class AudioRecordingManager {
   ): Promise<Blob> {
     if (!audioBlob || audioBlob.size === 0) return audioBlob;
     if (audioBlob.size > MAX_CONVERSION_BYTES) {
-      console.warn(
+      AppLogger.warn('AudioRecordingManager', 
         `AudioRecordingManager: skipping conversion for ${Math.round(audioBlob.size / (1024 * 1024))} MB blob (> ${MAX_CONVERSION_BYTES / (1024 * 1024)} MB)`
       );
       options?.onSkipped?.({ reason: 'too_large', sizeBytes: audioBlob.size });
@@ -506,7 +506,7 @@ export class AudioRecordingManager {
     try {
       rawBuffer = await this.safeReadAsArrayBuffer(audioBlob);
     } catch (readErr) {
-      console.warn('safeReadAsArrayBuffer failed, returning original blob', readErr);
+      AppLogger.warn('AudioRecordingManager', 'safeReadAsArrayBuffer failed, returning original blob', readErr);
       return audioBlob;
     }
     const wavInfo = this.inspectWavHeader(rawBuffer);
@@ -541,10 +541,10 @@ export class AudioRecordingManager {
       options?.onConverted?.();
       return new Blob([wavBuffer], { type: 'audio/wav' });
     } catch (e) {
-      console.warn('AudioRecordingManager.convertTo16kHzMonoWavAsync failed, returning safe copy', e);
+      AppLogger.warn('AudioRecordingManager', 'AudioRecordingManager.convertTo16kHzMonoWavAsync failed, returning safe copy', e);
       return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
     } finally {
-      try { if (audioCtx) await audioCtx.close(); } catch {}
+      try { if (audioCtx) await audioCtx.close(); } catch { /* ignore */ }
     }
   }
 
@@ -596,12 +596,12 @@ export class AudioRecordingManager {
   private cleanup(): void {
     if (this.animationFrameId) { cancelAnimationFrame(this.animationFrameId); this.animationFrameId = null; }
     if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      try { this.mediaRecorder.stop(); } catch {}
+      try { this.mediaRecorder.stop(); } catch { /* ignore */ }
     }
     this.mediaRecorder = null;
     this.audioChunks = [];
     if (this.audioStream) { this.audioStream.getTracks().forEach((t) => t.stop()); this.audioStream = null; }
-    if (this.audioContext) { try { this.audioContext.close(); } catch {} this.audioContext = null; }
+    if (this.audioContext) { try { this.audioContext.close(); } catch { /* ignore */ } this.audioContext = null; }
     this.analyser = null;
     this.isRecording = false;
     this.isPaused = false;

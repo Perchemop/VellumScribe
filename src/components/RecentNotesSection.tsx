@@ -1,20 +1,19 @@
 import React, { useRef } from 'react';
 import {
-  FileText,
+  
   Clock,
   Plus,
   Pin,
   Mic,
   Camera,
-  ArrowRight,
+  
   ChevronLeft,
   ChevronRight,
   CheckSquare,
   PenTool,
   Bell,
   MapPin,
-  Lock,
-} from 'lucide-react';
+  Lock} from 'lucide-react';
 import { NoteRecord, EventRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { AppLogo } from './AppLogo';

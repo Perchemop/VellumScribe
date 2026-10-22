@@ -1,4 +1,5 @@
 import { PartialTranscriptionSession } from '../types';
+import { AppLogger } from './logger';
 
 const STORAGE_KEY = 'vellumscribe_transcription_sessions_v1';
 
@@ -76,7 +77,7 @@ class TranscriptionProgressManagerImpl {
         try {
           listener(session);
         } catch (err) {
-          console.error('TranscriptionProgressManager listener error:', err);
+          AppLogger.error('TranscriptionProgressManager', 'TranscriptionProgressManager listener error:', err);
         }
       });
     }

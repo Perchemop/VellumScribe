@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Clock, Share2, Shield, Trash2, Eye, Edit3, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Clock, Share2, Shield, Trash2, Eye,  Lock, Unlock } from 'lucide-react';
 import { EventRecord } from '../../types';
 
 interface NoteTitleBarProps {

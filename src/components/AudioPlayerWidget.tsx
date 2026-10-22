@@ -12,20 +12,15 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
-  WifiOff,
+  
   Mic,
-  HelpCircle,
-  ArrowUpRight,
-} from 'lucide-react';
+  HelpCircle} from 'lucide-react';
 import { RecordingRecord, TranscriptionJobStatus } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
-import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
-import { UnlockSessionManager } from '../lib/UnlockSessionManager';
-import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { OfflineAiManager } from '../services/OfflineAiManager';
 import { TranscriptService, FullTranscriptView } from '../services/TranscriptService';
 import { TranscriptViewer } from './transcription/TranscriptViewer';
 import { LiveRegion } from './common/LiveRegion';
+import { AppLogger } from '../lib/logger';
 
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
 // keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
@@ -191,7 +186,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         }
       }, 250);
     } catch (err) {
-      console.warn('Web Audio synthesis not allowed yet without user gesture:', err);
+      AppLogger.warn('AudioPlayerWidget', 'Web Audio synthesis not allowed yet without user gesture:', err);
     }
   };
 

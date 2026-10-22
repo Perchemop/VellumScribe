@@ -1,4 +1,4 @@
-import { hashPin, verifyPin } from './cryptoUtils';
+import { AppLogger } from './logger';
 
 export class UnlockSessionManager {
   private static activeSessions: Map<number, { key: CryptoKey; expiresAt: number }> = new Map();
@@ -34,7 +34,7 @@ export class UnlockSessionManager {
       });
       return true;
     } catch (e) {
-      console.error('Failed to create unlock session', e);
+      AppLogger.error('UnlockSessionManager', 'Failed to create unlock session', e);
       return false;
     }
   }

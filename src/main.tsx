@@ -8,6 +8,7 @@ import { AndroidKeystoreManager } from './lib/keystore';
 import { registerDurabilityHooks } from './lib/NativeLifecycle';
 import { forceWebDatabaseAdapter } from './lib/sqlite/databaseAdapter';
 import './index.css';
+import { AppLogger } from './lib/logger';
 
 const BOOT_TIMEOUT_MS = 12_000;
 
@@ -33,12 +34,12 @@ function mountApp(bootWarning?: string) {
   try {
     registerDurabilityHooks();
   } catch (e) {
-    console.warn('[boot] registerDurabilityHooks failed', e);
+    AppLogger.warn('Main', '[boot] registerDurabilityHooks failed', e);
   }
 
   const rootEl = document.getElementById('root');
   if (!rootEl) {
-    console.error('[boot] #root element missing');
+    AppLogger.error('Main', '[boot] #root element missing');
     return;
   }
 
@@ -69,7 +70,7 @@ async function boot() {
       Promise.all([
         StorageManager.initialize(),
         AndroidKeystoreManager.migrateLegacyCredentials().catch((e) => {
-          console.warn('[boot] keystore migration skipped', e);
+          AppLogger.warn('Main', '[boot] keystore migration skipped', e);
           return 0;
         }),
       ]),
@@ -77,7 +78,7 @@ async function boot() {
       'Storage bootstrap'
     );
   } catch (primaryErr) {
-    console.error('[boot] Primary storage init failed', primaryErr);
+    AppLogger.error('Main', '[boot] Primary storage init failed', primaryErr);
     warning =
       primaryErr instanceof Error
         ? primaryErr.message
@@ -89,7 +90,7 @@ async function boot() {
       await withTimeout(StorageManager.initialize(), 8_000, 'Web storage fallback');
       warning = `${warning} — using on-device web storage fallback.`;
     } catch (fallbackErr) {
-      console.error('[boot] Web storage fallback also failed', fallbackErr);
+      AppLogger.error('Main', '[boot] Web storage fallback also failed', fallbackErr);
       warning = `${warning} — storage unavailable; notes may not persist until restart.`;
     }
   }
@@ -98,6 +99,6 @@ async function boot() {
 }
 
 boot().catch((e) => {
-  console.error('[boot] Unexpected fatal', e);
+  AppLogger.error('Main', '[boot] Unexpected fatal', e);
   mountApp(e instanceof Error ? e.message : 'Unexpected startup error');
 });

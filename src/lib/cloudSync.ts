@@ -3,6 +3,7 @@ import { StorageManager } from './storage';
 import { PrivacyManager } from './privacyManager';
 import { SyncRepository } from '../repositories/SyncRepository';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
+import { AppLogger } from './logger';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -50,7 +51,7 @@ export class CloudSyncEngine {
       try {
         localStorage.removeItem('vs_cloud_token');
         localStorage.removeItem('vs_cloud_session_id');
-      } catch {}
+      } catch { /* ignore */ }
     }
   }
 
@@ -133,7 +134,7 @@ export class CloudSyncEngine {
     if (stagedBlob && stagedKey) {
       import('./MediaRepository').then(({ MediaRepository }) => {
         MediaRepository.putBinary(stagedKey, stagedBlob).catch((e) => {
-          console.warn('Failed to stage offline sync archive in media repository:', e);
+          AppLogger.warn('CloudSync', 'Failed to stage offline sync archive in media repository:', e);
         });
       });
     }
@@ -226,7 +227,7 @@ export class CloudSyncEngine {
             try {
               const { MediaRepository } = await import('./MediaRepository');
               stagedBlob = await MediaRepository.getBinary(item.stagedStorageKey);
-            } catch {}
+            } catch { /* ignore */ }
           }
 
           const success = await this.triggerSync({
@@ -283,7 +284,7 @@ export class CloudSyncEngine {
               this.sessionToken = storedSecret;
               return storedSecret;
             }
-          } catch {}
+          } catch { /* ignore */ }
         }
 
         const res = await fetch('/api/cloud/session', {
@@ -300,12 +301,12 @@ export class CloudSyncEngine {
             try {
               const { AndroidKeystoreManager } = await import('./keystore');
               await AndroidKeystoreManager.saveSecret('cloud_session_token', data.token, 'cloud_credential');
-            } catch {}
+            } catch { /* ignore */ }
             return data.token;
           }
         }
       } catch (err) {
-        console.warn('Failed to establish signed cloud session token:', err);
+        AppLogger.warn('CloudSync', 'Failed to establish signed cloud session token:', err);
       } finally {
         this.tokenInitPromise = null;
       }
@@ -399,7 +400,7 @@ export class CloudSyncEngine {
         await new Promise((resolve) => setTimeout(resolve, 400));
         return this.fetchConfig(retries - 1);
       }
-      console.warn('Cloud storage configuration offline or unavailable, using local accounts cache:', e?.message || e);
+      AppLogger.warn('CloudSync', 'Cloud storage configuration offline or unavailable, using local accounts cache:', e?.message || e);
     }
 
     return {
@@ -511,7 +512,7 @@ export class CloudSyncEngine {
         credentials: 'same-origin',
       });
     } catch (e) {
-      console.warn(`Failed to notify server of disconnect for ${provider}:`, e);
+      AppLogger.warn('CloudSync', `Failed to notify server of disconnect for ${provider}:`, e);
     }
     this.removeAccount(provider);
   }
@@ -545,7 +546,7 @@ export class CloudSyncEngine {
       }
       return [];
     } catch (e) {
-      console.warn(`Failed to fetch remote backups for ${provider}:`, e);
+      AppLogger.warn('CloudSync', `Failed to fetch remote backups for ${provider}:`, e);
       return [];
     }
   }
@@ -697,7 +698,7 @@ export class CloudSyncEngine {
             lastTransferDurationMs: Date.now() - startTime,
           });
         } catch (e: any) {
-          console.error(`Sync error for ${acc.provider}:`, e);
+          AppLogger.error('CloudSync', `Sync error for ${acc.provider}:`, e);
           this.telemetry.unshift({
             provider: acc.provider,
             lastSyncAt: new Date().toISOString(),
@@ -720,7 +721,7 @@ export class CloudSyncEngine {
       }
       return false;
     } catch (err: any) {
-      console.error('Fatal sync error:', err);
+      AppLogger.error('CloudSync', 'Fatal sync error:', err);
       options?.onProgress?.({ percent: 100, message: `Backup generation failed: ${err.message}`, phase: 'error' });
       if (shouldEnqueue) {
         this.enqueueSync(accounts.map((a) => a.provider), `Backup creation failed: ${err.message}`);
@@ -775,7 +776,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     setTimeout(() => {
       CloudSyncEngine.processSyncQueue().catch((err) => {
-        console.warn('Background sync queue processing failed:', err);
+        AppLogger.warn('CloudSync', 'Background sync queue processing failed:', err);
       });
     }, 1500);
   });

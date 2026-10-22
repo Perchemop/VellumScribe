@@ -8,13 +8,11 @@ import {
   Loader2,
   Copy,
   RotateCcw,
-  AlertCircle,
-  Key,
-} from 'lucide-react';
+  
+  Key} from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { GeminiApiService } from '../lib/geminiService';
-import { OcrService } from '../services/ai';
 import { SQLiteDatabase } from '../lib/storage';
 import { OcrScanRecord } from '../types';
 import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
@@ -24,6 +22,7 @@ import { CloudAiConsentModal } from './CloudAiConsentModal';
 import { PrivacyManager, CloudAiConsentRequiredError } from '../lib/privacyManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { generatePrefixedId } from '../lib/uuid';
+import { AppLogger } from '../lib/logger';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -88,7 +87,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         setCameraActive(true);
       }
     } catch (e: any) {
-      console.warn('Camera stream could not start, fallback to native camera intent:', e);
+      AppLogger.warn('OcrScannerModal', 'Camera stream could not start, fallback to native camera intent:', e);
       setCameraActive(false);
       setCameraError('Live viewfinder unavailable. Click "Take Photo with Camera" below to capture using your device camera.');
     }
@@ -129,7 +128,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         return;
       }
     } catch (err: any) {
-      console.warn('Capacitor camera failed or dismissed, falling back to input capture:', err);
+      AppLogger.warn('OcrScannerModal', 'Capacitor camera failed or dismissed, falling back to input capture:', err);
       // If permission was denied or cancelled, try native file capture input
       if (nativeFileInputRef.current) {
         nativeFileInputRef.current.click();
@@ -193,7 +192,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       setHasKeyError(false);
       setIsQuotaError(false);
     } catch (err: any) {
-      console.error('OCR scan failed', err);
+      AppLogger.error('OcrScannerModal', 'OCR scan failed', err);
       if (err instanceof CloudAiConsentRequiredError) {
         setOcrStatus('Privacy consent required before sending image to Cloud AI.');
         setShowConsentModal(true);
@@ -252,7 +251,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       onOcrExtracted(ocrText, scanRecord, mode);
       onClose();
     } catch (e: any) {
-      console.error('Failed to save OCR scan to database:', e);
+      AppLogger.error('OcrScannerModal', 'Failed to save OCR scan to database:', e);
       setOcrStatus(`Storage Error: ${e.message}`);
     }
   };

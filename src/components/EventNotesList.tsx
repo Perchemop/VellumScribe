@@ -7,7 +7,6 @@ import {
   Camera,
   Pin,
   X,
-  Cloud,
   CheckSquare,
   PenTool,
   Bell,
@@ -15,15 +14,12 @@ import {
   Trash2,
   Lock,
   MapPin,
-  GitMerge,
   RotateCcw,
   LayoutGrid,
   List,
   CheckCircle2,
   Circle,
-  MoreHorizontal,
   Filter,
-  FolderPlus,
   Share2,
   Copy,
 } from 'lucide-react';
@@ -38,7 +34,7 @@ import { useModalBackHandler } from '../lib/modalBackStack';
 const NoteShareModal = React.lazy(() =>
   import('./NoteShareModal').then((m) => ({ default: m.NoteShareModal }))
 );
-import { ReminderService } from '../services/ReminderService';
+
 import { VirtualizedNotesList } from './VirtualizedNotesList';
 import { AppLogger } from '../lib/logger';
 import { NotesPageResult } from '../repositories/NoteRepository';
@@ -114,7 +110,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           map.set(r.note_id, (map.get(r.note_id) || 0) + 1);
         }
       }
-    } catch {}
+    } catch { /* ignore */ }
     return map;
   }, [notes]);
 
@@ -127,7 +123,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           map.set(s.note_id, (map.get(s.note_id) || 0) + 1);
         }
       }
-    } catch {}
+    } catch { /* ignore */ }
     return map;
   }, [notes]);
 
