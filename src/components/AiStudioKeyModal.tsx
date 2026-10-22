@@ -52,16 +52,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   } | null>(null);
   const [, setFileFeedback] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      const settings = AiSettingsManager.getSettings();
-      setSelectedProvider(initialProvider);
-      loadProviderKey(initialProvider, settings);
-      setVerifyStatus(null);
-      setFileFeedback(null);
-    }
-  }, [isOpen, initialProvider]);
-
   const loadProviderKey = (provider: 'google' | 'groq' | 'deepgram' | 'offline_rules', currentSettings = AiSettingsManager.getSettings()) => {
     if (provider === 'google') {
       setKeyInput(currentSettings.googleApiKey || currentSettings.apiKey || '');
@@ -73,6 +63,17 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
       setKeyInput('');
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      const settings = AiSettingsManager.getSettings();
+      setSelectedProvider(initialProvider);
+      loadProviderKey(initialProvider, settings);
+      setVerifyStatus(null);
+      setFileFeedback(null);
+    }
+  }, [isOpen, initialProvider]);
+
 
   const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'offline_rules') => {
     if (['groq', 'deepgram'].includes(prov)) {

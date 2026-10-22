@@ -228,6 +228,7 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
         if (e.target === e.currentTarget) handleDismiss();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-xs select-none animate-fade-in"
+      onKeyDown={(e) => { if (e.key === 'Escape') handleDismiss(); }}
     >
       <div className="w-full max-w-lg bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         <div className="p-6 pb-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-850">

@@ -926,6 +926,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setShowNewEventModal(false);
           }}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/40 backdrop-blur-xs"
+          onKeyDown={(e) => { if (e.key === 'Escape') setShowNewEventModal(false); }}
         >
           <div className="w-full sm:max-w-sm bg-white dark:bg-[#16161a] border border-zinc-200 dark:border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 animate-fade-in">
             <div className="flex items-center justify-between">
@@ -1003,6 +1004,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setConfirmEmptyTrashModal(false);
           }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+          onKeyDown={(e) => { if (e.key === 'Escape') setConfirmEmptyTrashModal(false); }}
         >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
@@ -1044,6 +1046,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setConfirmDeleteNoteId(null);
           }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+          onKeyDown={(e) => { if (e.key === 'Escape') setConfirmDeleteNoteId(null); }}
         >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">

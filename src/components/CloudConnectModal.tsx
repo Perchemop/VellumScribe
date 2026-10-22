@@ -358,6 +358,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div className="bg-white dark:bg-[#141418] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-zinc-200/70 dark:border-zinc-800/80">
         {/* Header */}
