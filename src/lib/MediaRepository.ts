@@ -110,7 +110,7 @@ export class MediaRepository {
     }
   }
 
-  static async saveBinary(key: string, blob: Blob, mimeType?: string, noteId?: number): Promise<void> {
+  static async saveBinary(key: string, blob: Blob, _mimeType?: string, _noteId?: number): Promise<void> {
     return this.putBinary(key, blob);
   }
 
@@ -122,7 +122,7 @@ export class MediaRepository {
           directory: Directory.Data,
         });
         return base64ToBlob(res.data as string, mimeType);
-      } catch (e) {
+      } catch {
         return null;
       }
     } else {

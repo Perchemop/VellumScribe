@@ -104,7 +104,7 @@ export class OfflineTranscriptionEngine {
    */
   public static async transcribeAudio(
     audioBlobOrBase64: Blob | string,
-    mimeType = 'audio/webm',
+    _mimeType = 'audio/webm',
     durationSeconds = 0,
     liveCapturedText?: string
   ): Promise<OfflineTranscriptResult> {

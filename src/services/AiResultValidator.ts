@@ -35,7 +35,6 @@ export class AiResultValidator {
     }
 
     const sanitized: TranscriptionSegmentRecord[] = [];
-    let lastEndMs = 0;
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
@@ -62,7 +61,6 @@ export class AiResultValidator {
         confidence: cleanConfidence,
       });
 
-      lastEndMs = seg.end_ms;
     }
 
     return { valid: true, sanitizedSegments: sanitized };

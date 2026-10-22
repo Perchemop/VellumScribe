@@ -92,7 +92,7 @@ export class AppLogger {
     logListeners.forEach(listener => {
       try {
         listener(entry);
-      } catch (e) {
+      } catch {
         // Ignore listener error
       }
     });

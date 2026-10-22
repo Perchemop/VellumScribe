@@ -29,8 +29,6 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'changelog' | 'migrations' | 'check'>('changelog');
   const [migrationLogs] = useState(() => AppUpdateManager.getMigrationLogs());
 
-  const currentRelease = APP_CHANGELOGS[0];
-
   const handleCheckForUpdates = async () => {
     setIsChecking(true);
     NativeBridge.hapticImpact('light');
