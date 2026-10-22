@@ -39,7 +39,9 @@ npm run dev
 Before opening a PR:
 
 ```bash
-npm run verify   # typecheck + lint + test
+# Edit locally, then verify on GitHub Actions via ci.sh (CI-first, guide §4):
+~/.config/opencode/scripts/ci.sh run "<short description>"
+# Never run `npm run verify`, `npm test`, or `npm run build` locally.
 ```
 
 ## Code style
