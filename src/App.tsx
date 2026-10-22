@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Moon,
   Sun,
@@ -67,17 +67,26 @@ export default function App() {
   const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
 
+  // Mount-only bootstrap: capture the latest context values in refs so the
+  // effect does not need to re-run (it starts migrations and update checks).
+  const notesRef = useRef(notes);
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    notesRef.current = notes;
+    showToastRef.current = showToast;
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const cloudError = params.get('cloud_error');
     if (cloudError) {
-      showToast(`Cloud Notice: ${cloudError}`);
+      showToastRef.current(`Cloud Notice: ${cloudError}`);
       window.history.replaceState({}, document.title, '/');
     } else if (params.get('cloud') === 'connected') {
       CloudSyncEngine.fetchConfig().then(() => {
         setActiveView('settings');
         setSettingsSubtab('cloud');
-        showToast('Cloud account connected successfully.');
+        showToastRef.current('Cloud account connected successfully.');
         window.history.replaceState({}, document.title, '/');
       });
     } else {
@@ -101,7 +110,7 @@ export default function App() {
         .catch(() => {});
     }
 
-    ReminderService.reconcileReminders(notes).catch((e) => AppLogger.warn('App', 'Reminder reconciliation', e));
+    ReminderService.reconcileReminders(notesRef.current).catch((e) => AppLogger.warn('App', 'Reminder reconciliation', e));
   }, []);
 
   useEffect(() => {
@@ -221,7 +230,7 @@ export default function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [showFabSpeedDial, showOnboardingGuide, showUpdateModal, selectedNoteId, activeView]);
+  }, [showFabSpeedDial, showOnboardingGuide, showUpdateModal, selectedNoteId, setSelectedNoteId, activeView]);
 
   const handleCreateEvent = (newEvent: Omit<EventRecord, 'id'>) => {
     const created = StorageManager.addEvent(newEvent);
