@@ -5,6 +5,7 @@ import { PrivacyManager, CloudAiConsentRequiredError } from './privacyManager';
 import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
 import { generatePrefixedId } from './uuid';
+import { AppLogger } from './logger';
 
 export interface OcrResult {
   ocrText: string;
@@ -693,7 +694,7 @@ export class GeminiApiService {
       totalSegments = initData.totalSegments || 1;
       serverSegments = initData.segments || [];
     } catch (networkInitErr: any) {
-      console.warn('Network or cloud API not available for audio transcription session, falling back to on-device acoustic analysis:', networkInitErr);
+      AppLogger.warn('GeminiService', 'Network or cloud API not available for audio transcription session, falling back to on-device acoustic analysis:', networkInitErr);
       const offlineResult = await OfflineTranscriptionEngine.transcribeAudio(
         audioBlobOrBase64,
         sanitizedMime
@@ -836,7 +837,7 @@ export class GeminiApiService {
           canResume: true,
         });
       } catch (segErr: any) {
-        console.warn(`Transcription segment ${i + 1} notice, using on-device recovery:`, segErr?.message || segErr);
+        AppLogger.warn('GeminiService', `Transcription segment ${i + 1} notice, using on-device recovery:`, segErr?.message || segErr);
         // Resilient fallback for segment
         completedMap.set(i, {
           index: i,
@@ -895,7 +896,7 @@ export class GeminiApiService {
         }
       }
     } catch (finErr) {
-      console.warn('Finalize call notice, using local merged segments:', finErr);
+      AppLogger.warn('GeminiService', 'Finalize call notice, using local merged segments:', finErr);
     }
 
     // Mark completed and clear session from storage
@@ -999,7 +1000,7 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Groq transcription failed');
       } catch (groqErr: any) {
-        console.warn('Groq Whisper failed, checking alternative providers:', groqErr);
+        AppLogger.warn('GeminiService', 'Groq Whisper failed, checking alternative providers:', groqErr);
       }
     }
 
@@ -1030,7 +1031,7 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
       } catch (dgErr: any) {
-        console.warn('Deepgram failed, checking alternative providers:', dgErr);
+        AppLogger.warn('GeminiService', 'Deepgram failed, checking alternative providers:', dgErr);
       }
     }
 
@@ -1060,7 +1061,7 @@ export class GeminiApiService {
         }
         throw new Error(data?.error || 'Local Whisper server failed');
       } catch (lwErr: any) {
-        console.warn('Local Whisper failed, checking alternative providers:', lwErr);
+        AppLogger.warn('GeminiService', 'Local Whisper failed, checking alternative providers:', lwErr);
       }
     }
 
@@ -1094,7 +1095,7 @@ export class GeminiApiService {
           };
         }
       } catch (directErr: any) {
-        console.warn('Direct Google AI transcription failed, checking server proxy fallback:', directErr);
+        AppLogger.warn('GeminiService', 'Direct Google AI transcription failed, checking server proxy fallback:', directErr);
       }
     }
 
@@ -1110,7 +1111,7 @@ export class GeminiApiService {
         options
       );
     } catch (sessionErr: any) {
-      console.warn('Resumable session transcription notice:', sessionErr?.message || sessionErr);
+      AppLogger.warn('GeminiService', 'Resumable session transcription notice:', sessionErr?.message || sessionErr);
       // If error occurred online or user aborted, rethrow so UI can display specific failure and offer Resume
       if (navigator.onLine || sessionErr?.name === 'AbortError') {
         throw sessionErr;
@@ -1236,7 +1237,7 @@ Formatting Directives:
         };
       } catch (groqErr: any) {
         if (!settings.autoFallbackToLocal) throw groqErr;
-        console.warn('Groq synthesis failed, attempting fallback:', groqErr);
+        AppLogger.warn('GeminiService', 'Groq synthesis failed, attempting fallback:', groqErr);
       }
     }
 
@@ -1256,7 +1257,7 @@ Formatting Directives:
         };
       } catch (ollamaErr: any) {
         if (!settings.autoFallbackToLocal) throw ollamaErr;
-        console.warn('Ollama synthesis failed, executing built-in offline engine fallback:', ollamaErr);
+        AppLogger.warn('GeminiService', 'Ollama synthesis failed, executing built-in offline engine fallback:', ollamaErr);
         return OfflineSynthesisEngine.synthesize(options);
       }
     }
@@ -1279,7 +1280,7 @@ Formatting Directives:
       } catch (directErr: any) {
         if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
           if (settings.autoFallbackToLocal) {
-            console.warn('Google AI Studio error, falling back to offline engine:', directErr);
+            AppLogger.warn('GeminiService', 'Google AI Studio error, falling back to offline engine:', directErr);
             return OfflineSynthesisEngine.synthesize(options);
           }
           throw directErr;
@@ -1312,7 +1313,7 @@ Formatting Directives:
       if (contentType.includes('application/json') || (!text.trim().startsWith('<') && text.trim().startsWith('{'))) {
         try {
           data = JSON.parse(text);
-        } catch {}
+        } catch { /* ignore */ }
       }
 
       if (res.ok && data.summary !== undefined) {
@@ -1327,7 +1328,7 @@ Formatting Directives:
       throw new Error(data?.error || 'Summary generation failed');
     } catch (err: any) {
       if (settings.autoFallbackToLocal) {
-        console.warn('All cloud summarization failed, returning offline synthesis:', err);
+        AppLogger.warn('GeminiService', 'All cloud summarization failed, returning offline synthesis:', err);
         return OfflineSynthesisEngine.synthesize(options);
       }
       throw new Error(err.message || 'Failed to generate AI summary with Gemini.');

@@ -5,12 +5,10 @@ import {
   RotateCcw,
   Clock,
   Check,
-  FileText,
-  AlertCircle,
+  
+  
   PlusCircle,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+  Eye} from 'lucide-react';
 import { NoteRecord, NoteRevisionRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { VersionControlManager } from '../lib/versionControl';

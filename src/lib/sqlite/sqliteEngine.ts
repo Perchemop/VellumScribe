@@ -283,7 +283,7 @@ export class SqliteEngine {
         ) {
           return;
         }
-        console.error(msg);
+        AppLogger.error('SqliteEngine', msg);
       },
     });
 
@@ -398,7 +398,7 @@ export class SqliteEngine {
                   if (check.length > 0 && check[0].values[0][0] === 'ok') {
                     recoveredDb = testIdbDb;
                   }
-                } catch {}
+                } catch { /* ignore */ }
               }
             }
 
@@ -501,7 +501,7 @@ export class SqliteEngine {
             this.db.close();
             this.db = new this.SQL!.Database(preMigrationBinary);
             this.db.run('PRAGMA foreign_keys = ON;');
-          } catch {}
+          } catch { /* ignore */ }
           throw e;
         }
       }

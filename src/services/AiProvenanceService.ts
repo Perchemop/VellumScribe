@@ -70,7 +70,7 @@ export class AiProvenanceService {
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch {}
+        } catch { /* ignore */ }
       }
 
       return {
@@ -107,7 +107,7 @@ export class AiProvenanceService {
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch {}
+        } catch { /* ignore */ }
       }
 
       return {

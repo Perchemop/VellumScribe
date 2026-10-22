@@ -9,12 +9,11 @@ import {
   QrCode,
   Printer,
   Download,
-  CheckSquare,
-  Sparkles,
+  
+  
   Smartphone,
   ExternalLink,
-  BookOpen,
-} from 'lucide-react';
+  BookOpen} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { NoteRecord, EventRecord } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';

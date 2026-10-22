@@ -11,7 +11,6 @@ import {
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { RecordingRepository } from '../repositories/RecordingRepository';
 import { AiResultValidator } from './AiResultValidator';
-import { TranscriptService } from './TranscriptService';
 import { AppLogger } from '../lib/logger';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { MediaRepository } from '../lib/MediaRepository';

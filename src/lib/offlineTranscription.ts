@@ -1,3 +1,4 @@
+import { AppLogger } from './logger';
 /**
  * Offline Transcription Engine
  * 
@@ -92,7 +93,7 @@ export class OfflineTranscriptionEngine {
 
       return recognition;
     } catch (e) {
-      console.warn('SpeechRecognition initialization error:', e);
+      AppLogger.warn('OfflineTranscription', 'SpeechRecognition initialization error:', e);
       return null;
     }
   }

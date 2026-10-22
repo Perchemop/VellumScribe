@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, Unlock, Shield, CloudOff, Cloud } from 'lucide-react';
+import { Lock,  Shield, CloudOff, Cloud } from 'lucide-react';
 
 interface SecurityControlsProps {
   isLocked: boolean;

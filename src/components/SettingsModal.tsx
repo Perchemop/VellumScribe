@@ -14,14 +14,13 @@ import {
   RefreshCw,
   HardDrive,
   WifiOff,
-  Check,
+  
   Cpu,
-  Lock,
-  Radio,
-  FileCode,
-  Trash2,
-  Mic,
-} from 'lucide-react';
+  
+  
+  
+  
+  Mic} from 'lucide-react';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';

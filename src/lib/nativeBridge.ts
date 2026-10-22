@@ -7,6 +7,7 @@ import { Camera } from '@capacitor/camera';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Browser } from '@capacitor/browser';
 import { App } from '@capacitor/app';
+import { AppLogger } from './logger';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -32,7 +33,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Camera permission check encountered exception:', e);
+      AppLogger.warn('NativeBridge', 'Camera permission check encountered exception:', e);
     }
     return false;
   }
@@ -50,7 +51,7 @@ export class NativeBridge {
       }
       return true;
     } catch (e) {
-      console.warn('Filesystem permission check encountered exception:', e);
+      AppLogger.warn('NativeBridge', 'Filesystem permission check encountered exception:', e);
       return true;
     }
   }
@@ -112,7 +113,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Clipboard write failed, attempting textarea fallback', e);
+      AppLogger.warn('NativeBridge', 'Clipboard write failed, attempting textarea fallback', e);
     }
 
     try {
@@ -165,7 +166,7 @@ export class NativeBridge {
         }
       }
     } catch (err: any) {
-      console.warn('Native share failed, falling back to browser download', err);
+      AppLogger.warn('NativeBridge', 'Native share failed, falling back to browser download', err);
     }
 
     // Web download fallback
@@ -210,7 +211,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Share dismissed or failed', e);
+      AppLogger.warn('NativeBridge', 'Share dismissed or failed', e);
     }
 
     // Fallback to clipboard
@@ -236,7 +237,7 @@ export class NativeBridge {
         }
       }
     } catch (e) {
-      console.warn('Notification permission check failed:', e);
+      AppLogger.warn('NativeBridge', 'Notification permission check failed:', e);
     }
     return false;
   }
@@ -277,7 +278,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native reminder scheduling failed, relying on web watcher fallback:', e);
+      AppLogger.warn('NativeBridge', 'Native reminder scheduling failed, relying on web watcher fallback:', e);
     }
     return false;
   }
@@ -292,7 +293,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native reminder cancellation failed:', e);
+      AppLogger.warn('NativeBridge', 'Native reminder cancellation failed:', e);
     }
     return false;
   }
@@ -307,7 +308,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native Browser.open failed:', e);
+      AppLogger.warn('NativeBridge', 'Native Browser.open failed:', e);
     }
     return false;
   }
@@ -320,7 +321,7 @@ export class NativeBridge {
       if (this.isNative()) {
         await Browser.close();
       }
-    } catch {}
+    } catch { /* ignore */ }
   }
 
   /**
@@ -338,7 +339,7 @@ export class NativeBridge {
           handlePromise.then((h) => h.remove()).catch(() => {});
         };
       }
-    } catch {}
+    } catch { /* ignore */ }
     return () => {};
   }
 
@@ -355,7 +356,7 @@ export class NativeBridge {
           handle.remove();
         };
       }
-    } catch {}
+    } catch { /* ignore */ }
     return () => {};
   }
 }

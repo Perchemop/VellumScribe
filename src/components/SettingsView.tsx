@@ -7,7 +7,7 @@ import {
   Layers,
   Key,
   ExternalLink,
-  Upload,
+  
   Eye,
   EyeOff,
   CheckCircle2,
@@ -15,24 +15,22 @@ import {
   Database,
   RefreshCw,
   Cpu,
-  Trash2,
+  
   Check,
-  Folder,
+  
   ChevronRight,
   WifiOff,
   Clock,
-  Copy,
-  Terminal,
+  
+  
   Zap,
-  Mic,
+  
   Smartphone,
   Download,
   ShieldCheck,
   FileCheck,
   ArrowDownToLine,
-  Server,
-  Lock,
-} from 'lucide-react';
+  Server} from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
@@ -45,7 +43,6 @@ import { AppLogo } from './AppLogo';
 import { CloudConnectModal } from './CloudConnectModal';
 import { SyncProgressBar } from './SyncProgressBar';
 import { StorageDashboard } from './StorageDashboard';
-import { AppLogger, LogEntry } from '../lib/logger';
 import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { OfflineAiPanel } from './settings/OfflineAiPanel'
@@ -55,6 +52,7 @@ import { StoragePanel } from './settings/StoragePanel';
 import { AboutPanel } from './settings/AboutPanel';
 import { DiagnosticsTools } from './settings/DiagnosticsTools';
 import { ConflictResolverPanel } from './settings/ConflictResolverPanel';
+import { AppLogger } from '../lib/logger';
 
 interface SettingsViewProps {
   initialSubtab?: 'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'offline-ai' | 'about';
@@ -304,7 +302,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const items = await CloudSyncEngine.fetchRemoteBackups(provider);
       setRemoteBackups((prev) => ({ ...prev, [provider]: items }));
     } catch (e) {
-      console.warn(`Failed to fetch remote backups for ${provider}:`, e);
+      AppLogger.warn('SettingsView', `Failed to fetch remote backups for ${provider}:`, e);
     } finally {
       setLoadingRemoteBackups((prev) => ({ ...prev, [provider]: false }));
     }
@@ -1262,6 +1260,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Backup passphrase + cloud-only controls */}
+            <CloudSettingsPanel />
           </div>
         )}
 

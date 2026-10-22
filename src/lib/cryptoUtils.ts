@@ -1,3 +1,4 @@
+import { AppLogger } from './logger';
 /**
  * Cryptographic utility functions for secure PIN hashing,
  * salt derivation, and AES-256-GCM note payload encryption using the Web Crypto API.
@@ -117,7 +118,7 @@ export async function verifyPin(
       if (toHex(legacyBuffer) === storedHash) {
         return true;
       }
-    } catch {}
+    } catch { /* ignore */ }
   }
 
   return false;
@@ -237,7 +238,7 @@ export async function decryptNotePayloadV2(
       return JSON.parse(decoded);
     }
   } catch (e) {
-    console.error('Failed to decrypt v2 note payload', e);
+    AppLogger.error('CryptoUtils', 'Failed to decrypt v2 note payload', e);
   }
   return null;
 }
@@ -313,7 +314,7 @@ export async function decryptNotePayload(
       }
     }
   } catch (e) {
-    console.error('Failed to decrypt note payload', e);
+    AppLogger.error('CryptoUtils', 'Failed to decrypt note payload', e);
   }
   return null;
 }
