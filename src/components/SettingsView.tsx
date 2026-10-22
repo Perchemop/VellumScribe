@@ -174,6 +174,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
 
   // Storage stats & Keystore
+  const [, setStats] = useState(() => StorageManager.getStorageStats());
   const [secrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
   // Import pipeline state
