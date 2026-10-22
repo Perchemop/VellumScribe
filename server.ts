@@ -15,7 +15,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 /**
- * SSRF Guard: Validates user-supplied endpoints (Ollama, local Whisper, WebDAV)
+ * SSRF Guard: Validates user-supplied endpoints (local Whisper, WebDAV)
  * Blocks AWS/GCP/Azure metadata services, loopback (unless explicitly allowed for local daemons),
  * and private RFC1918 addresses where forbidden.
  */
@@ -214,7 +214,6 @@ const cloudRateLimiter = createRateLimiter({
 
 // Apply rate limiter to all AI, audio, and cloud routes
 app.use("/api/gemini", geminiRateLimiter);
-app.use("/api/ollama", geminiRateLimiter);
 app.use("/api/local-whisper", geminiRateLimiter);
 app.use("/api/groq", geminiRateLimiter);
 app.use("/api/deepgram", geminiRateLimiter);
@@ -1536,84 +1535,7 @@ app.post("/api/deepgram/transcribe", async (req, res) => {
   }
 });
 
-// 6. Local Ollama Tags & Probe Proxy
-app.post("/api/ollama/tags", async (req, res) => {
-  try {
-    const rawEndpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
-    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
-    if (!validation.valid) {
-      return res.status(400).json({ success: false, error: validation.error });
-    }
-    const endpoint = rawEndpoint;
-    const response = await fetch(`${endpoint}/api/tags`, {
-      method: "GET",
-      signal: AbortSignal.timeout(4000),
-    });
-    const data: any = await response.json().catch(() => null);
-    if (response.ok && data?.models) {
-      const models = (data.models as Array<{ name: string }>).map((m) => m.name);
-      return res.json({
-        success: true,
-        endpoint,
-        models,
-      });
-    }
-    return res.status(502).json({
-      success: false,
-      error: `Could not retrieve models from Ollama at ${endpoint}.`,
-    });
-  } catch (err: any) {
-    console.error("Ollama tags probe error:", err);
-    return res.status(502).json({
-      success: false,
-      error: `Ollama daemon not reachable: ${sanitizeErrorMessage(err, "Ensure ollama serve is active")}.`,
-    });
-  }
-});
-
-// 7. Local Ollama Generation Proxy
-app.post("/api/ollama/generate", async (req, res) => {
-  try {
-    const rawEndpoint = (req.body?.endpoint || "http://localhost:11434").replace(/\/+$/, "");
-    const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
-    if (!validation.valid) {
-      return res.status(400).json({ error: validation.error });
-    }
-    const endpoint = rawEndpoint;
-    const { prompt, model = "llama3.2", system } = req.body;
-
-    const response = await fetch(`${endpoint}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        prompt,
-        system,
-        stream: false,
-      }),
-      signal: AbortSignal.timeout(120000),
-    });
-
-    const data: any = await response.json().catch(() => null);
-    if (response.ok && data?.response) {
-      return res.json({
-        text: data.response,
-        modelUsed: `ollama/${model}`,
-        source: `local_ollama/${model}`,
-      });
-    }
-    return res.status(500).json({
-      error: data?.error || "Ollama generation failed.",
-    });
-  } catch (err: any) {
-    console.error("Ollama generate error:", err);
-    return res.status(502).json({
-      error: `Failed to contact local Ollama daemon: ${sanitizeErrorMessage(err, "Ollama service unavailable")}`,
-    });
-  }
-});
-
-// 8. Local Whisper Server Proxy
+// 6. Local Whisper Server Proxy
 app.post("/api/local-whisper/verify", async (req, res) => {
   try {
     const rawEndpoint = (req.body?.endpoint || "http://localhost:8080/v1/audio/transcriptions").replace(/\/+$/, "");

@@ -3,6 +3,7 @@ import { Lock, Clock, Trash2, CheckCircle2, AlertTriangle, RefreshCw } from 'luc
 import { UnlockSessionManager } from '../../lib/UnlockSessionManager';
 import { StorageManager } from '../../lib/storage';
 import { AndroidKeystoreManager } from '../../lib/keystore';
+import { asErrorLike } from '../../lib/errorLike';
 
 interface SecurityPanelProps {
   onRefreshNotes?: () => void;
@@ -121,7 +122,8 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
                 await StorageManager.vacuumDatabase();
                 onRefreshNotes?.();
                 flash('All data erased');
-              } catch (err: any) {
+              } catch (_err) {
+                const err = asErrorLike(_err);
                 setErrorMessage(err.message || 'Erase failed');
               } finally {
                 setIsWiping(false);

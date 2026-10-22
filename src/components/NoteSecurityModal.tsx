@@ -5,6 +5,7 @@ import { StorageManager } from '../lib/storage';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { UnlockSessionManager } from '../lib/UnlockSessionManager';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { asErrorLike } from '../lib/errorLike';
 
 interface NoteSecurityModalProps {
   note: NoteRecord;
@@ -108,7 +109,8 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
           onClose();
         }
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setError(err.message || 'Security validation error occurred.');
     } finally {
       setIsProcessing(false);

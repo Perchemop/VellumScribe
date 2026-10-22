@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { AppLogger } from '../logger';
 import { SqliteEngine, base64ToUint8Array } from './sqliteEngine';
 import { MIGRATIONS, DB_SCHEMA_VERSION } from './schema';
+import { asErrorLike } from '../../lib/errorLike';
 
 export type DurabilityStatus = 'saved' | 'saving' | 'pending' | 'failed';
 
@@ -361,7 +362,8 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     try {
       await this.db.run(sql, params);
       this.durabilityStatus = 'saved';
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       this.durabilityStatus = 'failed';
       AppLogger.error('NativeSqliteAdapter', `execute failed on: "${sql}"`, {
         params,
@@ -376,7 +378,8 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     try {
       const result = await this.db.query(sql, params);
       return (result.values ?? []) as T[];
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.error('NativeSqliteAdapter', `query failed on: "${sql}"`, {
         params,
         error: err?.message,
@@ -405,7 +408,8 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
         this.lastId = lastInsertRowId;
       }
       return { changes, lastInsertRowId };
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       this.durabilityStatus = 'failed';
       AppLogger.error('NativeSqliteAdapter', `run failed on: "${sql}"`, {
         params,
@@ -441,7 +445,8 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       const res = await this.query<{ integrity_check: string }>('PRAGMA integrity_check;');
       const status = res[0]?.integrity_check || 'unknown';
       return { ok: status === 'ok', result: status };
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       return { ok: false, result: err?.message || 'Error checking integrity' };
     }
   }

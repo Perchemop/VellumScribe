@@ -3,6 +3,7 @@ import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { AppLogger } from './logger';
 import { EventRecord, NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../types';
+import { asErrorLike } from './errorLike';
 
 export interface ImportPreviewResult {
   valid: boolean;
@@ -47,7 +48,8 @@ export class ImportSafetyPipeline {
     let parsed: any;
     try {
       parsed = JSON.parse(rawJson);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return {
         valid: false,
         format: 'unknown',
@@ -246,7 +248,8 @@ export class ImportSafetyPipeline {
         message: `Successfully verified and imported ${notes.length} notes and ${events.length} categories.`,
         counts: preview.counts,
       };
-    } catch (importErr: any) {
+    } catch (_importErr) {
+      const importErr = asErrorLike(_importErr);
       AppLogger.error('ImportSafetyPipeline', 'Import execution failed; initiating automatic rollback', importErr);
 
       // Rollback to safety snapshot

@@ -1,11 +1,12 @@
 import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
-import { PrivacyManager, CloudAiConsentRequiredError } from './privacyManager';
+import { PrivacyManager } from './privacyManager';
 import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
 import { generatePrefixedId } from './uuid';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export interface OcrResult {
   ocrText: string;
@@ -50,7 +51,7 @@ export interface SummaryResult {
   summary: string;
   format: SummaryFormat;
   source?: string;
-  keyUsed?: 'custom' | 'server_env' | 'local_offline' | 'ollama';
+  keyUsed?: 'custom' | 'server_env' | 'local_offline';
 }
 
 function stripBase64Prefix(dataUriOrBase64: string): string {
@@ -132,7 +133,7 @@ class OfflineSynthesisEngine {
       });
     }
 
-    let output = '';
+    let output: string;
 
     switch (format) {
       case 'action_items': {
@@ -274,7 +275,8 @@ export class GeminiApiService {
           }
           throw lastError;
         }
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         lastError = err;
         if (
           err.message &&
@@ -335,41 +337,6 @@ export class GeminiApiService {
   }
 
   /**
-   * Direct Local Ollama synthesis
-   */
-  private static async executeOllama(prompt: string, endpoint: string, model: string): Promise<string> {
-    PrivacyManager.assertNetworkAllowed('Ollama Endpoint');
-    const cleanEndpoint = (endpoint || 'http://localhost:11434').replace(/\/+$/, '');
-
-    // 1. Direct browser fetch
-    try {
-      const res = await fetch(`${cleanEndpoint}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt, stream: false }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.response) {
-        return data.response;
-      }
-    } catch {
-      // Try server proxy
-    }
-
-    // 2. Server proxy fallback
-    const proxyRes = await fetch('/api/ollama/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: cleanEndpoint, model, prompt }),
-    });
-    const proxyData = await proxyRes.json().catch(() => null);
-    if (proxyRes.ok && proxyData?.text) {
-      return proxyData.text;
-    }
-    throw new Error(proxyData?.error || `Could not connect to Ollama at ${cleanEndpoint}`);
-  }
-
-  /**
    * Handwritten note OCR using Google AI Studio
    */
   public static async scanHandwrittenNote(
@@ -400,7 +367,8 @@ export class GeminiApiService {
           confidence: 0.98,
           source: directResult.model,
         };
-      } catch (directErr: any) {
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
         if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
           throw directErr;
         }
@@ -425,8 +393,9 @@ export class GeminiApiService {
         };
       }
       throw new Error(data?.error || 'OCR extraction failed');
-    } catch (err: any) {
-      throw new Error(err.message || 'Failed to extract text from handwritten note with Gemini AI.');
+    } catch (_err) {
+      const err = asErrorLike(_err);
+      throw new Error(err.message || 'Failed to extract text from handwritten note with Gemini AI.', { cause: _err });
     }
   }
 
@@ -693,7 +662,8 @@ export class GeminiApiService {
       sessionId = initData.sessionId;
       totalSegments = initData.totalSegments || 1;
       serverSegments = initData.segments || [];
-    } catch (networkInitErr: any) {
+    } catch (_networkInitErr) {
+      const networkInitErr = asErrorLike(_networkInitErr);
       AppLogger.warn('GeminiService', 'Network or cloud API not available for audio transcription session, falling back to on-device acoustic analysis:', networkInitErr);
       const offlineResult = await OfflineTranscriptionEngine.transcribeAudio(
         audioBlobOrBase64,
@@ -836,7 +806,8 @@ export class GeminiApiService {
           sessionId,
           canResume: true,
         });
-      } catch (segErr: any) {
+      } catch (_segErr) {
+        const segErr = asErrorLike(_segErr);
         AppLogger.warn('GeminiService', `Transcription segment ${i + 1} notice, using on-device recovery:`, segErr?.message || segErr);
         // Resilient fallback for segment
         completedMap.set(i, {
@@ -999,7 +970,8 @@ export class GeminiApiService {
           return { transcript: data.transcript, source: data.source || 'groq/whisper-large-v3-turbo' };
         }
         throw new Error(data?.error || 'Groq transcription failed');
-      } catch (groqErr: any) {
+      } catch (_groqErr) {
+        const groqErr = asErrorLike(_groqErr);
         AppLogger.warn('GeminiService', 'Groq Whisper failed, checking alternative providers:', groqErr);
       }
     }
@@ -1030,7 +1002,8 @@ export class GeminiApiService {
           return { transcript: data.transcript, source: data.source || 'deepgram/nova-3' };
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
-      } catch (dgErr: any) {
+      } catch (_dgErr) {
+        const dgErr = asErrorLike(_dgErr);
         AppLogger.warn('GeminiService', 'Deepgram failed, checking alternative providers:', dgErr);
       }
     }
@@ -1060,7 +1033,8 @@ export class GeminiApiService {
           return { transcript: data.transcript, source: 'local_whisper' };
         }
         throw new Error(data?.error || 'Local Whisper server failed');
-      } catch (lwErr: any) {
+      } catch (_lwErr) {
+        const lwErr = asErrorLike(_lwErr);
         AppLogger.warn('GeminiService', 'Local Whisper failed, checking alternative providers:', lwErr);
       }
     }
@@ -1094,7 +1068,8 @@ export class GeminiApiService {
             source: directResult.model,
           };
         }
-      } catch (directErr: any) {
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
         AppLogger.warn('GeminiService', 'Direct Google AI transcription failed, checking server proxy fallback:', directErr);
       }
     }
@@ -1110,7 +1085,8 @@ export class GeminiApiService {
         originalFileName,
         options
       );
-    } catch (sessionErr: any) {
+    } catch (_sessionErr) {
+      const sessionErr = asErrorLike(_sessionErr);
       AppLogger.warn('GeminiService', 'Resumable session transcription notice:', sessionErr?.message || sessionErr);
       // If error occurred online or user aborted, rethrow so UI can display specific failure and offer Resume
       if (navigator.onLine || sessionErr?.name === 'AbortError') {
@@ -1143,7 +1119,7 @@ export class GeminiApiService {
   }
 
   /**
-   * Multi-provider Structured Summary Generation (Google, Groq, Ollama, Offline Rules)
+   * Multi-provider Structured Summary Generation (Google, Groq, Offline Rules)
    */
   public static async generateSummary(options: SummaryRequestOptions): Promise<SummaryResult> {
     const settings = AiSettingsManager.getSettings();
@@ -1191,7 +1167,7 @@ export class GeminiApiService {
       .filter(Boolean)
       .join('\n\n');
 
-    let formatPrompt = '';
+    let formatPrompt: string;
     switch (options.format) {
       case 'action_items':
         formatPrompt = `Extract ALL actionable tasks, deliverables, deadlines, and follow-ups. Format exclusively as an interactive markdown checklist with empty checkboxes [ ] (or checked [x] if already completed). Include assignee and deadline in parentheses if mentioned.`;
@@ -1235,34 +1211,14 @@ Formatting Directives:
           source: `groq/${settings.groqModel || 'llama-3.3-70b'}`,
           keyUsed: 'custom',
         };
-      } catch (groqErr: any) {
+      } catch (_groqErr) {
+        const groqErr = asErrorLike(_groqErr);
         if (!settings.autoFallbackToLocal) throw groqErr;
         AppLogger.warn('GeminiService', 'Groq synthesis failed, attempting fallback:', groqErr);
       }
     }
 
-    // 2. Route to Local Ollama if selected
-    if (llmProvider === 'ollama') {
-      try {
-        const ollamaText = await this.executeOllama(
-          fullPrompt,
-          settings.ollamaEndpoint || 'http://localhost:11434',
-          settings.ollamaModel || 'llama3.2'
-        );
-        return {
-          summary: ollamaText,
-          format: options.format || 'executive',
-          source: `ollama/${settings.ollamaModel || 'llama3.2'}`,
-          keyUsed: 'ollama',
-        };
-      } catch (ollamaErr: any) {
-        if (!settings.autoFallbackToLocal) throw ollamaErr;
-        AppLogger.warn('GeminiService', 'Ollama synthesis failed, executing built-in offline engine fallback:', ollamaErr);
-        return OfflineSynthesisEngine.synthesize(options);
-      }
-    }
-
-    // 3. Route to Google AI Studio (Default)
+    // 2. Route to Google AI Studio (Default)
     const googleKey = (settings.googleApiKey || settings.apiKey || '').trim();
 
     if (NativeBridge.isNative() || googleKey) {
@@ -1277,7 +1233,8 @@ Formatting Directives:
           source: directResult.model,
           keyUsed: 'custom',
         };
-      } catch (directErr: any) {
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
         if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
           if (settings.autoFallbackToLocal) {
             AppLogger.warn('GeminiService', 'Google AI Studio error, falling back to offline engine:', directErr);
@@ -1326,12 +1283,13 @@ Formatting Directives:
       }
 
       throw new Error(data?.error || 'Summary generation failed');
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       if (settings.autoFallbackToLocal) {
         AppLogger.warn('GeminiService', 'All cloud summarization failed, returning offline synthesis:', err);
         return OfflineSynthesisEngine.synthesize(options);
       }
-      throw new Error(err.message || 'Failed to generate AI summary with Gemini.');
+      throw new Error(err.message || 'Failed to generate AI summary with Gemini.', { cause: _err });
     }
   }
 

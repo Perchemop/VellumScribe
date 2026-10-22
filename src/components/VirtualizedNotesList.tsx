@@ -10,9 +10,8 @@ export interface VirtualizedNotesListProps {
   emptyState?: React.ReactNode;
 }
 
-interface CustomRowProps {
-  // Empty object required by react-window for rowProps
-}
+// react-window requires an object type for rowProps; this list passes none.
+type CustomRowProps = Record<string, never>;
 
 /**
  * High-performance virtualized list wrapper using react-window v2.

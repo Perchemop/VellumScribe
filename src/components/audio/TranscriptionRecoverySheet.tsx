@@ -5,6 +5,7 @@ import { TranscriptionOrchestrator } from '../../services/TranscriptionOrchestra
 import { PrivacyManager } from '../../lib/privacyManager';
 import { RecordingRepository } from '../../repositories/RecordingRepository';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
+import { asErrorLike } from '../../lib/errorLike';
 
 export interface TranscriptionRecoverySheetProps {
   isOpen: boolean;
@@ -61,7 +62,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
           libLoaded: Boolean(c.nativeLibraryLoaded),
           installedModels: list.filter((m) => m.installed).map((m) => m.id),
         });
-      } catch (e: any) {
+      } catch (_e) {
+        const e = asErrorLike(_e);
         if (!cancelled) {
           setCaps({ phase: 'error', message: e?.message || 'Could not read offline AI status' });
         }
@@ -119,7 +121,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
 
       setCloudSuccess(result.transcript);
       onTranscribeSuccess?.(result.transcript);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setCloudError(e?.message || 'Cloud transcription failed.');
     } finally {
       setIsCloudTranscribing(false);
@@ -147,7 +150,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
           : prev
       );
       setInstallProgress(100);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setInstallError(e?.message || 'Model download failed');
     } finally {
       setIsInstalling(false);

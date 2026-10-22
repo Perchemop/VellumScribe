@@ -4,6 +4,7 @@ import { PrivacyManager } from './privacyManager';
 import { SyncRepository } from '../repositories/SyncRepository';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -248,7 +249,8 @@ export class CloudSyncEngine {
             item.lastError = 'Sync failed during queue execution';
             SyncRepository.markFailed(item.id, item.lastError).catch(() => {});
           }
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           failedCount++;
           consecutiveFailures++;
           item.attempts++;
@@ -395,7 +397,8 @@ export class CloudSyncEngine {
         }
         return data;
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       if (retries > 0) {
         await new Promise((resolve) => setTimeout(resolve, 400));
         return this.fetchConfig(retries - 1);
@@ -697,7 +700,8 @@ export class CloudSyncEngine {
             lastTransferBytes: backupBlob.size,
             lastTransferDurationMs: Date.now() - startTime,
           });
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           AppLogger.error('CloudSync', `Sync error for ${acc.provider}:`, e);
           this.telemetry.unshift({
             provider: acc.provider,
@@ -720,7 +724,8 @@ export class CloudSyncEngine {
         return true;
       }
       return false;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.error('CloudSync', 'Fatal sync error:', err);
       options?.onProgress?.({ percent: 100, message: `Backup generation failed: ${err.message}`, phase: 'error' });
       if (shouldEnqueue) {
@@ -765,7 +770,8 @@ export class CloudSyncEngine {
           ? 'Cloud backup successfully merged into local database.'
           : 'Cloud backup successfully restored into local database (exact restore).',
       };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { success: false, message: `Restore failed: ${e.message || 'Corrupted archive'}` };
     }
   }

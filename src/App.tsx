@@ -36,6 +36,7 @@ import { SyncStatus } from './components/SyncStatus';
 import { ReminderService } from './services/ReminderService';
 import { ListDensityProvider } from './context/ListDensityContext';
 import { AppLogger } from './lib/logger';
+import { asErrorLike } from 'lib/errorLike';
 
 export default function App() {
   const {
@@ -269,7 +270,8 @@ export default function App() {
       if (createdGeneralCategory) {
         showToast('Created note under new "General" category');
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('App', 'Failed to create new note:', e);
       showToast(
         e.message

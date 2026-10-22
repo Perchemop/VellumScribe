@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Key,
   ExternalLink,
@@ -12,17 +12,15 @@ import {
   Sparkles,
   Shield,
   Trash2,
-  Cpu,
   Zap,
   Mic,
-  Copy,
   Check,
-  Terminal,
   
   ChevronDown,
   ChevronUp} from 'lucide-react';
-import { AiSettingsManager,  TranscriptionProvider } from '../lib/aiSettings';
+import { AiSettingsManager } from '../lib/aiSettings';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { asErrorLike } from '../lib/errorLike';
 
 interface AiStudioKeyModalProps {
   isOpen: boolean;
@@ -30,7 +28,7 @@ interface AiStudioKeyModalProps {
   onSuccess?: () => void;
   title?: string;
   description?: string;
-  initialProvider?: 'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules';
+  initialProvider?: 'google' | 'groq' | 'deepgram' | 'offline_rules';
 }
 
 export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
@@ -42,8 +40,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   initialProvider = 'google',
 }) => {
   useModalBackHandler(isOpen, onClose, 'ai-studio-key-modal');
-  const isAdvancedProvider = ['groq', 'deepgram', 'ollama'].includes(initialProvider);
-  const [selectedProvider, setSelectedProvider] = useState<'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules'>(initialProvider);
+  const isAdvancedProvider = ['groq', 'deepgram'].includes(initialProvider);
+  const [selectedProvider, setSelectedProvider] = useState<'google' | 'groq' | 'deepgram' | 'offline_rules'>(initialProvider);
   const [showAdvancedProviders, setShowAdvancedProviders] = useState(isAdvancedProvider);
   const [keyInput, setKeyInput] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
@@ -52,24 +50,19 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     success?: boolean;
     message?: string;
   } | null>(null);
-  const [fileFeedback, setFileFeedback] = useState<string | null>(null);
-  const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => AiSettingsManager.getSettings().ollamaEndpoint || '');
-  const [ollamaModels, setOllamaModels] = useState<string[]>([]);
-  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [, setFileFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       const settings = AiSettingsManager.getSettings();
       setSelectedProvider(initialProvider);
       loadProviderKey(initialProvider, settings);
-      setOllamaEndpoint(settings.ollamaEndpoint || '');
       setVerifyStatus(null);
       setFileFeedback(null);
     }
   }, [isOpen, initialProvider]);
 
-  const loadProviderKey = (provider: 'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules', currentSettings = AiSettingsManager.getSettings()) => {
+  const loadProviderKey = (provider: 'google' | 'groq' | 'deepgram' | 'offline_rules', currentSettings = AiSettingsManager.getSettings()) => {
     if (provider === 'google') {
       setKeyInput(currentSettings.googleApiKey || currentSettings.apiKey || '');
     } else if (provider === 'groq') {
@@ -81,20 +74,14 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     }
   };
 
-  const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'ollama' | 'offline_rules') => {
-    if (['groq', 'deepgram', 'ollama'].includes(prov)) {
+  const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'offline_rules') => {
+    if (['groq', 'deepgram'].includes(prov)) {
       setShowAdvancedProviders(true);
     }
     setSelectedProvider(prov);
     setVerifyStatus(null);
     setFileFeedback(null);
     loadProviderKey(prov);
-  };
-
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedCmd(id);
-    setTimeout(() => setCopiedCmd(null), 2500);
   };
 
   const handleSwitchToOfflineRules = () => {
@@ -105,22 +92,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     setVerifyStatus({
       success: true,
       message: '100% Offline Rule Engine activated. Notes summaries and action items will process locally on-device without network requests or API keys.',
-    });
-    setTimeout(() => {
-      if (onSuccess) onSuccess();
-      onClose();
-    }, 1200);
-  };
-
-  const handleSaveOllamaWithFallback = () => {
-    AiSettingsManager.setOllamaEndpoint(ollamaEndpoint);
-    AiSettingsManager.updateSettings({
-      primaryLlmProvider: 'ollama',
-      autoFallbackToLocal: true,
-    });
-    setVerifyStatus({
-      success: true,
-      message: `Ollama endpoint saved (${ollamaEndpoint}). Automatic Built-in Offline Engine fallback is active when Ollama is offline.`,
     });
     setTimeout(() => {
       if (onSuccess) onSuccess();
@@ -147,25 +118,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     } catch {
       setFileFeedback('Could not access clipboard. Please paste manually.');
     }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const extracted = AiSettingsManager.extractApiKeyFromFile(content);
-      if (extracted.key) {
-        setKeyInput(extracted.key);
-        setFileFeedback(`Extracted API key from "${file.name}"`);
-        setVerifyStatus(null);
-      } else {
-        setFileFeedback(extracted.error || 'Could not locate API key in file.');
-      }
-    };
-    reader.readAsText(file);
   };
 
   const handleAuthenticate = async () => {
@@ -226,22 +178,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         } else {
           setVerifyStatus({ success: false, message: res.message || 'Deepgram key verification failed.' });
         }
-      } else if (selectedProvider === 'ollama') {
-        const res = await AiSettingsManager.probeOllamaEndpoint(ollamaEndpoint);
-        if (res.success) {
-          AiSettingsManager.setOllamaEndpoint(ollamaEndpoint);
-          AiSettingsManager.updateSettings({ primaryLlmProvider: 'ollama' });
-          if (res.models) setOllamaModels(res.models);
-          setVerifyStatus({ success: true, message: res.message || 'Connected to local Ollama daemon!' });
-          setTimeout(() => { if (onSuccess) onSuccess(); onClose(); }, 1000);
-        } else {
-          setVerifyStatus({
-            success: false,
-            message: res.message || 'Could not connect to Ollama daemon at http://localhost:11434.',
-          });
-        }
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setVerifyStatus({ success: false, message: err.message || 'Error communicating with provider.' });
     } finally {
       setIsVerifying(false);
@@ -311,7 +250,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             <span>Offline Engine (No Keys)</span>
           </button>
 
-          {showAdvancedProviders || ['groq', 'deepgram', 'ollama'].includes(selectedProvider) ? (
+          {showAdvancedProviders || ['groq', 'deepgram'].includes(selectedProvider) ? (
             <>
               <button
                 type="button"
@@ -341,22 +280,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => handleSelectTab('ollama')}
-                className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
-                  selectedProvider === 'ollama'
-                    ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-[#131317]'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-                }`}
-              >
-                <Cpu className="w-3.5 h-3.5" />
-                <span>Local Ollama</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => {
                   setShowAdvancedProviders(false);
-                  if (['groq', 'deepgram', 'ollama'].includes(selectedProvider)) {
+                  if (['groq', 'deepgram'].includes(selectedProvider)) {
                     handleSelectTab('google');
                   }
                 }}
@@ -372,7 +298,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               type="button"
               onClick={() => setShowAdvancedProviders(true)}
               className="ml-auto px-2.5 py-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
-              title="Show developer & self-hosted options (Groq, Deepgram, Ollama)"
+              title="Show developer & self-hosted options (Groq, Deepgram)"
             >
               <span>+ More Providers</span>
               <ChevronDown className="w-3.5 h-3.5" />
@@ -425,20 +351,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             </div>
           )}
 
-          {selectedProvider === 'ollama' && (
-            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex items-start gap-2.5">
-              <Cpu className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
-                  100% Private Local Offline Ollama
-                </p>
-                <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
-                  Runs local open-weights LLMs (Llama 3.2, Mistral, Qwen) on your computer. Zero network tokens or accounts needed.
-                </p>
-              </div>
-            </div>
-          )}
-
           {selectedProvider === 'offline_rules' && (
             <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 space-y-3">
               <div className="flex items-start gap-2.5">
@@ -448,7 +360,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     Zero Setup Built-in Offline Engine
                   </p>
                   <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
-                    No Ollama daemon or API keys required. Extracts action items, meeting minutes, and executive summaries directly inside the browser using deterministic natural language heuristics.
+                    No API keys or network connection required. Extracts action items, meeting minutes, and executive summaries directly inside the browser using deterministic natural language heuristics.
                   </p>
                 </div>
               </div>
@@ -464,7 +376,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           )}
 
           {/* External Key Link for Cloud Providers */}
-          {selectedProvider !== 'ollama' && selectedProvider !== 'offline_rules' && (
+          {selectedProvider !== 'offline_rules' && (
             <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-xs">
@@ -493,7 +405,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           )}
 
           {/* Input field for keys */}
-          {selectedProvider !== 'ollama' && selectedProvider !== 'offline_rules' ? (
+          {selectedProvider !== 'offline_rules' ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
@@ -550,129 +462,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 </div>
               </div>
             </div>
-          ) : selectedProvider === 'ollama' ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  Ollama Daemon Endpoint
-                </label>
-                <button
-                  type="button"
-                  onClick={handleSwitchToOfflineRules}
-                  className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1 min-h-[44px]"
-                >
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>Use Built-in Offline Engine Instead</span>
-                </button>
-              </div>
-
-              <input
-                type="text"
-                value={ollamaEndpoint}
-                onChange={(e) => {
-                  setOllamaEndpoint(e.target.value);
-                  setVerifyStatus(null);
-                }}
-                placeholder="http://192.168.1.X:11434 (PC Wi-Fi IP) or http://localhost:11434"
-                className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-mono text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-
-              {/* Endpoint Presets for Quick Selection on Mobile & PC */}
-              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                <span className="text-xs text-zinc-500 mr-1">Presets:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOllamaEndpoint('http://localhost:11434');
-                    setVerifyStatus(null);
-                  }}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
-                    ollamaEndpoint === 'http://localhost:11434'
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
-                      : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  localhost:11434 (PC)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOllamaEndpoint('http://10.0.2.2:11434');
-                    setVerifyStatus(null);
-                  }}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
-                    ollamaEndpoint === 'http://10.0.2.2:11434'
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
-                      : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  10.0.2.2:11434 (Android Host)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOllamaEndpoint('http://192.168.1.50:11434');
-                    setVerifyStatus(null);
-                  }}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-mono border transition-colors ${
-                    ollamaEndpoint.startsWith('http://192.168')
-                      ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-semibold'
-                      : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  192.168.1.X:11434 (Wi-Fi LAN)
-                </button>
-              </div>
-
-              {/* Troubleshooting and Quick Commands Box */}
-              <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
-                <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300">
-                  <span className="font-semibold text-xs flex items-center gap-1.5">
-                    <Terminal className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Start Ollama with CORS Origins Enabled:</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy('OLLAMA_ORIGINS="*" ollama serve', 'serve-cmd')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors min-h-[36px]"
-                  >
-                    {copiedCmd === 'serve-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCmd === 'serve-cmd' ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-                <pre className="p-2.5 rounded-lg bg-zinc-950 text-emerald-400 font-mono text-xs overflow-x-auto select-all">
-                  OLLAMA_ORIGINS="*" ollama serve
-                </pre>
-
-                <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-300 pt-1">
-                  <span className="text-xs text-zinc-500">Pull lightweight model:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy('ollama pull llama3.2', 'pull-cmd')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-200/70 dark:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-indigo-500 hover:text-white transition-colors min-h-[36px]"
-                  >
-                    {copiedCmd === 'pull-cmd' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCmd === 'pull-cmd' ? 'Copied' : 'Copy'}</span>
-                  </button>
-                </div>
-                <pre className="p-2.5 rounded-lg bg-zinc-950 text-zinc-300 font-mono text-xs overflow-x-auto select-all">
-                  ollama pull llama3.2
-                </pre>
-              </div>
-
-              {ollamaModels.length > 0 && (
-                <div className="p-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200">
-                  <span className="font-semibold text-xs uppercase tracking-wider text-zinc-500">Available local models:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {ollamaModels.map((m) => (
-                      <span key={m} className="px-2.5 py-1 rounded-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-mono text-xs">
-                        {m}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           ) : null}
 
           {/* Verification Status Banner & Instant Recovery Actions */}
@@ -693,47 +482,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 <span className="leading-snug">{verifyStatus.message}</span>
               </div>
 
-              {/* Quick Fallback Shortcuts if Ollama fails */}
-              {!verifyStatus.success && selectedProvider === 'ollama' && (
-                <div className="pt-2 border-t border-red-200/60 dark:border-red-900/60 mt-1 flex flex-col gap-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSwitchToOfflineRules}
-                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs min-h-[44px]"
-                    >
-                      <Shield className="w-3.5 h-3.5" />
-                      <span>Use Built-in Offline Engine (Instant)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveOllamaWithFallback}
-                      className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
-                    >
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Save &amp; Use Offline Fallback</span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTab('google')}
-                      className="px-3 py-2 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Use Free Google AI Key</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTab('groq')}
-                      className="px-3 py-2 bg-orange-50 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-300 rounded-xl font-medium text-xs transition-colors flex items-center justify-center gap-1.5 min-h-[44px]"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-orange-500" />
-                      <span>Use Free Groq Key</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -755,7 +503,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           <button
             type="button"
             onClick={handleAuthenticate}
-            disabled={isVerifying || (selectedProvider !== 'ollama' && selectedProvider !== 'offline_rules' && !keyInput.trim())}
+            disabled={isVerifying || (selectedProvider !== 'offline_rules' && !keyInput.trim())}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors flex items-center gap-1.5 disabled:opacity-40"
           >
             {isVerifying ? (
@@ -767,9 +515,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               <>
                 <Key className="w-3.5 h-3.5" />
                 <span>
-                  {selectedProvider === 'ollama'
-                    ? 'Connect Ollama'
-                    : selectedProvider === 'offline_rules'
+                  {selectedProvider === 'offline_rules'
                     ? 'Activate Offline Engine'
                     : 'Authenticate & Save'}
                 </span>

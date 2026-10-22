@@ -2,16 +2,14 @@ import React, { useState } from 'react';
 import {
   X,
   Sparkles,
-  
   CheckCircle2,
   RefreshCw,
-  
   Database,
   ShieldCheck,
   Smartphone,
   Check,
-  ChevronRight} from 'lucide-react';
-import { AppUpdateManager, APP_CHANGELOGS, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, ReleaseInfo } from '../lib/appUpdateManager';
+} from 'lucide-react';
+import { AppUpdateManager, APP_CHANGELOGS, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER } from '../lib/appUpdateManager';
 import { NativeBridge } from '../lib/nativeBridge';
 import { useModalBackHandler } from '../lib/modalBackStack';
 

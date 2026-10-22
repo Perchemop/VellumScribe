@@ -115,7 +115,7 @@ export class AndroidKeystoreManager {
         await SecureStorage.set(`vellumscribe.secret.${alias}`, rawValue);
       } catch (e) {
         AppLogger.error('Keystore', '[Keystore] Native secure storage write failed', e);
-        throw new Error('Could not save this secret to the device secure storage.');
+        throw new Error('Could not save this secret to the device secure storage.', { cause: e });
       }
     } else {
       this.runtimeSessionSecrets.set(alias, rawValue);
