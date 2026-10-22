@@ -55,18 +55,6 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const nativeFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Start / stop camera stream on web if in camera tab and no image is captured yet
-  useEffect(() => {
-    if (activeTab === 'camera' && !selectedImage && !Capacitor.isNativePlatform()) {
-      startCameraStream();
-    } else {
-      stopCameraStream();
-    }
-    return () => {
-      stopCameraStream();
-    };
-  }, [activeTab, selectedImage]);
-
   const startCameraStream = async () => {
     setCameraError(null);
     try {
@@ -111,6 +99,20 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
     }
     setCameraActive(false);
   };
+
+  // Start / stop camera stream on web if in camera tab and no image is captured yet
+  useEffect(() => {
+    if (activeTab === 'camera' && !selectedImage && !Capacitor.isNativePlatform()) {
+      startCameraStream();
+    } else {
+      stopCameraStream();
+    }
+    return () => {
+      stopCameraStream();
+    };
+  }, [activeTab, selectedImage]);
+
+
 
   // Native / Capacitor camera capture (works seamlessly in APK and mobile)
   const handleNativeCameraCapture = async () => {

@@ -59,6 +59,19 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   const timerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const handleCleanup = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      recordingManager.stopRecording?.(0).catch(() => {});
+    } catch { /* ignore */ }
+    setIsRecording(false);
+    setIsPaused(false);
+    setTranscribing(false);
+    setJobStatus(null);
+    setIsImporting(false);
+    setMode('idle');
+  };
+
   useEffect(() => {
     if (isOpen) {
       // Do NOT auto-start the microphone. Show choice screen instead.
@@ -171,18 +184,6 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     }
   };
 
-  const handleCleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    try {
-      recordingManager.stopRecording?.(0).catch(() => {});
-    } catch { /* ignore */ }
-    setIsRecording(false);
-    setIsPaused(false);
-    setTranscribing(false);
-    setJobStatus(null);
-    setIsImporting(false);
-    setMode('idle');
-  };
 
   /**
    * Import a pre-recorded audio file (no extra top-level button).

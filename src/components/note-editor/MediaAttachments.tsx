@@ -76,6 +76,9 @@ export const MediaAttachments: React.FC<MediaAttachmentsProps> = ({
               alt="Hand-drawn sketch"
               className="w-16 h-12 object-contain bg-white dark:bg-zinc-950 rounded-lg border border-zinc-200 dark:border-zinc-800 cursor-pointer"
               onClick={onOpenSketchModal}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSketchModal() } }}
             />
             <div>
               <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Hand-Drawn Sketch</div>

@@ -152,6 +152,9 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                   key={note.id}
                   onClick={() => onSelectNote(note.id)}
                   className="w-64 shrink-0 p-4 rounded-2xl bg-zinc-50/70 dark:bg-[#121216]/70 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/60 dark:hover:bg-[#16161c] transition-all cursor-pointer space-y-3 snap-start group relative"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectNote(note.id) } }}
                 >
                   {note.is_pinned && (
                     <div className="absolute top-3 right-3 text-zinc-400">
