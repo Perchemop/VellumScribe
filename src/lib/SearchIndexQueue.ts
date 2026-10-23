@@ -1,6 +1,7 @@
 import { AppLogger } from './logger';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
+import { asErrorLike } from './errorLike';
 
 /**
  * SearchIndexQueue
@@ -9,7 +10,7 @@ import { getDatabaseAdapter } from './sqlite/databaseAdapter';
  * survive app restarts, crashes, and reloads without index drift.
  */
 export class SearchIndexQueue {
-  private static debounceTimer: any = null;
+  private static debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly BATCH_DEBOUNCE_MS = 1000;
   private static isProcessing = false;
 
@@ -27,7 +28,10 @@ export class SearchIndexQueue {
         [staleThreshold]
       );
       if ((res.changes || 0) > 0) {
-        AppLogger.info('SearchIndexQueue', `Recovered ${res.changes} stale search index job(s) left in processing state.`);
+        AppLogger.info(
+          'SearchIndexQueue',
+          `Recovered ${res.changes} stale search index job(s) left in processing state.`
+        );
       }
       return res.changes || 0;
     } catch (e) {
@@ -59,9 +63,11 @@ export class SearchIndexQueue {
            VALUES (?, 'pending', 0, ?, ?)
            ON CONFLICT(note_id) DO UPDATE SET status = 'pending', locked_at = NULL, updated_at = ?;`,
           [noteId, now, now, now]
-        ).catch((err) => AppLogger.warn('SearchIndexQueue', `Failed to enqueue note ${noteId} asynchronously`, err));
+        ).catch((err) =>
+          AppLogger.warn('SearchIndexQueue', `Failed to enqueue note ${noteId} asynchronously`, err)
+        );
       }
-    } catch (err) {
+    } catch {
       db.run(
         `INSERT INTO search_index_jobs (note_id, status, attempts, created_at, updated_at)
          VALUES (?, 'pending', 0, ?, ?)
@@ -145,13 +151,16 @@ export class SearchIndexQueue {
       );
 
       // Clean up old completed jobs periodically (> 24 hours)
-      await db.run(
-        `DELETE FROM search_index_jobs WHERE status = 'completed' AND updated_at < ?;`,
-        [Date.now() - 24 * 3600 * 1000]
-      );
+      await db.run(`DELETE FROM search_index_jobs WHERE status = 'completed' AND updated_at < ?;`, [
+        Date.now() - 24 * 3600 * 1000,
+      ]);
 
-      AppLogger.info('SearchIndexQueue', `Successfully indexed ${ids.length} note(s) into SQLite FTS`);
-    } catch (e: any) {
+      AppLogger.info(
+        'SearchIndexQueue',
+        `Successfully indexed ${ids.length} note(s) into SQLite FTS`
+      );
+    } catch (_e) {
+      const e = asErrorLike(_e);
       AppLogger.error('SearchIndexQueue', 'Failed to batch reindex notes in FTS', e);
       try {
         await db.run(
@@ -187,7 +196,10 @@ export class SearchIndexQueue {
       const db = getDatabaseAdapter();
       await db.run(`DELETE FROM search_index_jobs;`);
 
-      AppLogger.info('SearchIndexQueue', `Full FTS index rebuild completed for ${ids.length} note(s).`);
+      AppLogger.info(
+        'SearchIndexQueue',
+        `Full FTS index rebuild completed for ${ids.length} note(s).`
+      );
       return { indexedCount: ids.length };
     } catch (err) {
       AppLogger.error('SearchIndexQueue', 'Failed to perform full FTS index rebuild', err);

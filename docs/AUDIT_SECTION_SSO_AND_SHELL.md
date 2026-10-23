@@ -10,12 +10,12 @@
 
 ### What works in code
 
-| Path | Behaviour |
-|------|-----------|
+| Path                | Behaviour                                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CloudConnectModal` | PKCE via `generatePKCE`, `CloudSyncEngine.getAuthUrl`, popup + `postMessage` origin check, native `Browser.open` + `addAppUrlListener` + poll |
-| Settings quick SSO | Popup flow when OAuth env configured; honest error if not |
-| `NativeBridge` | `openInAppBrowser`, `addAppUrlListener`, `addBrowserFinishedListener` |
-| Server redirect | App reads `?cloud=connected` / `cloud_error` query and toasts |
+| Settings quick SSO  | Popup flow when OAuth env configured; honest error if not                                                                                     |
+| `NativeBridge`      | `openInAppBrowser`, `addAppUrlListener`, `addBrowserFinishedListener`                                                                         |
+| Server redirect     | App reads `?cloud=connected` / `cloud_error` query and toasts                                                                                 |
 
 ### Gap fixed this pass
 
@@ -32,14 +32,14 @@ Documented in `docs/KNOWN_LIMITATIONS.md` §4.
 
 ## App shell findings
 
-| Area | Assessment |
-|------|------------|
-| Navigation | Notes / Recent / Archive / Settings; hardware back via `ModalBackStack` + `popstate` |
-| FAB create | Text / checklist / sketch types |
-| Focus mode | Hides chrome; editor supports Done |
-| Reminders | Interval watcher + `ReminderService.reconcileReminders` + native schedule |
-| Onboarding | First-time guide gated by local flag |
-| Note editor entry | `NoteEditor.tsx` re-exports write-first implementation |
+| Area              | Assessment                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| Navigation        | Notes / Recent / Archive / Settings; hardware back via `ModalBackStack` + `popstate` |
+| FAB create        | Text / checklist / sketch types                                                      |
+| Focus mode        | Hides chrome; editor supports Done                                                   |
+| Reminders         | Interval watcher + `ReminderService.reconcileReminders` + native schedule            |
+| Onboarding        | First-time guide gated by local flag                                                 |
+| Note editor entry | `NoteEditor.tsx` re-exports write-first implementation                               |
 
 ### Minor polish (non-blocking)
 

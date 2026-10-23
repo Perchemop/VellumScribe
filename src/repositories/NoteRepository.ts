@@ -1,6 +1,6 @@
 import { NoteRecord, ChecklistItem } from '../types';
 import { getDatabaseAdapter, DatabaseAdapter } from '../lib/sqlite/databaseAdapter';
-import { SearchOptions, SearchResult } from '../lib/sqlite/sqliteRepository';
+import { ChecklistRow, SearchOptions, SearchResult, TagRow } from '../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../lib/logger';
 import { generatePrefixedId } from '../lib/uuid';
 
@@ -65,12 +65,15 @@ export interface INoteRepository {
  * Hydrates checklist items and tags for a batch of note rows asynchronously
  * using the DatabaseAdapter directly. Eliminates N+1 query overhead.
  */
-async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Promise<NoteRecord[]> {
+async function populateNotesBatchAsync(
+  db: DatabaseAdapter,
+  noteRows: NoteRecord[]
+): Promise<NoteRecord[]> {
   if (!noteRows || noteRows.length === 0) return [];
   const noteIds = noteRows.map((r) => r.id);
   const placeholders = noteIds.map(() => '?').join(',');
 
-  const chkRows = await db.query<any>(
+  const chkRows = await db.query<ChecklistRow>(
     `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
     noteIds
   );
@@ -84,7 +87,7 @@ async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Pr
     });
   }
 
-  const tagRows = await db.query<any>(
+  const tagRows = await db.query<TagRow>(
     `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
     noteIds
   );
@@ -105,7 +108,10 @@ async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Pr
     is_locked: Boolean(row.is_locked),
     lock_mode: row.lock_mode || undefined,
     security_type: row.security_type || undefined,
-    cloud_save_enabled: row.cloud_save_enabled !== undefined && row.cloud_save_enabled !== null ? Boolean(row.cloud_save_enabled) : true,
+    cloud_save_enabled:
+      row.cloud_save_enabled !== undefined && row.cloud_save_enabled !== null
+        ? Boolean(row.cloud_save_enabled)
+        : true,
     pin_hash: row.pin_hash || undefined,
     pin_salt: row.pin_salt || undefined,
     encrypted_payload: row.encrypted_payload || undefined,
@@ -141,7 +147,7 @@ async function recordItemChange(
     const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload ?? '');
     let hash = 0;
     for (let i = 0; i < payloadStr.length; i++) {
-      hash = ((hash << 5) - hash) + payloadStr.charCodeAt(i);
+      hash = (hash << 5) - hash + payloadStr.charCodeAt(i);
       hash |= 0;
     }
     const payloadHash = Math.abs(hash).toString(16);
@@ -188,7 +194,7 @@ export class NoteRepository implements INoteRepository {
   public static async getById(id: number): Promise<NoteRecord | null> {
     try {
       const db = getDatabaseAdapter();
-      const rows = await db.query<any>('SELECT * FROM notes WHERE id = ?;', [id]);
+      const rows = await db.query<NoteRecord>('SELECT * FROM notes WHERE id = ?;', [id]);
       if (!rows || rows.length === 0) return null;
       const populated = await populateNotesBatchAsync(db, rows);
       return populated.length > 0 ? populated[0] : null;
@@ -219,7 +225,8 @@ export class NoteRepository implements INoteRepository {
     }
 
     if (options.tag) {
-      whereClause += ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
+      whereClause +=
+        ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
       params.push(options.tag);
     }
 
@@ -237,7 +244,8 @@ export class NoteRepository implements INoteRepository {
     }
 
     if (options.hasAttachments) {
-      whereClause += ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
+      whereClause +=
+        ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
     }
 
     if (options.cursor) {
@@ -259,7 +267,7 @@ export class NoteRepository implements INoteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = await db.query<any>(querySql, [...params, limit, offset]);
+    const rows = await db.query<NoteRecord>(querySql, [...params, limit, offset]);
     const notes = await populateNotesBatchAsync(db, rows);
     const hasMore = offset + notes.length < totalCount;
     const lastNote = notes.length > 0 ? notes[notes.length - 1] : undefined;
@@ -334,7 +342,10 @@ export class NoteRepository implements INoteRepository {
           const trimmed = tag.trim();
           if (trimmed) {
             await db.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [trimmed]);
-            await db.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [noteId, trimmed]);
+            await db.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [
+              noteId,
+              trimmed,
+            ]);
           }
         }
       }
@@ -344,7 +355,14 @@ export class NoteRepository implements INoteRepository {
       const checklistText = (input.checklist_items || []).map((c) => c.text).join(' ');
       await db.run(
         'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?)',
-        [noteId, input.title || '', input.body || '', checklistText, '', (input.tags || []).join(' ')]
+        [
+          noteId,
+          input.title || '',
+          input.body || '',
+          checklistText,
+          '',
+          (input.tags || []).join(' '),
+        ]
       );
 
       // Record item change for sync
@@ -375,14 +393,23 @@ export class NoteRepository implements INoteRepository {
       const mergedPinned = patch.is_pinned !== undefined ? patch.is_pinned : existing.is_pinned;
       const mergedLocked = patch.is_locked !== undefined ? patch.is_locked : existing.is_locked;
       const mergedLockMode = patch.lock_mode !== undefined ? patch.lock_mode : existing.lock_mode;
-      const mergedSecType = patch.security_type !== undefined ? patch.security_type : existing.security_type;
+      const mergedSecType =
+        patch.security_type !== undefined ? patch.security_type : existing.security_type;
       const mergedPinHash = patch.pin_hash !== undefined ? patch.pin_hash : existing.pin_hash;
       const mergedPinSalt = patch.pin_salt !== undefined ? patch.pin_salt : existing.pin_salt;
       const mergedStatus = patch.status !== undefined ? patch.status : existing.status;
-      const mergedArchivedAt = patch.archived_at !== undefined ? patch.archived_at : existing.archived_at;
-      const mergedTrashedAt = patch.deleted_at !== undefined ? patch.deleted_at : (patch.status === 'trash' ? (existing.trashed_at || now) : existing.trashed_at);
-      const mergedReminderAt = patch.reminder_at !== undefined ? patch.reminder_at : existing.reminder_at;
-      const mergedSketchMediaKey = patch.sketch_media_key !== undefined ? patch.sketch_media_key : existing.sketch_media_key;
+      const mergedArchivedAt =
+        patch.archived_at !== undefined ? patch.archived_at : existing.archived_at;
+      const mergedTrashedAt =
+        patch.deleted_at !== undefined
+          ? patch.deleted_at
+          : patch.status === 'trash'
+            ? existing.trashed_at || now
+            : existing.trashed_at;
+      const mergedReminderAt =
+        patch.reminder_at !== undefined ? patch.reminder_at : existing.reminder_at;
+      const mergedSketchMediaKey =
+        patch.sketch_media_key !== undefined ? patch.sketch_media_key : existing.sketch_media_key;
 
       await db.run(
         `UPDATE notes SET
@@ -416,10 +443,12 @@ export class NoteRepository implements INoteRepository {
 
       // Checklists update
       if (patch.checklist_items !== undefined) {
-        const existingChecklists = await db.query<{ id: string; text: string; completed: number; position: number }>(
-          'SELECT id, text, completed, position FROM checklists WHERE note_id = ?',
-          [id]
-        );
+        const existingChecklists = await db.query<{
+          id: string;
+          text: string;
+          completed: number;
+          position: number;
+        }>('SELECT id, text, completed, position FROM checklists WHERE note_id = ?', [id]);
         const existingChkMap = new Map(existingChecklists.map((c) => [c.id, c]));
         const incomingChkIds = new Set<string>();
 
@@ -431,7 +460,11 @@ export class NoteRepository implements INoteRepository {
           const completedNum = item.completed ? 1 : 0;
 
           if (existingChk) {
-            if (existingChk.text !== item.text || existingChk.completed !== completedNum || existingChk.position !== i) {
+            if (
+              existingChk.text !== item.text ||
+              existingChk.completed !== completedNum ||
+              existingChk.position !== i
+            ) {
               await db.run(
                 'UPDATE checklists SET text = ?, completed = ?, position = ? WHERE id = ? AND note_id = ?',
                 [item.text, completedNum, i, chkId, id]
@@ -454,13 +487,19 @@ export class NoteRepository implements INoteRepository {
       // Tags update
       if (patch.tags !== undefined) {
         const incomingTags = new Set((patch.tags || []).map((t) => t.trim()).filter(Boolean));
-        const currentTagRows = await db.query<{ tag_name: string }>('SELECT tag_name FROM note_tags WHERE note_id = ?', [id]);
+        const currentTagRows = await db.query<{ tag_name: string }>(
+          'SELECT tag_name FROM note_tags WHERE note_id = ?',
+          [id]
+        );
         const currentTags = new Set(currentTagRows.map((r) => r.tag_name));
 
         for (const tag of incomingTags) {
           if (!currentTags.has(tag)) {
             await db.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tag]);
-            await db.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [id, tag]);
+            await db.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [
+              id,
+              tag,
+            ]);
           }
         }
         for (const tag of currentTags) {
@@ -473,7 +512,11 @@ export class NoteRepository implements INoteRepository {
       // Update FTS
       await db.run('DELETE FROM notes_fts WHERE note_id = ?;', [id]);
       const finalTags = patch.tags !== undefined ? patch.tags : existing.tags;
-      const checklistText = (patch.checklist_items !== undefined ? patch.checklist_items : (existing.checklist_items || [])).map((c) => c.text).join(' ');
+      const checklistText = (
+        patch.checklist_items !== undefined ? patch.checklist_items : existing.checklist_items || []
+      )
+        .map((c) => c.text)
+        .join(' ');
       await db.run(
         'INSERT INTO notes_fts (note_id, title, body, checklist_text, ocr_text, tags) VALUES (?, ?, ?, ?, ?, ?)',
         [id, mergedTitle, mergedBody, checklistText, '', (finalTags || []).join(' ')]
@@ -526,7 +569,8 @@ export class NoteRepository implements INoteRepository {
     }
 
     if (options.tag) {
-      whereClause += ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
+      whereClause +=
+        ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
       params.push(options.tag);
     }
 
@@ -544,7 +588,8 @@ export class NoteRepository implements INoteRepository {
     }
 
     if (options.hasAttachments) {
-      whereClause += ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
+      whereClause +=
+        ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
     }
 
     if (!options.includeLocked) {
@@ -579,7 +624,12 @@ export class NoteRepository implements INoteRepository {
             ORDER BY n.is_pinned DESC, n.updated_at DESC
             LIMIT ? OFFSET ?
           `;
-          const rows = await db.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          const rows = await db.query<NoteRecord>(matchSql, [
+            ftsExpression,
+            ...params,
+            limit,
+            offset,
+          ]);
           const notes = await populateNotesBatchAsync(db, rows);
           return { notes, totalCount };
         } catch (ftsErr) {
@@ -614,7 +664,7 @@ export class NoteRepository implements INoteRepository {
         ORDER BY n.is_pinned DESC, n.updated_at DESC
         LIMIT ? OFFSET ?
       `;
-      const rows = await db.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      const rows = await db.query<NoteRecord>(fallbackSql, [...likeParams, limit, offset]);
       const notes = await populateNotesBatchAsync(db, rows);
       return { notes, totalCount };
     }
@@ -632,7 +682,7 @@ export class NoteRepository implements INoteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = await db.query<any>(querySql, [...params, limit, offset]);
+    const rows = await db.query<NoteRecord>(querySql, [...params, limit, offset]);
     const notes = await populateNotesBatchAsync(db, rows);
     return { notes, totalCount };
   }

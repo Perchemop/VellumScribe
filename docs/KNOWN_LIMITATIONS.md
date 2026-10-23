@@ -62,4 +62,3 @@ Then NDK-build a **real** APK and smoke-test offline transcription on device.
 - **In-place updates require a stable signing key.** A newly downloaded APK can replace an installed copy only when it shares the same `applicationId`, the same signing certificate, and a `versionCode` ≥ the installed one. If the key changes, Android refuses the install ("App not installed") until the old app is uninstalled.
 - **Bump the version before releasing.** `versionCode` is derived from `package.json` (`major*10000 + minor*100 + patch`); leaving the version unchanged still installs, but bumping is the reliable way to force an upgrade prompt.
 - Debug and release builds are both signed with the configured key (when present) so a sideloaded debug build stays upgradable to a release build.
-

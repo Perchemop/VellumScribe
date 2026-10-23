@@ -2,14 +2,14 @@
 
 **Locked name: VellumScribe**
 
-| Property | Value |
-| --- | --- |
-| Product name | VellumScribe |
-| Short name (launcher / PWA) | VellumScribe |
-| Package / application ID | `com.vellumscribe.app` |
-| Web manifest `short_name` | `VellumScribe` |
-| Licence | MIT (see `LICENSE`) |
-| Copyright line | `Copyright (c) 2026 VellumScribe` |
+| Property                    | Value                             |
+| --------------------------- | --------------------------------- |
+| Product name                | VellumScribe                      |
+| Short name (launcher / PWA) | VellumScribe                      |
+| Package / application ID    | `com.vellumscribe.app`            |
+| Web manifest `short_name`   | `VellumScribe`                    |
+| Licence                     | MIT (see `LICENSE`)               |
+| Copyright line              | `Copyright (c) 2026 VellumScribe` |
 
 ## Rationale
 

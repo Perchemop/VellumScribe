@@ -2,14 +2,14 @@
 
 ## Strengths
 
-| Area | Assessment |
-|------|------------|
-| Envelope | v3 `EncryptedCloudBackupEnvelope`: AES-256-GCM, PBKDF2-HMAC-SHA256 @ 210k iterations, gzip |
-| Export path | `StorageManager.exportCloudBackupArchive` → `CloudBackupCrypto.encryptArchive` |
-| Key storage | Prefer Android Keystore alias `client_vault_key`; migrate off plaintext localStorage; fail closed if metadata exists but decrypt fails |
-| Legacy import | Unencrypted JSON only with explicit `allowLegacyUnencrypted` |
-| Sync | Session token in memory/keystore (not localStorage); network asserts; offline queue + staged MediaRepository blobs; chunked upload >2MB |
-| Accounts cache | localStorage `vs_cloud_accounts` after server config |
+| Area           | Assessment                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Envelope       | v3 `EncryptedCloudBackupEnvelope`: AES-256-GCM, PBKDF2-HMAC-SHA256 @ 210k iterations, gzip                                              |
+| Export path    | `StorageManager.exportCloudBackupArchive` → `CloudBackupCrypto.encryptArchive`                                                          |
+| Key storage    | Prefer Android Keystore alias `client_vault_key`; migrate off plaintext localStorage; fail closed if metadata exists but decrypt fails  |
+| Legacy import  | Unencrypted JSON only with explicit `allowLegacyUnencrypted`                                                                            |
+| Sync           | Session token in memory/keystore (not localStorage); network asserts; offline queue + staged MediaRepository blobs; chunked upload >2MB |
+| Accounts cache | localStorage `vs_cloud_accounts` after server config                                                                                    |
 
 ## Residual risks / open items
 

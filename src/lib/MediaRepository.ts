@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { asBlobPart } from './binary';
 
 const DB_NAME = 'vellumscribe_media';
 const STORE_NAME = 'blobs';
@@ -103,18 +104,26 @@ export class MediaRepository {
         path: `media/${key}`,
         data: base64,
         directory: Directory.Data,
-        recursive: true
+        recursive: true,
       });
     } else {
       await idb.put(key, blob);
     }
   }
 
-  static async saveBinary(key: string, blob: Blob, mimeType?: string, noteId?: number): Promise<void> {
+  static async saveBinary(
+    key: string,
+    blob: Blob,
+    _mimeType?: string,
+    _noteId?: number
+  ): Promise<void> {
     return this.putBinary(key, blob);
   }
 
-  static async getBinary(key: string, mimeType: string = 'application/octet-stream'): Promise<Blob | null> {
+  static async getBinary(
+    key: string,
+    mimeType: string = 'application/octet-stream'
+  ): Promise<Blob | null> {
     if (Capacitor.isNativePlatform()) {
       try {
         const res = await Filesystem.readFile({
@@ -122,7 +131,7 @@ export class MediaRepository {
           directory: Directory.Data,
         });
         return base64ToBlob(res.data as string, mimeType);
-      } catch (e) {
+      } catch {
         return null;
       }
     } else {
@@ -142,7 +151,9 @@ export class MediaRepository {
           path: `media/${key}`,
           directory: Directory.Data,
         });
-      } catch (e) {}
+      } catch {
+        /* ignore */
+      }
     } else {
       await idb.delete(key);
     }
@@ -183,7 +194,7 @@ export class SecureMediaRepository {
       if (envelope.magic !== 'vellum_enc_v1') return null;
       const decrypted = await decryptBinaryPayloadWithKey(envelope.data, envelope.iv, cryptoKey);
       if (!decrypted) return null;
-      return new Blob([decrypted as any], { type: envelope.mimeType });
+      return new Blob([asBlobPart(decrypted)], { type: envelope.mimeType });
     } catch {
       return null;
     }

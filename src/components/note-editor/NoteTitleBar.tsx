@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Clock, Share2, Shield, Trash2, Eye, Edit3, Lock, Unlock } from 'lucide-react';
+import { ArrowLeft, Clock, Share2, Shield, Trash2, Eye, Lock, Unlock } from 'lucide-react';
 import { EventRecord } from '../../types';
 
 interface NoteTitleBarProps {
@@ -73,12 +73,18 @@ export const NoteTitleBar: React.FC<NoteTitleBarProps> = ({
             </select>
 
             {isLocked && (
-              <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${
-                isUnlockedInSession
-                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                  : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
-              }`}>
-                {isUnlockedInSession ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+              <span
+                className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                  isUnlockedInSession
+                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                    : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                }`}
+              >
+                {isUnlockedInSession ? (
+                  <Unlock className="w-3 h-3" />
+                ) : (
+                  <Lock className="w-3 h-3" />
+                )}
                 {isUnlockedInSession ? 'Unlocked (Session)' : 'Locked (AES-256)'}
               </span>
             )}

@@ -7,13 +7,7 @@ import {
   FileText,
   CheckSquare,
   PenTool,
-  Clock,
-  Tag,
-  AlertCircle,
   FolderArchive,
-  ArrowRight,
-  Shield,
-  Layers,
   LayoutGrid,
   List as ListIcon,
 } from 'lucide-react';
@@ -76,11 +70,17 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
     });
   }, [archivedNotes, selectedTag, searchQuery, events]);
 
-  const [confirmDeleteNote, setConfirmDeleteNote] = useState<{ id: number; title: string } | null>(null);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState<{ id: number; title: string } | null>(
+    null
+  );
   const [confirmRestoreAll, setConfirmRestoreAll] = useState(false);
 
   // Hardware back stack navigation integration
-  useModalBackHandler(confirmDeleteNote !== null, () => setConfirmDeleteNote(null), 'archive-delete-note');
+  useModalBackHandler(
+    confirmDeleteNote !== null,
+    () => setConfirmDeleteNote(null),
+    'archive-delete-note'
+  );
   useModalBackHandler(confirmRestoreAll, () => setConfirmRestoreAll(false), 'archive-restore-all');
 
   const handleUnarchive = (noteId: number, e?: React.MouseEvent) => {
@@ -124,7 +124,10 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
   };
 
   return (
-    <div id="archive-section-workspace" className="h-full overflow-y-auto custom-minimal-scrollbar bg-white dark:bg-[#0c0c0e] p-4 sm:p-8">
+    <div
+      id="archive-section-workspace"
+      className="h-full overflow-y-auto custom-minimal-scrollbar bg-white dark:bg-[#0c0c0e] p-4 sm:p-8"
+    >
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200/80 dark:border-zinc-800/80">
@@ -141,7 +144,8 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Archived notes are safely hidden from your main notes and timeline without being deleted.
+              Archived notes are safely hidden from your main notes and timeline without being
+              deleted.
             </p>
           </div>
 
@@ -256,7 +260,8 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 No archived notes
               </h3>
               <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                When you archive notes, they will appear here. Archive completed projects or old drafts to keep your primary notes organized and focused.
+                When you archive notes, they will appear here. Archive completed projects or old
+                drafts to keep your primary notes organized and focused.
               </p>
             </div>
           </div>
@@ -285,6 +290,14 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                     id={`archived-note-card-${note.id}`}
                     onClick={() => onSelectNote(note.id)}
                     className="group relative p-3.5 bg-zinc-50/70 hover:bg-white dark:bg-[#121215] dark:hover:bg-[#16161a] border border-zinc-200/70 dark:border-zinc-800/80 rounded-2xl shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between h-[128px]"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelectNote(note.id);
+                      }
+                    }}
                   >
                     <div className="space-y-1.5 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -365,6 +378,14 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                   id={`archived-note-card-${note.id}`}
                   onClick={() => onSelectNote(note.id)}
                   className="group relative p-4 bg-zinc-50/70 hover:bg-white dark:bg-[#121215] dark:hover:bg-[#16161a] border border-zinc-200/70 dark:border-zinc-800/80 rounded-2xl shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-3"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectNote(note.id);
+                    }
+                  }}
                 >
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -439,7 +460,9 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Permanently Delete Note?</h3>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Permanently Delete Note?
+                </h3>
                 <p className="text-xs text-zinc-400 mt-0.5 truncate">
                   &ldquo;{confirmDeleteNote.title}&rdquo; will be deleted permanently.
                 </p>
@@ -475,7 +498,9 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 <RotateCcw className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Restore All Notes?</h3>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Restore All Notes?
+                </h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Move all {archivedNotes.length} archived notes back to your active notes list.
                 </p>

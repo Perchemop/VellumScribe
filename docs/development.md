@@ -13,7 +13,7 @@ concrete commands, files and rules that apply here.
    `IMPLEMENTATION_PLAN.md` and every requirement in
    `REQUIREMENTS_TRACEABILITY.md`.
 2. **Never claim unverified work is complete.** A slice is Done only when
-   CI is green via `ci.sh` *and* the QC checklist for it has been walked.
+   CI is green via `ci.sh` _and_ the QC checklist for it has been walked.
    If CI is down or a gate is failing, say so explicitly rather than implying
    CI passed.
 3. **Never invent requirements.** Open questions live in
@@ -22,18 +22,25 @@ concrete commands, files and rules that apply here.
 4. **Never break update-in-place.** Application ID, package name, signing key
    and version monotonicity must not regress (see §4).
 5. **Clean-room.** `docs/inspiration.md` rules are non-negotiable.
-6. **CI-first: no heavy toolchain runs locally.** `npm ci`, `npm install`,
-   `npm test`, `npm run build`, `npm run lint`, `npx tsc`, `vitest`, and the
-   full `npm run verify` run exclusively on GitHub Actions via
+6. **CI-first: nothing verifies locally.** Every gate — `npm ci`,
+   `npm install`, `npm test`, `npm run build`, `npm run lint`,
+   `npm run format:check`, `npx tsc`, `vitest`, and the full `npm run verify` —
+   runs exclusively on GitHub Actions via
    `~/.config/opencode/scripts/ci.sh` (guide §4). The host is memory-constrained
-   and restarts under load. Local work is editing, read-only checks, git
-   operations, and reviewing CI results.
+   and restarts under load. Per guide §4.2 local work is limited to: editing
+   source files, reading files and CI logs, lightweight git operations, and
+   reviewing Pull Requests and CI results. There is no local-check allowance —
+   not even a "quick" `eslint`/`prettier`/`tsc` run.
+7. **Chat -> Task -> PR -> merge.** Plan in Chat mode (orchestrator, §5.1
+   below), execute one bounded Task (coder), let GitHub Actions verify, open or
+   update a Pull Request, and let the human review and merge (guide §5.2/§9).
 
 ---
 
 ## 2. Commands
 
 Light / read-only (safe on this machine):
+
 ```bash
 git status          # read-only
 git diff            # read-only
@@ -43,6 +50,7 @@ npm run format:check
 ```
 
 Heavy / CI-only (never run on this machine — guide §4):
+
 ```bash
 npm install --legacy-peer-deps   # heavy; blocked locally
 npm ci                           # heavy; blocked locally
@@ -56,6 +64,7 @@ npm run build                    # vite build + esbuild
 ```
 
 Verify a change with CI:
+
 ```bash
 ~/.config/opencode/scripts/ci.sh run "<short description>"
 # commits the working tree to opencode/ci, opens a PR to main,
@@ -63,6 +72,7 @@ Verify a change with CI:
 ```
 
 Android (CI only — see §3):
+
 ```bash
 npx cap sync android
 ./gradlew assembleDebug assembleRelease
@@ -92,12 +102,12 @@ The local machine has ~2.7 GiB RAM, no JDK, no Android SDK/NDK/CMake.
 
 These must never regress:
 
-| Invariant | Where it lives |
-| --- | --- |
-| Application ID stays `com.vellumscribe.app` | `android/app/build.gradle` |
-| `versionCode` strictly increases per release | derived from `package.json` (`major*10000 + minor*100 + patch`) |
-| Same signing key across debug and release | `signingConfigs` in `android/app/build.gradle` |
-| Keystore never committed | `.gitignore` covers `*.jks`, `*.keystore`, `android/keystore.properties` |
+| Invariant                                    | Where it lives                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| Application ID stays `com.vellumscribe.app`  | `android/app/build.gradle`                                               |
+| `versionCode` strictly increases per release | derived from `package.json` (`major*10000 + minor*100 + patch`)          |
+| Same signing key across debug and release    | `signingConfigs` in `android/app/build.gradle`                           |
+| Keystore never committed                     | `.gitignore` covers `*.jks`, `*.keystore`, `android/keystore.properties` |
 
 A new APK only updates an installed copy if the **application ID and the
 signing key both match**. Verify per `docs/BUILD_RELEASE.md` §5 before any
@@ -115,9 +125,28 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
    `DECISIONS.md`.
 5. Walk the matching checklist in `docs/qc/manual-checklists.md`.
 6. Verify via `~/.config/opencode/scripts/ci.sh run "<description>"`
-   (CI-first, guide §4), then commit and push with a message that names the
-   slice. Never run `npm run verify` locally.
-7. Update `CHANGELOG.md` only for user-visible change.
+   (CI-first, guide §4), which commits, pushes, and opens/updates the PR. Check
+   the resulting PR checks — never run `npm run verify` (or any part of it)
+   locally.
+7. Update `PROGRESS.md` **and** `REQUIREMENTS_TRACEABILITY.md` (guide §5.2/§6),
+   and `CHANGELOG.md` for user-visible change.
+
+---
+
+## 5b. Operating model: Chat -> Task -> Pull Request (guide §5)
+
+We emulate cto.new's paid workflow using free models and GitHub Actions.
+
+| Mode               | Who                                    | Does                                                                                                          | Does not                      |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Chat (plan)**    | `orchestrator` (primary)               | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates | edit code, run builds         |
+| **Task (execute)** | `coder` (+ `explorer` for context)     | implements one bounded slice, writes tests, commits, pushes                                                   | run local builds/tests, merge |
+| **Verify**         | GitHub Actions via `ci-runner`         | format + lint + typecheck + orphans + tests on 3 OS runners                                                   | —                             |
+| **Review**         | `reviewer` (read-only), then the human | reports issues, risks, missing tests; human merges                                                            | fix, merge                    |
+
+Supporting roles: `tester` (extend tests), `fixer` (repair a red CI gate),
+`docs-writer` (tracking docs). None of them may run the toolchain locally
+either — they hand off to `ci-runner`.
 
 ---
 
@@ -126,12 +155,12 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
 Agent definitions live in `.opencode/agents/`. Roles are wired to the
 provider that is actually connected (currently OpenCode free / Big Pickle):
 
-| Role | Agent file | Use for |
-| --- | --- | --- |
+| Role             | Agent file                         | Use for                                     |
+| ---------------- | ---------------------------------- | ------------------------------------------- |
 | Lead / Architect | `.opencode/agents/orchestrator.md` | Discovery, scope, decisions, slice planning |
-| Coder | `.opencode/agents/coder.md` | Implementing a slice |
-| Explorer | `.opencode/agents/explorer.md` | Codebase search, mapping, audits |
-| Reviewer | `.opencode/agents/reviewer.md` | Post-slice review, gate verification |
+| Coder            | `.opencode/agents/coder.md`        | Implementing a slice                        |
+| Explorer         | `.opencode/agents/explorer.md`     | Codebase search, mapping, audits            |
+| Reviewer         | `.opencode/agents/reviewer.md`     | Post-slice review, gate verification        |
 
 When a stronger free provider (Gemini, Groq) is connected, only the `model:`
 field in those files changes — role structure stays.
@@ -175,19 +204,19 @@ runs the repository's CI. Always cite a run ID you actually inspected.
 
 ## 8. Documentation set
 
-| File | Purpose |
-| --- | --- |
-| `docs/project-brief.md` | Why the app exists |
-| `docs/scope.md` | What is in and out of scope |
-| `docs/inspiration.md` | Clean-room inspiration statement |
-| `docs/product-name.md` | Locked name and usage rules |
-| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions |
-| `docs/architecture.md` | *(this repo uses `docs/ARCHITECTURE.md`)* |
-| `docs/parity.md` | Capability tracker |
-| `docs/qc/manual-checklists.md` | Manual QC |
-| `IMPLEMENTATION_PLAN.md` | Vertical slices |
-| `REQUIREMENTS_TRACEABILITY.md` | Requirement → file → test |
-| `DECISIONS.md` | Decision log |
-| `PROGRESS.md` | Running status |
-| `ATTRIBUTION.md` | Third-party licences |
-| `CHANGELOG.md` | User-visible history |
+| File                                | Purpose                                   |
+| ----------------------------------- | ----------------------------------------- |
+| `docs/project-brief.md`             | Why the app exists                        |
+| `docs/scope.md`                     | What is in and out of scope               |
+| `docs/inspiration.md`               | Clean-room inspiration statement          |
+| `docs/product-name.md`              | Locked name and usage rules               |
+| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions    |
+| `docs/architecture.md`              | _(this repo uses `docs/ARCHITECTURE.md`)_ |
+| `docs/parity.md`                    | Capability tracker                        |
+| `docs/qc/manual-checklists.md`      | Manual QC                                 |
+| `IMPLEMENTATION_PLAN.md`            | Vertical slices                           |
+| `REQUIREMENTS_TRACEABILITY.md`      | Requirement → file → test                 |
+| `DECISIONS.md`                      | Decision log                              |
+| `PROGRESS.md`                       | Running status                            |
+| `ATTRIBUTION.md`                    | Third-party licences                      |
+| `CHANGELOG.md`                      | User-visible history                      |

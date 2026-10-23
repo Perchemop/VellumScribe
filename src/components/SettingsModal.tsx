@@ -14,20 +14,16 @@ import {
   RefreshCw,
   HardDrive,
   WifiOff,
-  Check,
   Cpu,
-  Lock,
-  Radio,
-  FileCode,
-  Trash2,
   Mic,
 } from 'lucide-react';
-import { AiSettingsManager, AiIntegrationSettings } from '../lib/aiSettings';
+import { AiSettingsManager } from '../lib/aiSettings';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { AppLogo } from './AppLogo';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { OfflineAiSettings } from '../pages/settings/OfflineAiSettings';
+import { asErrorLike } from '../lib/errorLike';
 
 interface SettingsModalProps {
   initialTab?: 'ai' | 'backup' | 'security' | 'offline-ai';
@@ -45,26 +41,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     initialTab === 'security'
       ? 'security'
       : initialTab === 'backup'
-      ? 'backup'
-      : initialTab === 'ai'
-      ? 'ai'
-      : 'offline-ai'
+        ? 'backup'
+        : initialTab === 'ai'
+          ? 'ai'
+          : 'offline-ai'
   );
 
   // AI Settings state
-  const [aiSettings, setAiSettings] = useState<AiIntegrationSettings>(() => AiSettingsManager.getSettings());
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => AiSettingsManager.getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ success: boolean; message: string } | null>(
+    null
+  );
   const [fileUploadFeedback, setFileUploadFeedback] = useState<string | null>(null);
 
   // Backup & Storage state
-  const [backupFeedback, setBackupFeedback] = useState<string | null>(null);
-  const [stats, setStats] = useState(() => StorageManager.getStorageStats());
+  const [stats] = useState(() => StorageManager.getStorageStats());
 
   // Keystore secrets
-  const [secrets, setSecrets] = useState(() => AndroidKeystoreManager.listSecrets());
+  const [secrets] = useState(() => AndroidKeystoreManager.listSecrets());
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -93,7 +89,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       const res = await AiSettingsManager.testApiKey(apiKeyInput.trim());
       setVerifyResult(res);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setVerifyResult({
         success: false,
         message: err?.message || 'Verification request failed.',
@@ -139,7 +136,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Settings &amp; Configuration
               </h2>
-              <p className="text-xs text-zinc-400">Manage Google AI Studio API key, local database, and storage</p>
+              <p className="text-xs text-zinc-400">
+                Manage Google AI Studio API key, local database, and storage
+              </p>
             </div>
           </div>
           <button
@@ -232,7 +231,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  Powers instant meeting summaries, audio transcription, and OCR document scanning using Google Gemini models.
+                  Powers instant meeting summaries, audio transcription, and OCR document scanning
+                  using Google Gemini models.
                 </p>
 
                 <div className="space-y-2">
@@ -250,7 +250,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       onClick={() => setShowKey(!showKey)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                     >
-                      {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      {showKey ? (
+                        <EyeOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Eye className="w-3.5 h-3.5" />
+                      )}
                     </button>
                   </div>
 
@@ -308,8 +312,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Upload file fallback */}
               <div className="p-3.5 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">Load from File</p>
-                  <p className="text-xs text-zinc-400">Import key from .env, .json, or key.txt file</p>
+                  <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                    Load from File
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Import key from .env, .json, or key.txt file
+                  </p>
                 </div>
                 <input
                   type="file"
@@ -349,19 +357,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
                     <span className="text-zinc-400 block text-xs">Total Notes</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalNotes}</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
+                      {stats.totalNotes}
+                    </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
                     <span className="text-zinc-400 block text-xs">Audio Memos</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.totalRecordings}</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
+                      {stats.totalRecordings}
+                    </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
                     <span className="text-zinc-400 block text-xs">Active Notes</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.activeNotes}</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
+                      {stats.activeNotes}
+                    </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
                     <span className="text-zinc-400 block text-xs">Archived</span>
-                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">{stats.archivedNotes}</span>
+                    <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
+                      {stats.archivedNotes}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -375,7 +391,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </h3>
                 </div>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  All notes, sketches, checklists, and audio recordings are saved locally inside this browser. You can export complete snapshots below or import from previously saved JSON backups anytime.
+                  All notes, sketches, checklists, and audio recordings are saved locally inside
+                  this browser. You can export complete snapshots below or import from previously
+                  saved JSON backups anytime.
                 </p>
               </div>
 
@@ -398,16 +416,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                     className="p-3.5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                   >
-                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">Export JSON Backup</p>
-                    <p className="text-xs text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      Export JSON Backup
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Full structured backup of notes, sketches, and checklists
+                    </p>
                   </button>
 
                   <button
                     onClick={() => {
                       const notes = StorageManager.getNotes();
-                      const md = notes.length > 0 
-                        ? notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`).join('\n\n---\n\n')
-                        : '# VellumScribe Notes\n\nNo notes currently saved.';
+                      const md =
+                        notes.length > 0
+                          ? notes
+                              .map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`)
+                              .join('\n\n---\n\n')
+                          : '# VellumScribe Notes\n\nNo notes currently saved.';
                       const blob = new Blob([md], { type: 'text/markdown' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
@@ -418,8 +443,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                     className="p-3.5 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                   >
-                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">Export Markdown Archive</p>
-                    <p className="text-xs text-zinc-400">Clean Markdown text files readable in any editor</p>
+                    <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      Export Markdown Archive
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Clean Markdown text files readable in any editor
+                    </p>
                   </button>
                 </div>
               </div>
@@ -442,7 +471,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Cryptographic keys, token aliases, and locked note master credentials are protected inside your device hardware security container.
+                  Cryptographic keys, token aliases, and locked note master credentials are
+                  protected inside your device hardware security container.
                 </p>
               </div>
 
@@ -459,7 +489,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex items-center gap-2.5">
                         <Key className="w-3.5 h-3.5 text-zinc-500" />
                         <div>
-                          <p className="font-semibold text-zinc-900 dark:text-zinc-100">{s.alias}</p>
+                          <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+                            {s.alias}
+                          </p>
                           <p className="font-mono text-xs text-zinc-400">{s.masked_value}</p>
                         </div>
                       </div>

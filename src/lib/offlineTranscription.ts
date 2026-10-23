@@ -1,6 +1,8 @@
+import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 /**
  * Offline Transcription Engine
- * 
+ *
  * Provides 100% on-device, offline-first speech transcription:
  * 1. Web Speech API (SpeechRecognition / webkitSpeechRecognition) for live & streaming speech
  * 2. Web Audio API Acoustic Analyzer for offline segmentation, voice activity detection & timestamping
@@ -19,16 +21,52 @@ export interface OfflineTranscriptResult {
   }>;
 }
 
+/**
+ * Minimal Web Speech API shapes. The DOM lib does not ship them for every
+ * target, and the engine only uses this subset.
+ */
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: { length: number; [index: number]: SpeechRecognitionResultLike };
+}
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+  webkitAudioContext?: typeof AudioContext;
+};
+
 export class OfflineTranscriptionEngine {
   /**
    * Check if browser has native Web Speech API recognition capabilities
    */
   public static isSpeechRecognitionSupported(): boolean {
     if (typeof window === 'undefined') return false;
-    return Boolean(
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition
-    );
+    const w = window as SpeechRecognitionWindow;
+    return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
   }
 
   /**
@@ -37,23 +75,28 @@ export class OfflineTranscriptionEngine {
   public static createSpeechRecognizer(callbacks: {
     onInterim?: (text: string) => void;
     onFinal?: (text: string) => void;
-    onError?: (error: any) => void;
+    onError?: (error: SpeechRecognitionErrorEventLike) => void;
     onEnd?: () => void;
     lang?: string;
-  }): any | null {
+  }): SpeechRecognitionLike | null {
     if (!this.isSpeechRecognitionSupported()) return null;
 
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as SpeechRecognitionWindow;
+    const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SpeechRec) return null;
     try {
       const recognition = new SpeechRec();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
-      recognition.lang = callbacks.lang || (typeof navigator !== 'undefined' ? navigator.language : 'en-US') || 'en-US';
+      recognition.lang =
+        callbacks.lang ||
+        (typeof navigator !== 'undefined' ? navigator.language : 'en-US') ||
+        'en-US';
 
       let accumulatedFinal = '';
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
         let currentInterim = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
@@ -74,7 +117,7 @@ export class OfflineTranscriptionEngine {
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
         // Ignore aborted or no-speech events gracefully
         if (event.error === 'no-speech' || event.error === 'aborted') {
           return;
@@ -92,7 +135,7 @@ export class OfflineTranscriptionEngine {
 
       return recognition;
     } catch (e) {
-      console.warn('SpeechRecognition initialization error:', e);
+      AppLogger.warn('OfflineTranscription', 'SpeechRecognition initialization error:', e);
       return null;
     }
   }
@@ -102,7 +145,7 @@ export class OfflineTranscriptionEngine {
    */
   public static async transcribeAudio(
     audioBlobOrBase64: Blob | string,
-    mimeType = 'audio/webm',
+    _mimeType = 'audio/webm',
     durationSeconds = 0,
     liveCapturedText?: string
   ): Promise<OfflineTranscriptResult> {
@@ -124,10 +167,13 @@ export class OfflineTranscriptionEngine {
       if (arrayBuffer && arrayBuffer.byteLength > 0) {
         const acousticInfo = await this.analyzeAcousticSignal(arrayBuffer);
         if (!acousticInfo.hasVoiceActivity || acousticInfo.segments.length === 0) {
-          throw new Error('OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.');
+          throw new Error(
+            'OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.'
+          );
         }
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       if (e?.message?.includes('OFFLINE_AI_NO_SPEECH')) {
         throw e;
       }
@@ -164,14 +210,12 @@ export class OfflineTranscriptionEngine {
   /**
    * Analyze audio acoustic structure (energy RMS, pauses, voice activity)
    */
-  private static async analyzeAcousticSignal(
-    arrayBuffer: ArrayBuffer
-  ): Promise<{
+  private static async analyzeAcousticSignal(arrayBuffer: ArrayBuffer): Promise<{
     duration: number;
     hasVoiceActivity: boolean;
     segments: Array<{ start: number; end: number; energyRms: number }>;
   }> {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioCtx = window.AudioContext || (window as SpeechRecognitionWindow).webkitAudioContext;
     if (!AudioCtx) {
       return { duration: 0, hasVoiceActivity: false, segments: [] };
     }
@@ -240,7 +284,10 @@ export class OfflineTranscriptionEngine {
       return {
         duration,
         hasVoiceActivity: segments.length > 0,
-        segments: segments.length > 0 ? segments : [{ start: 0, end: Math.round(duration), energyRms: 0.05 }],
+        segments:
+          segments.length > 0
+            ? segments
+            : [{ start: 0, end: Math.round(duration), energyRms: 0.05 }],
       };
     } catch {
       try {

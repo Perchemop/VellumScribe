@@ -79,7 +79,7 @@ describe('TranscriptionOrchestrator Selection & Honesty Matrix', () => {
 
     // Force network disabled in privacy manager
     const originalAllowed = PrivacyManager.isNetworkAllowed;
-    (PrivacyManager as any).isNetworkAllowed = () => false;
+    PrivacyManager.isNetworkAllowed = () => false;
 
     try {
       const dummyBlob = new Blob(['RIFF....WAVEfmt '], { type: 'audio/wav' });
@@ -90,7 +90,7 @@ describe('TranscriptionOrchestrator Selection & Honesty Matrix', () => {
         )
       ).rejects.toThrow(/(Privacy|Network|NO_ENGINE|OFFLINE_AI_ENGINE_UNAVAILABLE)/i);
     } finally {
-      (PrivacyManager as any).isNetworkAllowed = originalAllowed;
+      PrivacyManager.isNetworkAllowed = originalAllowed;
     }
   });
 });

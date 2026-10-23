@@ -7,7 +7,6 @@ import {
   Camera,
   Pin,
   X,
-  Cloud,
   CheckSquare,
   PenTool,
   Bell,
@@ -15,15 +14,12 @@ import {
   Trash2,
   Lock,
   MapPin,
-  GitMerge,
   RotateCcw,
   LayoutGrid,
   List,
   CheckCircle2,
   Circle,
-  MoreHorizontal,
   Filter,
-  FolderPlus,
   Share2,
   Copy,
 } from 'lucide-react';
@@ -38,7 +34,7 @@ import { useModalBackHandler } from '../lib/modalBackStack';
 const NoteShareModal = React.lazy(() =>
   import('./NoteShareModal').then((m) => ({ default: m.NoteShareModal }))
 );
-import { ReminderService } from '../services/ReminderService';
+
 import { VirtualizedNotesList } from './VirtualizedNotesList';
 import { AppLogger } from '../lib/logger';
 import { NotesPageResult } from '../repositories/NoteRepository';
@@ -69,7 +65,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   onSelectNote,
   onCreateEvent,
   onCreateNote,
-  onDeleteEvent,
+  onDeleteEvent: _onDeleteEvent,
   onDeleteNote,
   onRefresh,
 }) => {
@@ -81,7 +77,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   const [viewLayout, setViewLayout] = useState<'list' | 'grid'>('list');
   const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventCategory, setNewEventCategory] = useState<EventRecord['category']>('meeting');
+  const [newEventCategory] = useState<EventRecord['category']>('meeting');
   const [newEventColor, setNewEventColor] = useState('#3b82f6');
 
   // Debounce search query input (180ms) to avoid stuttering on large note collections
@@ -106,28 +102,39 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
   // Pre-aggregate counts for recordings and OCR scans to avoid N+1 scans in note render loops
   const recordingsCountMap = useMemo(() => {
-    const map = new Map<number, number>();
+    const counts = new Map<number, number>();
     try {
       const all = StorageManager.getRecordings();
       for (const r of all) {
         if (r.note_id) {
-          map.set(r.note_id, (map.get(r.note_id) || 0) + 1);
+          counts.set(r.note_id, (counts.get(r.note_id) || 0) + 1);
         }
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
+    // Projected onto the rendered notes: the stored media itself is not
+    // reactive, so `notes` is the memo's real dependency.
+    const map = new Map<number, number>();
+    for (const n of notes) map.set(n.id, counts.get(n.id) || 0);
     return map;
   }, [notes]);
 
   const ocrScansCountMap = useMemo(() => {
-    const map = new Map<number, number>();
+    const counts = new Map<number, number>();
     try {
       const all = StorageManager.getOcrScans();
       for (const s of all) {
         if (s.note_id) {
-          map.set(s.note_id, (map.get(s.note_id) || 0) + 1);
+          counts.set(s.note_id, (counts.get(s.note_id) || 0) + 1);
         }
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
+    // Projected onto the rendered notes (see recordingsCountMap above).
+    const map = new Map<number, number>();
+    for (const n of notes) map.set(n.id, counts.get(n.id) || 0);
     return map;
   }, [notes]);
 
@@ -268,8 +275,16 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
   // In-app confirm state (avoids iframe window.confirm blocks)
   const [confirmEmptyTrashModal, setConfirmEmptyTrashModal] = useState(false);
   const [confirmDeleteNoteId, setConfirmDeleteNoteId] = useState<number | null>(null);
-  useModalBackHandler(confirmEmptyTrashModal, () => setConfirmEmptyTrashModal(false), 'confirm-empty-trash-modal');
-  useModalBackHandler(confirmDeleteNoteId !== null, () => setConfirmDeleteNoteId(null), 'confirm-delete-note-modal');
+  useModalBackHandler(
+    confirmEmptyTrashModal,
+    () => setConfirmEmptyTrashModal(false),
+    'confirm-empty-trash-modal'
+  );
+  useModalBackHandler(
+    confirmDeleteNoteId !== null,
+    () => setConfirmDeleteNoteId(null),
+    'confirm-delete-note-modal'
+  );
 
   const handleEmptyTrash = () => {
     setConfirmEmptyTrashModal(true);
@@ -311,7 +326,6 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
     onRefresh();
   };
 
-
   const renderNoteCard = (note: NoteRecord) => {
     const isSelectedInBatch = selectedNoteIds.includes(note.id);
     const isActiveEditor = selectedNoteId === note.id;
@@ -322,12 +336,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
     const completedItems = (note.checklist_items || []).filter((i) => i.completed).length;
     const totalItems = (note.checklist_items || []).length;
     const isPrivateLocked = note.is_locked && note.lock_mode === 'private';
-    const displayTitle = isPrivateLocked ? '🔒 Locked Note' : (note.title || 'Untitled Note');
+    const displayTitle = isPrivateLocked ? '🔒 Locked Note' : note.title || 'Untitled Note';
     const displayBody = isPrivateLocked
       ? 'Private content'
       : note.is_locked
-      ? '•••••••• Protected Note Content'
-      : note.body.replace(/[#*`_]/g, '').slice(0, 120);
+        ? '•••••••• Protected Note Content'
+        : note.body.replace(/[#*`_]/g, '').slice(0, 120);
 
     return (
       <div
@@ -361,8 +375,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           isSelectedInBatch
             ? 'bg-zinc-100 dark:bg-zinc-800 border-2 border-zinc-900 dark:border-zinc-100 shadow-md ring-1 ring-zinc-400'
             : isActiveEditor
-            ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
-            : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
+              ? 'bg-white dark:bg-[#16161a] border border-zinc-300 dark:border-zinc-700 shadow-xs'
+              : 'bg-white/70 dark:bg-[#141418] hover:bg-white dark:hover:bg-[#18181e] border border-zinc-200/70 dark:border-zinc-800/70 shadow-2xs'
         }`}
       >
         {/* Selection Checkbox */}
@@ -391,7 +405,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         )}
 
         {/* Title & Status Icons */}
-        <div className={`flex items-start justify-between gap-2 mb-1.5 ${(isSelectionMode || selectedNoteIds.length > 0) ? 'pr-6' : ''}`}>
+        <div
+          className={`flex items-start justify-between gap-2 mb-1.5 ${isSelectionMode || selectedNoteIds.length > 0 ? 'pr-6' : ''}`}
+        >
           <div className="flex items-center gap-1.5 min-w-0">
             {note.color && !isPrivateLocked && (
               <span
@@ -424,7 +440,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         {/* Body or Checklist summary */}
         {isChecklist && totalItems > 0 && !note.is_locked ? (
           <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2.5">
-            <span>{completedItems} of {totalItems} items checked</span>
+            <span>
+              {completedItems} of {totalItems} items checked
+            </span>
             <div className="w-full h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full mt-1.5 overflow-hidden">
               <div
                 className="h-full bg-zinc-900 dark:bg-zinc-100 rounded-full transition-all"
@@ -433,7 +451,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             </div>
           </div>
         ) : (
-          <p className={`text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}>
+          <p
+            className={`text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mb-2.5 font-normal ${viewLayout === 'grid' ? 'line-clamp-3' : 'line-clamp-2'}`}
+          >
             {displayBody}
           </p>
         )}
@@ -444,7 +464,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             {!isPrivateLocked && note.reminder_at && (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <Bell className="w-3 h-3" />
-                <span>{new Date(note.reminder_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                <span>
+                  {new Date(note.reminder_at).toLocaleDateString([], {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
               </span>
             )}
 
@@ -456,21 +481,30 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             )}
 
             {recordingsCount > 0 && (
-              <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${recordingsCount} audio recordings`}>
+              <span
+                className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400"
+                title={`${recordingsCount} audio recordings`}
+              >
                 <Mic className="w-3 h-3" />
                 {recordingsCount}
               </span>
             )}
 
             {ocrScansCount > 0 && (
-              <span className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400" title={`${ocrScansCount} scanned documents`}>
+              <span
+                className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400"
+                title={`${ocrScansCount} scanned documents`}
+              >
                 <Camera className="w-3 h-3" />
                 {ocrScansCount}
               </span>
             )}
 
             {(note.sketch_data || note.sketch_media_key) && (
-              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400" title="Contains sketch drawing">
+              <span
+                className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400"
+                title="Contains sketch drawing"
+              >
                 <PenTool className="w-3 h-3" />
               </span>
             )}
@@ -655,11 +689,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   : 'bg-white dark:bg-[#16161a] text-zinc-600 dark:text-zinc-300 border-zinc-200/80 dark:border-zinc-800/80 hover:bg-zinc-100 dark:hover:bg-zinc-800'
               }`}
             >
-              {isSelectionMode ? (
-                <X className="w-4 h-4" />
-              ) : (
-                <CheckSquare className="w-4 h-4" />
-              )}
+              {isSelectionMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
             </button>
           </div>
         </div>
@@ -832,7 +862,11 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             title={viewLayout === 'list' ? 'Switch to Grid View' : 'Switch to List View'}
             className="p-1 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md"
           >
-            {viewLayout === 'list' ? <LayoutGrid className="w-3.5 h-3.5" /> : <List className="w-3.5 h-3.5" />}
+            {viewLayout === 'list' ? (
+              <LayoutGrid className="w-3.5 h-3.5" />
+            ) : (
+              <List className="w-3.5 h-3.5" />
+            )}
           </button>
 
           {activeTab === 'trash' ? (
@@ -883,14 +917,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 {activeTab === 'trash'
                   ? 'Trash is Empty'
                   : activeTab === 'archived'
-                  ? 'No Archived Notes'
-                  : activeTab === 'checklist'
-                  ? 'No Checklists Yet'
-                  : activeTab === 'sketch'
-                  ? 'No Sketches Yet'
-                  : activeTab === 'reminders'
-                  ? 'No Active Reminders'
-                  : 'No Notes in this Category'}
+                    ? 'No Archived Notes'
+                    : activeTab === 'checklist'
+                      ? 'No Checklists Yet'
+                      : activeTab === 'sketch'
+                        ? 'No Sketches Yet'
+                        : activeTab === 'reminders'
+                          ? 'No Active Reminders'
+                          : 'No Notes in this Category'}
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
                 {activeTab === 'all'
@@ -930,6 +964,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setShowNewEventModal(false);
           }}
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-zinc-950/40 backdrop-blur-xs"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setShowNewEventModal(false);
+          }}
         >
           <div className="w-full sm:max-w-sm bg-white dark:bg-[#16161a] border border-zinc-200 dark:border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 shadow-xl space-y-4 animate-fade-in">
             <div className="flex items-center justify-between">
@@ -966,17 +1003,19 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   Tag Color
                 </label>
                 <div className="flex items-center gap-2">
-                  {['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'].map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setNewEventColor(color)}
-                      className={`w-6 h-6 rounded-full transition-transform ${
-                        newEventColor === color ? 'scale-125 ring-2 ring-zinc-400' : ''
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
+                  {['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'].map(
+                    (color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewEventColor(color)}
+                        className={`w-6 h-6 rounded-full transition-transform ${
+                          newEventColor === color ? 'scale-125 ring-2 ring-zinc-400' : ''
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    )
+                  )}
                 </div>
               </div>
 
@@ -1007,6 +1046,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setConfirmEmptyTrashModal(false);
           }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setConfirmEmptyTrashModal(false);
+          }}
         >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
@@ -1014,7 +1056,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Empty Trash?</h3>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Empty Trash?
+                </h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Permanently delete all notes in Trash? This action cannot be undone.
                 </p>
@@ -1048,6 +1092,9 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             if (e.target === e.currentTarget) setConfirmDeleteNoteId(null);
           }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setConfirmDeleteNoteId(null);
+          }}
         >
           <div className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
@@ -1055,9 +1102,12 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Permanently Delete Note?</h3>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Permanently Delete Note?
+                </h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  This note and its recordings, transcripts, and OCR scans will be removed permanently.
+                  This note and its recordings, transcripts, and OCR scans will be removed
+                  permanently.
                 </p>
               </div>
             </div>

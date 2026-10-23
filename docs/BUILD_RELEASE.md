@@ -39,18 +39,18 @@ keyPassword=YOUR_KEY_PASSWORD
 
 When a key is configured, **both `debug` and `release` builds are signed with it**. That is deliberate: a sideloaded debug APK must be replaceable by a later release APK on the same device, which only works when the certificate matches.
 
-If no key is configured, the release APK is left *unsigned* and Gradle logs a warning — such an APK cannot be installed at all, so never ship it.
+If no key is configured, the release APK is left _unsigned_ and Gradle logs a warning — such an APK cannot be installed at all, so never ship it.
 
 ### Why a stable key matters (in-place updates)
 
 For a newly downloaded APK to upgrade an already-installed copy, Android requires **all** of:
 
-| Requirement | Where it is enforced |
-| --- | --- |
+| Requirement                                   | Where it is enforced       |
+| --------------------------------------------- | -------------------------- |
 | Same `applicationId` (`com.vellumscribe.app`) | `android/app/build.gradle` |
-| Same signing certificate as the installed app | the keystore |
-| `versionCode` ≥ the installed app's | `android/app/build.gradle` |
-| Same `versionName` channel (informational) | `package.json` |
+| Same signing certificate as the installed app | the keystore               |
+| `versionCode` ≥ the installed app's           | `android/app/build.gradle` |
+| Same `versionName` channel (informational)    | `package.json`             |
 
 Never regenerate or rotate the release key once users have installed a build: doing so forces every user to uninstall first ("App not installed").
 
@@ -128,12 +128,12 @@ To test minification without signing errors, run:
 
 `.github/workflows/build-apk.yml` signs automatically when these repository secrets are present:
 
-| Secret | Value |
-| --- | --- |
+| Secret                    | Value                                 |
+| ------------------------- | ------------------------------------- |
 | `ANDROID_KEYSTORE_BASE64` | `base64 -w0 vellumscribe-release.jks` |
-| `ANDROID_STORE_PASSWORD` | keystore password |
-| `ANDROID_KEY_ALIAS` | `vellumscribe` |
-| `ANDROID_KEY_PASSWORD` | key password |
+| `ANDROID_STORE_PASSWORD`  | keystore password                     |
+| `ANDROID_KEY_ALIAS`       | `vellumscribe`                        |
+| `ANDROID_KEY_PASSWORD`    | key password                          |
 
 The workflow decodes the keystore, writes `android/keystore.properties`, and builds `assembleDebug assembleRelease`. **Tagged releases (`v*`) fail the build when the keystore secret is missing**, so a release can never be published unsigned.
 
@@ -160,4 +160,3 @@ App Links / OAuth deep links depend on `public/.well-known/assetlinks.json`. Rep
 keytool -list -v -keystore vellumscribe-release.jks -alias vellumscribe \
   | grep SHA256 | awk '{ print $2$3$4$5$6$7$8$9$10 }' | tr -d ':'
 ```
-

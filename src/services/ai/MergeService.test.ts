@@ -19,10 +19,7 @@ describe('MergeService', () => {
   };
 
   it('merges markdown bodies without duplicating identical content', () => {
-    const merged = MergeService.mergeBodies(
-      baseNote.body,
-      baseNote.body
-    );
+    const merged = MergeService.mergeBodies(baseNote.body, baseNote.body);
     expect(merged).toBe(baseNote.body);
   });
 
@@ -40,10 +37,7 @@ describe('MergeService', () => {
       { id: 'c3', text: 'Run cold-start integrity audit', completed: false },
     ];
 
-    const result = MergeService.mergeChecklists(
-      baseNote.checklist_items!,
-      incomingChecklists
-    );
+    const result = MergeService.mergeChecklists(baseNote.checklist_items!, incomingChecklists);
 
     expect(result.length).toBe(3);
     const c2 = result.find((item) => item.text === 'Review ProGuard keep rules');
@@ -60,7 +54,9 @@ describe('MergeService', () => {
     };
 
     const res = MergeService.mergeNotes(baseNote, incoming);
-    expect(res.mergedNote.tags).toEqual(expect.arrayContaining(['work', 'android', 'release', 'foss']));
+    expect(res.mergedNote.tags).toEqual(
+      expect.arrayContaining(['work', 'android', 'release', 'foss'])
+    );
     expect(res.hasConflict).toBe(false);
   });
 });

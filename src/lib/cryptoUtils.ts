@@ -1,3 +1,4 @@
+import { AppLogger } from './logger';
 /**
  * Cryptographic utility functions for secure PIN hashing,
  * salt derivation, and AES-256-GCM note payload encryption using the Web Crypto API.
@@ -15,7 +16,9 @@ export function generateSalt(): string {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   }
-  throw new Error('Web Crypto API (crypto.getRandomValues) is required for cryptographically secure salt generation.');
+  throw new Error(
+    'Web Crypto API (crypto.getRandomValues) is required for cryptographically secure salt generation.'
+  );
 }
 
 export function toHex(buffer: ArrayBuffer | Uint8Array): string {
@@ -36,11 +39,24 @@ export function fromHex(hex: string): Uint8Array {
 /**
  * Hash a PIN using PBKDF2-HMAC-SHA256 (600,000 rounds standard, configurable) for verification storage.
  */
-export async function hashPin(pin: string, salt?: string, iterations = PBKDF2_ITERATIONS): Promise<{ hash: string; salt: string }> {
-  const rawSalt = salt ? (salt.startsWith(VERIFICATION_SALT_PREFIX) ? salt.replace(VERIFICATION_SALT_PREFIX, '') : salt) : generateSalt();
+export async function hashPin(
+  pin: string,
+  salt?: string,
+  iterations = PBKDF2_ITERATIONS
+): Promise<{ hash: string; salt: string }> {
+  const rawSalt = salt
+    ? salt.startsWith(VERIFICATION_SALT_PREFIX)
+      ? salt.replace(VERIFICATION_SALT_PREFIX, '')
+      : salt
+    : generateSalt();
   const activeSalt = rawSalt;
 
-  if (typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.importKey && crypto.subtle.deriveBits) {
+  if (
+    typeof crypto !== 'undefined' &&
+    crypto.subtle &&
+    crypto.subtle.importKey &&
+    crypto.subtle.deriveBits
+  ) {
     try {
       const encoder = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey(
@@ -67,14 +83,20 @@ export async function hashPin(pin: string, salt?: string, iterations = PBKDF2_IT
       // PBKDF2 itself failed (e.g. restricted in a locked-down WebView). Do not
       // silently downgrade to a weaker scheme - surface the failure so the
       // caller can tell the user PIN protection is unavailable here.
-      throw new Error('Secure PIN hashing (PBKDF2) failed on this device: ' + (e instanceof Error ? e.message : String(e)));
+      throw new Error(
+        'Secure PIN hashing (PBKDF2) failed on this device: ' +
+          (e instanceof Error ? e.message : String(e)),
+        {
+          cause: e,
+        }
+      );
     }
   }
 
   // No Web Crypto API available at all.
   throw new Error(
     'This device does not support the Web Crypto API, so a security PIN cannot be safely created. ' +
-    'Please update your browser/WebView or use an unlocked note.'
+      'Please update your browser/WebView or use an unlocked note.'
   );
 }
 
@@ -117,7 +139,9 @@ export async function verifyPin(
       if (toHex(legacyBuffer) === storedHash) {
         return true;
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }
 
   return false;
@@ -126,19 +150,24 @@ export async function verifyPin(
 /**
  * Derive an AES-256-GCM CryptoKey from the user's PIN and salt.
  */
-export async function deriveAesKey(pin: string, salt: string, iterations = PBKDF2_ITERATIONS): Promise<CryptoKey | null> {
-  if (typeof crypto === 'undefined' || !crypto.subtle || !crypto.subtle.importKey || !crypto.subtle.deriveKey) {
+export async function deriveAesKey(
+  pin: string,
+  salt: string,
+  iterations = PBKDF2_ITERATIONS
+): Promise<CryptoKey | null> {
+  if (
+    typeof crypto === 'undefined' ||
+    !crypto.subtle ||
+    !crypto.subtle.importKey ||
+    !crypto.subtle.deriveKey
+  ) {
     return null;
   }
 
   const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(pin),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
+  const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, [
+    'deriveKey',
+  ]);
 
   return crypto.subtle.deriveKey(
     {
@@ -154,12 +183,15 @@ export async function deriveAesKey(pin: string, salt: string, iterations = PBKDF
   );
 }
 
+import { ChecklistItem } from '../types';
+import { asBufferSource } from './binary';
+
 export interface PrivateNotePayloadV1 {
   payload_version: 1;
   title?: string;
   body: string;
   tags?: string[];
-  checklist_items?: any[];
+  checklist_items?: ChecklistItem[];
   sketch_data?: string;
   sketch_media_key?: string;
   attachment_references?: string[];
@@ -177,7 +209,7 @@ export interface NotePayloadData {
   payload_version?: number;
   title?: string;
   body: string;
-  checklist_items?: any[];
+  checklist_items?: ChecklistItem[];
   sketch_data?: string;
   sketch_media_key?: string;
   attachment_references?: string[];
@@ -205,11 +237,7 @@ export async function encryptNotePayloadV2(
   const encoder = new TextEncoder();
   const encoded = encoder.encode(jsonStr);
 
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    encoded
-  );
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
 
   return JSON.stringify({
     v: 2,
@@ -237,7 +265,7 @@ export async function decryptNotePayloadV2(
       return JSON.parse(decoded);
     }
   } catch (e) {
-    console.error('Failed to decrypt v2 note payload', e);
+    AppLogger.error('CryptoUtils', 'Failed to decrypt v2 note payload', e);
   }
   return null;
 }
@@ -256,11 +284,7 @@ export async function encryptNotePayload(
       const encoder = new TextEncoder();
       const encoded = encoder.encode(jsonStr);
 
-      const ciphertext = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        key,
-        encoded
-      );
+      const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
 
       return JSON.stringify({
         v: 1,
@@ -313,7 +337,7 @@ export async function decryptNotePayload(
       }
     }
   } catch (e) {
-    console.error('Failed to decrypt note payload', e);
+    AppLogger.error('CryptoUtils', 'Failed to decrypt note payload', e);
   }
   return null;
 }
@@ -346,30 +370,37 @@ export async function migrateLegacyV0NotePayload(
   }
 }
 
-export async function encryptBinaryPayloadWithKey(payload: Uint8Array, key: CryptoKey): Promise<{ iv: string; data: string }> {
+export async function encryptBinaryPayloadWithKey(
+  payload: Uint8Array,
+  key: CryptoKey
+): Promise<{ iv: string; data: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    payload as any
+    asBufferSource(payload)
   );
   return {
     iv: toHex(iv),
-    data: toHex(ciphertext)
+    data: toHex(ciphertext),
   };
 }
 
-export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHex: string, key: CryptoKey): Promise<Uint8Array | null> {
+export async function decryptBinaryPayloadWithKey(
+  encryptedDataHex: string,
+  ivHex: string,
+  key: CryptoKey
+): Promise<Uint8Array | null> {
   try {
     const iv = fromHex(ivHex);
     const ciphertext = fromHex(encryptedDataHex);
     const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as any },
+      { name: 'AES-GCM', iv: asBufferSource(iv) },
       key,
-      ciphertext as any
+      asBufferSource(ciphertext)
     );
     return new Uint8Array(decryptedBuffer);
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -380,7 +411,10 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
 export class PinRateLimiter {
   private static failedAttempts: Map<string, { count: number; lockUntilMs: number }> = new Map();
 
-  public static checkLockout(targetId: number | string): { isLocked: boolean; remainingSeconds: number } {
+  public static checkLockout(targetId: number | string): {
+    isLocked: boolean;
+    remainingSeconds: number;
+  } {
     const key = String(targetId);
     const state = this.failedAttempts.get(key);
     if (!state) return { isLocked: false, remainingSeconds: 0 };
@@ -419,4 +453,3 @@ export class PinRateLimiter {
 }
 
 export { deriveAesKey as deriveEncryptionKey };
-

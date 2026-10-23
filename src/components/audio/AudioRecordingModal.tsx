@@ -1,17 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Mic,
-  Square,
-  Pause,
-  Play,
-  X,
-  Sparkles,
-  AlertCircle,
-  RefreshCw,
-  HardDrive,
-  WifiOff,
-  Upload,
-} from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, Square, Pause, Play, X, AlertCircle, WifiOff, Upload } from 'lucide-react';
 import { AudioRecordingManager, RecordedAudioResult } from '../../services/AudioRecordingManager';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { TranscriptService } from '../../services/TranscriptService';
@@ -19,6 +7,8 @@ import { TranscriptionJobStatus } from '../../types';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
 import { describeAudioImport } from '../../lib/audioImportNotices';
+import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -55,8 +45,23 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   // contributing to process kills on file pick.
   const [mode, setMode] = useState<'idle' | 'recording' | 'uploading'>('idle');
 
-  const timerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleCleanup = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    try {
+      recordingManager.stopRecording?.(0).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    setIsRecording(false);
+    setIsPaused(false);
+    setTranscribing(false);
+    setJobStatus(null);
+    setIsImporting(false);
+    setMode('idle');
+  }, [recordingManager]);
 
   useEffect(() => {
     if (isOpen) {
@@ -74,7 +79,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       handleCleanup();
     }
     return () => handleCleanup();
-  }, [isOpen]);
+  }, [isOpen, handleCleanup]);
 
   const handleStart = async () => {
     setErrorMessage(null);
@@ -93,7 +98,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         const st = recordingManager.getStatus();
         setElapsedSec(Math.floor(st.elapsedMs / 1000));
       }, 500);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err?.message || 'Could not access microphone.');
       setIsRecording(false);
       setMode('idle');
@@ -128,7 +134,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           try {
             const status = await aiManager.getTranscriptionStatus(jobId);
             setJobStatus(status);
-            if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+            if (
+              status.status === 'COMPLETED' ||
+              status.status === 'FAILED' ||
+              status.status === 'CANCELLED'
+            ) {
               setTranscribing(false);
               if (status.status === 'COMPLETED') {
                 onRecordingComplete(result);
@@ -141,7 +151,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
               return;
             }
             setTimeout(poll, 800);
-          } catch (e: any) {
+          } catch (_e) {
+            const e = asErrorLike(_e);
             setTranscribing(false);
             const message = e?.message || 'Status poll failed.';
             setErrorMessage(message);
@@ -153,7 +164,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         onRecordingComplete(result);
         onClose();
       }
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err?.message || 'Failed to stop and save recording.');
       setIsRecording(false);
     }
@@ -165,19 +177,6 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       setTranscribing(false);
       onClose();
     }
-  };
-
-  const handleCleanup = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    try {
-      recordingManager.stopRecording?.(0).catch(() => {});
-    } catch {}
-    setIsRecording(false);
-    setIsPaused(false);
-    setTranscribing(false);
-    setJobStatus(null);
-    setIsImporting(false);
-    setMode('idle');
   };
 
   /**
@@ -198,7 +197,9 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       if (isRecording) {
         try {
           await recordingManager.stopRecording(noteId).catch(() => {});
-        } catch {}
+        } catch {
+          /* ignore */
+        }
         setIsRecording(false);
         setIsPaused(false);
         if (timerRef.current) clearInterval(timerRef.current);
@@ -224,7 +225,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         try {
           const status = await aiManager.getTranscriptionStatus(jobId);
           setJobStatus(status);
-          if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+          if (
+            status.status === 'COMPLETED' ||
+            status.status === 'FAILED' ||
+            status.status === 'CANCELLED'
+          ) {
             setTranscribing(false);
             if (status.status === 'COMPLETED') {
               onRecordingComplete(result);
@@ -237,7 +242,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
             return;
           }
           setTimeout(poll, 800);
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           setTranscribing(false);
           const message = e?.message || 'Status poll failed.';
           setErrorMessage(message);
@@ -245,11 +251,14 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         }
       };
       setTimeout(poll, 600);
-    } catch (err: any) {
-      console.error('Import audio failed', err);
+    } catch (_err) {
+      const err = asErrorLike(_err);
+      AppLogger.error('AudioRecordingModal', 'Import audio failed', err);
       setIsImporting(false);
       setTranscribing(false);
-      setErrorMessage(err?.message || 'Could not import audio file. Try a different format (WAV/MP3/M4A).');
+      setErrorMessage(
+        err?.message || 'Could not import audio file. Try a different format (WAV/MP3/M4A).'
+      );
     }
   };
 
@@ -275,9 +284,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                     ? 'Voice Memo'
                     : 'Record Audio Memo'}
               </h3>
-              <span className="text-[11px] text-stone-500">
-                16 kHz Mono PCM • On-Device AI
-              </span>
+              <span className="text-[11px] text-stone-500">16 kHz Mono PCM • On-Device AI</span>
             </div>
           </div>
 
@@ -299,7 +306,10 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         )}
 
         {importNotice && !errorMessage && (
-          <div role="status" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
+          <div
+            role="status"
+            className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2"
+          >
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{importNotice}</span>
           </div>
@@ -315,7 +325,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 currentSegment: jobStatus?.currentChunk || 1,
                 totalSegments: jobStatus?.totalChunks || 1,
                 completedSegmentsCount: Math.max(0, (jobStatus?.currentChunk || 1) - 1),
-                status: jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
+                status:
+                  jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
               }}
               onCancel={handleCancelTranscription}
             />
@@ -357,7 +368,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                     // Defer off the native file-chooser callback to avoid WebView process kills
                     setTimeout(() => {
                       handleImportAudioFile(f).catch((err) => {
-                        console.error('handleImportAudioFile uncaught', err);
+                        AppLogger.error(
+                          'AudioRecordingModal',
+                          'handleImportAudioFile uncaught',
+                          err
+                        );
                         setErrorMessage(err?.message || 'Import failed');
                         setIsImporting(false);
                         setMode('idle');

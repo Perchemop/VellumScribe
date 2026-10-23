@@ -1,9 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  EventRecord,
-  NoteRecord,
-} from '../types';
+import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
@@ -27,7 +26,9 @@ interface AppContextValue {
 
   setSelectedEventId: (id: number | null) => void;
   setSelectedNoteId: (id: number | null) => void;
-  setActiveView: (view: 'all' | 'recent' | 'archive' | 'trash' | 'tag' | 'security_log' | 'version_history') => void;
+  setActiveView: (
+    view: 'all' | 'recent' | 'archive' | 'trash' | 'tag' | 'security_log' | 'version_history'
+  ) => void;
   setSelectedTag: (tag: string | null) => void;
   setSearchQuery: (q: string) => void;
   setFilterType: (f: 'all' | 'text' | 'checklist' | 'sketch') => void;
@@ -60,7 +61,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'text' | 'checklist' | 'sketch'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(null);
+  const [toastAction, setToastAction] = useState<{ label: string; onClick: () => void } | null>(
+    null
+  );
   const toastTimeoutRef = React.useRef<number | null>(null);
 
   const dismissToast = useCallback(() => {
@@ -93,7 +96,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const saved = localStorage.getItem('omninote_dark_mode_v1');
       if (saved !== null) return JSON.parse(saved);
-      return typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return (
+        typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+      );
     } catch {
       return false;
     }
@@ -105,7 +110,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         localStorage.setItem('omninote_dark_mode_v1', JSON.stringify(next));
       } catch (e) {
-        console.error('Failed to save dark mode preference', e);
+        AppLogger.error('AppContext', 'Failed to save dark mode preference', e);
       }
       return next;
     });
@@ -191,8 +196,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedNoteId(newNote.id);
         showToast('New note created.');
         return newNote;
-      } catch (e: any) {
-        console.error('Failed to create note:', e);
+      } catch (_e) {
+        const e = asErrorLike(_e);
+        AppLogger.error('AppContext', 'Failed to create note:', e);
         showToast(`Storage Error: ${e.message}`);
         throw e;
       }

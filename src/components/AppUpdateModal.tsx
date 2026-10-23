@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import {
   X,
   Sparkles,
-  Download,
   CheckCircle2,
   RefreshCw,
-  Layers,
   Database,
   ShieldCheck,
   Smartphone,
   Check,
-  ChevronRight,
-  ExternalLink,
 } from 'lucide-react';
-import { AppUpdateManager, APP_CHANGELOGS, CURRENT_APP_VERSION, CURRENT_BUILD_NUMBER, ReleaseInfo } from '../lib/appUpdateManager';
+import {
+  AppUpdateManager,
+  APP_CHANGELOGS,
+  CURRENT_APP_VERSION,
+  CURRENT_BUILD_NUMBER,
+} from '../lib/appUpdateManager';
 import { NativeBridge } from '../lib/nativeBridge';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
@@ -32,8 +33,6 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
   } | null>(null);
   const [activeTab, setActiveTab] = useState<'changelog' | 'migrations' | 'check'>('changelog');
   const [migrationLogs] = useState(() => AppUpdateManager.getMigrationLogs());
-
-  const currentRelease = APP_CHANGELOGS[0];
 
   const handleCheckForUpdates = async () => {
     setIsChecking(true);
@@ -178,10 +177,10 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                   {/* Fixes */}
                   {rel.fixes && rel.fixes.length > 0 && (
                     <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-1">
-                      <div className="text-xs font-medium text-zinc-400">Performance &amp; Bugfixes:</div>
-                      <div className="text-xs text-zinc-500">
-                        {rel.fixes.join(' • ')}
+                      <div className="text-xs font-medium text-zinc-400">
+                        Performance &amp; Bugfixes:
                       </div>
+                      <div className="text-xs text-zinc-500">{rel.fixes.join(' • ')}</div>
                     </div>
                   )}
                 </div>
@@ -200,7 +199,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                     APK Release Channel
                   </h3>
                   <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
-                    When a newer APK build is installed over your existing installation, VellumScribe's migration engine automatically preserves all existing notes, voice memos, and offline databases.
+                    When a newer APK build is installed over your existing installation,
+                    VellumScribe's migration engine automatically preserves all existing notes,
+                    voice memos, and offline databases.
                   </p>
                 </div>
 
@@ -211,20 +212,23 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                     className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-xl text-xs font-semibold shadow-md transition-all flex items-center gap-2 mx-auto disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isChecking ? 'animate-spin' : ''}`} />
-                    <span>{isChecking ? 'Checking Server...' : 'Check For Newer APK Releases'}</span>
+                    <span>
+                      {isChecking ? 'Checking Server...' : 'Check For Newer APK Releases'}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              {checkResult && (
-                checkResult.isUpToDate ? (
+              {checkResult &&
+                (checkResult.isUpToDate ? (
                   <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-2 animate-fade-in">
                     <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                       <span>You are running the latest version (v{checkResult.latestVersion})</span>
                     </div>
                     <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80 pl-6">
-                      Release timestamp: {checkResult.releaseDate} &bull; Verified at {checkResult.checkedAt}
+                      Release timestamp: {checkResult.releaseDate} &bull; Verified at{' '}
+                      {checkResult.checkedAt}
                     </p>
                   </div>
                 ) : (
@@ -234,29 +238,37 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                       <span>Newer Version Available: v{checkResult.latestVersion}</span>
                     </div>
                     <p className="text-xs text-indigo-700/80 dark:text-indigo-400/80 pl-6">
-                      Release timestamp: {checkResult.releaseDate} &bull; Checked at {checkResult.checkedAt}
+                      Release timestamp: {checkResult.releaseDate} &bull; Checked at{' '}
+                      {checkResult.checkedAt}
                     </p>
                   </div>
-                )
-              )}
+                ))}
 
               {/* Version Specs */}
               <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-zinc-800/60 grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <div className="text-zinc-400 text-xs">Package ID</div>
-                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">com.vellumscribe.app</div>
+                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">
+                    com.vellumscribe.app
+                  </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-xs">Release Track</div>
-                  <div className="font-medium text-emerald-600 dark:text-emerald-400 text-xs">Production (Stable)</div>
+                  <div className="font-medium text-emerald-600 dark:text-emerald-400 text-xs">
+                    Production (Stable)
+                  </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-xs">Database Architecture</div>
-                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">Local Storage / Schema v3</div>
+                  <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">
+                    Local Storage / Schema v3
+                  </div>
                 </div>
                 <div>
                   <div className="text-zinc-400 text-xs">Storage Migration</div>
-                  <div className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">Automatic Safe Backfill</div>
+                  <div className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">
+                    Automatic Safe Backfill
+                  </div>
                 </div>
               </div>
             </div>
@@ -265,13 +277,16 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
           {activeTab === 'migrations' && (
             <div className="space-y-3">
               <div className="text-xs text-zinc-500">
-                Safe upgrade audit trail. All note records are automatically verified and upgraded whenever a new APK is installed.
+                Safe upgrade audit trail. All note records are automatically verified and upgraded
+                whenever a new APK is installed.
               </div>
 
               {migrationLogs.length === 0 ? (
                 <div className="p-6 text-center text-xs text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60">
                   <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-80" />
-                  <div className="font-medium text-zinc-700 dark:text-zinc-300">Clean Database State</div>
+                  <div className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Clean Database State
+                  </div>
                   <div>Database schema is up to date on v{CURRENT_APP_VERSION}.</div>
                 </div>
               ) : (
@@ -282,11 +297,15 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                       className="p-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl border border-zinc-200/70 dark:border-zinc-800/70 text-xs space-y-1 font-mono"
                     >
                       <div className="flex items-center justify-between text-zinc-800 dark:text-zinc-200">
-                        <span>v{log.fromVersion} &rarr; v{log.toVersion}</span>
+                        <span>
+                          v{log.fromVersion} &rarr; v{log.toVersion}
+                        </span>
                         <span className="text-xs text-emerald-500 uppercase">{log.status}</span>
                       </div>
                       <div className="text-xs text-zinc-500 font-sans">{log.details}</div>
-                      <div className="text-xs text-zinc-400">{new Date(log.timestamp).toLocaleString()}</div>
+                      <div className="text-xs text-zinc-400">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </div>
                     </div>
                   ))}
                 </div>

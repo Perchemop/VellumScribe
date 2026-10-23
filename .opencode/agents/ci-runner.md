@@ -4,70 +4,70 @@ mode: subagent
 model: opencode/beam-free#high
 permissions:
   - action: edit
-    resource: "*"
+    resource: '*'
     effect: deny
   - action: shell
-    resource: "git status*"
+    resource: 'git status*'
     effect: allow
   - action: shell
-    resource: "git diff*"
+    resource: 'git diff*'
     effect: allow
   - action: shell
-    resource: "git log*"
+    resource: 'git log*'
     effect: allow
   - action: shell
-    resource: "git add*"
+    resource: 'git add*'
     effect: allow
   - action: shell
-    resource: "git commit*"
+    resource: 'git commit*'
     effect: allow
   - action: shell
-    resource: "git push*"
+    resource: 'git push*'
     effect: allow
   - action: shell
-    resource: "git checkout*"
+    resource: 'git checkout*'
     effect: allow
   - action: shell
-    resource: "git fetch*"
+    resource: 'git fetch*'
     effect: allow
   - action: shell
-    resource: "git rev-parse*"
+    resource: 'git rev-parse*'
     effect: allow
   - action: shell
-    resource: "git rev-list*"
+    resource: 'git rev-list*'
     effect: allow
   - action: shell
-    resource: "git merge-base*"
+    resource: 'git merge-base*'
     effect: allow
   - action: shell
-    resource: "git rebase*"
+    resource: 'git rebase*'
     effect: allow
   - action: shell
-    resource: "git restore*"
+    resource: 'git restore*'
     effect: allow
   - action: shell
-    resource: "git rm*"
+    resource: 'git rm*'
     effect: allow
   - action: shell
-    resource: "gh *"
+    resource: 'gh *'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh*"
+    resource: '~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh*"
+    resource: '~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh*"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh*"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "sh ~/.config/opencode/scripts/ci.sh*"
+    resource: 'sh ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: subagent
-    resource: "*"
+    resource: '*'
     effect: deny
 ---
 
@@ -87,6 +87,7 @@ Your job:
    precise failure output for each failing job.
 
 Rules:
+
 - Never run a build, test, or lint toolchain locally. Only GitHub Actions runs
   the heavy gates.
 - Never edit, create, or delete source files. If a fix is needed, report it and

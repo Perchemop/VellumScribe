@@ -18,12 +18,12 @@ import {
   Mic,
   Image,
 } from 'lucide-react';
-import { NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../types';
+import { NoteRecord, TranscriptRecord, OcrScanRecord } from '../types';
 import { GeminiApiService, SummaryFormat, SummaryResult } from '../lib/geminiService';
-import { SummaryService } from '../services/ai';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { AiStudioKeyModal } from './AiStudioKeyModal';
 import { useModalBackHandler } from '../lib/modalBackStack';
+import { asErrorLike } from '../lib/errorLike';
 
 interface AiSummaryModalProps {
   isOpen: boolean;
@@ -109,7 +109,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
     try {
       const activeTranscripts = includeTranscripts ? transcripts : [];
       const activeOcr = includeOcr ? ocrScans : [];
-      const activeChecklists = includeChecklists ? (note.checklist_items || []) : [];
+      const activeChecklists = includeChecklists ? note.checklist_items || [] : [];
 
       const result = await GeminiApiService.generateSummary({
         format: selectedFormat,
@@ -122,7 +122,8 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
       });
 
       setGeneratedResult(result);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setError(err.message || 'Failed to generate AI summary.');
     } finally {
       setIsLoading(false);
@@ -242,7 +243,9 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400'}`} />
+                        <Icon
+                          className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400'}`}
+                        />
                         <span className="font-semibold text-xs">{fmt.label}</span>
                       </div>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-snug">
@@ -262,7 +265,9 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 font-medium">
                   <FileText className="w-3 h-3 text-zinc-400" />
-                  <span>Note Body ({note.body?.trim().split(/\s+/).filter(Boolean).length || 0} words)</span>
+                  <span>
+                    Note Body ({note.body?.trim().split(/\s+/).filter(Boolean).length || 0} words)
+                  </span>
                 </span>
 
                 {transcripts.length > 0 && (
@@ -276,7 +281,10 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     }`}
                   >
                     <Mic className="w-3 h-3" />
-                    <span>{transcripts.length} Audio {transcripts.length === 1 ? 'Transcript' : 'Transcripts'}</span>
+                    <span>
+                      {transcripts.length} Audio{' '}
+                      {transcripts.length === 1 ? 'Transcript' : 'Transcripts'}
+                    </span>
                   </button>
                 )}
 
@@ -291,7 +299,9 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     }`}
                   >
                     <Image className="w-3 h-3" />
-                    <span>{ocrScans.length} OCR {ocrScans.length === 1 ? 'Scan' : 'Scans'}</span>
+                    <span>
+                      {ocrScans.length} OCR {ocrScans.length === 1 ? 'Scan' : 'Scans'}
+                    </span>
                   </button>
                 )}
 
@@ -316,7 +326,9 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
                 <span>Custom Guidance (Optional)</span>
-                <span className="text-xs text-zinc-400 font-normal">e.g. &ldquo;Emphasize budget figures and next milestones&rdquo;</span>
+                <span className="text-xs text-zinc-400 font-normal">
+                  e.g. &ldquo;Emphasize budget figures and next milestones&rdquo;
+                </span>
               </label>
               <input
                 type="text"
@@ -334,11 +346,15 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                   <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
                   <div className="flex-1">
                     <p className="font-semibold text-xs text-amber-900 dark:text-amber-200">
-                      {error.includes('Permission') || error.includes('caller') || error.includes('403')
+                      {error.includes('Permission') ||
+                      error.includes('caller') ||
+                      error.includes('403')
                         ? 'Google AI Studio Permission Issue'
                         : 'AI Service Notice'}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">{error}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-300/90">
+                      {error}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-200/60 dark:border-amber-900/40">

@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { KeystoreSecret } from '../types';
+import { AppLogger } from './logger';
 
 const KEYSTORE_STORAGE_KEY = 'vellumscribe_keystore_metadata_v2';
 
@@ -39,7 +40,7 @@ export class AndroidKeystoreManager {
       const raw = localStorage.getItem(KEYSTORE_STORAGE_KEY);
       this.cache = raw ? JSON.parse(raw) : [];
     } catch (e) {
-      console.error('Failed to read keystore metadata from storage', e);
+      AppLogger.error('Keystore', 'Failed to read keystore metadata from storage', e);
       this.cache = [];
     }
     return this.cache || [];
@@ -50,14 +51,12 @@ export class AndroidKeystoreManager {
     try {
       localStorage.setItem(KEYSTORE_STORAGE_KEY, JSON.stringify(this.cache));
     } catch (e) {
-      console.error('Failed to write keystore metadata to storage', e);
+      AppLogger.error('Keystore', 'Failed to write keystore metadata to storage', e);
     }
   }
 
   private static maskValue(rawValue: string): string {
-    return rawValue.length > 4
-      ? '••••••••••••••••' + rawValue.slice(-4)
-      : '••••••••••••';
+    return rawValue.length > 4 ? '••••••••••••••••' + rawValue.slice(-4) : '••••••••••••';
   }
 
   /**
@@ -81,11 +80,12 @@ export class AndroidKeystoreManager {
     if (Capacitor.isNativePlatform()) {
       try {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-        const res = await SecureStorage.get(`vellumscribe.secret.${alias}`) as any;
+        const res = (await SecureStorage.get(`vellumscribe.secret.${alias}`)) as
+          string | { value?: string } | null;
         if (typeof res === 'string') return res;
         if (res && typeof res.value === 'string') return res.value;
       } catch (e) {
-        console.warn(`[Keystore] Native secret retrieval failed for ${alias}:`, e);
+        AppLogger.warn('Keystore', `[Keystore] Native secret retrieval failed for ${alias}:`, e);
       }
     }
 
@@ -113,8 +113,8 @@ export class AndroidKeystoreManager {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
         await SecureStorage.set(`vellumscribe.secret.${alias}`, rawValue);
       } catch (e) {
-        console.error('[Keystore] Native secure storage write failed', e);
-        throw new Error('Could not save this secret to the device secure storage.');
+        AppLogger.error('Keystore', '[Keystore] Native secure storage write failed', e);
+        throw new Error('Could not save this secret to the device secure storage.', { cause: e });
       }
     } else {
       this.runtimeSessionSecrets.set(alias, rawValue);
@@ -155,7 +155,11 @@ export class AndroidKeystoreManager {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
         await SecureStorage.remove(`vellumscribe.secret.${alias}`);
       } catch (e) {
-        console.warn('[Keystore] Failed to remove native secure value (continuing to clear local metadata)', e);
+        AppLogger.warn(
+          'Keystore',
+          '[Keystore] Failed to remove native secure value (continuing to clear local metadata)',
+          e
+        );
       }
     }
     this.save(this.getStored().filter((s) => s.alias !== alias));
@@ -183,7 +187,8 @@ export class AndroidKeystoreManager {
     let migratedCount = 0;
     try {
       // 1. Check legacy Gemini API key
-      const legacyGeminiKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key');
+      const legacyGeminiKey =
+        localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key');
       if (legacyGeminiKey && legacyGeminiKey.trim()) {
         await this.saveSecret('gemini_api_key', legacyGeminiKey.trim(), 'api_key');
         localStorage.removeItem('gemini_api_key');
@@ -219,7 +224,7 @@ export class AndroidKeystoreManager {
         }
       }
     } catch (e) {
-      console.warn('[Keystore] Legacy credential migration notice:', e);
+      AppLogger.warn('Keystore', '[Keystore] Legacy credential migration notice:', e);
     }
     return migratedCount;
   }
