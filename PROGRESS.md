@@ -170,6 +170,33 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
+## 2026-10-23 — Adopt the updated guide: CTO.new model + tightened local rules (D-408)
+
+The guide was re-read in full and its changes implemented as `D-408`:
+
+- **Operating model is now Chat -> Task -> Pull Request -> human merge**
+  (guide §5). `orchestrator` is the Chat-mode planner (writes Task briefs, never
+  edits code); `coder` executes one bounded Task; `reviewer` reviews the PR
+  read-only; the human merges (`docs/development.md` §5b).
+- **Local work tightened (guide §4.2).** The former "very small, fast checks"
+  allowance is gone — no local `eslint`, `prettier`, `tsc`, or tests. The
+  `shell` allows for `npm run lint*`, `npm run format*`, `npx eslint*` and
+  `npx prettier*` were removed from the `coder` and `reviewer` agent files.
+- Tracking updates now cover `REQUIREMENTS_TRACEABILITY.md` **and**
+  `PROGRESS.md` after each Task (guide §5.2), and its header now records the CI
+  gate states.
+- `ci-runner` remains the only GitHub interaction point; `tester`, `fixer` and
+  `docs-writer` stay as supporting roles with no local toolchain access.
+
+**Note on `CodeQL` (D-409).** GitHub default-setup CodeQL reports 68
+pre-existing alerts (almost all in `server.ts`). They are visible on this PR
+because the B-3 Prettier pass rewrote `server.ts` line by line and CodeQL's
+diff-informed analysis now counts them as "in the diff". They are **not**
+dismissed and **not** hidden — a dedicated hardening slice is scheduled, and the
+owner triages in the Security tab until then.
+
+---
+
 ## 2026-10-23 — Slice B-3: Prettier baseline + required format gate (D-407, Q-004 resolved)
 
 - One dedicated mechanical `prettier --write .` pass, committed on its own:
