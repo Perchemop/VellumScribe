@@ -11,8 +11,8 @@ Append here for every slice; never rewrite history.
 
 | Signal | State |
 | --- | --- |
-| `npm run verify` | ⚠ **last known green locally:** typecheck clean, lint 0 errors / 656 warnings, orphan check clean across 118 files, 86 tests passing. Heavy verification no longer runs on this machine (guide §4) — it runs on GitHub Actions via `ci.sh`. |
-| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 53 warnings (all `no-explicit-any`; 656 → 53 via slices B-4…B-7) — this is the active blocker (see Q-005). |
+| `npm run verify` | ✅ **GREEN on CI (all three OS runners)** — `typecheck` + `lint` (0 warnings) + `check:orphans` + 86 tests. Run `1cbc192` on `opencode/ci`. |
+| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job now also runs `check:orphans` (✅ 119 files) and the 86-test suite (✅). |
 | Test suite | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`). |
 | Working tree | clean, committed and pushed |
 | GitHub Actions | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green. |
@@ -22,10 +22,10 @@ Append here for every slice; never rewrite history.
 
 **Status sentence:** code compiles and tests pass; CI is operational on three
 OS runners with a real (unsigned) APK. The active blocker is lint:
-`--max-warnings=0` now denies warnings (guide §4), so CI lint fails until the
-remaining 53 `no-explicit-any` warnings are burned down via `ci.sh` iterations
-(B-4 → 332, B-5 → 275, B-6 → 229, B-7 → 53). Per guide §4,
-fixing CI is the first task.
+`--max-warnings=0` now denies warnings (guide §4), lint is now clean (B-4 → 332,
+B-5 → 275, B-6 → 229, B-7 → 0), so `npm run verify` passes end-to-end on all
+three OS runners. The remaining non-blocking red is the staged Prettier job
+(slice B-3).
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
 `tsc`, `vitest`, or `npm ci` runs on this machine. Verify changes with
@@ -169,7 +169,37 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
-## 2026-10-23 — Slice B-7 (in progress): type the `no-explicit-any` sites (275 → 53)
+## 2026-10-23 — Slice B-7 (DONE): lint gate is GREEN (275 → 0) 🎉
+
+**`npm run verify` passes end-to-end on all three OS runners** — the first time
+since the `--max-warnings=0` ceiling was set. Blocker **Q-005 is resolved**.
+
+CI run for `1cbc192` (`opencode/ci`): `verify (ubuntu-latest)` ✅,
+`verify (windows-latest)` ✅, `verify (macos-latest)` ✅, CodeQL ✅, CodeQL
+Security Analysis ✅, Dependency Audit ✅. Only the deliberately non-blocking
+`format (staged)` job is red (slice B-3 owns the Prettier baseline).
+
+Because lint now passes, the `verify` job finally ran its later steps again:
+`check:orphans` ✅ (119 files) and the **86-test suite** ✅ — neither had run
+since lint went red on `ae01c47`.
+
+The whole `no-explicit-any` class (229 sites) is gone: typed row shapes for
+every SQLite query, typed request/response shapes at the AI boundaries,
+`unknown` for genuinely opaque payloads (log data, import bundles) with type
+predicates to narrow them, a shared `src/lib/binary.ts` for the
+`Uint8Array → BufferSource/BlobPart` boundary, and one `conn` accessor in
+`NativeSqliteAdapter` instead of 30 `any`-typed null checks.
+
+Work landed as `B-7a…B-7e`, each verified on CI with `typecheck` green:
+B-7a `storage`/repositories/`geminiService` (229→148) · B-7b repositories +
+`AiResultValidator` (→104) · B-7c logger/speech/sqlite-engine/crypto/provenance
+(→53) · B-7d storage/settings/notebooklm/misc (→2) · B-7e final two sites (→0)
+plus the typecheck fallout fixes (global picker hook declaration, `../../lib/binary`
+path, checklist/notebooklm test fixtures, sync-job entity union).
+
+---
+
+## 2026-10-23 — Slice B-7 (earlier commits): type the `no-explicit-any` sites (275 → 53)
 
 Every remaining warning is `@typescript-eslint/no-explicit-any`. Typed row shapes,
 payload shapes and boundary casts — no blanket `any → unknown` sweeps that would
@@ -358,11 +388,9 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 
 ## Open blockers (carry into next session)
 
-1. **Q-005 (ACTIVE) — lint warnings denied, CI failing.** `--max-warnings=0`
-   fails on the remaining 53 `no-explicit-any` warnings (656 → 53 across
-   B-4…B-7). Burn down in slices of ≤50 via
-   `ci.sh` iterations (edit locally, verify on CI). Until this is resolved,
-   CI lint is red and per guide §4 this is the first task to fix.
+1. ~~**Q-005 — lint warnings denied, CI failing.**~~ ✅ **RESOLVED 2026-10-23** —
+   656 → 0 across slices B-4…B-7; `npm run verify` is green on
+   ubuntu/windows/macos (`1cbc192`) including`check:orphans` and the 86 tests.
 2. **Q-002 — no release keystore (release blocker).** Generate it per
    `docs/BUILD_RELEASE.md` §1, set the four `ANDROID_KEYSTORE_*` secrets,
    then re-run slice A-2 and confirm `signed=true`.
