@@ -989,7 +989,10 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
       if (!match) {
         return res.status(404).json({ error: 'Uploaded audio file not found on server.' });
       }
-      sourcePath = resolveWithin(tempDir, match);
+      sourcePath = resolveWithin(
+        tempDir,
+        `trans_init_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${inputExt}`
+      );
       const matchExt = match.match(/\.([a-zA-Z0-9]+)$/);
       if (matchExt) inputExt = matchExt[1].toLowerCase();
     } else if (audioBase64) {
@@ -1004,7 +1007,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
             : validMime.includes('webm')
               ? 'webm'
               : 'mp3';
-      sourcePath = path.join(
+      sourcePath = resolveWithin(
         tempDir,
         `trans_init_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${inputExt}`
       );
@@ -1038,7 +1041,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
       console.warn('FFmpeg session optimization notice:', ffErr);
     }
 
-    const workingAudioPath = converted ? optimizedPath : sourcePath;
+    const workingAudioPath = converted ? optimizedPath : (sourcePath ?? '');
     if (durationSec === 0) {
       try {
         const probeOut = runFfprobe(workingAudioPath, 10000);
