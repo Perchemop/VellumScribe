@@ -2,13 +2,31 @@ import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { RecordingRecord } from '../types';
 import { AppLogger } from '../lib/logger';
 
+/** Raw rows from the `recordings` table (see schema.ts). */
+interface RecordingRow {
+  id: number;
+  note_id: number;
+  file_path: string;
+  media_key?: string;
+  duration_seconds?: number;
+  file_size?: number;
+  sample_rate?: number;
+  bitrate_kbps?: number;
+  created_at: string;
+  checksum?: string;
+  duration_ms?: number;
+  mime_type?: string;
+  channels?: number;
+  status?: string;
+}
+
 export class RecordingRepository {
   /**
    * Get recording by ID asynchronously
    */
   public static async getByIdAsync(id: number): Promise<RecordingRecord | null> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE id = ?`,
@@ -23,7 +41,7 @@ export class RecordingRepository {
    */
   public static getById(id: number): RecordingRecord | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
+    const rows = db.querySync ? db.querySync<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE id = ?`,
@@ -38,7 +56,7 @@ export class RecordingRepository {
    */
   public static async getByNoteIdAsync(noteId: number): Promise<RecordingRecord[]> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE note_id = ? ORDER BY id DESC`,
@@ -52,7 +70,7 @@ export class RecordingRepository {
    */
   public static getByNoteId(noteId: number): RecordingRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
+    const rows = db.querySync ? db.querySync<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE note_id = ? ORDER BY id DESC`,
@@ -66,7 +84,7 @@ export class RecordingRepository {
    */
   public static async getAllAsync(): Promise<RecordingRecord[]> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings ORDER BY id DESC`
@@ -79,7 +97,7 @@ export class RecordingRepository {
    */
   public static getAll(): RecordingRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
+    const rows = db.querySync ? db.querySync<RecordingRow>(
       `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings ORDER BY id DESC`
@@ -283,7 +301,7 @@ export class RecordingRepository {
     db.runSync?.('DELETE FROM recordings WHERE id = ?', [id]);
   }
 
-  private static mapRow(r: any): RecordingRecord {
+  private static mapRow(r: RecordingRow): RecordingRecord {
     return {
       id: r.id,
       note_id: r.note_id,

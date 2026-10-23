@@ -1,6 +1,6 @@
 import { NoteRecord, ChecklistItem } from '../types';
 import { getDatabaseAdapter, DatabaseAdapter } from '../lib/sqlite/databaseAdapter';
-import { SearchOptions, SearchResult } from '../lib/sqlite/sqliteRepository';
+import { ChecklistRow, SearchOptions, SearchResult, TagRow } from '../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../lib/logger';
 import { generatePrefixedId } from '../lib/uuid';
 
@@ -65,12 +65,12 @@ export interface INoteRepository {
  * Hydrates checklist items and tags for a batch of note rows asynchronously
  * using the DatabaseAdapter directly. Eliminates N+1 query overhead.
  */
-async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Promise<NoteRecord[]> {
+async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: NoteRecord[]): Promise<NoteRecord[]> {
   if (!noteRows || noteRows.length === 0) return [];
   const noteIds = noteRows.map((r) => r.id);
   const placeholders = noteIds.map(() => '?').join(',');
 
-  const chkRows = await db.query<any>(
+  const chkRows = await db.query<ChecklistRow>(
     `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
     noteIds
   );
@@ -84,7 +84,7 @@ async function populateNotesBatchAsync(db: DatabaseAdapter, noteRows: any[]): Pr
     });
   }
 
-  const tagRows = await db.query<any>(
+  const tagRows = await db.query<TagRow>(
     `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
     noteIds
   );
@@ -188,7 +188,7 @@ export class NoteRepository implements INoteRepository {
   public static async getById(id: number): Promise<NoteRecord | null> {
     try {
       const db = getDatabaseAdapter();
-      const rows = await db.query<any>('SELECT * FROM notes WHERE id = ?;', [id]);
+      const rows = await db.query<NoteRecord>('SELECT * FROM notes WHERE id = ?;', [id]);
       if (!rows || rows.length === 0) return null;
       const populated = await populateNotesBatchAsync(db, rows);
       return populated.length > 0 ? populated[0] : null;
@@ -259,7 +259,7 @@ export class NoteRepository implements INoteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = await db.query<any>(querySql, [...params, limit, offset]);
+    const rows = await db.query<NoteRecord>(querySql, [...params, limit, offset]);
     const notes = await populateNotesBatchAsync(db, rows);
     const hasMore = offset + notes.length < totalCount;
     const lastNote = notes.length > 0 ? notes[notes.length - 1] : undefined;
@@ -579,7 +579,7 @@ export class NoteRepository implements INoteRepository {
             ORDER BY n.is_pinned DESC, n.updated_at DESC
             LIMIT ? OFFSET ?
           `;
-          const rows = await db.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          const rows = await db.query<NoteRecord>(matchSql, [ftsExpression, ...params, limit, offset]);
           const notes = await populateNotesBatchAsync(db, rows);
           return { notes, totalCount };
         } catch (ftsErr) {
@@ -614,7 +614,7 @@ export class NoteRepository implements INoteRepository {
         ORDER BY n.is_pinned DESC, n.updated_at DESC
         LIMIT ? OFFSET ?
       `;
-      const rows = await db.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      const rows = await db.query<NoteRecord>(fallbackSql, [...likeParams, limit, offset]);
       const notes = await populateNotesBatchAsync(db, rows);
       return { notes, totalCount };
     }
@@ -632,7 +632,7 @@ export class NoteRepository implements INoteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = await db.query<any>(querySql, [...params, limit, offset]);
+    const rows = await db.query<NoteRecord>(querySql, [...params, limit, offset]);
     const notes = await populateNotesBatchAsync(db, rows);
     return { notes, totalCount };
   }
