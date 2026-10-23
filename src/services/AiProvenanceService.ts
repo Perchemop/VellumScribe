@@ -17,15 +17,15 @@ export interface AiProvenanceRecord {
 
 /** Raw rows from the `ai_provenance` table (see schema.ts). */
 interface AiProvenanceRow {
-  id?: string;
-  target_entity_type?: string;
-  target_entity_id?: number;
+  id: string;
+  target_entity_type: string;
+  target_entity_id: number;
   source_entity_type?: string;
   source_entity_id?: number;
-  model_id?: string;
-  provider?: string;
+  model_id: string;
+  provider: string;
   prompt_hash?: string;
-  generated_at?: number;
+  generated_at: number;
   metadata_json?: string;
 }
 
