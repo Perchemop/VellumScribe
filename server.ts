@@ -300,6 +300,12 @@ const audioRateLimiter = createRateLimiter({
     'Rate limit exceeded. Too many audio chunk upload or conversion requests. Please wait a moment before retrying.',
 });
 
+const notebooklmRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+  message: 'Rate limit exceeded for NotebookLM source uploads.',
+});
+
 const cloudRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 60,
@@ -314,6 +320,7 @@ app.use('/api/groq', geminiRateLimiter);
 app.use('/api/deepgram', geminiRateLimiter);
 app.use('/api/audio', audioRateLimiter);
 app.use('/api/cloud', cloudRateLimiter);
+app.use('/api/notebooklm', notebooklmRateLimiter);
 
 // Lazy initialize Gemini client
 function createGeminiInstance(apiKey: string): GoogleGenAI {
@@ -814,7 +821,7 @@ async function processAndTranscribeAudio(
 }
 
 // 2. Audio Transcription Endpoint
-app.post('/api/gemini/transcribe', async (req, res) => {
+app.post('/api/gemini/transcribe', geminiRateLimiter, async (req, res) => {
   let tempInFile: string | null = null;
   try {
     const { audioBase64, mimeType } = req.body;
@@ -851,7 +858,7 @@ app.post('/api/gemini/transcribe', async (req, res) => {
 });
 
 // 2b. Chunked Audio Upload & Transcription Endpoint (Bypasses Cloud Run 32MB payload limit for long/large recordings)
-app.post('/api/audio/chunk-upload', highCapacityJsonParser, async (req, res) => {
+app.post('/api/audio/chunk-upload', audioRateLimiter, highCapacityJsonParser, async (req, res) => {
   try {
     const { uploadId, chunkIndex, totalChunks, chunkBase64, originalFileName, mimeType } = req.body;
     if (!uploadId || chunkIndex === undefined || totalChunks === undefined || !chunkBase64) {
@@ -975,7 +982,7 @@ function calculateAudioSegments(durationSec: number): AudioTranscribeSession['se
 }
 
 // Session Init: Prepares audio and breaks down into trackable segments
-app.post('/api/audio/transcribe-session/init', async (req, res) => {
+app.post('/api/audio/transcribe-session/init', audioRateLimiter, async (req, res) => {
   try {
     const { uploadId, audioBase64, mimeType, originalFileName } = req.body;
     const tempDir = os.tmpdir();
@@ -1088,7 +1095,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
 });
 
 // Segment Transcription: Transcribes a single segment with progress tracking and caching
-app.post('/api/audio/transcribe-session/segment', async (req, res) => {
+app.post('/api/audio/transcribe-session/segment', audioRateLimiter, async (req, res) => {
   const { sessionId, segmentIndex } = req.body;
   if (!sessionId || segmentIndex === undefined) {
     return res.status(400).json({ error: 'Missing sessionId or segmentIndex.' });
@@ -1280,7 +1287,7 @@ app.get('/api/audio/transcribe-session/status/:sessionId', (req, res) => {
 });
 
 // Finalize Session: Joins all completed parts and cleans up temp files
-app.post('/api/audio/transcribe-session/finalize', async (req, res) => {
+app.post('/api/audio/transcribe-session/finalize', audioRateLimiter, async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId.' });
@@ -3836,7 +3843,7 @@ app.get('/api/cloud/:provider/restore/:backupId', async (req, res) => {
 });
 
 // 11. Audio Conversion Endpoint (FFmpeg-powered universal audio transcoder)
-app.post('/api/audio/convert', highCapacityJsonParser, async (req, res) => {
+app.post('/api/audio/convert', audioRateLimiter, highCapacityJsonParser, async (req, res) => {
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 
@@ -4001,7 +4008,7 @@ app.post('/api/notebooklm/validate-notebook', (req, res) => {
   }
 });
 
-app.post('/api/notebooklm/upload-source', (req, res) => {
+app.post('/api/notebooklm/upload-source', notebooklmRateLimiter, (req, res) => {
   try {
     const { notebookId, title, content, sourceType, metadata } = req.body || {};
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -4040,7 +4047,7 @@ app.post('/api/notebooklm/upload-source', (req, res) => {
   }
 });
 
-app.post('/api/notebooklm/delete-source', (req, res) => {
+app.post('/api/notebooklm/delete-source', notebooklmRateLimiter, (req, res) => {
   try {
     const { remoteSourceId } = req.body || {};
     if (!remoteSourceId || typeof remoteSourceId !== 'string') {
