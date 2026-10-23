@@ -67,12 +67,14 @@ from Q-002.
 dedicated mechanical formatting slice, then enable `format:check` as a
 required CI step.
 
-**Q-005. ✅ Resolved in part — lint now denies warnings (`--max-warnings=0`,
-set 2026-10-22, guide §4 Required CI).**
-Lint warnings stand at **656** against the now-zero ceiling, so CI lint is
-**currently FAILING** until they are burned down — active blocker #1 (Q-005,
-see `PROGRESS.md`). Burn down in slices of ≤50 via `ci.sh` iterations; never
-run `npm run lint` locally.
+**Q-005. ✅ Resolved 2026-10-23 — lint is clean at `--max-warnings=0`.**
+Was: the guide §4 ceiling denied all 656 pre-existing warnings, so `npm run
+verify` failed at `lint` and never reached `check:orphans` or the test suite.
+Resolution: burned the whole set down (656 → 0) over slices B-4…B-7 — unused
+vars, `AppLogger` routing, a11y/hook fixes, and typed rows at every SQLite and
+AI boundary. `npm run verify` is now green on ubuntu/windows/macos (`1cbc192`),
+including the 86-test suite and the orphan check. The only remaining red is the
+deliberately non-blocking Prettier job (see Q-004).
 
 **Q-008. ✅ Resolved 2026-10-21 — legacy one-shot CI workflows cleaned up.**
 There were 19 permanent no-op stubs (`if: false` jobs named "(disabled)")
