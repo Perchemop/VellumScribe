@@ -1117,7 +1117,7 @@ app.post('/api/audio/transcribe-session/segment', async (req, res) => {
 
   segment.status = 'processing';
   const tempDir = os.tmpdir();
-  const segmentFile = path.join(tempDir, `${sessionId}_seg_${segmentIndex}_${Date.now()}.mp3`);
+  const segmentFile = resolveWithin(tempDir, `${sessionId}_seg_${segmentIndex}_${Date.now()}.mp3`);
 
   try {
     const segLen = Math.max(0.5, segment.endSec - segment.startSec);
@@ -4030,8 +4030,8 @@ app.post('/api/notebooklm/delete-source', (req, res) => {
     }
 
     const safeId = remoteSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
-    const sourcesDir = path.join(os.tmpdir(), 'vellumscribe_notebooklm_sources');
-    const targetFile = path.join(sourcesDir, `${safeId}.md`);
+    const sourcesDir = resolveWithin(os.tmpdir(), 'vellumscribe_notebooklm_sources');
+    const targetFile = resolveWithin(sourcesDir, `${safeId}.md`);
 
     if (fs.existsSync(targetFile)) {
       fs.unlinkSync(targetFile);
@@ -4066,7 +4066,8 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      // Fixed, developer-controlled filename inside a resolved dist directory.
+      res.sendFile(resolveWithin(distPath, 'index.html'));
     });
   }
 
