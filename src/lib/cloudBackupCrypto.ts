@@ -31,35 +31,49 @@ interface BackupEnvelope {
 
 export class CloudBackupCrypto {
   private static cachedVaultKey: string | null = null;
-  private static readonly BACKUP_PASSPHRASE_SESSION = 'vs_cloud_backup_passphrase';
+  /**
+   * Held in memory only. A backup passphrase never belongs in
+   * sessionStorage/localStorage: both are readable by any script on the origin
+   * and survive on disk. The user is asked again when the app restarts.
+   */
+  private static sessionPassphrase: string | null = null;
   private static readonly BACKUP_PASSPHRASE_HINT = 'vs_cloud_backup_passphrase_hint';
 
-  public static setUserBackupPassphrase(passphrase: string | null): void {
+  /** Only the passphrase's length is ever persisted, never the passphrase. */
+  private static writePassphraseHint(passphrase: string): void {
     try {
-      if (!passphrase || !passphrase.trim()) {
-        sessionStorage.removeItem(this.BACKUP_PASSPHRASE_SESSION);
-        localStorage.removeItem(this.BACKUP_PASSPHRASE_HINT);
-        return;
-      }
-      const trimmed = passphrase.trim();
-      sessionStorage.setItem(this.BACKUP_PASSPHRASE_SESSION, trimmed);
-      localStorage.setItem(this.BACKUP_PASSPHRASE_HINT, String(trimmed.length));
+      localStorage.setItem(this.BACKUP_PASSPHRASE_HINT, String(passphrase.length));
     } catch {
       /* ignore */
     }
   }
 
-  public static getUserBackupPassphrase(): string | undefined {
+  private static clearPassphraseHint(): void {
     try {
-      return sessionStorage.getItem(this.BACKUP_PASSPHRASE_SESSION) || undefined;
+      localStorage.removeItem(this.BACKUP_PASSPHRASE_HINT);
     } catch {
-      return undefined;
+      /* ignore */
     }
+  }
+
+  public static setUserBackupPassphrase(passphrase: string | null): void {
+    const trimmed = passphrase?.trim() || '';
+    if (!trimmed) {
+      this.sessionPassphrase = null;
+      this.clearPassphraseHint();
+      return;
+    }
+    this.sessionPassphrase = trimmed;
+    this.writePassphraseHint(trimmed);
+  }
+
+  public static getUserBackupPassphrase(): string | undefined {
+    return this.sessionPassphrase || undefined;
   }
 
   public static hasUserBackupPassphraseConfigured(): boolean {
     try {
-      return Boolean(localStorage.getItem(this.BACKUP_PASSPHRASE_HINT));
+      return Boolean(this.sessionPassphrase);
     } catch {
       return false;
     }
