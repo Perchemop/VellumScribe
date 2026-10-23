@@ -1,4 +1,4 @@
-import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic, SqlValue } from 'sql.js';
 import { AppLogger } from '../logger';
 import { MIGRATIONS } from './schema';
 import { Capacitor } from '@capacitor/core';
@@ -534,7 +534,8 @@ export class SqliteEngine {
     const db = this.getDb();
     try {
       const stmt = db.prepare(sql);
-      stmt.bind(params);
+      // The adapter contract is `unknown[]`; sql.js only binds SqlValue.
+      stmt.bind(params as SqlValue[]);
       const rows: T[] = [];
       while (stmt.step()) {
         rows.push(stmt.getAsObject() as unknown as T);
@@ -554,7 +555,7 @@ export class SqliteEngine {
   public static run(sql: string, params: unknown[] = []): void {
     const db = this.getDb();
     try {
-      db.run(sql, params);
+      db.run(sql, params as SqlValue[]);
       this.markDirty();
     } catch (_e) {
       const e = asErrorLike(_e);

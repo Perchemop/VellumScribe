@@ -83,6 +83,7 @@ export class OfflineTranscriptionEngine {
 
     const w = window as SpeechRecognitionWindow;
     const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SpeechRec) return null;
     try {
       const recognition = new SpeechRec();
       recognition.continuous = true;
