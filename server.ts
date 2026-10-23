@@ -608,7 +608,7 @@ async function processAndTranscribeAudio(
 
     const tempDir = os.tmpdir();
     const sessionPrefix = `trans_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const optimizedMp3Path = path.join(tempDir, `${sessionPrefix}_opt.mp3`);
+    const optimizedMp3Path = resolveWithin(tempDir, `${sessionPrefix}_opt.mp3`);
     tempFilesToClean.push(optimizedMp3Path);
 
     // 1. Probe duration using ffprobe
@@ -669,7 +669,7 @@ async function processAndTranscribeAudio(
         const chunkLen = Math.min(chunkDuration, durationSec - chunkStart);
         if (chunkLen <= 0.5) continue;
 
-        const chunkFile = path.join(tempDir, `${sessionPrefix}_seg_${i}.mp3`);
+        const chunkFile = resolveWithin(tempDir, `${sessionPrefix}_seg_${i}.mp3`);
         tempFilesToClean.push(chunkFile);
 
         chunkPromises.push(
@@ -852,7 +852,7 @@ app.post('/api/audio/chunk-upload', highCapacityJsonParser, async (req, res) => 
       : mimeType && mimeType.includes('wav')
         ? 'wav'
         : 'mp3';
-    const targetFile = path.join(tempDir, `vellum_chunk_up_${safeUploadId}.${ext}`);
+    const targetFile = resolveWithin(tempDir, `vellum_chunk_up_${safeUploadId}.${ext}`);
 
     const chunkBuf = Buffer.from(chunkBase64, 'base64');
     if (chunkIndex === 0 && fs.existsSync(targetFile)) {
@@ -974,7 +974,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
       if (!match) {
         return res.status(404).json({ error: 'Uploaded audio file not found on server.' });
       }
-      sourcePath = path.join(tempDir, match);
+      sourcePath = resolveWithin(tempDir, match);
       const matchExt = match.match(/\.([a-zA-Z0-9]+)$/);
       if (matchExt) inputExt = matchExt[1].toLowerCase();
     } else if (audioBase64) {
@@ -1009,7 +1009,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
 
     // Optimize to 24kHz mono MP3 for high-speed speech AI processing
     const sessionId = `ts_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const optimizedPath = path.join(tempDir, `${sessionId}_optimized.mp3`);
+    const optimizedPath = resolveWithin(tempDir, `${sessionId}_optimized.mp3`);
     let converted = false;
     try {
       runFfmpeg(
@@ -3855,10 +3855,10 @@ app.post('/api/audio/convert', highCapacityJsonParser, async (req, res) => {
 
     const uniqueId = crypto.randomBytes(8).toString('hex');
     const tempDir = os.tmpdir();
-    inputPath = path.join(tempDir, `vellum_audio_in_${uniqueId}.${inputExt}`);
+    inputPath = resolveWithin(tempDir, `vellum_audio_in_${uniqueId}.${inputExt}`);
 
     const outputExt = targetFormat === 'wav' ? 'wav' : 'mp3';
-    outputPath = path.join(tempDir, `vellum_audio_out_${uniqueId}.${outputExt}`);
+    outputPath = resolveWithin(tempDir, `vellum_audio_out_${uniqueId}.${outputExt}`);
 
     await fs.promises.writeFile(inputPath, inputBuffer);
 
