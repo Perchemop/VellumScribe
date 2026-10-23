@@ -170,6 +170,37 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
+## 2026-10-23 — C-2 CodeQL hardening, parts 1 & 2 (rate limits, argv, CORS, path containment)
+
+Part 1 (PR #70, merged as `79cb9ef`): `/api/notebooklm/*` had **no rate
+limiter at all**; added `notebooklmRateLimiter` and mounted it, and made rate
+limiting explicit **per route** on the 8 flagged handlers (CodeQL only models
+per-route middleware — the prefix mounts were there but invisible to it).
+
+Part 2 (seccurity hardening, PR #71): replaced all 7 shell-interpolated
+`execSync("ffmpeg/ffprobe ... \"${path}\"")` calls with `execFileSync`
+**argument vectors** (`runFfmpeg(args, timeout)` / `runFfprobe(file, timeout)`),
+so a path or numeric parameter can never be read as a shell metacharacter; and
+tightened credentialed CORS so it is driven by a configured allow-list
+(`APP_URL`, comma-separated) instead of reflecting the origin against the
+request's own (spoofable) `Host` header.
+
+Part 3 adds `resolveWithin(baseDir, ...segments)` — resolves the full path and
+enforces that it stays inside `baseDir` — and uses it for the chunk-upload
+target, the NotebookLM source files and the session segment/optimised files. A
+character filter alone is not containment.
+
+**Process note (recorded in D-410's file).** `ci.sh run` checks out
+`opencode/ci` before committing, so a commit made on _another_ branch is
+stranded: the tool prints "updated PR" and CI runs on an unchanged branch.
+Hardening part 2 hit exactly that — PR #71 merged an empty branch and its
+green checks meant nothing. The fix is to land the commit on `opencode/ci`
+itself (reset to main, cherry-pick) before opening the PR.
+
+Verified on GitHub Actions (verify ×3, format, Dependency Audit, CodeQL).
+
+---
+
 ## 2026-10-23 — Adopt the updated guide: CTO.new model + tightened local rules (D-408)
 
 The guide was re-read in full and its changes implemented as `D-408`:
