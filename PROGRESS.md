@@ -479,3 +479,28 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 6. **Q-009 / Q-010 — product decisions:** `arm64`-only ABI acceptability and
    ~30 MB bundled Whisper model in APK assets.
 7. **C-1…C-5 — test coverage gaps** (R-2 notes & capture has no tests).
+
+## 2026-10-24 — C-2 hardening parts 4 & 5 (SSRF-derived URLs, memory-only passphrase)
+
+**Part 4 (`6f0f721`) — `js/request-forgery` / `js/incomplete-url-substring-sanitization`.**
+
+- The WebDAV credential probe validated its base URL but then built the request
+  URL from caller-supplied `remotePath`. An **absolute** `remotePath` (e.g.
+  `https://attacker/`) replaces the validated host in `new URL(targetPath, base)`,
+  so a credentialed `PROPFIND` (Basic auth header) could be sent to an
+  attacker-chosen host. The derived URL is now re-validated with the same
+  `validateSafeUrl` policy.
+- The local-Whisper probe URL is rewritten from the endpoint
+  (`/transcriptions` → `/models`); the rewritten value is re-validated too.
+
+**Part 5 (`cb04ce5`) — `js/clear-text-storage-of-sensitive-data`.**
+The cloud-backup passphrase was stored in `sessionStorage` in clear text. It now
+lives in memory only, and nothing derived from it is persisted (the passphrase
+**length** hint is gone too — CodeQL flags derived leaks). Recorded as **D-411**.
+
+Both verified on GitHub Actions: `verify` ×3, `format`, `Dependency Audit`,
+`CodeQL`, `CodeQL Security Analysis` all green. Open alerts on `main`: **64 → 59**.
+
+Process note: `ci.sh run` checks out `opencode/ci` _before_ committing, so a
+commit made on a different branch is silently stranded (PR #71 merged an empty
+branch that way). Commits are now landed on `opencode/ci` directly.
