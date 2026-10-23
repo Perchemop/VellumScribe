@@ -28,12 +28,14 @@
 ## Building the Release APK
 
 ### Prerequisites
+
 - Node.js 20+
 - Android Studio / Android SDK (Platform 34+)
 - Android NDK (r25+ recommended, e.g. `25.1.8937393`)
 - CMake 3.22.1+
 
 ### Build Steps
+
 ```bash
 # 1. Compile web application
 npm ci
@@ -48,7 +50,9 @@ cd android
 ```
 
 ### Rollback / Stub Mode
+
 To force the fail-closed stub build without tensor execution runtime:
+
 ```gradle
 // In android/app/build.gradle
 defaultConfig {

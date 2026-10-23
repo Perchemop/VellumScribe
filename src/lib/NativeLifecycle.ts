@@ -35,7 +35,9 @@ export function registerDurabilityHooks(): void {
         try {
           const db = getDatabaseAdapter();
           if (db.flush) {
-            db.flush().catch((e) => AppLogger.warn('NativeLifecycle', 'Web visibility flush warning', e));
+            db.flush().catch((e) =>
+              AppLogger.warn('NativeLifecycle', 'Web visibility flush warning', e)
+            );
           }
         } catch (e) {
           AppLogger.warn('NativeLifecycle', 'Visibility change handler error', e);

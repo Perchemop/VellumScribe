@@ -7,7 +7,6 @@ import {
   Layers,
   Key,
   ExternalLink,
-  
   Eye,
   EyeOff,
   CheckCircle2,
@@ -15,26 +14,28 @@ import {
   Database,
   RefreshCw,
   Cpu,
-  
   Check,
-  
   ChevronRight,
   WifiOff,
   Clock,
-  
-  
   Zap,
-  
   Smartphone,
   Download,
   ShieldCheck,
   FileCheck,
   ArrowDownToLine,
-  Server} from 'lucide-react';
+  Server,
+} from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
 import { AiSettingsManager } from '../lib/aiSettings';
-import { CloudSyncEngine, BackupFrequency, SyncProgressUpdate, RemoteBackupItem, QueuedSyncItem } from '../lib/cloudSync';
+import {
+  CloudSyncEngine,
+  BackupFrequency,
+  SyncProgressUpdate,
+  RemoteBackupItem,
+  QueuedSyncItem,
+} from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
 import { CURRENT_APP_VERSION } from '../lib/appUpdateManager';
@@ -45,7 +46,7 @@ import { SyncProgressBar } from './SyncProgressBar';
 import { StorageDashboard } from './StorageDashboard';
 import { ImportSafetyPipeline, ImportPreviewResult } from '../lib/importSafety';
 import { useModalBackHandler } from '../lib/modalBackStack';
-import { OfflineAiPanel } from './settings/OfflineAiPanel'
+import { OfflineAiPanel } from './settings/OfflineAiPanel';
 import { CloudSettingsPanel } from './settings/CloudSettingsPanel';
 import { SecurityPanel } from './settings/SecurityPanel';
 import { StoragePanel } from './settings/StoragePanel';
@@ -122,9 +123,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'about'>(
-    initialSubtab === 'offline-ai' ? 'ai' : (initialSubtab || 'cloud')
-  );
+  const [activeTab, setActiveTab] = useState<
+    'cloud' | 'ai' | 'storage' | 'security' | 'diagnostics' | 'about'
+  >(initialSubtab === 'offline-ai' ? 'ai' : initialSubtab || 'cloud');
 
   const setMode = (mode: 'simple' | 'advanced') => {
     setSettingsMode(mode);
@@ -149,29 +150,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   // Cloud Backup State
   const [accounts, setAccounts] = useState<CloudAccount[]>(() => CloudSyncEngine.getAccounts());
-  const [telemetryList, setTelemetryList] = useState<SyncTelemetry[]>(() => CloudSyncEngine.getTelemetry());
+  const [telemetryList, setTelemetryList] = useState<SyncTelemetry[]>(() =>
+    CloudSyncEngine.getTelemetry()
+  );
   const [notes, setNotes] = useState<NoteRecord[]>(() => StorageManager.getNotes());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgressUpdate | null>(null);
-  const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() => CloudSyncEngine.getBackupFrequency());
+  const [backupFrequency, setBackupFrequencyState] = useState<BackupFrequency>(() =>
+    CloudSyncEngine.getBackupFrequency()
+  );
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-  const [selectedProviderForConnect, setSelectedProviderForConnect] = useState<CloudStorageProvider | null>(null);
+  const [selectedProviderForConnect, setSelectedProviderForConnect] =
+    useState<CloudStorageProvider | null>(null);
   const [remoteBackups, setRemoteBackups] = useState<Record<string, RemoteBackupItem[]>>({});
   const [loadingRemoteBackups, setLoadingRemoteBackups] = useState<Record<string, boolean>>({});
   const [isRestoringBackupId, setIsRestoringBackupId] = useState<string | null>(null);
-  const [restoreConfirmTarget, setRestoreConfirmTarget] = useState<{ provider: CloudStorageProvider; backupId: string; title?: string } | null>(null);
+  const [restoreConfirmTarget, setRestoreConfirmTarget] = useState<{
+    provider: CloudStorageProvider;
+    backupId: string;
+    title?: string;
+  } | null>(null);
 
-  useModalBackHandler(!!restoreConfirmTarget, () => setRestoreConfirmTarget(null), 'settings-restore-backup-modal');
-  const [quickConnectingProvider, setQuickConnectingProvider] = useState<CloudStorageProvider | null>(null);
-  const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() => CloudSyncEngine.getSyncQueue());
+  useModalBackHandler(
+    !!restoreConfirmTarget,
+    () => setRestoreConfirmTarget(null),
+    'settings-restore-backup-modal'
+  );
+  const [quickConnectingProvider, setQuickConnectingProvider] =
+    useState<CloudStorageProvider | null>(null);
+  const [syncQueue, setSyncQueue] = useState<QueuedSyncItem[]>(() =>
+    CloudSyncEngine.getSyncQueue()
+  );
 
   // AI State
-  const [googleKeyInput, setGoogleKeyInput] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
+  const [googleKeyInput, setGoogleKeyInput] = useState<string>(() =>
+    AiSettingsManager.getGoogleApiKey()
+  );
   const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [isVerifyingGoogle, setIsVerifyingGoogle] = useState(false);
-  const [googleVerifyResult, setGoogleVerifyResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [googleVerifyResult, setGoogleVerifyResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
   const [, setFileUploadFeedback] = useState<string | null>(null);
-
 
   // Storage stats & Keystore
   const [, setStats] = useState(() => StorageManager.getStorageStats());
@@ -190,7 +211,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     },
     'settings-import-preview-modal'
   );
-
 
   const isAirGapped = backupFrequency === 'off';
   const activeAccounts = accounts; // Everyone connected is active now
@@ -293,7 +313,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         );
 
         if (!popup || popup.closed) {
-          throw new Error('SSO popup blocked by browser. Please allow popups or use the connect modal.');
+          throw new Error(
+            'SSO popup blocked by browser. Please allow popups or use the connect modal.'
+          );
         }
 
         const handleMessage = (event: MessageEvent) => {
@@ -305,7 +327,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             setQuickConnectingProvider(null);
           } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
             window.removeEventListener('message', handleMessage);
-            setSyncFeedback(`Authentication notice: ${event.data?.error || 'SSO was not completed.'}`);
+            setSyncFeedback(
+              `Authentication notice: ${event.data?.error || 'SSO was not completed.'}`
+            );
             setQuickConnectingProvider(null);
           }
         };
@@ -326,7 +350,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const promptRestoreRemoteBackup = (provider: CloudStorageProvider, backupId: string, title?: string) => {
+  const promptRestoreRemoteBackup = (
+    provider: CloudStorageProvider,
+    backupId: string,
+    title?: string
+  ) => {
     setRestoreConfirmTarget({ provider, backupId, title });
   };
 
@@ -344,11 +372,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setNotes(StorageManager.getNotes());
         onRefreshNotes();
       } else {
-        setSyncFeedback(`Could not restore backup: ${res.message || 'Snapshot verification failed'}. Your local notes remain safe.`);
+        setSyncFeedback(
+          `Could not restore backup: ${res.message || 'Snapshot verification failed'}. Your local notes remain safe.`
+        );
       }
     } catch (_e) {
       const e = asErrorLike(_e);
-      setSyncFeedback(`Restore failed: ${e.message || 'Error occurred while decrypting'}. Your existing local notes remain completely safe.`);
+      setSyncFeedback(
+        `Restore failed: ${e.message || 'Error occurred while decrypting'}. Your existing local notes remain completely safe.`
+      );
     } finally {
       setIsRestoringBackupId(null);
       setTimeout(() => setSyncFeedback(null), 5000);
@@ -387,7 +419,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setGoogleVerifyResult(null);
     setFileUploadFeedback('Google AI Studio key removed.');
     setTimeout(() => setFileUploadFeedback(null), 3000);
-  }
+  };
 
   const handleVerifyGoogle = async () => {
     const key = googleKeyInput.trim();
@@ -403,26 +435,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     } finally {
       setIsVerifyingGoogle(false);
     }
-  };;
-
-
-
-
-
-
-
-
-
-
+  };
 
   return (
-    <div id="dedicated-settings-view" className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden">
+    <div
+      id="dedicated-settings-view"
+      className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden"
+    >
       {/* Return to Note Banner (if opened during active note editing) */}
       {onBackToNotes && (
         <div className="px-6 py-2.5 bg-indigo-50/80 dark:bg-indigo-950/40 border-b border-indigo-200/60 dark:border-indigo-900/60 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-indigo-900 dark:text-indigo-200">
             <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-            <span>Currently Editing: <strong>{activeEditingNoteTitle || 'Untitled Note'}</strong></span>
+            <span>
+              Currently Editing: <strong>{activeEditingNoteTitle || 'Untitled Note'}</strong>
+            </span>
           </div>
           <button
             id="back-to-active-note-btn"
@@ -446,7 +473,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </span>
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Multi-cloud backup, Google Gemini AI API key, local database, and hardware keystore encryption.
+              Multi-cloud backup, Google Gemini AI API key, local database, and hardware keystore
+              encryption.
             </p>
           </div>
         </div>
@@ -467,7 +495,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Simple / Advanced mode */}
       <div className="px-6 py-2 border-b border-zinc-200/70 dark:border-zinc-800/70 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 mr-1">Mode</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400 mr-1">
+          Mode
+        </span>
         <div className="inline-flex rounded-xl border border-zinc-200 dark:border-zinc-700 p-0.5">
           <button
             type="button"
@@ -497,9 +527,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
         <span className="text-[11px] text-zinc-400 hidden sm:inline">
-          {settingsMode === 'simple'
-            ? 'Cloud, AI, storage, security'
-            : 'Includes diagnostics'}
+          {settingsMode === 'simple' ? 'Cloud, AI, storage, security' : 'Includes diagnostics'}
         </span>
       </div>
 
@@ -579,21 +607,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </button>
 
         {settingsMode === 'advanced' && (
-        <button
-          id="subtab-diagnostics-btn"
-          role="tab"
-          aria-selected={activeTab === 'diagnostics'}
-          aria-controls="panel-diagnostics"
-          onClick={() => setActiveTab('diagnostics')}
-          className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
-            activeTab === 'diagnostics'
-              ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Architecture &amp; Logs</span>
-        </button>
+          <button
+            id="subtab-diagnostics-btn"
+            role="tab"
+            aria-selected={activeTab === 'diagnostics'}
+            aria-controls="panel-diagnostics"
+            onClick={() => setActiveTab('diagnostics')}
+            className={`py-3 px-3.5 font-medium border-b-2 transition-colors flex items-center gap-2 shrink-0 ${
+              activeTab === 'diagnostics'
+                ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Architecture &amp; Logs</span>
+          </button>
         )}
 
         <button
@@ -615,17 +643,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* Main Tab Content Body */}
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
-
         {/* TAB: ABOUT & GUIDE */}
         {activeTab === 'about' && (
-          <div id="panel-about" role="tabpanel" aria-labelledby="subtab-about-btn" className="max-w-5xl mx-auto space-y-6">
+          <div
+            id="panel-about"
+            role="tabpanel"
+            aria-labelledby="subtab-about-btn"
+            className="max-w-5xl mx-auto space-y-6"
+          >
             <AboutPanel onOpenOnboardingGuide={onOpenOnboardingGuide} />
           </div>
         )}
 
         {/* TAB 1: CLOUD SYNC & PROVIDERS */}
         {activeTab === 'cloud' && (
-          <div id="panel-cloud-sync" role="tabpanel" aria-labelledby="subtab-cloud-sync-btn" className="max-w-5xl mx-auto space-y-6">
+          <div
+            id="panel-cloud-sync"
+            role="tabpanel"
+            aria-labelledby="subtab-cloud-sync-btn"
+            className="max-w-5xl mx-auto space-y-6"
+          >
             {/* Sync Progress Alert */}
             {(isSyncing || syncProgress) && (
               <SyncProgressBar
@@ -653,9 +690,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="flex items-center gap-2.5">
                   <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <div>
-                    <span className="font-semibold">{syncQueue.length} Offline Sync Request{syncQueue.length !== 1 ? 's' : ''} Queued</span>
+                    <span className="font-semibold">
+                      {syncQueue.length} Offline Sync Request{syncQueue.length !== 1 ? 's' : ''}{' '}
+                      Queued
+                    </span>
                     <p className="text-xs text-amber-700/80 dark:text-amber-300/80">
-                      Syncs interrupted by network drops will auto-retry when connection is restored.
+                      Syncs interrupted by network drops will auto-retry when connection is
+                      restored.
                     </p>
                   </div>
                 </div>
@@ -694,12 +735,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     ) : (
                       <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" />
-                        {activeAccounts.length} Connected Destination{activeAccounts.length !== 1 ? 's' : ''}
+                        {activeAccounts.length} Connected Destination
+                        {activeAccounts.length !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-zinc-400">
-                    Delta snapshotting with conflict resolution, markdown export, and client-side encryption.
+                    Delta snapshotting with conflict resolution, markdown export, and client-side
+                    encryption.
                   </p>
                 </div>
 
@@ -753,7 +796,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <span>End-to-End Encrypted Cloud Architecture</span>
               </div>
               <p className="text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
-                Connect backup destinations securely. Notes and attachments are encrypted locally using AES-256-GCM before transport. Cloud destinations never receive plaintext note contents.
+                Connect backup destinations securely. Notes and attachments are encrypted locally
+                using AES-256-GCM before transport. Cloud destinations never receive plaintext note
+                contents.
               </p>
             </div>
 
@@ -785,13 +830,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center font-bold text-xs" style={{ color: meta.brandColor }}>
+                          <div
+                            className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center font-bold text-xs"
+                            style={{ color: meta.brandColor }}
+                          >
                             <Cloud className="w-4 h-4" />
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{meta.name}</h4>
-                              <span className={`text-xs px-1.5 py-0.2 rounded-md border font-medium ${meta.badgeBg}`}>
+                              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                {meta.name}
+                              </h4>
+                              <span
+                                className={`text-xs px-1.5 py-0.2 rounded-md border font-medium ${meta.badgeBg}`}
+                              >
                                 {meta.category}
                               </span>
                               {isConnected ? (
@@ -800,7 +852,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 </span>
                               ) : null}
                             </div>
-                            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">{meta.description}</p>
+                            <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1">
+                              {meta.description}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -903,7 +957,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400">
-                    Verify cloud archives, inspect cryptographic checksums, or restore notes from a cloud snapshot.
+                    Verify cloud archives, inspect cryptographic checksums, or restore notes from a
+                    cloud snapshot.
                   </p>
                 </div>
 
@@ -925,7 +980,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     No cloud destinations connected yet.
                   </p>
                   <p className="text-xs text-zinc-400">
-                    Tap &quot;1-Click Connect&quot; on any destination above to enable automatic encrypted backups with zero configuration.
+                    Tap &quot;1-Click Connect&quot; on any destination above to enable automatic
+                    encrypted backups with zero configuration.
                   </p>
                 </div>
               ) : (
@@ -950,7 +1006,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                               {meta?.name || acc.provider}
                             </span>
                             <span className="text-xs text-zinc-400 font-mono">
-                              ({providerBackups.length} snapshot{providerBackups.length !== 1 ? 's' : ''})
+                              ({providerBackups.length} snapshot
+                              {providerBackups.length !== 1 ? 's' : ''})
                             </span>
                           </div>
 
@@ -960,12 +1017,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                             className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg transition-colors"
                             title="Reload backups from this provider"
                           >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                            <RefreshCw
+                              className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`}
+                            />
                           </button>
                         </div>
 
                         {isLoading ? (
-                          <p className="text-xs text-zinc-400 py-2">Querying remote cloud storage...</p>
+                          <p className="text-xs text-zinc-400 py-2">
+                            Querying remote cloud storage...
+                          </p>
                         ) : providerBackups.length === 0 ? (
                           <div className="py-2 text-xs text-zinc-400 flex items-center justify-between">
                             <span>No backup snapshots found in this vault yet.</span>
@@ -985,8 +1046,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                                 b.size < 1024
                                   ? `${b.size} B`
                                   : b.size < 1024 * 1024
-                                  ? `${(b.size / 1024).toFixed(1)} KB`
-                                  : `${(b.size / (1024 * 1024)).toFixed(2)} MB`;
+                                    ? `${(b.size / 1024).toFixed(1)} KB`
+                                    : `${(b.size / (1024 * 1024)).toFixed(2)} MB`;
 
                               return (
                                 <div
@@ -1028,7 +1089,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                                     <button
                                       type="button"
-                                      onClick={() => promptRestoreRemoteBackup(acc.provider, b.id, b.filename)}
+                                      onClick={() =>
+                                        promptRestoreRemoteBackup(acc.provider, b.id, b.filename)
+                                      }
                                       disabled={isRestoring}
                                       aria-label={`Restore backup snapshot ${b.filename || b.id}`}
                                       className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1 disabled:opacity-40 min-h-[36px]"
@@ -1063,11 +1126,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     Granular Document Cloud Backup Preferences
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Control which individual notes sync to the cloud versus remain strictly offline on this device.
+                    Control which individual notes sync to the cloud versus remain strictly offline
+                    on this device.
                   </p>
                 </div>
                 <span className="text-xs text-zinc-500 font-medium">
-                  {notes.filter((n) => n.cloud_save_enabled !== false).length} of {notes.length} notes cloud-enabled
+                  {notes.filter((n) => n.cloud_save_enabled !== false).length} of {notes.length}{' '}
+                  notes cloud-enabled
                 </span>
               </div>
 
@@ -1113,17 +1178,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 2: AI — offline Whisper first + optional Google key */}
         {activeTab === 'ai' && (
-          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-3xl mx-auto space-y-6">
+          <div
+            id="panel-ai-studio"
+            role="tabpanel"
+            aria-labelledby="subtab-ai-key-btn"
+            className="max-w-3xl mx-auto space-y-6"
+          >
             <OfflineAiPanel />
 
             <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#121216] space-y-4">
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Cloud AI (optional)</h3>
-                <p className="text-xs text-zinc-500 mt-0.5">Google API key for summaries when network is allowed.</p>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Cloud AI (optional)
+                </h3>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Google API key for summaries when network is allowed.
+                </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Google API key</label>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  Google API key
+                </label>
                 <div className="flex gap-2">
                   <input
                     type={showGoogleKey ? 'text' : 'password'}
@@ -1169,7 +1245,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   ) : null}
                 </div>
                 {googleVerifyResult && (
-                  <p className={`text-xs ${googleVerifyResult.success ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <p
+                    className={`text-xs ${googleVerifyResult.success ? 'text-emerald-600' : 'text-rose-600'}`}
+                  >
                     {googleVerifyResult.message}
                   </p>
                 )}
@@ -1180,7 +1258,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 3: STORAGE & BACKUPS */}
         {activeTab === 'storage' && (
-          <div id="panel-storage" role="tabpanel" aria-labelledby="subtab-storage-btn" className="max-w-4xl mx-auto space-y-6">
+          <div
+            id="panel-storage"
+            role="tabpanel"
+            aria-labelledby="subtab-storage-btn"
+            className="max-w-4xl mx-auto space-y-6"
+          >
             <StorageDashboard onRefreshNotes={onRefreshNotes} />
             <StoragePanel onRefreshNotes={onRefreshNotes} />
 
@@ -1204,17 +1287,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }}
                   className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                 >
-                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export JSON Workspace</p>
-                  <p className="text-xs text-zinc-400">Full structured backup of notes, sketches, and checklists</p>
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                    Export JSON Workspace
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Full structured backup of notes, sketches, and checklists
+                  </p>
                 </button>
 
                 <label className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216] cursor-pointer">
-                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Restore from JSON File</p>
-                  <p className="text-xs text-zinc-400">Validate format, preview contents, and safely restore</p>
-                  <input 
-                    type="file" 
-                    accept=".json" 
-                    className="hidden" 
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                    Restore from JSON File
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Validate format, preview contents, and safely restore
+                  </p>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -1230,16 +1321,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         reader.readAsText(file);
                       }
                       e.target.value = '';
-                    }} 
+                    }}
                   />
                 </label>
 
                 <button
                   onClick={() => {
                     const notes = StorageManager.getNotes();
-                    const md = notes.length > 0 
-                      ? notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`).join('\n\n---\n\n')
-                      : '# VellumScribe Notes\n\nNo notes currently saved.';
+                    const md =
+                      notes.length > 0
+                        ? notes
+                            .map((n) => `# ${n.title || 'Untitled'}\n\n${n.body}`)
+                            .join('\n\n---\n\n')
+                        : '# VellumScribe Notes\n\nNo notes currently saved.';
                     const blob = new Blob([md], { type: 'text/markdown' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -1250,8 +1344,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   }}
                   className="p-4 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left space-y-1 transition-colors bg-white dark:bg-[#121216]"
                 >
-                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">Export Markdown Archive</p>
-                  <p className="text-xs text-zinc-400">Clean Markdown text files readable in any standard text editor</p>
+                  <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                    Export Markdown Archive
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Clean Markdown text files readable in any standard text editor
+                  </p>
                 </button>
               </div>
             </div>
@@ -1260,7 +1358,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 4: SECURITY & KEYSTORE */}
         {activeTab === 'security' && (
-          <div id="panel-security" role="tabpanel" aria-labelledby="subtab-security-btn" className="max-w-4xl mx-auto space-y-6">
+          <div
+            id="panel-security"
+            role="tabpanel"
+            aria-labelledby="subtab-security-btn"
+            className="max-w-4xl mx-auto space-y-6"
+          >
             <SecurityPanel onRefreshNotes={onRefreshNotes} />
             <div className="p-6 bg-zinc-950 rounded-3xl text-white border border-zinc-850 space-y-3">
               <div className="flex items-center justify-between">
@@ -1270,7 +1373,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold tracking-wide">
-                      {Capacitor.isNativePlatform() ? 'Hardware Keystore Encryption' : 'Local Secret Registry'}
+                      {Capacitor.isNativePlatform()
+                        ? 'Hardware Keystore Encryption'
+                        : 'Local Secret Registry'}
                     </h3>
                     <p className="text-xs text-zinc-400">
                       {Capacitor.isNativePlatform()
@@ -1280,7 +1385,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 </div>
                 <span className="text-xs font-mono bg-emerald-950 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full font-semibold">
-                  {Capacitor.isNativePlatform() ? 'Hardware Keystore (AES-256-GCM)' : 'Volatile Session Memory'}
+                  {Capacitor.isNativePlatform()
+                    ? 'Hardware Keystore (AES-256-GCM)'
+                    : 'Volatile Session Memory'}
                 </span>
               </div>
             </div>
@@ -1298,7 +1405,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="flex items-center gap-3">
                       <Key className="w-4 h-4 text-zinc-500" />
                       <div>
-                        <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">{s.alias}</p>
+                        <p className="font-semibold text-xs text-zinc-900 dark:text-zinc-100">
+                          {s.alias}
+                        </p>
                         <p className="font-mono text-xs text-zinc-400">{s.masked_value}</p>
                       </div>
                     </div>
@@ -1314,7 +1423,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {/* TAB 5: ARCHITECTURE & DIAGNOSTICS */}
         {activeTab === 'diagnostics' && (
-          <div id="panel-diagnostics" role="tabpanel" aria-labelledby="subtab-diagnostics-btn" className="max-w-4xl mx-auto space-y-5">
+          <div
+            id="panel-diagnostics"
+            role="tabpanel"
+            aria-labelledby="subtab-diagnostics-btn"
+            className="max-w-4xl mx-auto space-y-5"
+          >
             <DiagnosticsTools />
             <ConflictResolverPanel />
             {/* Android Mobile Platform & Performance Guidance Card */}
@@ -1352,7 +1466,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span>Sub-Millisecond Speed</span>
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Zero network delay for edits, search, and checklists using on-device SQLite &amp; client-side caching.
+                    Zero network delay for edits, search, and checklists using on-device SQLite
+                    &amp; client-side caching.
                   </p>
                 </div>
 
@@ -1362,7 +1477,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span>Single-Thumb Navigation</span>
                   </div>
                   <p className="text-xs text-zinc-400 leading-relaxed">
-                    Ergonomic bottom navigation, Material speed-dial FAB, and 48px+ touch targets for one-handed use.
+                    Ergonomic bottom navigation, Material speed-dial FAB, and 48px+ touch targets
+                    for one-handed use.
                   </p>
                 </div>
               </div>
@@ -1441,7 +1557,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Offline-First Architectural Engine
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                VellumScribe runs on an offline-first foundation. All edits write immediately to local browser storage. When cloud providers are connected, cloud sync exports notes flagged for cloud save into a verified backup snapshot.
+                VellumScribe runs on an offline-first foundation. All edits write immediately to
+                local browser storage. When cloud providers are connected, cloud sync exports notes
+                flagged for cloud save into a verified backup snapshot.
               </p>
             </div>
 
@@ -1451,15 +1569,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </h3>
               <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60 max-h-80 overflow-y-auto custom-minimal-scrollbar text-xs">
                 {telemetryList.length === 0 ? (
-                  <p className="py-4 text-center text-zinc-400 text-xs">No telemetry recorded yet.</p>
+                  <p className="py-4 text-center text-zinc-400 text-xs">
+                    No telemetry recorded yet.
+                  </p>
                 ) : (
                   telemetryList.map((t, i) => (
                     <div key={i} className="py-2.5 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${t.lastSyncStatus === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 capitalize">{t.provider}</span>
+                        <span
+                          className={`w-2 h-2 rounded-full ${t.lastSyncStatus === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                        />
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 capitalize">
+                          {t.provider}
+                        </span>
                         <span className="text-zinc-400">
-                          {t.lastSyncStatus === 'success' ? `Synced (${Math.round((t.lastTransferBytes || 0) / 1024)} KB)` : t.lastSyncError || 'Sync failed'}
+                          {t.lastSyncStatus === 'success'
+                            ? `Synced (${Math.round((t.lastTransferBytes || 0) / 1024)} KB)`
+                            : t.lastSyncError || 'Sync failed'}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-zinc-400 text-xs">
@@ -1483,7 +1609,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           onClose={() => setSelectedProviderForConnect(null)}
           onConnected={(_updatedAccount) => {
             setAccounts(CloudSyncEngine.getAccounts());
-            setSyncFeedback(`Successfully configured ${PROVIDERS[selectedProviderForConnect].name}!`);
+            setSyncFeedback(
+              `Successfully configured ${PROVIDERS[selectedProviderForConnect].name}!`
+            );
             setSelectedProviderForConnect(null);
             setTimeout(() => setSyncFeedback(null), 3000);
           }}
@@ -1502,8 +1630,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-2xl ${importPreviewData.valid ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
-                  {importPreviewData.valid ? <ShieldCheck className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                <div
+                  className={`p-2.5 rounded-2xl ${importPreviewData.valid ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}
+                >
+                  {importPreviewData.valid ? (
+                    <ShieldCheck className="w-6 h-6" />
+                  ) : (
+                    <AlertCircle className="w-6 h-6" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
@@ -1514,11 +1648,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </p>
                 </div>
               </div>
-              <span className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-full ${
-                importPreviewData.valid 
-                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800' 
-                  : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800'
-              }`}>
+              <span
+                className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-full ${
+                  importPreviewData.valid
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-800'
+                }`}
+              >
                 {importPreviewData.valid ? `v${importPreviewData.version} Valid` : 'Invalid File'}
               </span>
             </div>
@@ -1537,19 +1673,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
-                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.notes}</p>
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                      {importPreviewData.counts.notes}
+                    </p>
                     <p className="text-xs text-zinc-400 font-medium">Notes</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
-                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.events}</p>
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                      {importPreviewData.counts.events}
+                    </p>
                     <p className="text-xs text-zinc-400 font-medium">Categories</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
-                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.recordings}</p>
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                      {importPreviewData.counts.recordings}
+                    </p>
                     <p className="text-xs text-zinc-400 font-medium">Voice Memos</p>
                   </div>
                   <div className="p-3 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60 rounded-xl text-center">
-                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{importPreviewData.counts.ocrScans}</p>
+                    <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                      {importPreviewData.counts.ocrScans}
+                    </p>
                     <p className="text-xs text-zinc-400 font-medium">OCR Scans</p>
                   </div>
                 </div>
@@ -1571,7 +1715,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="p-3.5 bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/40 rounded-2xl text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
                   <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
                   <p>
-                    A safety snapshot of your current local workspace will be generated automatically before importing. The import executes within an atomic SQLite transaction and verifies database integrity before saving.
+                    A safety snapshot of your current local workspace will be generated
+                    automatically before importing. The import executes within an atomic SQLite
+                    transaction and verifies database integrity before saving.
                   </p>
                 </div>
               </div>
@@ -1651,7 +1797,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <Database className="w-5 h-5" />
               </div>
               <div>
-                <h3 id="restore-modal-title" className="text-base font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
+                <h3
+                  id="restore-modal-title"
+                  className="text-base font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial"
+                >
                   Restore Cloud Backup?
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
@@ -1660,7 +1809,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
             <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
-              Restoring will synchronize your local notes from this encrypted remote cloud snapshot. A safety rollback snapshot of your current local notes will be automatically preserved before restoring.
+              Restoring will synchronize your local notes from this encrypted remote cloud snapshot.
+              A safety rollback snapshot of your current local notes will be automatically preserved
+              before restoring.
             </p>
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button

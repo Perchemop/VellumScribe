@@ -38,7 +38,7 @@ dependency, not a clean-room concern. It is listed in `ATTRIBUTION.md`.
 - **Honest failure** — inference availability is a runtime capability that must
   be checked, not assumed; when it is unavailable the app must say so.
 
-### What is *not* taken
+### What is _not_ taken
 
 No UI, no layout, no iconography, no product concept. The inspiration is the
 inference contract and the input format only.
@@ -63,7 +63,7 @@ been read or copied.
 - **Fast capture over filing** — writing a note must never require setting up
   structure first.
 
-### What is *not* taken
+### What is _not_ taken
 
 - Obsidian's visual design, theme, iconography or branding — VellumScribe's
   brand (`#121215` / `#09090B` / white "V" mark) is original.

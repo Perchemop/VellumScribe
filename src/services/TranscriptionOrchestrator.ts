@@ -19,11 +19,7 @@ import { TranscriptionRepository } from '../repositories/TranscriptionRepository
 import { MediaRepository } from '../lib/MediaRepository';
 import { GeminiService } from '../lib/geminiService';
 import { asErrorLike } from '../lib/errorLike';
-import {
-  RecordingRecord,
-  TranscriptionEntity,
-  OfflineAiErrorCode,
-} from '../types';
+import { RecordingRecord, TranscriptionEntity, OfflineAiErrorCode } from '../types';
 
 export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed' | 'cloud_only';
 
@@ -104,11 +100,15 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
     const caps = await aiMgr.getDeviceCapabilities();
 
     if (!caps.isNativeEngineAvailable || !caps.inferenceRuntimeReady) {
-      throw new Error('OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.');
+      throw new Error(
+        'OFFLINE_AI_ENGINE_UNAVAILABLE: Native Whisper tensor execution runtime is not available on this device.'
+      );
     }
 
     if (!input.recordingId) {
-      throw new Error('OFFLINE_AI_AUDIO_INVALID: Native Whisper engine requires a persistent recording ID.');
+      throw new Error(
+        'OFFLINE_AI_AUDIO_INVALID: Native Whisper engine requires a persistent recording ID.'
+      );
     }
 
     const startRes = await aiMgr.transcribeRecording(input.recordingId, {
@@ -138,7 +138,9 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
       if (status.status === 'COMPLETED') {
         const fullText = (status.transcript || '').trim();
         if (!fullText) {
-          throw new Error('OFFLINE_AI_NO_SPEECH: No speech activity was detected in the audio recording.');
+          throw new Error(
+            'OFFLINE_AI_NO_SPEECH: No speech activity was detected in the audio recording.'
+          );
         }
 
         return {
@@ -156,7 +158,9 @@ export class AndroidWhisperEngine implements TranscriptionEngine {
       }
 
       if (status.status === 'FAILED') {
-        throw new Error(status.error || 'OFFLINE_AI_ENGINE_UNAVAILABLE: On-device speech recognition failed.');
+        throw new Error(
+          status.error || 'OFFLINE_AI_ENGINE_UNAVAILABLE: On-device speech recognition failed.'
+        );
       }
 
       if (status.status === 'CANCELLED') {
@@ -333,7 +337,9 @@ export class TranscriptionOrchestrator {
     }
 
     if (!recording && input.recordingId) {
-      throw new Error(`OFFLINE_AI_AUDIO_INVALID: Recording #${input.recordingId} was not found on this device.`);
+      throw new Error(
+        `OFFLINE_AI_AUDIO_INVALID: Recording #${input.recordingId} was not found on this device.`
+      );
     }
 
     const mergedInput: TranscriptionInput = {
@@ -345,7 +351,10 @@ export class TranscriptionOrchestrator {
     };
 
     const engine = await this.selectEngine(policy, mergedInput, options.enginePreference);
-    AppLogger.info('TranscriptionOrchestrator', `Selected engine: ${engine.id} under policy: ${policy}`);
+    AppLogger.info(
+      'TranscriptionOrchestrator',
+      `Selected engine: ${engine.id} under policy: ${policy}`
+    );
 
     let durableRecord: TranscriptionEntity | null = null;
     if (input.recordingId) {
@@ -360,7 +369,11 @@ export class TranscriptionOrchestrator {
           started_at: Date.now(),
         });
       } catch (saveErr) {
-        AppLogger.warn('TranscriptionOrchestrator', 'Failed to register initial durable job record', saveErr);
+        AppLogger.warn(
+          'TranscriptionOrchestrator',
+          'Failed to register initial durable job record',
+          saveErr
+        );
       }
     }
 
@@ -385,12 +398,7 @@ export class TranscriptionOrchestrator {
 
       if (durableRecord?.id) {
         try {
-          TranscriptionRepository.updateStatus(
-            durableRecord.id,
-            'COMPLETED',
-            undefined,
-            undefined
-          );
+          TranscriptionRepository.updateStatus(durableRecord.id, 'COMPLETED', undefined, undefined);
           TranscriptionRepository.saveTranscription({
             id: durableRecord.id,
             recording_id: input.recordingId || 0,
@@ -403,7 +411,11 @@ export class TranscriptionOrchestrator {
             completed_at: Date.now(),
           });
         } catch (updateErr) {
-          AppLogger.warn('TranscriptionOrchestrator', 'Failed updating durable transcript completion', updateErr);
+          AppLogger.warn(
+            'TranscriptionOrchestrator',
+            'Failed updating durable transcript completion',
+            updateErr
+          );
         }
       }
 
@@ -442,13 +454,17 @@ export class TranscriptionOrchestrator {
 
     if (policy === 'cloud_only') {
       if (!PrivacyManager.isNetworkAllowed()) {
-        throw new Error('Privacy Policy Violation: Network access is blocked by Privacy Mode. Cannot perform cloud transcription.');
+        throw new Error(
+          'Privacy Policy Violation: Network access is blocked by Privacy Mode. Cannot perform cloud transcription.'
+        );
       }
       const cloud = this.engines.get('cloud_gemini_multimodal');
       if (cloud && (await cloud.isAvailable())) {
         return cloud;
       }
-      throw new Error('NO_ENGINE: Cloud Gemini transcription engine is not configured or unavailable.');
+      throw new Error(
+        'NO_ENGINE: Cloud Gemini transcription engine is not configured or unavailable.'
+      );
     }
 
     if (enginePreference && !isOfflineMode) {

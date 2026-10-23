@@ -27,7 +27,9 @@ export class MergeService {
         // Concatenate if significantly different
         title = `${base.title} / ${incoming.title}`;
         hasConflict = true;
-        conflictDetails.push(`Title merged from conflicting inputs: "${base.title}" vs "${incoming.title}"`);
+        conflictDetails.push(
+          `Title merged from conflicting inputs: "${base.title}" vs "${incoming.title}"`
+        );
       }
     }
 
@@ -38,7 +40,10 @@ export class MergeService {
     const mergedTags = Array.from(new Set([...(base.tags || []), ...(incoming.tags || [])]));
 
     // Checklist items reconciliation: match by text or id, prefer checked status if either is completed
-    const mergedChecklists = this.mergeChecklists(base.checklist_items || [], incoming.checklist_items || []);
+    const mergedChecklists = this.mergeChecklists(
+      base.checklist_items || [],
+      incoming.checklist_items || []
+    );
 
     const mergedNote: NoteRecord = {
       ...base,

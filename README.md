@@ -27,6 +27,7 @@ cd android && ./gradlew assembleRelease
 ```
 
 GitHub Actions: **Build Android APK**
+
 - Default: `whisper_mode=real`
 - Use `stub` only for faster CI without full native Whisper
 
@@ -34,12 +35,12 @@ Uninstall any previous APK before installing a new native build.
 
 ## Scripts
 
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Local dev |
-| `npm run build:spa` | Web bundle |
-| `npm run typecheck` / `lint` / `test` | Quality |
-| `npm run setup:whisper` | Vendor native Whisper sources |
+| Command                               | Purpose                       |
+| ------------------------------------- | ----------------------------- |
+| `npm run dev`                         | Local dev                     |
+| `npm run build:spa`                   | Web bundle                    |
+| `npm run typecheck` / `lint` / `test` | Quality                       |
+| `npm run setup:whisper`               | Vendor native Whisper sources |
 
 ## Docs
 

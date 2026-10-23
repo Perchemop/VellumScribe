@@ -28,7 +28,10 @@ export class SearchIndexQueue {
         [staleThreshold]
       );
       if ((res.changes || 0) > 0) {
-        AppLogger.info('SearchIndexQueue', `Recovered ${res.changes} stale search index job(s) left in processing state.`);
+        AppLogger.info(
+          'SearchIndexQueue',
+          `Recovered ${res.changes} stale search index job(s) left in processing state.`
+        );
       }
       return res.changes || 0;
     } catch (e) {
@@ -60,7 +63,9 @@ export class SearchIndexQueue {
            VALUES (?, 'pending', 0, ?, ?)
            ON CONFLICT(note_id) DO UPDATE SET status = 'pending', locked_at = NULL, updated_at = ?;`,
           [noteId, now, now, now]
-        ).catch((err) => AppLogger.warn('SearchIndexQueue', `Failed to enqueue note ${noteId} asynchronously`, err));
+        ).catch((err) =>
+          AppLogger.warn('SearchIndexQueue', `Failed to enqueue note ${noteId} asynchronously`, err)
+        );
       }
     } catch {
       db.run(
@@ -146,12 +151,14 @@ export class SearchIndexQueue {
       );
 
       // Clean up old completed jobs periodically (> 24 hours)
-      await db.run(
-        `DELETE FROM search_index_jobs WHERE status = 'completed' AND updated_at < ?;`,
-        [Date.now() - 24 * 3600 * 1000]
-      );
+      await db.run(`DELETE FROM search_index_jobs WHERE status = 'completed' AND updated_at < ?;`, [
+        Date.now() - 24 * 3600 * 1000,
+      ]);
 
-      AppLogger.info('SearchIndexQueue', `Successfully indexed ${ids.length} note(s) into SQLite FTS`);
+      AppLogger.info(
+        'SearchIndexQueue',
+        `Successfully indexed ${ids.length} note(s) into SQLite FTS`
+      );
     } catch (_e) {
       const e = asErrorLike(_e);
       AppLogger.error('SearchIndexQueue', 'Failed to batch reindex notes in FTS', e);
@@ -189,7 +196,10 @@ export class SearchIndexQueue {
       const db = getDatabaseAdapter();
       await db.run(`DELETE FROM search_index_jobs;`);
 
-      AppLogger.info('SearchIndexQueue', `Full FTS index rebuild completed for ${ids.length} note(s).`);
+      AppLogger.info(
+        'SearchIndexQueue',
+        `Full FTS index rebuild completed for ${ids.length} note(s).`
+      );
       return { indexedCount: ids.length };
     } catch (err) {
       AppLogger.error('SearchIndexQueue', 'Failed to perform full FTS index rebuild', err);

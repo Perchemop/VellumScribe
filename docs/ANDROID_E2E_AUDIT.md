@@ -15,18 +15,18 @@ Android SDK/NDK, and no CMake**, and the box has ~2.7 GiB RAM total. Gradle +
 AGP + the native whisper/ggml build would OOM before finishing. Release
 artifacts must be produced by CI or a workstation.
 
-| Tool | Workspace | Required for | Notes |
-| --- | --- | --- | --- |
-| Node 22.23.3 | ✅ | web bundle, tests | matches CI `node 22` |
-| npm 10.9.9 | ✅ | dependency install | CI uses `npm install --legacy-peer-deps` |
-| Python 3.13.5 | ✅ | asset/CI helper scripts | |
-| git / gh | ✅ (gh authed) | commits, releases | |
-| JDK 21 | ❌ | Gradle / AGP | CI: `temurin 21` |
-| Android SDK platform 36 | ❌ | `compileSdk`/`targetSdk` 36 | see fix in §2 |
-| Android build-tools 36.0.0 | ❌ | packaging | |
-| NDK 26.1.10909125 | ❌ | whisper JNI | now pinned in Gradle |
-| CMake 3.22.1 + ninja | ❌ | `externalNativeBuild` | |
-| `aapt2`/`apksigner`/`adb` | ❌ | install & verification | |
+| Tool                       | Workspace      | Required for                | Notes                                    |
+| -------------------------- | -------------- | --------------------------- | ---------------------------------------- |
+| Node 22.23.3               | ✅             | web bundle, tests           | matches CI `node 22`                     |
+| npm 10.9.9                 | ✅             | dependency install          | CI uses `npm install --legacy-peer-deps` |
+| Python 3.13.5              | ✅             | asset/CI helper scripts     |                                          |
+| git / gh                   | ✅ (gh authed) | commits, releases           |                                          |
+| JDK 21                     | ❌             | Gradle / AGP                | CI: `temurin 21`                         |
+| Android SDK platform 36    | ❌             | `compileSdk`/`targetSdk` 36 | see fix in §2                            |
+| Android build-tools 36.0.0 | ❌             | packaging                   |                                          |
+| NDK 26.1.10909125          | ❌             | whisper JNI                 | now pinned in Gradle                     |
+| CMake 3.22.1 + ninja       | ❌             | `externalNativeBuild`       |                                          |
+| `aapt2`/`apksigner`/`adb`  | ❌             | install & verification      |                                          |
 
 `android/local.properties` (the SDK path) is intentionally absent and
 git-ignored; Gradle finds the SDK via `ANDROID_HOME`/`sdk.dir`.
@@ -35,16 +35,16 @@ git-ignored; Gradle finds the SDK via `ANDROID_HOME`/`sdk.dir`.
 
 ## 2. Build, versioning & in-place updates
 
-The single most important requirement — *"a newly downloaded APK can update the
-copy already installed on the phone"* — needs three things to line up. Two were
+The single most important requirement — _"a newly downloaded APK can update the
+copy already installed on the phone"_ — needs three things to line up. Two were
 missing.
 
-| Requirement | Before | After |
-| --- | --- | --- |
-| `applicationId` stable | ✅ `com.vellumscribe.app` | ✅ |
+| Requirement              | Before                                           | After                                                                                              |
+| ------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `applicationId` stable   | ✅ `com.vellumscribe.app`                        | ✅                                                                                                 |
 | Signed with a stable key | ❌ release was **unsigned**; no `signingConfigs` | ✅ reads `android/keystore.properties` or `VELLUM_*` env vars; **debug and release share the key** |
-| `versionCode` increasing | ⚠️ hard-coded `31` | ✅ derived from `package.json` (`3.1.0` → `30100`), overridable |
-| `versionName` | ⚠️ hard-coded `3.1.0` | ✅ from `package.json` |
+| `versionCode` increasing | ⚠️ hard-coded `31`                               | ✅ derived from `package.json` (`3.1.0` → `30100`), overridable                                    |
+| `versionName`            | ⚠️ hard-coded `3.1.0`                            | ✅ from `package.json`                                                                             |
 
 Fixes shipped:
 
@@ -104,8 +104,8 @@ XML well-formedness) — 0 corrupt, 0 malformed.
 Web bundle measured with `vite build --manifest` (entry + statically reachable
 chunks, i.e. what loads before the first paint):
 
-| Metric | Before | After |
-| --- | --- | --- |
+| Metric   | Before    | After                                       |
+| -------- | --------- | ------------------------------------------- |
 | Eager JS | 893.12 kB | **867.76 kB** (−25.4 kB raw, ~−6.8 kB gzip) |
 
 Cause: `NoteShareModal` and `TranscriptionRecoverySheet` were lazily imported in
@@ -141,7 +141,7 @@ vendor-fetch tool). `.github/workflows/` is now 8 files. See
 
 ## 4c. Actions runs were failing before any step starts ✅ RESOLVED
 
-*Status: resolved 2026-10-21.*
+_Status: resolved 2026-10-21._
 
 Originally, every run on `main` failed in 2–4 s with `steps: []` and no logs
 (`BlobNotFound`):

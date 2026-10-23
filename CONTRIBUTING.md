@@ -19,7 +19,7 @@ fixed. Please don't reintroduce this pattern:
   clear error - don't return a plausible-looking fake result.
 - If an operation didn't actually happen (a network call failed, wasn't
   attempted, or isn't supported), the return value should say `success:
-  false` with a real reason, not `true` with fabricated details.
+false` with a real reason, not `true` with fabricated details.
 - Don't invent placeholder user data (emails, names, tokens) as a
   "default" - leave the field empty and let the UI ask for it.
 - If you're not sure whether a code path can be exercised in production,
@@ -94,6 +94,6 @@ a security vulnerability.
 
 - Keep PRs focused; a mix of an unrelated refactor and a bug fix is
   harder to review and to revert if something's wrong.
-- Describe *what changed and why* in the PR body - if you fixed a false
+- Describe _what changed and why_ in the PR body - if you fixed a false
   claim or fabricated behavior, say what it used to do and what it does
   now, the same way `CHANGELOG.md` documents this release.

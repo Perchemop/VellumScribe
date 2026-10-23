@@ -34,7 +34,7 @@ export const VirtualizedNotesList: React.FC<VirtualizedNotesListProps> = ({
 
     const updateHeight = () => {
       const rect = el.getBoundingClientRect();
-      const h = Math.max(300, rect.height || (window.innerHeight - 240));
+      const h = Math.max(300, rect.height || window.innerHeight - 240);
       setContainerHeight(h);
     };
 
@@ -52,9 +52,12 @@ export const VirtualizedNotesList: React.FC<VirtualizedNotesListProps> = ({
     };
   }, []);
 
-  const rowKey = useCallback((index: number) => {
-    return notes[index]?.id ?? index;
-  }, [notes]);
+  const rowKey = useCallback(
+    (index: number) => {
+      return notes[index]?.id ?? index;
+    },
+    [notes]
+  );
 
   if (notes.length === 0) {
     return <>{emptyState}</>;
@@ -65,9 +68,7 @@ export const VirtualizedNotesList: React.FC<VirtualizedNotesListProps> = ({
     return (
       <div className={`space-y-2 ${className}`}>
         {notes.map((note) => (
-          <React.Fragment key={note.id}>
-            {renderNote(note)}
-          </React.Fragment>
+          <React.Fragment key={note.id}>{renderNote(note)}</React.Fragment>
         ))}
       </div>
     );

@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Mic,
-  Square,
-  Pause,
-  Play,
-  X,
-  
-  AlertCircle,
-  
-  
-  WifiOff,
-  Upload} from 'lucide-react';
+import { Mic, Square, Pause, Play, X, AlertCircle, WifiOff, Upload } from 'lucide-react';
 import { AudioRecordingManager, RecordedAudioResult } from '../../services/AudioRecordingManager';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { TranscriptService } from '../../services/TranscriptService';
@@ -63,7 +52,9 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     if (timerRef.current) clearInterval(timerRef.current);
     try {
       recordingManager.stopRecording?.(0).catch(() => {});
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setIsRecording(false);
     setIsPaused(false);
     setTranscribing(false);
@@ -143,7 +134,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
           try {
             const status = await aiManager.getTranscriptionStatus(jobId);
             setJobStatus(status);
-            if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+            if (
+              status.status === 'COMPLETED' ||
+              status.status === 'FAILED' ||
+              status.status === 'CANCELLED'
+            ) {
               setTranscribing(false);
               if (status.status === 'COMPLETED') {
                 onRecordingComplete(result);
@@ -184,7 +179,6 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
     }
   };
 
-
   /**
    * Import a pre-recorded audio file (no extra top-level button).
    * Runs the exact same 16 kHz mono PCM conversion + MediaRepository save +
@@ -203,7 +197,9 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       if (isRecording) {
         try {
           await recordingManager.stopRecording(noteId).catch(() => {});
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         setIsRecording(false);
         setIsPaused(false);
         if (timerRef.current) clearInterval(timerRef.current);
@@ -229,7 +225,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         try {
           const status = await aiManager.getTranscriptionStatus(jobId);
           setJobStatus(status);
-          if (status.status === 'COMPLETED' || status.status === 'FAILED' || status.status === 'CANCELLED') {
+          if (
+            status.status === 'COMPLETED' ||
+            status.status === 'FAILED' ||
+            status.status === 'CANCELLED'
+          ) {
             setTranscribing(false);
             if (status.status === 'COMPLETED') {
               onRecordingComplete(result);
@@ -256,7 +256,9 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       AppLogger.error('AudioRecordingModal', 'Import audio failed', err);
       setIsImporting(false);
       setTranscribing(false);
-      setErrorMessage(err?.message || 'Could not import audio file. Try a different format (WAV/MP3/M4A).');
+      setErrorMessage(
+        err?.message || 'Could not import audio file. Try a different format (WAV/MP3/M4A).'
+      );
     }
   };
 
@@ -282,9 +284,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                     ? 'Voice Memo'
                     : 'Record Audio Memo'}
               </h3>
-              <span className="text-[11px] text-stone-500">
-                16 kHz Mono PCM • On-Device AI
-              </span>
+              <span className="text-[11px] text-stone-500">16 kHz Mono PCM • On-Device AI</span>
             </div>
           </div>
 
@@ -306,7 +306,10 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
         )}
 
         {importNotice && !errorMessage && (
-          <div role="status" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2">
+          <div
+            role="status"
+            className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center gap-2"
+          >
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{importNotice}</span>
           </div>
@@ -322,7 +325,8 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                 currentSegment: jobStatus?.currentChunk || 1,
                 totalSegments: jobStatus?.totalChunks || 1,
                 completedSegmentsCount: Math.max(0, (jobStatus?.currentChunk || 1) - 1),
-                status: jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
+                status:
+                  jobStatus?.phaseLabel || 'Transcribing speech chunks locally with Whisper...',
               }}
               onCancel={handleCancelTranscription}
             />
@@ -364,7 +368,11 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
                     // Defer off the native file-chooser callback to avoid WebView process kills
                     setTimeout(() => {
                       handleImportAudioFile(f).catch((err) => {
-                        AppLogger.error('AudioRecordingModal', 'handleImportAudioFile uncaught', err);
+                        AppLogger.error(
+                          'AudioRecordingModal',
+                          'handleImportAudioFile uncaught',
+                          err
+                        );
                         setErrorMessage(err?.message || 'Import failed');
                         setIsImporting(false);
                         setMode('idle');

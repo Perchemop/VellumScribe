@@ -4,55 +4,56 @@ mode: subagent
 model: opencode/glm-5.3-flash-free#high
 permissions:
   - action: edit
-    resource: "*"
+    resource: '*'
     effect: allow
   - action: shell
-    resource: "npm run lint*"
+    resource: 'npm run lint*'
     effect: allow
   - action: shell
-    resource: "npm run format*"
+    resource: 'npm run format*'
     effect: allow
   - action: shell
-    resource: "npx prettier*"
+    resource: 'npx prettier*'
     effect: allow
   - action: shell
-    resource: "npx eslint*"
+    resource: 'npx eslint*'
     effect: allow
   - action: shell
-    resource: "git status*"
+    resource: 'git status*'
     effect: allow
   - action: shell
-    resource: "git diff*"
+    resource: 'git diff*'
     effect: allow
   - action: shell
-    resource: "git log*"
+    resource: 'git log*'
     effect: allow
   - action: shell
-    resource: "git show*"
+    resource: 'git show*'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh*"
+    resource: '~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh*"
+    resource: '~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh*"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh*"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: shell
-    resource: "sh ~/.config/opencode/scripts/ci.sh*"
+    resource: 'sh ~/.config/opencode/scripts/ci.sh*'
     effect: allow
   - action: subagent
-    resource: "*"
+    resource: '*'
     effect: deny
 ---
 
 You fix build and test failures in **VellumScribe** that GitHub Actions reported.
 
 Rules:
+
 - Work only in this repository.
 - Read the CI log excerpt you are given before changing anything.
 - Fix the root cause; do not silence a failing check.

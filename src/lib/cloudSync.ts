@@ -39,7 +39,13 @@ export interface QueuedSyncItem {
 export interface CloudSyncConfig {
   providers?: Record<
     string,
-    { name?: string; isConfigured?: boolean; hasOAuthEnv?: boolean; isSSO?: boolean; description?: string }
+    {
+      name?: string;
+      isConfigured?: boolean;
+      hasOAuthEnv?: boolean;
+      isSSO?: boolean;
+      description?: string;
+    }
   >;
   accounts?: CloudAccount[];
   configured?: boolean;
@@ -62,7 +68,9 @@ export class CloudSyncEngine {
       try {
         localStorage.removeItem('vs_cloud_token');
         localStorage.removeItem('vs_cloud_session_id');
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -130,9 +138,8 @@ export class CloudSyncEngine {
     stagedBlob?: Blob,
     meta?: { filename?: string; checksum?: string }
   ): QueuedSyncItem {
-    const activeProviders = providers && providers.length > 0
-      ? providers
-      : this.getAccounts().map((a) => a.provider);
+    const activeProviders =
+      providers && providers.length > 0 ? providers : this.getAccounts().map((a) => a.provider);
 
     const randBytes = new Uint8Array(4);
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
@@ -145,7 +152,11 @@ export class CloudSyncEngine {
     if (stagedBlob && stagedKey) {
       import('./MediaRepository').then(({ MediaRepository }) => {
         MediaRepository.putBinary(stagedKey, stagedBlob).catch((e) => {
-          AppLogger.warn('CloudSync', 'Failed to stage offline sync archive in media repository:', e);
+          AppLogger.warn(
+            'CloudSync',
+            'Failed to stage offline sync archive in media repository:',
+            e
+          );
         });
       });
     }
@@ -215,7 +226,11 @@ export class CloudSyncEngine {
   /**
    * Automatically flushes offline sync items when network is active
    */
-  public static async processSyncQueue(): Promise<{ processed: number; success: number; failed: number }> {
+  public static async processSyncQueue(): Promise<{
+    processed: number;
+    success: number;
+    failed: number;
+  }> {
     if (this.isProcessingQueue) return { processed: 0, success: 0, failed: 0 };
     const queue = this.getSyncQueue();
     if (queue.length === 0) return { processed: 0, success: 0, failed: 0 };
@@ -238,7 +253,9 @@ export class CloudSyncEngine {
             try {
               const { MediaRepository } = await import('./MediaRepository');
               stagedBlob = await MediaRepository.getBinary(item.stagedStorageKey);
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           }
 
           const success = await this.triggerSync({
@@ -296,7 +313,9 @@ export class CloudSyncEngine {
               this.sessionToken = storedSecret;
               return storedSecret;
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
 
         const res = await fetch('/api/cloud/session', {
@@ -312,8 +331,14 @@ export class CloudSyncEngine {
             this.sessionToken = data.token;
             try {
               const { AndroidKeystoreManager } = await import('./keystore');
-              await AndroidKeystoreManager.saveSecret('cloud_session_token', data.token, 'cloud_credential');
-            } catch { /* ignore */ }
+              await AndroidKeystoreManager.saveSecret(
+                'cloud_session_token',
+                data.token,
+                'cloud_credential'
+              );
+            } catch {
+              /* ignore */
+            }
             return data.token;
           }
         }
@@ -372,7 +397,8 @@ export class CloudSyncEngine {
         isConfigured: true,
         hasOAuthEnv: false,
         isSSO: false,
-        description: 'Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.',
+        description:
+          'Store encrypted backups on a self-hosted Nextcloud server via authenticated WebDAV.',
       },
       webdav: {
         name: 'Custom WebDAV',
@@ -413,7 +439,11 @@ export class CloudSyncEngine {
         await new Promise((resolve) => setTimeout(resolve, 400));
         return this.fetchConfig(retries - 1);
       }
-      AppLogger.warn('CloudSync', 'Cloud storage configuration offline or unavailable, using local accounts cache:', e?.message || e);
+      AppLogger.warn(
+        'CloudSync',
+        'Cloud storage configuration offline or unavailable, using local accounts cache:',
+        e?.message || e
+      );
     }
 
     return {
@@ -617,7 +647,9 @@ export class CloudSyncEngine {
       });
 
       if (!chunkRes.ok) {
-        const err = await chunkRes.json().catch(() => ({ error: `Failed to upload chunk ${chunkIndex}` }));
+        const err = await chunkRes
+          .json()
+          .catch(() => ({ error: `Failed to upload chunk ${chunkIndex}` }));
         throw new Error(err.error || `Chunk ${chunkIndex + 1} upload failed`);
       }
 
@@ -660,34 +692,56 @@ export class CloudSyncEngine {
     PrivacyManager.assertNetworkAllowed('Cloud Backup Upload');
     const startTime = Date.now();
     const allAccounts = this.getAccounts();
-    const accounts = options?.targetProviders && options.targetProviders.length > 0
-      ? allAccounts.filter((a) => options.targetProviders!.includes(a.provider))
-      : allAccounts;
+    const accounts =
+      options?.targetProviders && options.targetProviders.length > 0
+        ? allAccounts.filter((a) => options.targetProviders!.includes(a.provider))
+        : allAccounts;
 
     const shouldEnqueue = options?.enqueueOnFailure !== false;
 
     if (accounts.length === 0) {
-      options?.onProgress?.({ percent: 100, message: 'No cloud accounts connected', phase: 'error' });
+      options?.onProgress?.({
+        percent: 100,
+        message: 'No cloud accounts connected',
+        phase: 'error',
+      });
       return false;
     }
 
-    options?.onProgress?.({ percent: 10, message: 'Generating and compressing backup snapshot...', phase: 'compressing' });
+    options?.onProgress?.({
+      percent: 10,
+      message: 'Generating and compressing backup snapshot...',
+      phase: 'compressing',
+    });
 
     try {
       await this.ensureSessionToken();
-      const backupBlob = options?.pregeneratedBlob || (await StorageManager.exportCloudBackupArchive());
+      const backupBlob =
+        options?.pregeneratedBlob || (await StorageManager.exportCloudBackupArchive());
       const arrayBuffer = await backupBlob.arrayBuffer();
       const checksum = await this.computeChecksum(arrayBuffer);
-      const filename = options?.customFilename || `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
+      const filename =
+        options?.customFilename ||
+        `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
 
-      options?.onProgress?.({ percent: 25, message: 'Starting cloud backup upload...', phase: 'uploading' });
+      options?.onProgress?.({
+        percent: 25,
+        message: 'Starting cloud backup upload...',
+        phase: 'uploading',
+      });
 
       let allSuccess = true;
       for (const acc of accounts) {
         try {
           if (backupBlob.size > 2 * 1024 * 1024) {
             // Large archive: use streaming chunked pipeline
-            await this.uploadChunkedArchive(acc.provider, backupBlob, filename, checksum, options?.onProgress);
+            await this.uploadChunkedArchive(
+              acc.provider,
+              backupBlob,
+              filename,
+              checksum,
+              options?.onProgress
+            );
           } else {
             // Small/medium archive: direct octet-stream upload
             const res = await fetch(`/api/cloud/${acc.provider}/backup`, {
@@ -723,23 +777,39 @@ export class CloudSyncEngine {
           });
           allSuccess = false;
           if (shouldEnqueue) {
-            this.enqueueSync([acc.provider], `Upload failed for ${acc.provider}: ${e.message}`, backupBlob, { filename, checksum });
+            this.enqueueSync(
+              [acc.provider],
+              `Upload failed for ${acc.provider}: ${e.message}`,
+              backupBlob,
+              { filename, checksum }
+            );
           }
           // Continue iteration so remaining providers are given a chance to sync
         }
       }
 
       if (allSuccess) {
-        options?.onProgress?.({ percent: 100, message: 'Backup complete and verified', phase: 'complete' });
+        options?.onProgress?.({
+          percent: 100,
+          message: 'Backup complete and verified',
+          phase: 'complete',
+        });
         return true;
       }
       return false;
     } catch (_err) {
       const err = asErrorLike(_err);
       AppLogger.error('CloudSync', 'Fatal sync error:', err);
-      options?.onProgress?.({ percent: 100, message: `Backup generation failed: ${err.message}`, phase: 'error' });
+      options?.onProgress?.({
+        percent: 100,
+        message: `Backup generation failed: ${err.message}`,
+        phase: 'error',
+      });
       if (shouldEnqueue) {
-        this.enqueueSync(accounts.map((a) => a.provider), `Backup creation failed: ${err.message}`);
+        this.enqueueSync(
+          accounts.map((a) => a.provider),
+          `Backup creation failed: ${err.message}`
+        );
       }
       return false;
     }
@@ -771,14 +841,18 @@ export class CloudSyncEngine {
       });
 
       if (!importResult.success) {
-        return { success: false, message: `Restore aborted: ${importResult.error || 'Validation error'}` };
+        return {
+          success: false,
+          message: `Restore aborted: ${importResult.error || 'Validation error'}`,
+        };
       }
 
       return {
         success: true,
-        message: options?.mode === 'merge'
-          ? 'Cloud backup successfully merged into local database.'
-          : 'Cloud backup successfully restored into local database (exact restore).',
+        message:
+          options?.mode === 'merge'
+            ? 'Cloud backup successfully merged into local database.'
+            : 'Cloud backup successfully restored into local database (exact restore).',
       };
     } catch (_e) {
       const e = asErrorLike(_e);

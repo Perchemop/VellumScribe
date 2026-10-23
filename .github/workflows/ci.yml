@@ -2,32 +2,30 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ['main']
   pull_request:
-    branches: [ "main" ]
+    branches: ['main']
 
 jobs:
-  # Format baseline does not exist yet (194 files differ — Q-004).
-  # This job is intentionally non-blocking until slice B-3 lands, then it
-  # becomes a required gate. See DECISIONS.md D-303.
+  # Format baseline established in slice B-3 (D-407, Q-004 resolved).
+  # Required gate: `prettier --check .` must pass.
   format:
-    name: format (staged, non-blocking)
+    name: format
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22.x'
-        cache: 'npm'
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci --no-fund --no-audit
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
 
-    - name: Prettier check
-      run: npm run format:check
+      - name: Prettier check
+        run: npm run format:check
 
   build:
     name: verify (${{ matrix.os }})
@@ -41,46 +39,46 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Guard against truncated storage.ts
-      run: |
-        set -euo pipefail
-        SIZE=$(wc -c < src/lib/storage.ts)
-        echo "storage.ts size=$SIZE"
-        if [ "$SIZE" -lt 20000 ]; then
-          echo "ERROR: src/lib/storage.ts looks truncated ($SIZE bytes)"
-          exit 1
-        fi
-        grep -q 'export class StorageManager' src/lib/storage.ts
-        grep -q 'getRecordingsForNote' src/lib/storage.ts
+      - name: Guard against truncated storage.ts
+        run: |
+          set -euo pipefail
+          SIZE=$(wc -c < src/lib/storage.ts)
+          echo "storage.ts size=$SIZE"
+          if [ "$SIZE" -lt 20000 ]; then
+            echo "ERROR: src/lib/storage.ts looks truncated ($SIZE bytes)"
+            exit 1
+          fi
+          grep -q 'export class StorageManager' src/lib/storage.ts
+          grep -q 'getRecordingsForNote' src/lib/storage.ts
 
-    - name: Verify offline Whisper source gate files
-      run: |
-        set -euo pipefail
-        ROOT="android/app/src/main/cpp/third_party/whisper.cpp"
-        test -f android/app/src/main/cpp/CMakeLists.txt
-        test -f android/app/src/main/cpp/jni_whisper.cpp
-        test -f android/app/src/main/cpp/stub/whisper.cpp
-        if [[ -f "$ROOT/src/whisper.cpp" && -f "$ROOT/ggml/src/ggml.c" ]]; then
-          echo "WHISPER_UPSTREAM_PRESENT=true"
-        else
-          echo "WHISPER_UPSTREAM_PRESENT=false"
-        fi
+      - name: Verify offline Whisper source gate files
+        run: |
+          set -euo pipefail
+          ROOT="android/app/src/main/cpp/third_party/whisper.cpp"
+          test -f android/app/src/main/cpp/CMakeLists.txt
+          test -f android/app/src/main/cpp/jni_whisper.cpp
+          test -f android/app/src/main/cpp/stub/whisper.cpp
+          if [[ -f "$ROOT/src/whisper.cpp" && -f "$ROOT/ggml/src/ggml.c" ]]; then
+            echo "WHISPER_UPSTREAM_PRESENT=true"
+          else
+            echo "WHISPER_UPSTREAM_PRESENT=false"
+          fi
 
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22.x'
-        cache: 'npm'
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci --no-fund --no-audit
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
 
-    - run: npm run typecheck
-    - run: npm run lint
-    - run: npm run check:orphans
-    - run: npm run test
-    - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run check:orphans
+      - run: npm run test
+      - run: npm run build

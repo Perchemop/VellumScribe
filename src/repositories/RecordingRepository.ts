@@ -41,12 +41,14 @@ export class RecordingRepository {
    */
   public static getById(id: number): RecordingRecord | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<RecordingRow>(
-      `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
+    const rows = db.querySync
+      ? db.querySync<RecordingRow>(
+          `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE id = ?`,
-      [id]
-    ) : [];
+          [id]
+        )
+      : [];
     if (!rows || rows.length === 0) return null;
     return this.mapRow(rows[0]);
   }
@@ -70,12 +72,14 @@ export class RecordingRepository {
    */
   public static getByNoteId(noteId: number): RecordingRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<RecordingRow>(
-      `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
+    const rows = db.querySync
+      ? db.querySync<RecordingRow>(
+          `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings WHERE note_id = ? ORDER BY id DESC`,
-      [noteId]
-    ) : [];
+          [noteId]
+        )
+      : [];
     return rows.map((r) => this.mapRow(r));
   }
 
@@ -97,22 +101,27 @@ export class RecordingRepository {
    */
   public static getAll(): RecordingRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<RecordingRow>(
-      `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
+    const rows = db.querySync
+      ? db.querySync<RecordingRow>(
+          `SELECT id, note_id, file_path, media_key, duration_seconds, file_size, sample_rate, bitrate_kbps,
               created_at, checksum, duration_ms, mime_type, channels, status
        FROM recordings ORDER BY id DESC`
-    ) : [];
+        )
+      : [];
     return rows.map((r) => this.mapRow(r));
   }
 
   /**
    * Save or insert recording asynchronously
    */
-  public static async saveAsync(recording: Partial<RecordingRecord> & { note_id: number; file_path: string }): Promise<RecordingRecord> {
+  public static async saveAsync(
+    recording: Partial<RecordingRecord> & { note_id: number; file_path: string }
+  ): Promise<RecordingRecord> {
     const db = getDatabaseAdapter();
     let recordingId = recording.id;
     const createdAt = recording.created_at || new Date().toISOString();
-    const durationMs = recording.duration_ms ?? (recording.duration_seconds ? recording.duration_seconds * 1000 : 0);
+    const durationMs =
+      recording.duration_ms ?? (recording.duration_seconds ? recording.duration_seconds * 1000 : 0);
     const durationSec = recording.duration_seconds ?? Math.round(durationMs / 1000);
     const checksum = recording.checksum || '';
     const mimeType = recording.mime_type || 'audio/wav';
@@ -170,7 +179,14 @@ export class RecordingRepository {
         await db.run(
           `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [recording.media_key, recording.note_id, 'audio', mimeType, recording.file_size || 0, Date.now()]
+          [
+            recording.media_key,
+            recording.note_id,
+            'audio',
+            mimeType,
+            recording.file_size || 0,
+            Date.now(),
+          ]
         );
       } catch (err) {
         AppLogger.warn('RecordingRepository', 'Failed to register media_files entry', err);
@@ -198,11 +214,14 @@ export class RecordingRepository {
   /**
    * Save or insert recording with strict schema conformance
    */
-  public static save(recording: Partial<RecordingRecord> & { note_id: number; file_path: string }): RecordingRecord {
+  public static save(
+    recording: Partial<RecordingRecord> & { note_id: number; file_path: string }
+  ): RecordingRecord {
     const db = getDatabaseAdapter();
     let recordingId = recording.id;
     const createdAt = recording.created_at || new Date().toISOString();
-    const durationMs = recording.duration_ms ?? (recording.duration_seconds ? recording.duration_seconds * 1000 : 0);
+    const durationMs =
+      recording.duration_ms ?? (recording.duration_seconds ? recording.duration_seconds * 1000 : 0);
     const durationSec = recording.duration_seconds ?? Math.round(durationMs / 1000);
     const checksum = recording.checksum || '';
     const mimeType = recording.mime_type || 'audio/wav';
@@ -260,7 +279,14 @@ export class RecordingRepository {
         db.runSync?.(
           `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [recording.media_key, recording.note_id, 'audio', mimeType, recording.file_size || 0, Date.now()]
+          [
+            recording.media_key,
+            recording.note_id,
+            'audio',
+            mimeType,
+            recording.file_size || 0,
+            Date.now(),
+          ]
         );
       } catch (err) {
         AppLogger.warn('RecordingRepository', 'Failed to register media_files entry', err);

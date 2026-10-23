@@ -80,7 +80,10 @@ export class CloudBackupCrypto {
           );
         }
 
-        const legacyKey = typeof localStorage !== 'undefined' ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE) : null;
+        const legacyKey =
+          typeof localStorage !== 'undefined'
+            ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE)
+            : null;
         if (legacyKey && legacyKey.trim()) {
           key = legacyKey.trim();
           await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
@@ -109,7 +112,10 @@ export class CloudBackupCrypto {
   public static getOrCreateClientVaultKey(): string {
     if (this.cachedVaultKey) return this.cachedVaultKey;
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('vellumscribe_keystore_metadata_v2') : null;
+      const raw =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('vellumscribe_keystore_metadata_v2')
+          : null;
       if (raw && raw.includes('"alias":"client_vault_key"')) {
         throw new Error(
           'Device master vault key is registered in secure storage metadata but could not be retrieved synchronously. Refusing to create ephemeral key.'
@@ -156,14 +162,23 @@ export class CloudBackupCrypto {
         }
         return result;
       } catch (e) {
-        AppLogger.warn('CloudBackupCrypto', 'GZIP compression failed, falling back to raw bytes', e);
+        AppLogger.warn(
+          'CloudBackupCrypto',
+          'GZIP compression failed, falling back to raw bytes',
+          e
+        );
       }
     }
     return data;
   }
 
   public static async decompressGzip(data: Uint8Array): Promise<Uint8Array> {
-    if (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b && typeof DecompressionStream !== 'undefined') {
+    if (
+      data.length > 2 &&
+      data[0] === 0x1f &&
+      data[1] === 0x8b &&
+      typeof DecompressionStream !== 'undefined'
+    ) {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
@@ -253,9 +268,13 @@ export class CloudBackupCrypto {
     passphraseOrOptions?: string | { userPassphrase?: string; allowLegacyUnencrypted?: boolean }
   ): Promise<string> {
     const userPassphrase =
-      typeof passphraseOrOptions === 'string' ? passphraseOrOptions : passphraseOrOptions?.userPassphrase;
+      typeof passphraseOrOptions === 'string'
+        ? passphraseOrOptions
+        : passphraseOrOptions?.userPassphrase;
     const allowLegacy =
-      typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
+      typeof passphraseOrOptions === 'object'
+        ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted)
+        : false;
 
     let rawText: string;
     if (typeof data === 'string') {
@@ -279,7 +298,10 @@ export class CloudBackupCrypto {
           'Legacy unencrypted backup detected. Unencrypted backups cannot be restored via encrypted cloud restore. Please use explicit Legacy Unencrypted Import mode.'
         );
       }
-      AppLogger.warn('CloudBackupCrypto', 'Importing legacy unencrypted backup bundle via explicit migration mode.');
+      AppLogger.warn(
+        'CloudBackupCrypto',
+        'Importing legacy unencrypted backup bundle via explicit migration mode.'
+      );
       return rawText;
     }
 
@@ -304,7 +326,9 @@ export class CloudBackupCrypto {
         asBufferSource(ciphertext)
       );
     } catch {
-      throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');
+      throw new Error(
+        'Backup decryption failed: Incorrect encryption key or corrupted ciphertext.'
+      );
     }
 
     const decompressedBytes = await this.decompressGzip(new Uint8Array(decryptedBuffer));

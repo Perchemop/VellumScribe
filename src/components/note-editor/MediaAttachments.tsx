@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, Camera, PenTool,  Trash2 } from 'lucide-react';
+import { Mic, Camera, PenTool, Trash2 } from 'lucide-react';
 import { RecordingRecord, OcrScanRecord } from '../../types';
 
 interface MediaAttachmentsProps {
@@ -78,10 +78,17 @@ export const MediaAttachments: React.FC<MediaAttachmentsProps> = ({
               onClick={onOpenSketchModal}
               role="button"
               tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSketchModal() } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onOpenSketchModal();
+                }
+              }}
             />
             <div>
-              <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">Hand-Drawn Sketch</div>
+              <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                Hand-Drawn Sketch
+              </div>
               <div className="text-[11px] text-zinc-400">Stored in encrypted media repository</div>
             </div>
           </div>

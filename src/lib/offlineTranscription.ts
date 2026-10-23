@@ -2,7 +2,7 @@ import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 /**
  * Offline Transcription Engine
- * 
+ *
  * Provides 100% on-device, offline-first speech transcription:
  * 1. Web Speech API (SpeechRecognition / webkitSpeechRecognition) for live & streaming speech
  * 2. Web Audio API Acoustic Analyzer for offline segmentation, voice activity detection & timestamping
@@ -89,7 +89,10 @@ export class OfflineTranscriptionEngine {
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.maxAlternatives = 1;
-      recognition.lang = callbacks.lang || (typeof navigator !== 'undefined' ? navigator.language : 'en-US') || 'en-US';
+      recognition.lang =
+        callbacks.lang ||
+        (typeof navigator !== 'undefined' ? navigator.language : 'en-US') ||
+        'en-US';
 
       let accumulatedFinal = '';
 
@@ -164,7 +167,9 @@ export class OfflineTranscriptionEngine {
       if (arrayBuffer && arrayBuffer.byteLength > 0) {
         const acousticInfo = await this.analyzeAcousticSignal(arrayBuffer);
         if (!acousticInfo.hasVoiceActivity || acousticInfo.segments.length === 0) {
-          throw new Error('OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.');
+          throw new Error(
+            'OFFLINE_AI_NO_SPEECH: No vocal speech activity detected in the audio recording.'
+          );
         }
       }
     } catch (_e) {
@@ -205,9 +210,7 @@ export class OfflineTranscriptionEngine {
   /**
    * Analyze audio acoustic structure (energy RMS, pauses, voice activity)
    */
-  private static async analyzeAcousticSignal(
-    arrayBuffer: ArrayBuffer
-  ): Promise<{
+  private static async analyzeAcousticSignal(arrayBuffer: ArrayBuffer): Promise<{
     duration: number;
     hasVoiceActivity: boolean;
     segments: Array<{ start: number; end: number; energyRms: number }>;
@@ -281,7 +284,10 @@ export class OfflineTranscriptionEngine {
       return {
         duration,
         hasVoiceActivity: segments.length > 0,
-        segments: segments.length > 0 ? segments : [{ start: 0, end: Math.round(duration), energyRms: 0.05 }],
+        segments:
+          segments.length > 0
+            ? segments
+            : [{ start: 0, end: Math.round(duration), energyRms: 0.05 }],
       };
     } catch {
       try {

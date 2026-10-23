@@ -28,9 +28,7 @@ export const CloudAiConsentModal: React.FC<CloudAiConsentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div
-        className="w-full max-w-md bg-white dark:bg-[#18181b] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
-      >
+      <div className="w-full max-w-md bg-white dark:bg-[#18181b] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -52,19 +50,26 @@ export const CloudAiConsentModal: React.FC<CloudAiConsentModalProps> = ({
               <span>External Provider Notice: {providerName}</span>
             </p>
             <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
-              You are about to run: <strong className="font-semibold">{operationDescription}</strong>.
-              This will transmit note content to an external cloud API over TLS encryption.
+              You are about to run:{' '}
+              <strong className="font-semibold">{operationDescription}</strong>. This will transmit
+              note content to an external cloud API over TLS encryption.
             </p>
           </div>
 
           <div className="space-y-2 text-xs text-zinc-600 dark:text-zinc-400 mb-4">
             <div className="flex items-start gap-2">
               <Lock className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-              <span>VellumScribe stores all notes locally in SQLite by default. Cloud processing occurs only upon your explicit instruction.</span>
+              <span>
+                VellumScribe stores all notes locally in SQLite by default. Cloud processing occurs
+                only upon your explicit instruction.
+              </span>
             </div>
             <div className="flex items-start gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-              <span>You can revoke this consent or toggle 100% Private Offline Mode at any time in Settings.</span>
+              <span>
+                You can revoke this consent or toggle 100% Private Offline Mode at any time in
+                Settings.
+              </span>
             </div>
           </div>
 

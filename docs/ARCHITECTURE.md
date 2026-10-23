@@ -61,14 +61,14 @@ Authoritative local state is stored in an SQLite relational database (`vellumscr
 
 VellumScribe enforces a strict zero-knowledge security model for locked notes:
 
-| Property | Value | Rationale |
-|---|---|---|
-| **Cipher** | AES-256-GCM | Authenticated symmetric encryption with 96-bit unique IVs |
-| **KDF Algorithm** | PBKDF2-HMAC-SHA-256 | High iteration count defense against hardware brute-force |
-| **KDF Work Factor** | **600,000 iterations** | Meets modern OWASP & NIST mobile cryptographic standards |
-| **Salt Separation** | Verification vs Encryption | Independent 16-byte random salts prevent cross-key exposure |
-| **Session Lifetime** | 5m, 15m, 30m, 60m, or app exit | Configurable via `UnlockSessionManager` in volatile memory |
-| **Hardware Binding** | Android Keystore | Master credential migration via `AndroidKeystoreManager` |
+| Property             | Value                          | Rationale                                                   |
+| -------------------- | ------------------------------ | ----------------------------------------------------------- |
+| **Cipher**           | AES-256-GCM                    | Authenticated symmetric encryption with 96-bit unique IVs   |
+| **KDF Algorithm**    | PBKDF2-HMAC-SHA-256            | High iteration count defense against hardware brute-force   |
+| **KDF Work Factor**  | **600,000 iterations**         | Meets modern OWASP & NIST mobile cryptographic standards    |
+| **Salt Separation**  | Verification vs Encryption     | Independent 16-byte random salts prevent cross-key exposure |
+| **Session Lifetime** | 5m, 15m, 30m, 60m, or app exit | Configurable via `UnlockSessionManager` in volatile memory  |
+| **Hardware Binding** | Android Keystore               | Master credential migration via `AndroidKeystoreManager`    |
 
 ---
 

@@ -4,34 +4,34 @@ mode: subagent
 model: opencode/beam-free#high
 permissions:
   - action: edit
-    resource: "*"
+    resource: '*'
     effect: deny
   - action: shell
-    resource: "npm run lint*"
+    resource: 'npm run lint*'
     effect: allow
   - action: shell
-    resource: "npm run format*"
+    resource: 'npm run format*'
     effect: allow
   - action: shell
-    resource: "npx prettier*"
+    resource: 'npx prettier*'
     effect: allow
   - action: shell
-    resource: "npx eslint*"
+    resource: 'npx eslint*'
     effect: allow
   - action: shell
-    resource: "git status*"
+    resource: 'git status*'
     effect: allow
   - action: shell
-    resource: "git diff*"
+    resource: 'git diff*'
     effect: allow
   - action: shell
-    resource: "git log*"
+    resource: 'git log*'
     effect: allow
   - action: shell
-    resource: "git show*"
+    resource: 'git show*'
     effect: allow
   - action: subagent
-    resource: "*"
+    resource: '*'
     effect: deny
 ---
 

@@ -73,9 +73,14 @@ export class AiProvenanceService {
       if (db.runSync) {
         db.runSync(sql, params);
       } else {
-        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordProvenance failed', err));
+        db.run(sql, params).catch((err) =>
+          AppLogger.warn('AiProvenanceService', 'Async recordProvenance failed', err)
+        );
       }
-      AppLogger.debug('AiProvenanceService', `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`);
+      AppLogger.debug(
+        'AiProvenanceService',
+        `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`
+      );
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to record AI provenance', e);
     }
@@ -84,7 +89,10 @@ export class AiProvenanceService {
   /**
    * Retrieves provenance records for a given entity
    */
-  public static getProvenance(targetEntityType: string, targetEntityId: number): AiProvenanceRecord | null {
+  public static getProvenance(
+    targetEntityType: string,
+    targetEntityId: number
+  ): AiProvenanceRecord | null {
     try {
       const db = getDatabaseAdapter();
       const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
@@ -98,7 +106,9 @@ export class AiProvenanceService {
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
 
       return {
@@ -121,7 +131,10 @@ export class AiProvenanceService {
   /**
    * Async variant to retrieve provenance records for a given entity
    */
-  public static async getProvenanceAsync(targetEntityType: string, targetEntityId: number): Promise<AiProvenanceRecord | null> {
+  public static async getProvenanceAsync(
+    targetEntityType: string,
+    targetEntityId: number
+  ): Promise<AiProvenanceRecord | null> {
     try {
       const db = getDatabaseAdapter();
       const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
@@ -135,7 +148,9 @@ export class AiProvenanceService {
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
 
       return {
@@ -187,7 +202,9 @@ export class AiProvenanceService {
       if (db.runSync) {
         db.runSync(sql, params);
       } else {
-        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordAiOperation failed', err));
+        db.run(sql, params).catch((err) =>
+          AppLogger.warn('AiProvenanceService', 'Async recordAiOperation failed', err)
+        );
       }
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to log AI operation to SQLite', e);

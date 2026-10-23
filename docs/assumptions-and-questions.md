@@ -29,8 +29,8 @@ Last reviewed: 2026-10-21.
 
 ## Assumptions (unconfirmed — carry risk)
 
-- **A-001.** The primary user is Android-first. *Inferred from the platform
-  decision and the APK build path, never stated explicitly.* If the web app is
+- **A-001.** The primary user is Android-first. _Inferred from the platform
+  decision and the APK build path, never stated explicitly._ If the web app is
   actually the primary surface, priority between the two should be revisited.
 - **A-002.** "Premium UI" means the existing dark, information-dense aesthetic
   (`#121215`, emerald accent, dense cards) is correct, rather than a
@@ -50,22 +50,24 @@ Last reviewed: 2026-10-21.
 Signing is fully wired (`android/keystore.properties` or `VELLUM_*` env vars,
 CI secrets), but no key has been generated. Until one is, `assembleRelease`
 produces an unsigned APK that cannot be installed, and no installed copy can
-ever be updated in place. *Action:* generate and back up the keystore per
+ever be updated in place. _Action:_ generate and back up the keystore per
 `docs/BUILD_RELEASE.md` §1, then set the four CI secrets.
 
 **Q-003. `public/.well-known/assetlinks.json` still holds the placeholder
 fingerprint.**
 HTTPS App Links (`https://vellumscribe.app/...`) and OAuth return therefore
-show a disambiguation dialog. *Action:* fill in the release keystore SHA-256
+show a disambiguation dialog. _Action:_ fill in the release keystore SHA-256
 from Q-002.
 
 ### Quality debt
 
-**Q-004. Format checking is not enforced.**
-`npm run format:check` reports **194 files** that would be reformatted
-(measured 2026-10-21). Adding the gate now would make CI red. *Action:* run one
-dedicated mechanical formatting slice, then enable `format:check` as a
-required CI step.
+**Q-004. ✅ Resolved 2026-10-23 — format checking is enforced.**
+_Was:_ `npm run format:check` reported 194 files that would be reformatted, so
+enabling the gate would have made CI red; the `format` job ran
+`continue-on-error`.
+_Resolution:_ one mechanical `prettier --write .` pass (148 files, D-407), the
+generated `cap sync` web bundle added to `.prettierignore`, and the job
+promoted to a required gate (`format`) running `npm run format:check`.
 
 **Q-005. ✅ Resolved 2026-10-23 — lint is clean at `--max-warnings=0`.**
 Was: the guide §4 ceiling denied all 656 pre-existing warnings, so `npm run
@@ -79,11 +81,11 @@ deliberately non-blocking Prettier job (see Q-004).
 **Q-008. ✅ Resolved 2026-10-21 — legacy one-shot CI workflows cleaned up.**
 There were 19 permanent no-op stubs (`if: false` jobs named "(disabled)")
 plus four push-triggered bots holding `contents: write`.
-*Action taken:* deleted all 19 stubs; removed the `push:` trigger from the
+_Action taken:_ deleted all 19 stubs; removed the `push:` trigger from the
 four bots so they now run on `workflow_dispatch` only. `vendor-whisper.yml`
 was left alone — it is dispatch-only and is a legitimate vendor-fetch tool,
 not a patch bot.
-*Result:* `.github/workflows/` went from 27 files to 8:
+_Result:_ `.github/workflows/` went from 27 files to 8:
 build-apk, ci, fix-ai-handlers, fix-settings-jsx, remove-orphans,
 security-scan, ux-residual, vendor-whisper. No workflow now fires on `push`
 except `build-apk.yml`, `ci.yml` and `security-scan.yml`.
@@ -118,11 +120,11 @@ distribution, or whether `stub` should be the default.
 
 **Q-001. ✅ Resolved 2026-10-21 — every GitHub Actions run failed before any
 step started.**
-*Was:* all runs on `main` concluded in 2–4 s with `steps: []` and no logs,
+_Was:_ all runs on `main` concluded in 2–4 s with `steps: []` and no logs,
 which blocked the APK build and removed the primary verification signal.
-*Cause:* account/repo runner side (Actions spending limit / billing on a
+_Cause:_ account/repo runner side (Actions spending limit / billing on a
 private repo), not the code.
-*Resolution:* the repository is now public, and runs execute normally.
+_Resolution:_ the repository is now public, and runs execute normally.
 Evidence — CI `39566612176` (Linux + Windows + macOS green), Security
 Scanning `39566612217` (green), Build Android APK `39566612127` (green,
 artifact `VellumScribe-Android-APKs-real`). Recorded as fact F-007.

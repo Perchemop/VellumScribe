@@ -9,11 +9,10 @@ import {
   QrCode,
   Printer,
   Download,
-  
-  
   Smartphone,
   ExternalLink,
-  BookOpen} from 'lucide-react';
+  BookOpen,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { NoteRecord, EventRecord } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';
@@ -28,11 +27,7 @@ interface NoteShareModalProps {
 
 type ShareFormat = 'share_sheet' | 'notebooklm' | 'markdown' | 'text' | 'qr' | 'json';
 
-export const NoteShareModal: React.FC<NoteShareModalProps> = ({
-  note,
-  event,
-  onClose,
-}) => {
+export const NoteShareModal: React.FC<NoteShareModalProps> = ({ note, event, onClose }) => {
   useModalBackHandler(true, onClose, 'note-share-modal');
   const [activeFormat, setActiveFormat] = useState<ShareFormat>('share_sheet');
   const [copied, setCopied] = useState(false);
@@ -174,7 +169,8 @@ ${formattedText}
                 Share &amp; Export Note
               </h2>
               <p className="text-xs text-zinc-400">
-                {note.title || 'Untitled Note'} &bull; {note.note_type === 'checklist' ? 'To-Do List' : 'Document'}
+                {note.title || 'Untitled Note'} &bull;{' '}
+                {note.note_type === 'checklist' ? 'To-Do List' : 'Document'}
               </p>
             </div>
           </div>
@@ -285,7 +281,8 @@ ${formattedText}
                   </span>
                 </div>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  Send this note to any installed app (Gmail, Google Drive, WhatsApp, Messages, Slack, Keep, or local Files).
+                  Send this note to any installed app (Gmail, Google Drive, WhatsApp, Messages,
+                  Slack, Keep, or local Files).
                 </p>
                 <div className="pt-2">
                   <button
@@ -305,7 +302,11 @@ ${formattedText}
                   className="p-3 rounded-2xl bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-800 text-left transition-colors flex items-center gap-3"
                 >
                   <div className="p-2 rounded-xl bg-zinc-200/60 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                    {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                    {copied ? (
+                      <Check className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-4 h-4" />
+                    )}
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
@@ -344,26 +345,26 @@ ${formattedText}
           {activeFormat === 'qr' && (
             <div className="flex flex-col items-center text-center space-y-4">
               <div className="p-4 bg-white rounded-2xl border border-zinc-200 shadow-sm flex items-center justify-center">
-                <QRCodeSVG
-                  value={qrPayload}
-                  size={190}
-                  level="M"
-                  includeMargin={true}
-                />
+                <QRCodeSVG value={qrPayload} size={190} level="M" includeMargin={true} />
               </div>
               <div className="space-y-1">
                 <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                   Instant Air-Gapped Device Scanning
                 </div>
                 <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
-                  Scan this code directly with another smartphone camera to transfer the note offline without internet, cloud, or pairing.
+                  Scan this code directly with another smartphone camera to transfer the note
+                  offline without internet, cloud, or pairing.
                 </p>
               </div>
               <button
                 onClick={handleCopyText}
                 className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
               >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
                 <span>{copied ? 'Copied Text' : 'Copy QR Payload'}</span>
               </button>
             </div>
@@ -388,14 +389,17 @@ ${formattedText}
                   </a>
                 </div>
                 <p className="text-xs text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
-                  Formatted specifically for NotebookLM source ingestion, including metadata headers, date attribution, document IDs, and clean markdown hierarchy.
+                  Formatted specifically for NotebookLM source ingestion, including metadata
+                  headers, date attribution, document IDs, and clean markdown hierarchy.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={async () => {
                       await NativeBridge.copyText(notebooklmText);
                       setCopied(true);
-                      setFeedback('NotebookLM source copied to clipboard! Ready to paste into NotebookLM.');
+                      setFeedback(
+                        'NotebookLM source copied to clipboard! Ready to paste into NotebookLM.'
+                      );
                       setTimeout(() => {
                         setCopied(false);
                         setFeedback(null);
@@ -438,7 +442,9 @@ ${formattedText}
           {activeFormat === 'markdown' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-zinc-500">Standardized Markdown with frontmatter</span>
+                <span className="text-xs text-zinc-500">
+                  Standardized Markdown with frontmatter
+                </span>
                 <button
                   onClick={handleShareMarkdownFile}
                   className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-xs font-semibold flex items-center gap-1.5"
@@ -461,7 +467,11 @@ ${formattedText}
                   onClick={handleCopyText}
                   className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl text-xs font-semibold flex items-center gap-1.5"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
                   <span>{copied ? 'Copied' : 'Copy to Clipboard'}</span>
                 </button>
               </div>

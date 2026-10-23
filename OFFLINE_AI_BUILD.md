@@ -41,10 +41,12 @@ This document describes the on-device Speech-to-Text (STT) architecture in Vellu
 To compile the real tensor inference runtime into Android APK builds:
 
 ### Step 1: Vendor Upstream whisper.cpp and ggml
+
 1. Vendor upstream [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) into `android/app/src/main/cpp/third_party/whisper.cpp`.
 2. Include the entire `ggml` backend (including `ggml.c`, `ggml-alloc.c`, `ggml-backend.c`, `ggml-quants.c`, and CPU/NEON kernel implementations).
 
 ### Step 2: Update CMakeLists.txt
+
 1. Update `android/app/src/main/cpp/CMakeLists.txt` to compile upstream sources instead of the fallback stub.
 2. Link `ggml` and platform log libraries:
    ```cmake
@@ -63,6 +65,7 @@ To compile the real tensor inference runtime into Android APK builds:
    ```
 
 ### Step 3: Adapt JNI Bridge (`jni_whisper.cpp`)
+
 1. Ensure the JNI functions map cleanly to the updated C API in upstream `whisper.h`:
    - `whisper_init_from_file_with_params(...)`
    - `whisper_full_default_params(...)`
@@ -71,6 +74,7 @@ To compile the real tensor inference runtime into Android APK builds:
    - `whisper_full_get_segment_text(...)`
 
 ### Step 4: Verification & Smoke Test (T-P0.4)
+
 1. Build `arm64-v8a` APK via Android NDK.
 2. Download official quantized model (e.g. `ggml-tiny.bin` or `ggml-base.bin`, Q5_1).
 3. Validate runtime probe returns `inferenceRuntimeReady: true`.

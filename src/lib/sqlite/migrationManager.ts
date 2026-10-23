@@ -1,6 +1,12 @@
 import { getDatabaseAdapter } from './databaseAdapter';
 import { AppLogger } from '../logger';
-import { EventRecord, NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../../types';
+import {
+  EventRecord,
+  NoteRecord,
+  RecordingRecord,
+  TranscriptRecord,
+  OcrScanRecord,
+} from '../../types';
 
 const LEGACY_STORAGE_KEYS = {
   EVENTS: 'omninote_sqlite_events_v1',
@@ -84,7 +90,10 @@ export class MigrationManager {
       return null;
     }
 
-    AppLogger.info('MigrationManager', `Starting safe SQLite migration for ${notes.length} notes and ${events.length} events...`);
+    AppLogger.info(
+      'MigrationManager',
+      `Starting safe SQLite migration for ${notes.length} notes and ${events.length} events...`
+    );
 
     // 1. Create safety pre-migration snapshot backup in localStorage / backup key
     try {
@@ -96,9 +105,16 @@ export class MigrationManager {
         transcripts,
         ocrScans,
       };
-      localStorage.setItem(LEGACY_STORAGE_KEYS.PRE_MIGRATION_BACKUP, JSON.stringify(backupSnapshot));
+      localStorage.setItem(
+        LEGACY_STORAGE_KEYS.PRE_MIGRATION_BACKUP,
+        JSON.stringify(backupSnapshot)
+      );
     } catch (backupErr) {
-      AppLogger.warn('MigrationManager', 'Could not write safety backup to localStorage, continuing with migration', backupErr);
+      AppLogger.warn(
+        'MigrationManager',
+        'Could not write safety backup to localStorage, continuing with migration',
+        backupErr
+      );
     }
 
     let migratedChecklists = 0;
@@ -169,7 +185,13 @@ export class MigrationManager {
               await db.run(
                 `INSERT OR REPLACE INTO checklists (id, note_id, text, completed, position)
                  VALUES (?, ?, ?, ?, ?)`,
-                [item.id || `chk_${note.id}_${i}`, note.id, item.text || '', item.completed ? 1 : 0, i]
+                [
+                  item.id || `chk_${note.id}_${i}`,
+                  note.id,
+                  item.text || '',
+                  item.completed ? 1 : 0,
+                  i,
+                ]
               );
               migratedChecklists++;
             }
@@ -181,7 +203,10 @@ export class MigrationManager {
               const trimmed = tag.trim();
               if (trimmed) {
                 await db.run(`INSERT OR IGNORE INTO tags (name) VALUES (?)`, [trimmed]);
-                await db.run(`INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)`, [note.id, trimmed]);
+                await db.run(`INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)`, [
+                  note.id,
+                  trimmed,
+                ]);
                 migratedTags++;
               }
             }
@@ -250,7 +275,10 @@ export class MigrationManager {
       if (db.flush) {
         await db.flush();
       }
-      AppLogger.info('MigrationManager', 'SQLite migration successfully committed via DatabaseAdapter.');
+      AppLogger.info(
+        'MigrationManager',
+        'SQLite migration successfully committed via DatabaseAdapter.'
+      );
 
       const report: MigrationReport = {
         migratedEvents: events.length,
@@ -267,7 +295,11 @@ export class MigrationManager {
 
       return report;
     } catch (migrationErr) {
-      AppLogger.error('MigrationManager', 'Fatal error during SQLite migration, data rolled back', migrationErr);
+      AppLogger.error(
+        'MigrationManager',
+        'Fatal error during SQLite migration, data rolled back',
+        migrationErr
+      );
       throw migrationErr;
     }
   }
