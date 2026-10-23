@@ -330,3 +330,21 @@ never mistaken for a code regression.
 **Rejected.** Adding `CodeQL` to `.ci-required.txt` as non-authoritative
 (that would silently hide future _new_ alerts), and blanket-dismissing the
 existing ones.
+
+### D-410 · 2026-10-23 · Merge authority delegated to the agent (owner instruction)
+
+**Decision.** The repository owner explicitly delegated PR merge authority:
+"you can merge PR without my authority". The guide (§5.2 step 7, §9) has the
+human merge every PR; this records the owner's standing override, so a PR may be
+merged by the agent once its **required** checks are green.
+**Scope.** Only the required checks in `.github/workflows/ci.yml` decide the
+verdict: `verify` on the three OS runners (typecheck + lint with
+`--max-warnings=0` + `check:orphans` + tests) and `format`. A non-required red
+check never authorises a merge by itself — and it never silent-drops: it is
+recorded in the PR summary so the owner can triage it.
+**Consequences.** PR #61 is merged on this authority. `CodeQL` was red on it
+(68 pre-existing alerts, D-409): that is security debt the owner triages in the
+Security tab, not a regression from this PR, so it is reported rather than
+suppressed.
+**Rejected.** Adding `CodeQL` to `.ci-required.txt` just to make this merge
+cleaner (that would hide future _new_ alerts).
