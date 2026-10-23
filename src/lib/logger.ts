@@ -10,7 +10,7 @@ export interface LogEntry {
   level: LogLevel;
   category: string;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 const MAX_LOGS = 250;
@@ -24,7 +24,7 @@ const SENSITIVE_KEY_REGEX = /(pin|password|secret|token|apikey|api_key|auth|cred
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9_\-.+=/]+/gi;
 const APIKEY_PATTERN_REGEX = /(?:AIza[0-9A-Za-z-_]{35}|gsk_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,})/g;
 
-function sanitizeValue(value: any, depth = 0): any {
+function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 5 || value === null || value === undefined) return value;
   
   if (typeof value === 'string') {
@@ -38,7 +38,7 @@ function sanitizeValue(value: any, depth = 0): any {
   }
 
   if (typeof value === 'object') {
-    const sanitizedObj: Record<string, any> = {};
+    const sanitizedObj: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
       if (SENSITIVE_KEY_REGEX.test(k)) {
         sanitizedObj[k] = '[REDACTED]';
@@ -53,7 +53,7 @@ function sanitizeValue(value: any, depth = 0): any {
 }
 
 export class AppLogger {
-  private static addEntry(level: LogLevel, category: string, rawMessage: string, rawData?: any) {
+  private static addEntry(level: LogLevel, category: string, rawMessage: string, rawData?: unknown) {
     // Automatically redact sensitive information
     const message = typeof rawMessage === 'string'
       ? rawMessage
@@ -98,19 +98,19 @@ export class AppLogger {
     });
   }
 
-  public static debug(category: string, message: string, data?: any) {
+  public static debug(category: string, message: string, data?: unknown) {
     this.addEntry('DEBUG', category, message, data);
   }
 
-  public static info(category: string, message: string, data?: any) {
+  public static info(category: string, message: string, data?: unknown) {
     this.addEntry('INFO', category, message, data);
   }
 
-  public static warn(category: string, message: string, data?: any) {
+  public static warn(category: string, message: string, data?: unknown) {
     this.addEntry('WARN', category, message, data);
   }
 
-  public static error(category: string, message: string, data?: any) {
+  public static error(category: string, message: string, data?: unknown) {
     this.addEntry('ERROR', category, message, data);
   }
 

@@ -18,6 +18,16 @@ export interface EncryptedCloudBackupEnvelope {
   createdAt: string;
 }
 
+/** Fields read from an encrypted backup envelope (the rest is ignored). */
+interface BackupEnvelope {
+  vellumscribe_archive?: boolean;
+  schema?: string;
+  version?: string | number;
+  ciphertext?: string;
+  iv?: string;
+  salt?: string;
+}
+
 export class CloudBackupCrypto {
   private static cachedVaultKey: string | null = null;
   private static readonly BACKUP_PASSPHRASE_SESSION = 'vs_cloud_backup_passphrase';
@@ -122,12 +132,17 @@ export class CloudBackupCrypto {
     return ephemeralKey;
   }
 
+  /** TS 5.7+ widens Uint8Array over its buffer; the DOM lib narrows BufferSource. */
+  private static asBufferSource(data: Uint8Array): BufferSource {
+    return data as unknown as BufferSource;
+  }
+
   public static async compressGzip(data: Uint8Array): Promise<Uint8Array> {
     if (typeof CompressionStream !== 'undefined') {
       try {
         const cs = new CompressionStream('gzip');
         const writer = cs.writable.getWriter();
-        writer.write(data as any);
+        writer.write(this.asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = cs.readable.getReader();
@@ -156,7 +171,7 @@ export class CloudBackupCrypto {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
-        writer.write(data as any);
+        writer.write(this.asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = ds.readable.getReader();
@@ -195,7 +210,7 @@ export class CloudBackupCrypto {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: fromHex(saltHex) as any,
+        salt: this.asBufferSource(fromHex(saltHex)),
         iterations: PBKDF2_ITERATIONS,
         hash: 'SHA-256',
       },
@@ -220,7 +235,7 @@ export class CloudBackupCrypto {
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
-      compressedBytes as any
+      this.asBufferSource(compressedBytes)
     );
     const envelope: EncryptedCloudBackupEnvelope = {
       vellumscribe_archive: true,
@@ -255,9 +270,9 @@ export class CloudBackupCrypto {
       rawText = new TextDecoder().decode(data);
     }
 
-    let envelope: any;
+    let envelope: BackupEnvelope;
     try {
-      envelope = JSON.parse(rawText);
+      envelope = JSON.parse(rawText) as BackupEnvelope;
     } catch {
       throw new Error('Invalid backup archive: Content is not valid JSON or encrypted envelope.');
     }
@@ -272,7 +287,8 @@ export class CloudBackupCrypto {
       return rawText;
     }
 
-    if (envelope.vellumscribe_archive !== true || !envelope.ciphertext || !envelope.iv || !envelope.salt) {
+    const { ciphertext: cipherHex, iv: ivHex, salt: saltHex } = envelope;
+    if (envelope.vellumscribe_archive !== true || !cipherHex || !ivHex || !saltHex) {
       throw new Error('Unsupported or corrupted encrypted backup envelope.');
     }
 
@@ -280,16 +296,16 @@ export class CloudBackupCrypto {
       userPassphrase?.trim() ||
       this.getUserBackupPassphrase() ||
       (await this.getClientVaultKeyAsync());
-    const key = await this.deriveKey(passphrase, envelope.salt);
-    const iv = fromHex(envelope.iv);
-    const ciphertext = fromHex(envelope.ciphertext);
+    const key = await this.deriveKey(passphrase, saltHex);
+    const iv = fromHex(ivHex);
+    const ciphertext = fromHex(cipherHex);
 
     let decryptedBuffer: ArrayBuffer;
     try {
       decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as any },
+        { name: 'AES-GCM', iv: this.asBufferSource(iv) },
         key,
-        ciphertext as any
+        this.asBufferSource(ciphertext)
       );
     } catch {
       throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');
