@@ -54,10 +54,30 @@ describe('ImportSafetyPipeline', () => {
       schema: {
         events: [{ id: 1, title: 'Work', event_date: '2026-09-01' }],
         notes: [
-          { id: 101, event_id: 1, title: 'First Note', body: 'Body 1', created_at: '2026-09-01T00:00:00Z' },
-          { id: 102, event_id: 1, title: 'Second Note', body: 'Body 2', created_at: '2026-09-01T00:00:00Z' },
+          {
+            id: 101,
+            event_id: 1,
+            title: 'First Note',
+            body: 'Body 1',
+            created_at: '2026-09-01T00:00:00Z',
+          },
+          {
+            id: 102,
+            event_id: 1,
+            title: 'Second Note',
+            body: 'Body 2',
+            created_at: '2026-09-01T00:00:00Z',
+          },
         ],
-        recordings: [{ id: 1, note_id: 101, audio_url: 'data:audio/wav;base64,123', duration_ms: 2000, created_at: '2026-09-01T00:00:00Z' }],
+        recordings: [
+          {
+            id: 1,
+            note_id: 101,
+            audio_url: 'data:audio/wav;base64,123',
+            duration_ms: 2000,
+            created_at: '2026-09-01T00:00:00Z',
+          },
+        ],
         ocr_scans: [],
       },
     });
@@ -85,8 +105,20 @@ describe('ImportSafetyPipeline', () => {
       schema: {
         events: [{ id: 99, title: 'Imported Category', event_date: '2026-09-03' }],
         notes: [
-          { id: 501, event_id: 99, title: 'Restored Note A', body: 'Restored content A', created_at: '2026-09-03T00:00:00Z' },
-          { id: 502, event_id: 99, title: 'Restored Note B', body: 'Restored content B', created_at: '2026-09-03T00:00:00Z' },
+          {
+            id: 501,
+            event_id: 99,
+            title: 'Restored Note A',
+            body: 'Restored content A',
+            created_at: '2026-09-03T00:00:00Z',
+          },
+          {
+            id: 502,
+            event_id: 99,
+            title: 'Restored Note B',
+            body: 'Restored content B',
+            created_at: '2026-09-03T00:00:00Z',
+          },
         ],
       },
     });

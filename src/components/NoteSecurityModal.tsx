@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock,  X, AlertCircle, ShieldAlert, KeyRound, EyeOff, ShieldCheck } from 'lucide-react';
+import { Lock, X, AlertCircle, ShieldAlert, KeyRound, EyeOff, ShieldCheck } from 'lucide-react';
 import { NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { NotePayloadData } from '../lib/cryptoUtils';
@@ -135,12 +135,15 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
             ) : (
               <ShieldCheck className="w-5 h-5 text-emerald-500" />
             )}
-            <h3 id="security-modal-title" className="text-sm font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+            <h3
+              id="security-modal-title"
+              className="text-sm font-semibold uppercase tracking-wider text-zinc-900 dark:text-zinc-100"
+            >
               {mode === 'gate'
                 ? 'Unlock Protected Note'
                 : mode === 'manage'
-                ? 'Remove Note Protection'
-                : 'Configure Note Encryption'}
+                  ? 'Remove Note Protection'
+                  : 'Configure Note Encryption'}
             </h3>
           </div>
           <button
@@ -157,8 +160,8 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
           {mode === 'gate'
             ? 'Enter your security PIN or passphrase to view and edit this note in your active session.'
             : mode === 'manage'
-            ? 'Enter your credentials to permanently decrypt note contents and remove protection.'
-            : 'Encrypted at rest using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation.'}
+              ? 'Enter your credentials to permanently decrypt note contents and remove protection.'
+              : 'Encrypted at rest using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation.'}
         </p>
 
         {mode === 'set' && (
@@ -226,8 +229,12 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
                       : 'border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50'
                   }`}
                 >
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Standard Lock</span>
-                  <span className="text-xs text-zinc-500">Encrypts body & attachments. Title remains readable.</span>
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    Standard Lock
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    Encrypts body & attachments. Title remains readable.
+                  </span>
                 </button>
 
                 <button
@@ -243,7 +250,9 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
                     <EyeOff className="w-3 h-3 text-amber-500" />
                     <span>Private Lock</span>
                   </div>
-                  <span className="text-xs text-zinc-500">Encrypts title, tags & body. Displays "🔒 Locked Note".</span>
+                  <span className="text-xs text-zinc-500">
+                    Encrypts title, tags & body. Displays "🔒 Locked Note".
+                  </span>
                 </button>
               </div>
             </div>
@@ -318,10 +327,10 @@ export const NoteSecurityModal: React.FC<NoteSecurityModalProps> = ({
               {isProcessing
                 ? 'Verifying...'
                 : mode === 'gate'
-                ? 'Unlock'
-                : mode === 'manage'
-                ? 'Remove Protection'
-                : 'Encrypt Note'}
+                  ? 'Unlock'
+                  : mode === 'manage'
+                    ? 'Remove Protection'
+                    : 'Encrypt Note'}
             </button>
           </div>
         </form>

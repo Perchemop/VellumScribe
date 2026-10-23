@@ -148,9 +148,7 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
       'Client-side OAuth 2.0 + PKCE authorization code paths for major cloud storage services (not yet wired to a login UI at this version)',
       'Backup payload export/download plumbing with custom provider path configuration',
     ],
-    fixes: [
-      'Hardened offline token refresh routines for interrupted mobile connections',
-    ],
+    fixes: ['Hardened offline token refresh routines for interrupted mobile connections'],
   },
   {
     version: '2.7.0',
@@ -210,9 +208,7 @@ export const APP_CHANGELOGS: ReleaseInfo[] = [
       'Selective per-note cloud backup flags',
       '3-way semantic conflict merge engine',
     ],
-    fixes: [
-      'Initial public release',
-    ],
+    fixes: ['Initial public release'],
   },
 ];
 
@@ -270,8 +266,11 @@ export class AppUpdateManager {
    */
   private static runIncrementalMigrations(fromSchema: number, toSchema: number) {
     try {
-      AppLogger.info('AppUpdateManager', `[AppUpdateManager] Migrating database from schema v${fromSchema} to v${toSchema}...`);
-      
+      AppLogger.info(
+        'AppUpdateManager',
+        `[AppUpdateManager] Migrating database from schema v${fromSchema} to v${toSchema}...`
+      );
+
       // Step 1: Create an automated safety snapshot before altering records
       const notes = StorageManager.getNotes();
       const events = StorageManager.getEvents();
@@ -284,7 +283,10 @@ export class AppUpdateManager {
 
         // Ensure note_type exists
         if (!normalized.note_type) {
-          normalized.note_type = normalized.checklist_items && normalized.checklist_items.length > 0 ? 'checklist' : 'text';
+          normalized.note_type =
+            normalized.checklist_items && normalized.checklist_items.length > 0
+              ? 'checklist'
+              : 'text';
           changed = true;
         }
 
@@ -340,7 +342,10 @@ export class AppUpdateManager {
       // Update storage version keys
       localStorage.setItem(STORAGE_KEYS.INSTALLED_VERSION, CURRENT_APP_VERSION);
       localStorage.setItem(STORAGE_KEYS.SCHEMA_VERSION, CURRENT_SCHEMA_VERSION.toString());
-      AppLogger.info('AppUpdateManager', `[AppUpdateManager] Migration completed successfully. ${modifiedNotesCount} notes refreshed.`);
+      AppLogger.info(
+        'AppUpdateManager',
+        `[AppUpdateManager] Migration completed successfully. ${modifiedNotesCount} notes refreshed.`
+      );
     } catch (_e) {
       const e = asErrorLike(_e);
       AppLogger.error('AppUpdateManager', '[AppUpdateManager] Migration error:', e);
@@ -388,7 +393,8 @@ export class AppUpdateManager {
         releaseDate: latestRelease.releaseDate,
         hasUpdate: false,
         checked: false,
-        message: 'No update manifest is configured for this build (set VITE_UPDATE_MANIFEST_URL), so this could not check online for a newer release.',
+        message:
+          'No update manifest is configured for this build (set VITE_UPDATE_MANIFEST_URL), so this could not check online for a newer release.',
         release: latestRelease,
       };
     }
@@ -400,13 +406,17 @@ export class AppUpdateManager {
         throw new Error(`Update manifest request failed (HTTP ${res.status}).`);
       }
       const manifest = await res.json();
-      const latestVersion = typeof manifest.version === 'string' ? manifest.version : CURRENT_APP_VERSION;
+      const latestVersion =
+        typeof manifest.version === 'string' ? manifest.version : CURRENT_APP_VERSION;
       const hasUpdate = latestVersion !== CURRENT_APP_VERSION;
       return {
         isUpToDate: !hasUpdate,
         currentVersion: CURRENT_APP_VERSION,
         latestVersion,
-        releaseDate: typeof manifest.releaseDate === 'string' ? manifest.releaseDate : latestRelease.releaseDate,
+        releaseDate:
+          typeof manifest.releaseDate === 'string'
+            ? manifest.releaseDate
+            : latestRelease.releaseDate,
         hasUpdate,
         checked: true,
         message: hasUpdate

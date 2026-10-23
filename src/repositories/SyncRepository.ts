@@ -172,7 +172,11 @@ export class SyncRepository {
     await db.run('DELETE FROM cloud_sync_queue');
   }
 
-  public static async recordItemChange(change: Omit<ItemChangeRecord, 'changedAt' | 'syncState'> & { syncState?: ItemChangeRecord['syncState'] }): Promise<void> {
+  public static async recordItemChange(
+    change: Omit<ItemChangeRecord, 'changedAt' | 'syncState'> & {
+      syncState?: ItemChangeRecord['syncState'];
+    }
+  ): Promise<void> {
     const db = await this.getDb();
     const now = Date.now();
     await db.run(
@@ -203,7 +207,10 @@ export class SyncRepository {
       changed_at: number;
       payload_hash: string;
       sync_state: 'pending' | 'syncing' | 'synced' | 'failed';
-    }>('SELECT * FROM item_changes WHERE sync_state = ? ORDER BY changed_at ASC LIMIT ?', ['pending', limit]);
+    }>('SELECT * FROM item_changes WHERE sync_state = ? ORDER BY changed_at ASC LIMIT ?', [
+      'pending',
+      limit,
+    ]);
 
     return (rows || []).map((r) => ({
       id: r.id,

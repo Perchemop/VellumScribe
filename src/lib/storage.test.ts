@@ -24,7 +24,10 @@ function makeEvent(overrides: Partial<Omit<EventRecord, 'id'>> = {}): Omit<Event
   };
 }
 
-function makeNote(eventId: number, overrides: Partial<Omit<NoteRecord, 'id'>> = {}): Omit<NoteRecord, 'id'> {
+function makeNote(
+  eventId: number,
+  overrides: Partial<Omit<NoteRecord, 'id'>> = {}
+): Omit<NoteRecord, 'id'> {
   return {
     event_id: eventId,
     body: 'Some note content',
@@ -55,18 +58,20 @@ describe('StorageManager events', () => {
   it('preserves notes by moving them to General when an event is deleted', () => {
     const event = StorageManager.addEvent(makeEvent({ title: 'Work Projects' }));
     const note = StorageManager.addNote(makeNote(event.id, { body: 'Important project note' }));
-    
+
     StorageManager.deleteEvent(event.id);
-    
+
     // The original event should be deleted
     expect(StorageManager.getEvents().find((e) => e.id === event.id)).toBeUndefined();
-    
+
     // The note MUST be preserved, not deleted, and remapped to General
     const preservedNote = StorageManager.getNoteById(note.id);
     expect(preservedNote).toBeDefined();
     expect(preservedNote?.body).toBe('Important project note');
-    
-    const generalEvent = StorageManager.getEvents().find((e) => e.title.toLowerCase() === 'general');
+
+    const generalEvent = StorageManager.getEvents().find(
+      (e) => e.title.toLowerCase() === 'general'
+    );
     expect(generalEvent).toBeDefined();
     expect(preservedNote?.event_id).toBe(generalEvent?.id);
   });
@@ -83,7 +88,9 @@ describe('StorageManager notes', () => {
 
   it('updates an existing note and returns the updated record, or null if not found', () => {
     const event = StorageManager.addEvent(makeEvent());
-    const note = StorageManager.addNote(makeNote(event.id, { title: 'Initial Title', body: 'Initial Body' }));
+    const note = StorageManager.addNote(
+      makeNote(event.id, { title: 'Initial Title', body: 'Initial Body' })
+    );
 
     const updated = StorageManager.updateNote(note.id, { title: 'Updated Title' });
     expect(updated).not.toBeNull();
@@ -129,7 +136,9 @@ describe('StorageManager notes', () => {
 
   it('records and restores note revisions', async () => {
     const event = StorageManager.addEvent(makeEvent());
-    const note = StorageManager.addNote(makeNote(event.id, { title: 'Revision 1 Title', body: 'Revision 1 Body' }));
+    const note = StorageManager.addNote(
+      makeNote(event.id, { title: 'Revision 1 Title', body: 'Revision 1 Body' })
+    );
 
     // Update note to create a second version
     StorageManager.updateNote(note.id, { title: 'Revision 2 Title', body: 'Revision 2 Body' });
@@ -232,10 +241,16 @@ describe('StorageManager PIN lock', () => {
     // Plaintext body should not remain in the stored record once locked.
     expect(StorageManager.getNoteById(note.id)?.body).not.toContain('Top secret plans');
 
-    const wrongAttempt = await StorageManager.verifyAndUnlockNote(StorageManager.getNoteById(note.id)!, '0000');
+    const wrongAttempt = await StorageManager.verifyAndUnlockNote(
+      StorageManager.getNoteById(note.id)!,
+      '0000'
+    );
     expect(wrongAttempt.success).toBe(false);
 
-    const rightAttempt = await StorageManager.verifyAndUnlockNote(StorageManager.getNoteById(note.id)!, '1234');
+    const rightAttempt = await StorageManager.verifyAndUnlockNote(
+      StorageManager.getNoteById(note.id)!,
+      '1234'
+    );
     expect(rightAttempt.success).toBe(true);
     expect(rightAttempt.payload?.body).toBe('Top secret plans');
   });
@@ -300,7 +315,9 @@ describe('StorageManager note operations & batch processing', () => {
   it('runs SQLite VACUUM compaction and returns size metrics', async () => {
     const event = StorageManager.addEvent(makeEvent());
     for (let i = 0; i < 5; i++) {
-      StorageManager.addNote(makeNote(event.id, { title: `Note ${i}`, body: 'Content '.repeat(100) }));
+      StorageManager.addNote(
+        makeNote(event.id, { title: `Note ${i}`, body: 'Content '.repeat(100) })
+      );
     }
     const res = await StorageManager.vacuumDatabase();
     expect(res).toBeDefined();

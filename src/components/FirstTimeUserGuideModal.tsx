@@ -79,7 +79,9 @@ export function resetOnboardingState(): void {
       localStorage.removeItem(SPLASH_SEEN_KEY);
     }
     StorageManager.removeItem(STORAGE_KEY);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = ({
@@ -200,7 +202,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
       highlights: [
         {
           icon: Mic,
-          title: isWhisperRuntimeReady ? 'On-Device Whisper Models' : 'Real-Time Microphone Dictation',
+          title: isWhisperRuntimeReady
+            ? 'On-Device Whisper Models'
+            : 'Real-Time Microphone Dictation',
           desc: isWhisperRuntimeReady
             ? 'Download Tiny or Base models once to transcribe offline.'
             : 'Speech recognition while you speak — zero cloud traffic.',
@@ -228,7 +232,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
         if (e.target === e.currentTarget) handleDismiss();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/70 backdrop-blur-xs select-none animate-fade-in"
-      onKeyDown={(e) => { if (e.key === 'Escape') handleDismiss(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') handleDismiss();
+      }}
     >
       <div className="w-full max-w-lg bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         <div className="p-6 pb-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-850">
@@ -238,7 +244,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
               <span className="text-xs font-semibold tracking-wider text-indigo-600 dark:text-indigo-400 uppercase">
                 {step.badge}
               </span>
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Quick Start</h2>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Quick Start
+              </h2>
             </div>
           </div>
           <button
@@ -257,7 +265,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
             <h3 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
               {step.title}
             </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{step.description}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              {step.description}
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -271,8 +281,12 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
                   <div className="w-7 h-7 rounded-xl bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 flex items-center justify-center">
                     <Icon className="w-3.5 h-3.5" />
                   </div>
-                  <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">{h.title}</h4>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal">{h.desc}</p>
+                  <h4 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    {h.title}
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-normal">
+                    {h.desc}
+                  </p>
                 </div>
               );
             })}
@@ -313,7 +327,9 @@ export const FirstTimeUserGuideModal: React.FC<FirstTimeUserGuideModalProps> = (
               <div
                 key={idx}
                 className={`h-1.5 rounded-full transition-all ${
-                  idx === currentStep ? 'w-6 bg-zinc-900 dark:bg-zinc-100' : 'w-1.5 bg-zinc-200 dark:bg-zinc-800'
+                  idx === currentStep
+                    ? 'w-6 bg-zinc-900 dark:bg-zinc-100'
+                    : 'w-1.5 bg-zinc-200 dark:bg-zinc-800'
                 }`}
               />
             ))}

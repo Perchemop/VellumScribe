@@ -25,7 +25,9 @@ import { asErrorLike } from '../lib/errorLike';
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
 // keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
 const TranscriptionRecoverySheet = React.lazy(() =>
-  import('./audio/TranscriptionRecoverySheet').then((m) => ({ default: m.TranscriptionRecoverySheet }))
+  import('./audio/TranscriptionRecoverySheet').then((m) => ({
+    default: m.TranscriptionRecoverySheet,
+  }))
 );
 
 interface AudioPlayerWidgetProps {
@@ -155,7 +157,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   // Web Audio Synthesizer fallback for demo / synthetic recordings
   const playSyntheticAudioDemo = () => {
     try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
@@ -188,7 +192,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         }
       }, 250);
     } catch (err) {
-      AppLogger.warn('AudioPlayerWidget', 'Web Audio synthesis not allowed yet without user gesture:', err);
+      AppLogger.warn(
+        'AudioPlayerWidget',
+        'Web Audio synthesis not allowed yet without user gesture:',
+        err
+      );
     }
   };
 
@@ -261,7 +269,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             ref={audioRef}
             src={recording.audio_url}
             onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-            onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)}
+            onLoadedMetadata={() =>
+              audioRef.current &&
+              setDuration(audioRef.current.duration || recording.duration_seconds)
+            }
             onEnded={() => {
               setIsPlaying(false);
               setCurrentTime(0);
@@ -300,7 +311,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           ref={audioRef}
           src={recording.audio_url}
           onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-          onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)}
+          onLoadedMetadata={() =>
+            audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)
+          }
           onEnded={() => {
             setIsPlaying(false);
             setCurrentTime(0);
@@ -311,7 +324,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       {/* Top Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`p-2 rounded-xl ${isPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400'}`}>
+          <div
+            className={`p-2 rounded-xl ${isPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400'}`}
+          >
             <FileAudio className="w-4 h-4" />
           </div>
           <div className="min-w-0">
@@ -431,7 +446,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
                     : 'bg-stone-200 dark:bg-stone-800'
                 }`}
                 style={{
-                  height: isPlaying && isPlayed ? `${Math.min(22, h * (1 + Math.sin(i * 1.5 + currentTime * 8) * 0.25))}px` : `${h}px`,
+                  height:
+                    isPlaying && isPlayed
+                      ? `${Math.min(22, h * (1 + Math.sin(i * 1.5 + currentTime * 8) * 0.25))}px`
+                      : `${h}px`,
                 }}
               />
             );
@@ -465,7 +483,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             onClick={handleTogglePlay}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-semibold shadow-xs transition-colors"
           >
-            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+            {isPlaying ? (
+              <Pause className="w-3.5 h-3.5" />
+            ) : (
+              <Play className="w-3.5 h-3.5 ml-0.5" />
+            )}
             <span>{isPlaying ? 'Pause' : 'Play'}</span>
           </button>
 
@@ -482,7 +504,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             title={isMuted ? 'Unmute' : 'Mute'}
             className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-500" /> : <Volume2 className="w-3.5 h-3.5" />}
+            {isMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-red-500" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
 
@@ -513,7 +539,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             <div className="flex-1 space-y-0.5">
               <p className="font-semibold text-amber-300">Couldn't Transcribe Offline</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-300 leading-relaxed">
-                {transcribeError.includes('Whisper') || transcribeError.includes('runtime') || transcribeError.includes('unavailable')
+                {transcribeError.includes('Whisper') ||
+                transcribeError.includes('runtime') ||
+                transcribeError.includes('unavailable')
                   ? 'On-device Whisper tensor inference is not compiled into this binary yet. You can use live dictation while recording or optional Cloud Gemini AI.'
                   : transcribeError}
               </p>

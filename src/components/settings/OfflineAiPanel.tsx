@@ -78,7 +78,7 @@ export const OfflineAiPanel: React.FC = () => {
     }
   };
 
-  const formatMb = (bytes: number | null | undefined) => (((bytes || 0) / (1024 * 1024)).toFixed(0));
+  const formatMb = (bytes: number | null | undefined) => ((bytes || 0) / (1024 * 1024)).toFixed(0);
   const isInferenceReady = Boolean(caps?.inferenceRuntimeReady);
   const isLibraryLoaded = Boolean(caps?.nativeLibraryLoaded);
 
@@ -150,7 +150,9 @@ export const OfflineAiPanel: React.FC = () => {
       )}
 
       <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span></h4>
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+          Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span>
+        </h4>
         {models.map((model) => {
           const isInstalled = !!model.installed;
           const isDownloading = downloadingModelId === model.id;
@@ -163,7 +165,9 @@ export const OfflineAiPanel: React.FC = () => {
                 <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                   {model.displayName}
                   {isInstalled && (
-                    <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400">Installed</span>
+                    <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400">
+                      Installed
+                    </span>
                   )}
                 </div>
                 <div className="text-[11px] text-zinc-500">~{formatMb(model.downloadBytes)} MB</div>

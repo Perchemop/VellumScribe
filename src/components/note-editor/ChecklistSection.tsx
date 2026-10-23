@@ -23,7 +23,11 @@ export const ChecklistSection: React.FC<ChecklistSectionProps> = ({ items, onCha
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200 hover:text-indigo-600 transition"
         >
-          {isOpen ? <ChevronDown className="w-4 h-4 text-zinc-400" /> : <ChevronRight className="w-4 h-4 text-zinc-400" />}
+          {isOpen ? (
+            <ChevronDown className="w-4 h-4 text-zinc-400" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-zinc-400" />
+          )}
           <CheckSquare className="w-4 h-4 text-indigo-500" />
           <span>Interactive Checklists</span>
           {totalCount > 0 && (

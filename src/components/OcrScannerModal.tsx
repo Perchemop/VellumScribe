@@ -8,8 +8,8 @@ import {
   Loader2,
   Copy,
   RotateCcw,
-  
-  Key} from 'lucide-react';
+  Key,
+} from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { GeminiApiService } from '../lib/geminiService';
@@ -59,7 +59,9 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
     setCameraError(null);
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError('Webcam streaming not supported in this browser. Please use native photo capture or file upload.');
+        setCameraError(
+          'Webcam streaming not supported in this browser. Please use native photo capture or file upload.'
+        );
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -77,9 +79,15 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       }
     } catch (_e) {
       const e = asErrorLike(_e);
-      AppLogger.warn('OcrScannerModal', 'Camera stream could not start, fallback to native camera intent:', e);
+      AppLogger.warn(
+        'OcrScannerModal',
+        'Camera stream could not start, fallback to native camera intent:',
+        e
+      );
       setCameraActive(false);
-      setCameraError('Live viewfinder unavailable. Click "Take Photo with Camera" below to capture using your device camera.');
+      setCameraError(
+        'Live viewfinder unavailable. Click "Take Photo with Camera" below to capture using your device camera.'
+      );
     }
   };
 
@@ -112,8 +120,6 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
     };
   }, [activeTab, selectedImage]);
 
-
-
   // Native / Capacitor camera capture (works seamlessly in APK and mobile)
   const handleNativeCameraCapture = async () => {
     setCameraError(null);
@@ -133,7 +139,11 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       }
     } catch (_err) {
       const err = asErrorLike(_err);
-      AppLogger.warn('OcrScannerModal', 'Capacitor camera failed or dismissed, falling back to input capture:', err);
+      AppLogger.warn(
+        'OcrScannerModal',
+        'Capacitor camera failed or dismissed, falling back to input capture:',
+        err
+      );
       // If permission was denied or cancelled, try native file capture input
       if (nativeFileInputRef.current) {
         nativeFileInputRef.current.click();
@@ -215,11 +225,18 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
       if (isQuota) {
         setIsQuotaError(true);
         setHasKeyError(true);
-        setOcrStatus('Google Gemini quota limit reached. Please provide a custom API key or try again in a few moments.');
+        setOcrStatus(
+          'Google Gemini quota limit reached. Please provide a custom API key or try again in a few moments.'
+        );
       } else {
         setIsQuotaError(false);
         setOcrStatus(`Extraction error: ${msg}`);
-        if (msg.includes('key') || msg.includes('permission') || msg.includes('unauthorized') || msg.includes('403')) {
+        if (
+          msg.includes('key') ||
+          msg.includes('permission') ||
+          msg.includes('unauthorized') ||
+          msg.includes('403')
+        ) {
           setHasKeyError(true);
         }
       }
@@ -385,11 +402,10 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                       <CameraIcon className="w-6 h-6" />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs font-semibold text-zinc-200">
-                        Camera Ready
-                      </p>
+                      <p className="text-xs font-semibold text-zinc-200">Camera Ready</p>
                       <p className="text-xs text-zinc-400">
-                        {cameraError || 'Use your device camera to photograph notes, whiteboards, or documents.'}
+                        {cameraError ||
+                          'Use your device camera to photograph notes, whiteboards, or documents.'}
                       </p>
                     </div>
                   </div>
@@ -442,7 +458,12 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
               <label className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs font-semibold rounded-xl shadow-2xs cursor-pointer hover:bg-zinc-800 dark:hover:bg-white transition-colors">
                 <Upload className="w-3.5 h-3.5" />
                 <span>Browse Files / Gallery</span>
-                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
               </label>
             </div>
           )}
@@ -481,7 +502,9 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                   ) : (
                     <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                   )}
-                  <span>{isProcessing ? 'Extracting with Gemini AI...' : 'Extract Text with AI'}</span>
+                  <span>
+                    {isProcessing ? 'Extracting with Gemini AI...' : 'Extract Text with AI'}
+                  </span>
                 </button>
               </div>
             </div>
@@ -503,7 +526,11 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
             disabled={!ocrText}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-40 transition-colors"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
             <span>{copied ? 'Copied' : 'Copy Text'}</span>
           </button>
 
@@ -536,7 +563,11 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
             setIsQuotaError(false);
             handleRunOcr();
           }}
-          title={isQuotaError ? 'Google Gemini Quota Limit Reached' : 'AI Provider & Intelligence Backend'}
+          title={
+            isQuotaError
+              ? 'Google Gemini Quota Limit Reached'
+              : 'AI Provider & Intelligence Backend'
+          }
           description={
             isQuotaError
               ? 'The free shared Gemini API quota has been exhausted. You can add your own free Gemini API key from Google AI Studio to continue unlimited OCR scanning.'

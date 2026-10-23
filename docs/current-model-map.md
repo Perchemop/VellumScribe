@@ -12,16 +12,16 @@ NVIDIA free only when OpenCode free is exhausted, and record the switch in
 
 Role → capability → current model (OpenCode free), reviewed 2026-10-22:
 
-| Role | Capability needed | Current model | Selection guidance |
-| --- | --- | --- | --- |
-| Orchestrator / Lead | Strong reasoning + tool calling | `opencode/big-pickle` | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
-| Coder / Executor | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high` | Best available free coding model; writes code + tests, never runs the toolchain locally. |
-| Explorer | Speed + good search | `opencode/mimo-v2.6-flash-free` | Fastest free model with decent quality; read-only, no builds. |
-| Reviewer | Competent analysis, read-only | `opencode/beam-free#high` | Solid free model, prefer fast/cheap; read-only, no builds. |
-| Tester / Bulk | High volume, lower stakes | `opencode/deepseek-v4.1-flash-free#high` | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`. |
-| CI runner | GitHub interaction, read results | `opencode/beam-free#high` | Any capable free model; runs `ci.sh`, never changes source. |
-| Fixer | Fix CI-reported failures | `opencode/glm-5.3-flash-free#high` | Good coding model; reads CI logs, applies minimal fixes. |
-| Docs writer | Process docs up to date | `opencode/big-pickle` | Reasoning model; edits Markdown only. |
+| Role                | Capability needed                               | Current model                            | Selection guidance                                                                               |
+| ------------------- | ----------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Orchestrator / Lead | Strong reasoning + tool calling                 | `opencode/big-pickle`                    | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
+| Coder / Executor    | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high`       | Best available free coding model; writes code + tests, never runs the toolchain locally.         |
+| Explorer            | Speed + good search                             | `opencode/mimo-v2.6-flash-free`          | Fastest free model with decent quality; read-only, no builds.                                    |
+| Reviewer            | Competent analysis, read-only                   | `opencode/beam-free#high`                | Solid free model, prefer fast/cheap; read-only, no builds.                                       |
+| Tester / Bulk       | High volume, lower stakes                       | `opencode/deepseek-v4.1-flash-free#high` | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`.                       |
+| CI runner           | GitHub interaction, read results                | `opencode/beam-free#high`                | Any capable free model; runs `ci.sh`, never changes source.                                      |
+| Fixer               | Fix CI-reported failures                        | `opencode/glm-5.3-flash-free#high`       | Good coding model; reads CI logs, applies minimal fixes.                                         |
+| Docs writer         | Process docs up to date                         | `opencode/big-pickle`                    | Reasoning model; edits Markdown only.                                                            |
 
 ## How to re-select
 
@@ -45,12 +45,12 @@ Record any change here and in `PROGRESS.md`.
 
 Live probes of the NVIDIA free tier, which is tier 2 in the provider order:
 
-| Model | Result |
-| --- | --- |
-| `nvidia/z-ai/glm-5.3-flash` | reachable |
-| `nvidia/stepfun-ai/step-5-preview` | reachable |
-| `nvidia/openai/gpt-oss-20b` | reachable, intermittently |
-| `nvidia/z-ai/glm-5.3` | **not reachable** — `socket connection was closed`; removed from the routing chains |
+| Model                              | Result                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `nvidia/z-ai/glm-5.3-flash`        | reachable                                                                           |
+| `nvidia/stepfun-ai/step-5-preview` | reachable                                                                           |
+| `nvidia/openai/gpt-oss-20b`        | reachable, intermittently                                                           |
+| `nvidia/z-ai/glm-5.3`              | **not reachable** — `socket connection was closed`; removed from the routing chains |
 
 `nvidia/meta/llama-guard-4-12b` and `nvidia/google/google-paligemma` are guard
 and vision models, not coding models, so they are not used for roles.

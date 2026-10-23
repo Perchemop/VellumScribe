@@ -198,7 +198,8 @@ export const MIGRATIONS = [
   },
   {
     version: 5,
-    description: 'Add explicit encryption_state, encryption_version, plaintext_checksum, and ciphertext_checksum to media_files table',
+    description:
+      'Add explicit encryption_state, encryption_version, plaintext_checksum, and ciphertext_checksum to media_files table',
     sql: `
       ALTER TABLE media_files ADD COLUMN encryption_state TEXT DEFAULT 'plaintext';
       ALTER TABLE media_files ADD COLUMN encryption_version INTEGER DEFAULT 0;
@@ -263,7 +264,8 @@ export const MIGRATIONS = [
   },
   {
     version: 7,
-    description: 'Durable transcription jobs and chunk checkpointing for crash and process recovery',
+    description:
+      'Durable transcription jobs and chunk checkpointing for crash and process recovery',
     sql: `
       CREATE TABLE IF NOT EXISTS transcription_jobs (
         id TEXT PRIMARY KEY,
@@ -285,7 +287,8 @@ export const MIGRATIONS = [
   },
   {
     version: 8,
-    description: 'External Knowledge Adapter: NotebookLM connections, source mapping, and hash synchronization',
+    description:
+      'External Knowledge Adapter: NotebookLM connections, source mapping, and hash synchronization',
     sql: `
       CREATE TABLE IF NOT EXISTS notebooklm_connections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -413,7 +416,8 @@ export const MIGRATIONS = [
   },
   {
     version: 11,
-    description: 'Item changes log, AI operations audit in SQLite, note revisions, sync conflicts, and local snapshots',
+    description:
+      'Item changes log, AI operations audit in SQLite, note revisions, sync conflicts, and local snapshots',
     sql: `
       CREATE TABLE IF NOT EXISTS item_changes (
         id TEXT PRIMARY KEY,
@@ -489,7 +493,8 @@ export const MIGRATIONS = [
   },
   {
     version: 12,
-    description: 'Durable search index job recovery fields, AI mutations log, and unified capture inbox',
+    description:
+      'Durable search index job recovery fields, AI mutations log, and unified capture inbox',
     sql: `
       ALTER TABLE search_index_jobs ADD COLUMN next_attempt_at INTEGER;
       ALTER TABLE search_index_jobs ADD COLUMN locked_at INTEGER;

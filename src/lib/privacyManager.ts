@@ -84,8 +84,13 @@ export class PrivacyManager {
    */
   public static assertNetworkAllowed(targetService: string): void {
     if (this.settings.privateOfflineMode) {
-      AppLogger.warn('PrivacyManager', `Blocked network request to "${targetService}" because Private Offline Mode is ACTIVE.`);
-      throw new Error(`Network access blocked: Private Offline Mode is enabled. Disable it in Settings -> Privacy & Offline to connect to ${targetService}.`);
+      AppLogger.warn(
+        'PrivacyManager',
+        `Blocked network request to "${targetService}" because Private Offline Mode is ACTIVE.`
+      );
+      throw new Error(
+        `Network access blocked: Private Offline Mode is enabled. Disable it in Settings -> Privacy & Offline to connect to ${targetService}.`
+      );
     }
   }
 }

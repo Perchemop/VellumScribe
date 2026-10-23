@@ -30,7 +30,11 @@ export class NativeBridge {
         const req = await Camera.requestPermissions({ permissions: ['camera'] });
         return req.camera === 'granted';
       }
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.mediaDevices &&
+        typeof navigator.mediaDevices.getUserMedia === 'function'
+      ) {
         return true;
       }
     } catch (e) {
@@ -108,7 +112,11 @@ export class NativeBridge {
         this.hapticImpact('light');
         return true;
       }
-      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        navigator.clipboard.writeText
+      ) {
         await navigator.clipboard.writeText(text);
         this.hapticImpact('light');
         return true;
@@ -270,7 +278,11 @@ export class NativeBridge {
             {
               id: noteId,
               title: `Reminder: ${title || 'Untitled Note'}`,
-              body: body ? (body.length > 120 ? body.slice(0, 117) + '...' : body) : 'Note reminder due',
+              body: body
+                ? body.length > 120
+                  ? body.slice(0, 117) + '...'
+                  : body
+                : 'Note reminder due',
               schedule: { at: scheduledDate, allowWhileIdle: true },
               sound: undefined,
               actionTypeId: '',
@@ -281,7 +293,11 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      AppLogger.warn('NativeBridge', 'Native reminder scheduling failed, relying on web watcher fallback:', e);
+      AppLogger.warn(
+        'NativeBridge',
+        'Native reminder scheduling failed, relying on web watcher fallback:',
+        e
+      );
     }
     return false;
   }
@@ -324,7 +340,9 @@ export class NativeBridge {
       if (this.isNative()) {
         await Browser.close();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   /**
@@ -342,7 +360,9 @@ export class NativeBridge {
           handlePromise.then((h) => h.remove()).catch(() => {});
         };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return () => {};
   }
 
@@ -359,7 +379,9 @@ export class NativeBridge {
           handle.remove();
         };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return () => {};
   }
 }

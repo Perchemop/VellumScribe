@@ -6,7 +6,8 @@ import { asErrorLike } from './errorLike';
 export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
 
 export type LlmProvider = 'google' | 'groq' | 'offline_rules';
-export type TranscriptionProvider = 'google' | 'groq_whisper' | 'deepgram' | 'local_whisper' | 'browser_speech';
+export type TranscriptionProvider =
+  'google' | 'groq_whisper' | 'deepgram' | 'local_whisper' | 'browser_speech';
 export type OcrProvider = 'google' | 'offline_rules';
 
 export interface AiIntegrationSettings {
@@ -45,15 +46,36 @@ export const AI_PROVIDERS_META = {
     id: 'google',
     name: 'Google AI Studio (Gemini)',
     category: 'Cloud Multimodal (Free Tier)',
-    description: 'Ultra-fast vision OCR, audio transcription, and long-context meeting synthesis with generous free tier quotas.',
+    description:
+      'Ultra-fast vision OCR, audio transcription, and long-context meeting synthesis with generous free tier quotas.',
     models: [
-      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash (Recommended)', desc: 'Fast, high accuracy synthesis & vision' },
-      { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash', desc: 'Cutting-edge reasoning & analysis' },
-      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', desc: 'Minimal latency & low token consumption' },
-      { id: 'gemini-flash-latest', name: 'Gemini Flash Latest', desc: 'Auto-updating latest stable release' },
+      {
+        id: 'gemini-3.6-flash',
+        name: 'Gemini 3.6 Flash (Recommended)',
+        desc: 'Fast, high accuracy synthesis & vision',
+      },
+      {
+        id: 'gemini-3.7-flash',
+        name: 'Gemini 3.7 Flash',
+        desc: 'Cutting-edge reasoning & analysis',
+      },
+      {
+        id: 'gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash Lite',
+        desc: 'Minimal latency & low token consumption',
+      },
+      {
+        id: 'gemini-flash-latest',
+        name: 'Gemini Flash Latest',
+        desc: 'Auto-updating latest stable release',
+      },
     ],
     transcriptionModels: [
-      { id: 'gemini-3.5-transcribe', name: 'Gemini 3.5 Transcribe', desc: 'Optimized high-fidelity speech recognition' },
+      {
+        id: 'gemini-3.5-transcribe',
+        name: 'Gemini 3.5 Transcribe',
+        desc: 'Optimized high-fidelity speech recognition',
+      },
       { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', desc: 'Multimodal audio reasoning' },
     ],
     keyUrl: 'https://aistudio.google.com/app/apikey',
@@ -64,15 +86,36 @@ export const AI_PROVIDERS_META = {
     id: 'groq',
     name: 'Groq Cloud (LPU Inference)',
     category: 'High-Speed Cloud (Free Tier)',
-    description: 'Near-instantaneous LLM inference via custom LPUs with free access to open-source models and Whisper Large.',
+    description:
+      'Near-instantaneous LLM inference via custom LPUs with free access to open-source models and Whisper Large.',
     models: [
-      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile', desc: 'Top-tier open intelligence on LPUs' },
-      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', desc: 'Sub-second real-time streaming responses' },
-      { id: 'mixtral-8x7b-32768', name: 'Mixtral 8x7B (32k Context)', desc: 'High capacity long-meeting synthesizer' },
+      {
+        id: 'llama-3.3-70b-versatile',
+        name: 'Llama 3.3 70B Versatile',
+        desc: 'Top-tier open intelligence on LPUs',
+      },
+      {
+        id: 'llama-3.1-8b-instant',
+        name: 'Llama 3.1 8B Instant',
+        desc: 'Sub-second real-time streaming responses',
+      },
+      {
+        id: 'mixtral-8x7b-32768',
+        name: 'Mixtral 8x7B (32k Context)',
+        desc: 'High capacity long-meeting synthesizer',
+      },
     ],
     transcriptionModels: [
-      { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo', desc: 'Lightning-fast transcription on Groq hardware' },
-      { id: 'whisper-large-v3', name: 'Whisper Large v3', desc: 'High accuracy multilingual transcription' },
+      {
+        id: 'whisper-large-v3-turbo',
+        name: 'Whisper Large v3 Turbo',
+        desc: 'Lightning-fast transcription on Groq hardware',
+      },
+      {
+        id: 'whisper-large-v3',
+        name: 'Whisper Large v3',
+        desc: 'High accuracy multilingual transcription',
+      },
     ],
     keyUrl: 'https://console.groq.com/keys',
     keyPlaceholder: 'gsk_...',
@@ -82,7 +125,8 @@ export const AI_PROVIDERS_META = {
     id: 'deepgram',
     name: 'Deepgram Speech Engine',
     category: 'Dedicated Audio AI (Free Tier)',
-    description: 'Enterprise-grade end-to-end speech recognition with Nova-3 acoustics and auto-formatting.',
+    description:
+      'Enterprise-grade end-to-end speech recognition with Nova-3 acoustics and auto-formatting.',
     transcriptionModels: [
       { id: 'nova-3', name: 'Nova-3 (Latest)', desc: 'Next-gen speech accuracy & speed' },
       { id: 'nova-2', name: 'Nova-2', desc: 'Industry-standard high accuracy transcription' },
@@ -96,20 +140,23 @@ export const AI_PROVIDERS_META = {
     id: 'local_whisper',
     name: 'Local Whisper Server (100% Offline)',
     category: 'Local Speech Server (No Account)',
-    description: 'Connect to local whisper.cpp, faster-whisper-server, or LocalAI transcription daemon on your machine.',
+    description:
+      'Connect to local whisper.cpp, faster-whisper-server, or LocalAI transcription daemon on your machine.',
     defaultEndpoint: 'http://localhost:8080/v1/audio/transcriptions',
   },
   offline_rules: {
     id: 'offline_rules',
     name: 'Built-in Local Rule Engine (Default)',
     category: 'Device Native (100% Offline / Zero Setup)',
-    description: 'Deterministic extractive synthesis, task detector, and note digest running directly on-device without any API keys or internet connection.',
+    description:
+      'Deterministic extractive synthesis, task detector, and note digest running directly on-device without any API keys or internet connection.',
   },
   browser_speech: {
     id: 'browser_speech',
     name: 'Native Speech Recognition (Default)',
     category: 'Device Native (100% Offline / Zero Setup)',
-    description: 'Real-time on-device speech recognition via Web Speech API and acoustic signal analyzer. No external network requests or keys required.',
+    description:
+      'Real-time on-device speech recognition via Web Speech API and acoustic signal analyzer. No external network requests or keys required.',
   },
 };
 
@@ -159,8 +206,13 @@ export class AiSettingsManager {
           // 1. Google API Key
           let googleKey = await AndroidKeystoreManager.getSecret('google_api_key');
           if (!googleKey) {
-            const legacy = StorageManager.getItem<string>(STORAGE_KEYS.GOOGLE_KEY, '') ||
-                           (typeof localStorage !== 'undefined' ? (localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key') || '') : '');
+            const legacy =
+              StorageManager.getItem<string>(STORAGE_KEYS.GOOGLE_KEY, '') ||
+              (typeof localStorage !== 'undefined'
+                ? localStorage.getItem('gemini_api_key') ||
+                  localStorage.getItem('vs_gemini_api_key') ||
+                  ''
+                : '');
             if (legacy && legacy.trim()) {
               await AndroidKeystoreManager.saveSecret('google_api_key', legacy.trim(), 'api_key');
               const verified = await AndroidKeystoreManager.getSecret('google_api_key');
@@ -206,7 +258,11 @@ export class AiSettingsManager {
           }
           this.cachedDeepgramKey = deepgramKey || '';
         } catch (e) {
-          AppLogger.warn('AiSettings', '[AiSettingsManager] Failed during secure key initialization:', e);
+          AppLogger.warn(
+            'AiSettings',
+            '[AiSettingsManager] Failed during secure key initialization:',
+            e
+          );
         }
         this.getSettings();
       })();
@@ -328,7 +384,10 @@ export class AiSettingsManager {
 
   // --- Settings Persistence ---
   public static getSettings(): AiIntegrationSettings {
-    const parsed = StorageManager.getItem<Partial<AiIntegrationSettings>>(STORAGE_KEYS.SETTINGS, {});
+    const parsed = StorageManager.getItem<Partial<AiIntegrationSettings>>(
+      STORAGE_KEYS.SETTINGS,
+      {}
+    );
     const googleKey = this.getGoogleApiKey();
     const groqKey = this.getGroqApiKey();
     const deepgramKey = this.getDeepgramApiKey();
@@ -339,7 +398,8 @@ export class AiSettingsManager {
       ...(parsed || {}),
       primaryLlmProvider: parsed?.primaryLlmProvider || 'offline_rules',
       primaryTranscriptionProvider: parsed?.primaryTranscriptionProvider || 'browser_speech',
-      localWhisperEndpoint: parsed?.localWhisperEndpoint !== undefined ? parsed.localWhisperEndpoint : '',
+      localWhisperEndpoint:
+        parsed?.localWhisperEndpoint !== undefined ? parsed.localWhisperEndpoint : '',
       googleApiKey: googleKey,
       groqApiKey: groqKey,
       deepgramApiKey: deepgramKey,
@@ -412,12 +472,16 @@ export class AiSettingsManager {
       return { key: groqMatch[1].trim(), provider: 'groq' };
     }
 
-    const deepgramMatch = trimmed.match(/(?:DEEPGRAM_API_KEY|DEEPGRAM_KEY)\s*=\s*["']?([A-Za-z0-9_-]+)["']?/i);
+    const deepgramMatch = trimmed.match(
+      /(?:DEEPGRAM_API_KEY|DEEPGRAM_KEY)\s*=\s*["']?([A-Za-z0-9_-]+)["']?/i
+    );
     if (deepgramMatch && deepgramMatch[1]) {
       return { key: deepgramMatch[1].trim(), provider: 'deepgram' };
     }
 
-    const googleMatch = trimmed.match(/(?:GEMINI_API_KEY|GOOGLE_API_KEY|AI_STUDIO_API_KEY|API_KEY)\s*=\s*["']?([A-Za-z0-9_-]+)["']?/i);
+    const googleMatch = trimmed.match(
+      /(?:GEMINI_API_KEY|GOOGLE_API_KEY|AI_STUDIO_API_KEY|API_KEY)\s*=\s*["']?([A-Za-z0-9_-]+)["']?/i
+    );
     if (googleMatch && googleMatch[1]) {
       return { key: googleMatch[1].trim(), provider: 'google' };
     }
@@ -429,12 +493,20 @@ export class AiSettingsManager {
         return { key: String(parsed.GROQ_API_KEY || parsed.groqApiKey).trim(), provider: 'groq' };
       }
       if (parsed.DEEPGRAM_API_KEY || parsed.deepgramApiKey) {
-        return { key: String(parsed.DEEPGRAM_API_KEY || parsed.deepgramApiKey).trim(), provider: 'deepgram' };
+        return {
+          key: String(parsed.DEEPGRAM_API_KEY || parsed.deepgramApiKey).trim(),
+          provider: 'deepgram',
+        };
       }
       if (parsed.GEMINI_API_KEY || parsed.googleApiKey || parsed.apiKey) {
-        return { key: String(parsed.GEMINI_API_KEY || parsed.googleApiKey || parsed.apiKey).trim(), provider: 'google' };
+        return {
+          key: String(parsed.GEMINI_API_KEY || parsed.googleApiKey || parsed.apiKey).trim(),
+          provider: 'google',
+        };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // 5. Pattern search anywhere in content
     const gskRegex = /gsk_[A-Za-z0-9]{30,80}/;
@@ -452,7 +524,8 @@ export class AiSettingsManager {
 
     return {
       key: null,
-      error: 'Could not detect a valid Google AI Studio (AIzaSy...), Groq (gsk_...), or Deepgram API key in this input.',
+      error:
+        'Could not detect a valid Google AI Studio (AIzaSy...), Groq (gsk_...), or Deepgram API key in this input.',
     };
   }
 
@@ -462,18 +535,28 @@ export class AiSettingsManager {
   public static async testProviderConnection(
     provider: LlmProvider | TranscriptionProvider,
     options?: { key?: string; endpoint?: string; model?: string }
-  ): Promise<{ success: boolean; message: string; availableModels?: string[]; latencyMs?: number }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    availableModels?: string[];
+    latencyMs?: number;
+  }> {
     const startTime = Date.now();
 
     // 1. Google AI Studio
     if (provider === 'google') {
       const keyToTest = (options?.key || this.getGoogleApiKey()).trim();
       if (!keyToTest) {
-        return { success: false, message: 'Please provide a Google AI Studio API key (starts with AIzaSy).' };
+        return {
+          success: false,
+          message: 'Please provide a Google AI Studio API key (starts with AIzaSy).',
+        };
       }
 
       try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToTest)}`);
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(keyToTest)}`
+        );
         const data = await res.json().catch(() => null);
         const latency = Date.now() - startTime;
 
@@ -488,7 +571,10 @@ export class AiSettingsManager {
         }
 
         if (data?.error) {
-          return { success: false, message: data.error.message || 'Authentication rejected by Google AI Studio.' };
+          return {
+            success: false,
+            message: data.error.message || 'Authentication rejected by Google AI Studio.',
+          };
         }
       } catch {
         // Fallback to server verification
@@ -502,12 +588,18 @@ export class AiSettingsManager {
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.success) {
-          return { success: true, message: data.message || 'Google AI Studio key verified via proxy.' };
+          return {
+            success: true,
+            message: data.message || 'Google AI Studio key verified via proxy.',
+          };
         }
         return { success: false, message: data?.error || 'Unable to connect to Google AI Studio.' };
       } catch (_err) {
         const err = asErrorLike(_err);
-        return { success: false, message: err?.message || 'Network error connecting to Google AI Studio.' };
+        return {
+          success: false,
+          message: err?.message || 'Network error connecting to Google AI Studio.',
+        };
       }
     }
 
@@ -530,13 +622,18 @@ export class AiSettingsManager {
           return {
             success: true,
             message: `Connected to Groq Cloud in ${latency}ms! ${modelList.length} LPU models available.`,
-            availableModels: modelList.filter((m: string) => m.includes('llama') || m.includes('mixtral') || m.includes('whisper')),
+            availableModels: modelList.filter(
+              (m: string) => m.includes('llama') || m.includes('mixtral') || m.includes('whisper')
+            ),
             latencyMs: latency,
           };
         }
 
         if (data?.error) {
-          return { success: false, message: data.error.message || 'Authentication rejected by Groq Cloud.' };
+          return {
+            success: false,
+            message: data.error.message || 'Authentication rejected by Groq Cloud.',
+          };
         }
       } catch {
         // Try server proxy
@@ -585,11 +682,16 @@ export class AiSettingsManager {
 
     // 4. Local Whisper (Opt-in)
     if (provider === 'local_whisper') {
-      const endpoint = (options?.endpoint !== undefined ? options.endpoint : (this.getSettings().localWhisperEndpoint || '')).trim();
+      const endpoint = (
+        options?.endpoint !== undefined
+          ? options.endpoint
+          : this.getSettings().localWhisperEndpoint || ''
+      ).trim();
       if (!endpoint) {
         return {
           success: false,
-          message: 'Local Whisper is opt-in. Enter your Whisper server endpoint or use Native Speech Recognition.',
+          message:
+            'Local Whisper is opt-in. Enter your Whisper server endpoint or use Native Speech Recognition.',
         };
       }
       try {
@@ -600,7 +702,10 @@ export class AiSettingsManager {
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.success) {
-          return { success: true, message: data.message || `Local Whisper server reachable at ${endpoint}.` };
+          return {
+            success: true,
+            message: data.message || `Local Whisper server reachable at ${endpoint}.`,
+          };
         }
         return {
           success: false,
@@ -608,7 +713,10 @@ export class AiSettingsManager {
         };
       } catch (_err) {
         const err = asErrorLike(_err);
-        return { success: false, message: `Local Whisper check failed: ${err?.message || 'Server unreachable'}` };
+        return {
+          success: false,
+          message: `Local Whisper check failed: ${err?.message || 'Server unreachable'}`,
+        };
       }
     }
 
@@ -616,7 +724,8 @@ export class AiSettingsManager {
     if (provider === 'offline_rules' || provider === 'browser_speech') {
       return {
         success: true,
-        message: 'Built-in Offline Native Engine is ready. 100% on-device deterministic summarization and Web Speech API parser.',
+        message:
+          'Built-in Offline Native Engine is ready. 100% on-device deterministic summarization and Web Speech API parser.',
       };
     }
 
@@ -632,22 +741,30 @@ export class AiSettingsManager {
     this.saveSettings({ localWhisperEndpoint: endpoint.trim() });
   }
 
-  public static async testGroqKey(key?: string): Promise<{ success: boolean; message: string; availableModels?: string[] }> {
+  public static async testGroqKey(
+    key?: string
+  ): Promise<{ success: boolean; message: string; availableModels?: string[] }> {
     return this.testProviderConnection('groq', { key });
   }
 
-  public static async testDeepgramKey(key?: string): Promise<{ success: boolean; message: string }> {
+  public static async testDeepgramKey(
+    key?: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.testProviderConnection('deepgram', { key });
   }
 
-  public static async probeLocalWhisperEndpoint(endpoint?: string): Promise<{ success: boolean; message: string }> {
+  public static async probeLocalWhisperEndpoint(
+    endpoint?: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.testProviderConnection('local_whisper', { endpoint });
   }
 
   /**
    * Backwards compatible test method for Google AI Studio.
    */
-  public static async testApiKey(customKey?: string): Promise<{ success: boolean; message: string; model?: string }> {
+  public static async testApiKey(
+    customKey?: string
+  ): Promise<{ success: boolean; message: string; model?: string }> {
     const res = await this.testProviderConnection('google', { key: customKey });
     return {
       success: res.success,

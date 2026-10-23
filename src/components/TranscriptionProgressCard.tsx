@@ -9,7 +9,7 @@ import {
   ChevronUp,
   FileText,
   X,
-  Play
+  Play,
 } from 'lucide-react';
 import { TranscriptionProgress, PartialTranscriptionSession } from '../types';
 
@@ -36,7 +36,9 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
 
   if (!progress && !session) return null;
 
-  const phase = progress?.phase || (session?.status === 'failed' ? 'error' : session?.status === 'paused' ? 'paused' : 'idle');
+  const phase =
+    progress?.phase ||
+    (session?.status === 'failed' ? 'error' : session?.status === 'paused' ? 'paused' : 'idle');
   const isError = phase === 'error' || session?.status === 'failed';
   const isPaused = phase === 'paused' || session?.status === 'paused';
   const isCompleted = phase === 'completed' || session?.status === 'completed';
@@ -48,7 +50,9 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
       0,
       progress?.percent ??
         (session
-          ? Math.round((session.completedSegments.length / Math.max(1, session.totalSegments)) * 100)
+          ? Math.round(
+              (session.completedSegments.length / Math.max(1, session.totalSegments)) * 100
+            )
           : 0)
     )
   );
@@ -68,10 +72,10 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
         isError
           ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/50'
           : isCompleted
-          ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50'
-          : isPaused
-          ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50'
-          : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
+            ? 'bg-emerald-50/70 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/50'
+            : isPaused
+              ? 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50'
+              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
       } ${className}`}
     >
       {/* Top Header */}
@@ -104,8 +108,8 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
               isError
                 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300'
                 : isCompleted
-                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
-                : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+                  : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300'
             }`}
           >
             {percent}%
@@ -134,10 +138,10 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
                 isError
                   ? 'bg-rose-500'
                   : isCompleted
-                  ? 'bg-emerald-500'
-                  : isPaused
-                  ? 'bg-amber-500'
-                  : 'bg-indigo-600 dark:bg-indigo-500'
+                    ? 'bg-emerald-500'
+                    : isPaused
+                      ? 'bg-amber-500'
+                      : 'bg-indigo-600 dark:bg-indigo-500'
               }`}
               style={{ width: `${percent}%` }}
             />
@@ -161,10 +165,10 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
                       isSegDone
                         ? 'bg-emerald-500'
                         : isSegCurrent
-                        ? 'bg-indigo-600 animate-pulse'
-                        : isSegFailed
-                        ? 'bg-rose-500'
-                        : 'bg-zinc-200 dark:bg-zinc-700'
+                          ? 'bg-indigo-600 animate-pulse'
+                          : isSegFailed
+                            ? 'bg-rose-500'
+                            : 'bg-zinc-200 dark:bg-zinc-700'
                     }`}
                   />
                 );
@@ -184,14 +188,15 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
                 (isError
                   ? 'Transcription interrupted'
                   : isPaused
-                  ? 'Transcription paused'
-                  : isCompleted
-                  ? 'Transcription completed'
-                  : 'Ready')}
+                    ? 'Transcription paused'
+                    : isCompleted
+                      ? 'Transcription completed'
+                      : 'Ready')}
             </p>
             {progress?.startStr && progress?.endStr && isProcessing && (
               <p className="text-zinc-500 dark:text-zinc-400 font-mono text-[11px]">
-                Time window: [{progress.startStr} - {progress.endStr}] • Segment {currentSegment} of {totalSegments}
+                Time window: [{progress.startStr} - {progress.endStr}] • Segment {currentSegment} of{' '}
+                {totalSegments}
               </p>
             )}
             {isError && (
@@ -201,7 +206,8 @@ export const TranscriptionProgressCard: React.FC<TranscriptionProgressCardProps>
             )}
             {(isError || isPaused) && completedSegmentsCount > 0 && (
               <p className="text-emerald-700 dark:text-emerald-400 font-medium text-[11px]">
-                ✓ {completedSegmentsCount} of {totalSegments} segment{totalSegments > 1 ? 's' : ''} preserved in cache. You can resume without losing progress.
+                ✓ {completedSegmentsCount} of {totalSegments} segment{totalSegments > 1 ? 's' : ''}{' '}
+                preserved in cache. You can resume without losing progress.
               </p>
             )}
           </div>

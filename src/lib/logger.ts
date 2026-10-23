@@ -20,13 +20,15 @@ const logListeners: Set<(entry: LogEntry) => void> = new Set();
 /**
  * Redaction utility to ensure credentials, tokens, PINs, and keys never appear in logs
  */
-const SENSITIVE_KEY_REGEX = /(pin|password|secret|token|apikey|api_key|auth|credential|access_token|refresh_token|bearer|private_key)/i;
+const SENSITIVE_KEY_REGEX =
+  /(pin|password|secret|token|apikey|api_key|auth|credential|access_token|refresh_token|bearer|private_key)/i;
 const BEARER_REGEX = /Bearer\s+[A-Za-z0-9_\-.+=/]+/gi;
-const APIKEY_PATTERN_REGEX = /(?:AIza[0-9A-Za-z-_]{35}|gsk_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,})/g;
+const APIKEY_PATTERN_REGEX =
+  /(?:AIza[0-9A-Za-z-_]{35}|gsk_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,})/g;
 
 function sanitizeValue(value: unknown, depth = 0): unknown {
   if (depth > 5 || value === null || value === undefined) return value;
-  
+
   if (typeof value === 'string') {
     return value
       .replace(BEARER_REGEX, 'Bearer [REDACTED]')
@@ -53,14 +55,20 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
 }
 
 export class AppLogger {
-  private static addEntry(level: LogLevel, category: string, rawMessage: string, rawData?: unknown) {
+  private static addEntry(
+    level: LogLevel,
+    category: string,
+    rawMessage: string,
+    rawData?: unknown
+  ) {
     // Automatically redact sensitive information
-    const message = typeof rawMessage === 'string'
-      ? rawMessage
-          .replace(BEARER_REGEX, 'Bearer [REDACTED]')
-          .replace(APIKEY_PATTERN_REGEX, 'AIza[REDACTED]')
-      : String(rawMessage);
-    
+    const message =
+      typeof rawMessage === 'string'
+        ? rawMessage
+            .replace(BEARER_REGEX, 'Bearer [REDACTED]')
+            .replace(APIKEY_PATTERN_REGEX, 'AIza[REDACTED]')
+        : String(rawMessage);
+
     const data = rawData !== undefined ? sanitizeValue(rawData) : undefined;
 
     const entry: LogEntry = {
@@ -89,7 +97,7 @@ export class AppLogger {
       console.debug(prefix, message, data !== undefined ? data : '');
     }
 
-    logListeners.forEach(listener => {
+    logListeners.forEach((listener) => {
       try {
         listener(entry);
       } catch {

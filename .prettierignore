@@ -12,6 +12,9 @@ android/app/src/main/cpp/third_party
 public/sql-wasm.js
 public/sql-wasm.wasm
 
+# Generated web bundle copied into the Android project by `cap sync`.
+android/app/src/main/assets
+
 # Generated / fixture content.
 scripts/restore-payloads
 scripts/storage_restore

@@ -7,7 +7,7 @@ VellumScribe ships on-device speech transcription using an embedded C++ `whisper
 ## Architecture Overview
 
 ```
-[React Web App] 
+[React Web App]
        │  (OfflineAi.startTranscription)
        ▼
 [OfflineAiPlugin.java] (Capacitor Plugin)
@@ -110,11 +110,11 @@ Gradle automatically invokes CMake to compile `libwhisper.so` and packages it in
 
 Models are quantized with **Q5_1** GGML format for mobile efficiency:
 
-| Model ID | File Name | Size | Min RAM | Accuracy | Target Use Case |
-|---|---|---|---|---|---|
-| `whisper-tiny` | `ggml-tiny-q5_1.bin` | ~31 MB | 1 GB | Fast | Quick voice memos & short dictation |
-| `whisper-base` | `ggml-base-q5_1.bin` | ~58 MB | 2 GB | Balanced | Default recommendation for meetings |
-| `whisper-small`| `ggml-small-q5_1.bin`| ~182 MB | 4 GB | High | Complex terminology & long interviews |
+| Model ID        | File Name             | Size    | Min RAM | Accuracy | Target Use Case                       |
+| --------------- | --------------------- | ------- | ------- | -------- | ------------------------------------- |
+| `whisper-tiny`  | `ggml-tiny-q5_1.bin`  | ~31 MB  | 1 GB    | Fast     | Quick voice memos & short dictation   |
+| `whisper-base`  | `ggml-base-q5_1.bin`  | ~58 MB  | 2 GB    | Balanced | Default recommendation for meetings   |
+| `whisper-small` | `ggml-small-q5_1.bin` | ~182 MB | 4 GB    | High     | Complex terminology & long interviews |
 
 Models are stored in app-private storage: `/data/user/0/com.vellumscribe.app/files/models/whisper/`.
 Downloads feature HTTP range resume, exponential backoff, and SHA-256 verification.

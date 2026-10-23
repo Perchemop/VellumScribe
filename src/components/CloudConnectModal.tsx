@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, ShieldCheck, Cloud, RefreshCw, Zap, Server, KeyRound, AlertCircle } from 'lucide-react';
+import {
+  X,
+  Trash2,
+  ShieldCheck,
+  Cloud,
+  RefreshCw,
+  Zap,
+  Server,
+  KeyRound,
+  AlertCircle,
+} from 'lucide-react';
 import { CloudStorageProvider, CloudAccount } from '../types';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { generatePKCE } from '../lib/pkce';
@@ -23,19 +33,22 @@ const PROVIDER_METADATA: Record<
   google_drive: {
     name: 'Google (SSO & Drive)',
     brandColor: '#34a853',
-    description: 'Single Sign-On authentication and encrypted snapshots directly to your Google Drive.',
+    description:
+      'Single Sign-On authentication and encrypted snapshots directly to your Google Drive.',
     badge: 'SSO & OAuth',
   },
   microsoft: {
     name: 'Microsoft (SSO & OneDrive)',
     brandColor: '#0078d4',
-    description: 'Single Sign-On authentication and encrypted backup snapshots in Microsoft OneDrive.',
+    description:
+      'Single Sign-On authentication and encrypted backup snapshots in Microsoft OneDrive.',
     badge: 'SSO & OAuth',
   },
   nextcloud: {
     name: 'Nextcloud',
     brandColor: '#0082c9',
-    description: 'Store backups on a private or self-hosted Nextcloud server via authenticated WebDAV.',
+    description:
+      'Store backups on a private or self-hosted Nextcloud server via authenticated WebDAV.',
     badge: 'Self-Hosted WebDAV',
   },
   webdav: {
@@ -155,16 +168,18 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
 
         // 2. Browser finished / user closed the browser tab (prevents indefinite loading spinner)
         NativeBridge.addBrowserFinishedListener(() => {
-          CloudSyncEngine.fetchConfig().then(() => {
-            const accounts = CloudSyncEngine.getAccounts();
-            const connected = accounts.find((a) => a.provider === provider);
-            if (connected) {
-              onConnected(connected);
-            }
-          }).finally(() => {
-            nativeCleanup();
-            setLoading(false);
-          });
+          CloudSyncEngine.fetchConfig()
+            .then(() => {
+              const accounts = CloudSyncEngine.getAccounts();
+              const connected = accounts.find((a) => a.provider === provider);
+              if (connected) {
+                onConnected(connected);
+              }
+            })
+            .finally(() => {
+              nativeCleanup();
+              setLoading(false);
+            });
         }).then((cleanupFn) => {
           removeBrowserFinishedListener = cleanupFn;
         });
@@ -180,13 +195,17 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
               setLoading(false);
               onConnected(connected);
             }
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }, 2500);
 
         return;
       }
 
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
       const width = 520;
       const height = 650;
       const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
@@ -264,15 +283,21 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
       }, 1000);
 
       // Timeout after 5 minutes
-      timeoutTimer = setTimeout(() => {
-        cleanup();
-        setLoading(false);
-        setError('Authentication timed out. Please try again.');
-      }, 5 * 60 * 1000);
+      timeoutTimer = setTimeout(
+        () => {
+          cleanup();
+          setLoading(false);
+          setError('Authentication timed out. Please try again.');
+        },
+        5 * 60 * 1000
+      );
     } catch (_e) {
       const e = asErrorLike(_e);
       AppLogger.error('CloudConnectModal', 'Failed OAuth authentication:', e);
-      setError(e.message || 'Failed to authenticate. Please verify server configuration and network connectivity.');
+      setError(
+        e.message ||
+          'Failed to authenticate. Please verify server configuration and network connectivity.'
+      );
       setLoading(false);
     }
   };
@@ -287,20 +312,19 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const account = await CloudSyncEngine.connectCredentials(
-        provider as 'nextcloud' | 'webdav',
-        {
-          serverUrl: serverUrl.trim(),
-          username: username.trim(),
-          password: password.trim(),
-          remotePath: remotePath.trim() || undefined,
-        }
-      );
+      const account = await CloudSyncEngine.connectCredentials(provider as 'nextcloud' | 'webdav', {
+        serverUrl: serverUrl.trim(),
+        username: username.trim(),
+        password: password.trim(),
+        remotePath: remotePath.trim() || undefined,
+      });
       onConnected(account);
     } catch (_e) {
       const e = asErrorLike(_e);
       AppLogger.error('CloudConnectModal', 'Failed credential connect:', e);
-      setError(e.message || 'Failed to authenticate with WebDAV server. Check URL and credentials.');
+      setError(
+        e.message || 'Failed to authenticate with WebDAV server. Check URL and credentials.'
+      );
     } finally {
       setLoading(false);
     }
@@ -358,7 +382,9 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in"
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div className="bg-white dark:bg-[#141418] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-zinc-200/70 dark:border-zinc-800/80">
         {/* Header */}
@@ -371,7 +397,10 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
               <Cloud className="w-4 h-4" />
             </div>
             <div>
-              <h3 id="cloud-connect-modal-title" className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <h3
+                id="cloud-connect-modal-title"
+                className="font-bold text-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5"
+              >
                 <span>{meta.name}</span>
                 <span className="text-xs font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 font-normal">
                   {meta.badge}
@@ -416,18 +445,32 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   </span>
                 </div>
                 <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-0.5">
-                  <p><strong>Account:</strong> {existingAccount.displayName || existingAccount.email || 'Connected Profile'}</p>
-                  {existingAccount.email && <p><strong>Email:</strong> {existingAccount.email}</p>}
-                  {existingAccount.serverUrl && <p className="font-mono text-xs truncate"><strong>Host:</strong> {existingAccount.serverUrl}</p>}
+                  <p>
+                    <strong>Account:</strong>{' '}
+                    {existingAccount.displayName || existingAccount.email || 'Connected Profile'}
+                  </p>
+                  {existingAccount.email && (
+                    <p>
+                      <strong>Email:</strong> {existingAccount.email}
+                    </p>
+                  )}
+                  {existingAccount.serverUrl && (
+                    <p className="font-mono text-xs truncate">
+                      <strong>Host:</strong> {existingAccount.serverUrl}
+                    </p>
+                  )}
                   <p className="text-zinc-400 text-[11px]">
-                    Connected {new Date(existingAccount.connectedAt).toLocaleDateString()} at {new Date(existingAccount.connectedAt).toLocaleTimeString()}
+                    Connected {new Date(existingAccount.connectedAt).toLocaleDateString()} at{' '}
+                    {new Date(existingAccount.connectedAt).toLocaleTimeString()}
                   </p>
                 </div>
               </div>
 
               {syncStatus && (
                 <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-xs text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
-                  <RefreshCw className={`w-3.5 h-3.5 text-indigo-500 ${isSyncingNow ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    className={`w-3.5 h-3.5 text-indigo-500 ${isSyncingNow ? 'animate-spin' : ''}`}
+                  />
                   <span>{syncStatus}</span>
                 </div>
               )}
@@ -459,7 +502,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                      Authenticate with <strong>{meta.name}</strong> to enable secure Single Sign-On (SSO) and automatic encrypted backup storage.
+                      Authenticate with <strong>{meta.name}</strong> to enable secure Single Sign-On
+                      (SSO) and automatic encrypted backup storage.
                     </p>
                   </div>
 
@@ -475,7 +519,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                           : 'Server environment variables MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET must be configured to establish an authentic OneDrive connection.'}
                       </p>
                       <p className="text-[11px] leading-relaxed pt-1">
-                        For self-hosted zero-configuration storage, you can connect via <strong>Nextcloud</strong> or <strong>WebDAV</strong>.
+                        For self-hosted zero-configuration storage, you can connect via{' '}
+                        <strong>Nextcloud</strong> or <strong>WebDAV</strong>.
                       </p>
                     </div>
                   )}
@@ -511,7 +556,8 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                       <span>Zero-Knowledge End-to-End Encryption</span>
                     </p>
                     <p className="text-[11px] leading-relaxed">
-                      All snapshots are encrypted locally with AES-256-GCM before transport. Your credentials and files remain strictly private.
+                      All snapshots are encrypted locally with AES-256-GCM before transport. Your
+                      credentials and files remain strictly private.
                     </p>
                   </div>
                 </div>
@@ -541,7 +587,9 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Username</label>
+                      <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Username
+                      </label>
                       <input
                         type="text"
                         required
@@ -568,7 +616,9 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs text-zinc-500 dark:text-zinc-400">Remote Backup Folder</label>
+                    <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Remote Backup Folder
+                    </label>
                     <input
                       type="text"
                       placeholder="/VellumScribeBackups"

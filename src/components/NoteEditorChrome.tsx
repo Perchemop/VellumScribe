@@ -128,7 +128,11 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               </option>
             ) : (
               safeEvents.map((ev) => (
-                <option key={ev.id} value={ev.id} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+                <option
+                  key={ev.id}
+                  value={ev.id}
+                  className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
+                >
                   {ev.title}
                 </option>
               ))
@@ -296,7 +300,9 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             </div>
             <div className="py-1 pb-8 sm:pb-2 text-sm">
-              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Note</p>
+              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                Note
+              </p>
               {onToggleFocus && (
                 <button
                   type="button"
@@ -352,7 +358,11 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   setShowSecurityModal(true);
                 }}
               >
-                {note.is_locked ? <Lock className="w-5 h-5 text-amber-600" /> : <Unlock className="w-5 h-5 text-zinc-500" />}
+                {note.is_locked ? (
+                  <Lock className="w-5 h-5 text-amber-600" />
+                ) : (
+                  <Unlock className="w-5 h-5 text-zinc-500" />
+                )}
                 <span>{note.is_locked ? 'Unlock…' : 'Lock'}</span>
               </button>
               <button
@@ -402,7 +412,9 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               </button>
 
               <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-4" />
-              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">App</p>
+              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                App
+              </p>
               <button
                 type="button"
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/80 text-left min-h-[48px]"

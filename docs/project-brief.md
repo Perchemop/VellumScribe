@@ -1,6 +1,6 @@
 # Project Brief
 
-Source of truth for *why* VellumScribe exists. Answers below were confirmed
+Source of truth for _why_ VellumScribe exists. Answers below were confirmed
 with the project owner on 2026-10-21 during guide adoption discovery.
 
 ---
@@ -23,10 +23,10 @@ device, without creating an account.
 
 Three concrete failures of mainstream notes apps:
 
-| Failure | How VellumScribe addresses it |
-| --- | --- |
-| Notes live in one flat, undifferentiated list, so context is lost | Notes hang under **events** (`EventRecord` → `NoteRecord.event_id`): a meeting, lecture, sprint, interview. |
-| Voice notes become unsearchable binary blobs | Recordings are transcribed into durable, FTS-indexed transcripts with per-chunk checkpoints so a killed process resumes instead of re-transcribing. |
+| Failure                                                                           | How VellumScribe addresses it                                                                                                                                                                               |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notes live in one flat, undifferentiated list, so context is lost                 | Notes hang under **events** (`EventRecord` → `NoteRecord.event_id`): a meeting, lecture, sprint, interview.                                                                                                 |
+| Voice notes become unsearchable binary blobs                                      | Recordings are transcribed into durable, FTS-indexed transcripts with per-chunk checkpoints so a killed process resumes instead of re-transcribing.                                                         |
 | "Transcription" that silently produces nothing, or ships audio to a cloud service | The engine reports its real capability (`inferenceRuntimeReady`, engine provenance badges) and **rejects placeholder text**; the recovery sheet offers an explicit fallback instead of faking a transcript. |
 
 ## B. Inspiration & scope
@@ -87,13 +87,13 @@ Yes. ~2.7 GiB RAM total, no JDK, no Android SDK/NDK/CMake. Therefore:
 
 Yes. Brand tokens already exist and are used consistently:
 
-| Token | Value | Where |
-| --- | --- | --- |
-| App / WebView background | `#121215` | `capacitor.config.json`, `index.html`, PWA manifest |
-| Launcher icon background | `#09090B` | `values/ic_launcher_background.xml`, `public/favicon.svg` |
-| Brand mark | white "V" + stem + dot | `public/favicon.svg`, all Android launcher/splash assets |
-| Accent (emerald) | `#10B981` | UI accents, init loader |
-| Type | Plus Jakarta Sans / Newsreader / JetBrains Mono | `index.html` |
+| Token                    | Value                                           | Where                                                     |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------------- |
+| App / WebView background | `#121215`                                       | `capacitor.config.json`, `index.html`, PWA manifest       |
+| Launcher icon background | `#09090B`                                       | `values/ic_launcher_background.xml`, `public/favicon.svg` |
+| Brand mark               | white "V" + stem + dot                          | `public/favicon.svg`, all Android launcher/splash assets  |
+| Accent (emerald)         | `#10B981`                                       | UI accents, init loader                                   |
+| Type                     | Plus Jakarta Sans / Newsreader / JetBrains Mono | `index.html`                                              |
 
 Native launcher icons and splash screens are regenerated from the brand mark
 with `npm run assets:brand` so web and Android cannot drift.

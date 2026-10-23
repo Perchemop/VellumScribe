@@ -232,7 +232,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const handleExportMarkdown = async () => {
     const md = StorageManager.exportNotesAsMarkdown(selectedNoteIds);
     const fileName = `VellumScribe_Notes_${new Date().toISOString().slice(0, 10)}.md`;
-    await NativeBridge.shareOrDownloadFile(fileName, md, 'text/markdown', 'Share Selected Markdown Notes');
+    await NativeBridge.shareOrDownloadFile(
+      fileName,
+      md,
+      'text/markdown',
+      'Share Selected Markdown Notes'
+    );
     setShowExportMenu(false);
     setShowMoreMenu(false);
   };
@@ -240,7 +245,12 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
   const handleExportJson = async () => {
     const jsonStr = StorageManager.exportNotesAsJson(selectedNoteIds);
     const fileName = `VellumScribe_Backup_${new Date().toISOString().slice(0, 10)}.json`;
-    await NativeBridge.shareOrDownloadFile(fileName, jsonStr, 'application/json', 'Share Selected Notes JSON');
+    await NativeBridge.shareOrDownloadFile(
+      fileName,
+      jsonStr,
+      'application/json',
+      'Share Selected Notes JSON'
+    );
     setShowExportMenu(false);
     setShowMoreMenu(false);
   };
@@ -264,7 +274,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           >
             <X className="w-4 h-4" />
           </button>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-xs sm:text-sm font-semibold tracking-tight">
               {count} selected
@@ -344,7 +354,6 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
 
                 {showMoreMenu && (
                   <div className="absolute right-0 top-10 w-48 bg-white dark:bg-[#18181c] text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-800 rounded-xl p-1.5 shadow-2xl z-40 space-y-0.5 text-xs animate-fade-in">
-                    
                     {count >= 2 && onOpenMergeModal && (
                       <button
                         onClick={() => {
@@ -387,7 +396,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                       <Palette className="w-3.5 h-3.5 text-zinc-500" />
                       <span>Color</span>
                     </button>
-<button
+                    <button
                       onClick={() => {
                         setShowTagSheet(true);
                         setShowMoreMenu(false);
@@ -544,7 +553,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     style={{ backgroundColor: ev.color || '#3b82f6' }}
                   />
                   <span className="truncate flex-1">{ev.title}</span>
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">{ev.category}</span>
+                  <span className="text-xs text-zinc-400 uppercase tracking-wider">
+                    {ev.category}
+                  </span>
                 </button>
               ))}
             </div>

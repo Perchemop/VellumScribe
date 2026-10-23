@@ -79,10 +79,7 @@ async function boot() {
     );
   } catch (primaryErr) {
     AppLogger.error('Main', '[boot] Primary storage init failed', primaryErr);
-    warning =
-      primaryErr instanceof Error
-        ? primaryErr.message
-        : 'Storage initialization failed';
+    warning = primaryErr instanceof Error ? primaryErr.message : 'Storage initialization failed';
 
     // Fall back to in-app sql.js so the UI can still open
     try {
