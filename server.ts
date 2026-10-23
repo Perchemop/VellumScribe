@@ -9,6 +9,21 @@ import { spawn, execFileSync } from 'child_process';
  * numeric parameter can never be interpreted as a shell metacharacter.
  * `2>/dev/null` from the old commands is replaced by stdio ignore.
  */
+/**
+ * Resolves `segments` under `baseDir` and guarantees the result stays inside it.
+ * A character filter alone is not containment (`..`, encoded separators or an
+ * absolute path all survive a permissive one), so the boundary is enforced on
+ * the fully-resolved path.
+ */
+function resolveWithin(baseDir: string, ...segments: string[]): string {
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(base, ...segments);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
+    throw new Error(`Path escapes the allowed directory: ${base}`);
+  }
+  return resolved;
+}
+
 function runFfmpeg(args: string[], timeout: number): void {
   execFileSync('ffmpeg', args, { timeout, stdio: ['ignore', 'ignore', 'ignore'] });
 }
