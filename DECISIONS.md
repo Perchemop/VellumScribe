@@ -348,3 +348,20 @@ Security tab, not a regression from this PR, so it is reported rather than
 suppressed.
 **Rejected.** Adding `CodeQL` to `.ci-required.txt` just to make this merge
 cleaner (that would hide future _new_ alerts).
+
+### D-411 · 2026-10-24 · Cloud-backup passphrase is memory-only, nothing derived is persisted
+
+**Decision.** `CloudBackupCrypto` keeps the user's cloud-backup passphrase in a
+module-scoped variable for the lifetime of the page. Nothing derived from it is
+written to storage — not even its length, which was previously stored as
+`vs_cloud_backup_passphrase_hint`.
+**Rationale.** The passphrase was written to `sessionStorage` in clear text: any
+script on the origin (and anything that can read the browser profile on disk)
+could recover it, and it survived a browser restart. CodeQL flagged the length
+hint as well, because any value derived from a secret still leaks information;
+`hasUserBackupPassphraseConfigured()` now reads the in-memory value instead.
+**Consequence.** After a full page reload the user is asked for the backup
+passphrase again instead of having it silently recovered. This is the intended
+trade for not persisting a secret.
+**Rejected.** Storing the passphrase hashed/encrypted in storage (it would still
+be offline-attackable), and keeping the length hint (a derived leak).
