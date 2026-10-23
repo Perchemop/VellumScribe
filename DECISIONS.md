@@ -281,3 +281,49 @@ non-idempotent (it alternated the continuation indent), so the sentence now
 fits on one line.
 **Rejected.** Leaving the job non-blocking (style drift would keep landing), and
 reformatting the vendored `cap sync` bundle (generated output, not source).
+
+### D-408 · 2026-10-23 · Adopt the updated guide's CTO.new-style operating model
+**Decision.** The guide was updated to emulate cto.new on free models:
+`Chat (plan) -> Task (execute) -> Pull Request (review) -> merge`. Implemented
+in the repository:
+- **Chat mode** — `orchestrator` is the planner (primary, `edit: deny`,
+  `shell: deny`). It clarifies, then writes a Task brief (requirement IDs, files
+  likely touched, acceptance criteria, DoD) and delegates. It never edits code.
+- **Task mode** — `coder` executes exactly one bounded Task, writes tests,
+  commits and pushes, and keeps the diff small enough to become a clean PR.
+- **Review** — `reviewer` is read-only against the diff/PR and never fixes;
+  the human reviews and merges (guide §9).
+- **Local work tightened (guide §4.2).** The previous "very small, fast checks"
+  allowance is gone. Local work is now only: editing source, reading files and
+  CI logs, lightweight git, and reviewing PRs/CI results. The `shell` allows for
+  `npm run lint*`, `npm run format*`, `npx eslint*` and `npx prettier*` were
+  removed from `coder` and `reviewer`, so no agent can verify locally.
+- Tracking now updates `REQUIREMENTS_TRACEABILITY.md` **and** `PROGRESS.md`
+  after each Task (guide §5.2).
+**Rationale.** The guide is the process authority; the update makes the PR the
+review vehicle and removes any local verification, which is the exact failure
+mode this machine has hit before.
+**Rejected.** Keeping the local lint/format allowances (contradicts §4.2), and
+dropping the specialised `tester`/`fixer`/`docs-writer`/`ci-runner` roles (they
+remain as supporting roles with no local toolchain access).
+
+### D-409 · 2026-10-23 · CodeQL code-scanning alerts are owner-triaged, not agent-dismissed
+**Finding.** GitHub default-setup CodeQL reports **68 open alerts**, almost all
+in `server.ts` (`js/path-injection`, `js/request-forgery`, `js/polynomial-redos`,
+`js/reflected-xss`, `js/prototype-polluting-assignment`,
+`js/type-confusion-through-parameter-tampering`, and route handlers performing
+file-system access without rate limiting), plus one `js/xss-through-dom` in
+`SettingsView.tsx`.
+**Context.** These are pre-existing. They became visible on this PR because the
+B-3 Prettier pass rewrote `server.ts` (and most files) line by line, so CodeQL's
+diff-informed analysis now reports every alert as "in the diff", and the
+`CodeQL` check concludes `failure`.
+**Decision.** Do not dismiss alerts to make the check green, and do not
+reformat-and-hide. The owner triages alerts in the Security tab; the alerts are
+scheduled as a dedicated hardening slice (server route rate limiting, path
+containment, SSRF allow-listing, ReDoS-safe regexes, and the DOM-XSS sink).
+Until that slice lands, `CodeQL` may be red for this PR — recorded here so it is
+never mistaken for a code regression.
+**Rejected.** Adding `CodeQL` to `.ci-required.txt` as non-authoritative
+(that would silently hide future *new* alerts), and blanket-dismissing the
+existing ones.

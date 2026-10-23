@@ -22,12 +22,18 @@ concrete commands, files and rules that apply here.
 4. **Never break update-in-place.** Application ID, package name, signing key
    and version monotonicity must not regress (see §4).
 5. **Clean-room.** `docs/inspiration.md` rules are non-negotiable.
-6. **CI-first: no heavy toolchain runs locally.** `npm ci`, `npm install`,
-   `npm test`, `npm run build`, `npm run lint`, `npx tsc`, `vitest`, and the
-   full `npm run verify` run exclusively on GitHub Actions via
+6. **CI-first: nothing verifies locally.** Every gate — `npm ci`,
+   `npm install`, `npm test`, `npm run build`, `npm run lint`,
+   `npm run format:check`, `npx tsc`, `vitest`, and the full `npm run verify` —
+   runs exclusively on GitHub Actions via
    `~/.config/opencode/scripts/ci.sh` (guide §4). The host is memory-constrained
-   and restarts under load. Local work is editing, read-only checks, git
-   operations, and reviewing CI results.
+   and restarts under load. Per guide §4.2 local work is limited to: editing
+   source files, reading files and CI logs, lightweight git operations, and
+   reviewing Pull Requests and CI results. There is no local-check allowance —
+   not even a "quick" `eslint`/`prettier`/`tsc` run.
+7. **Chat -> Task -> PR -> merge.** Plan in Chat mode (orchestrator, §5.1
+   below), execute one bounded Task (coder), let GitHub Actions verify, open or
+   update a Pull Request, and let the human review and merge (guide §5.2/§9).
 
 ---
 
@@ -119,9 +125,28 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
    `DECISIONS.md`.
 5. Walk the matching checklist in `docs/qc/manual-checklists.md`.
 6. Verify via `~/.config/opencode/scripts/ci.sh run "<description>"`
-   (CI-first, guide §4), then commit and push with a message that names the
-   slice. Never run `npm run verify` locally.
-7. Update `CHANGELOG.md` only for user-visible change.
+   (CI-first, guide §4), which commits, pushes, and opens/updates the PR. Check
+   the resulting PR checks — never run `npm run verify` (or any part of it)
+   locally.
+7. Update `PROGRESS.md` **and** `REQUIREMENTS_TRACEABILITY.md` (guide §5.2/§6),
+   and `CHANGELOG.md` for user-visible change.
+
+---
+
+## 5b. Operating model: Chat -> Task -> Pull Request (guide §5)
+
+We emulate cto.new's paid workflow using free models and GitHub Actions.
+
+| Mode | Who | Does | Does not |
+| --- | --- | --- | --- |
+| **Chat (plan)** | `orchestrator` (primary) | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates | edit code, run builds |
+| **Task (execute)** | `coder` (+ `explorer` for context) | implements one bounded slice, writes tests, commits, pushes | run local builds/tests, merge |
+| **Verify** | GitHub Actions via `ci-runner` | format + lint + typecheck + orphans + tests on 3 OS runners | — |
+| **Review** | `reviewer` (read-only), then the human | reports issues, risks, missing tests; human merges | fix, merge |
+
+Supporting roles: `tester` (extend tests), `fixer` (repair a red CI gate),
+`docs-writer` (tracking docs). None of them may run the toolchain locally
+either — they hand off to `ci-runner`.
 
 ---
 
