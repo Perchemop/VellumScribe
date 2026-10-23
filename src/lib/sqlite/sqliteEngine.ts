@@ -42,13 +42,26 @@ export interface RecoveryState {
   unrecoverableError?: string;
 }
 
+/** sql.js expects an ArrayBuffer; the Node path reads the wasm file as a Buffer view. */
+function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+  return data instanceof Uint8Array
+    ? (data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)
+    : data;
+}
+
 // Global memory fallback for Node test environments where indexedDB is not polyfilled
-const globalMemoryFallback = (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ || {
-  binary: null as Uint8Array | null,
-  previousBinary: null as Uint8Array | null,
-  corruptedSnapshots: [] as Array<{ timestamp: number; data: Uint8Array }>,
+interface SqliteMemoryStore {
+  binary: Uint8Array | null;
+  previousBinary: Uint8Array | null;
+  corruptedSnapshots: Array<{ timestamp: number; data: Uint8Array }>;
+}
+const globalStore = globalThis as typeof globalThis & { __VELLUMSCRIBE_SQLITE_STORE__?: SqliteMemoryStore };
+const globalMemoryFallback: SqliteMemoryStore = globalStore.__VELLUMSCRIBE_SQLITE_STORE__ || {
+  binary: null,
+  previousBinary: null,
+  corruptedSnapshots: [],
 };
-(globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
+globalStore.__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
 
 /**
  * IndexedDB storage for SQLite binary database snapshots with previous/current crash recovery
@@ -214,7 +227,7 @@ export class SqliteEngine {
   private static db: Database | null = null;
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
-  private static saveTimeout: any = null;
+  private static saveTimeout: ReturnType<typeof setTimeout> | null = null;
   private static isDirty = false;
   private static durabilityStatus: 'saved' | 'saving' | 'pending' | 'failed' = 'saved';
   private static transactionDepth = 0;
@@ -271,7 +284,7 @@ export class SqliteEngine {
         }
         return file;
       },
-      ...(wasmBinary ? { wasmBinary: wasmBinary as any } : {}),
+      ...(wasmBinary ? { wasmBinary: toArrayBuffer(wasmBinary) } : {}),
       printErr: (msg: string) => {
         if (
           typeof msg === 'string' &&
@@ -517,7 +530,7 @@ export class SqliteEngine {
   /**
    * Execute SQL query returning structured rows
    */
-  public static query<T = any>(sql: string, params: any[] = []): T[] {
+  public static query<T = unknown>(sql: string, params: unknown[] = []): T[] {
     const db = this.getDb();
     try {
       const stmt = db.prepare(sql);
@@ -538,7 +551,7 @@ export class SqliteEngine {
   /**
    * Execute write/DML statements
    */
-  public static run(sql: string, params: any[] = []): void {
+  public static run(sql: string, params: unknown[] = []): void {
     const db = this.getDb();
     try {
       db.run(sql, params);
@@ -553,7 +566,7 @@ export class SqliteEngine {
   /**
    * Execute write/DML statements (alias for run)
    */
-  public static execute(sql: string, params: any[] = []): void {
+  public static execute(sql: string, params: unknown[] = []): void {
     this.run(sql, params);
   }
 

@@ -123,11 +123,16 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     let isCharging: boolean | null = null;
 
     if (typeof navigator !== 'undefined') {
+      const nav = navigator as Navigator & {
+        deviceMemory?: number;
+        getBattery?: () => Promise<{ level: number; charging: boolean }>;
+        userAgentData?: { platform?: string };
+      };
       if ('hardwareConcurrency' in navigator && typeof navigator.hardwareConcurrency === 'number') {
         cpuCores = navigator.hardwareConcurrency;
       }
-      if ('deviceMemory' in (navigator as any) && typeof (navigator as any).deviceMemory === 'number') {
-        availableRamMb = Math.round((navigator as any).deviceMemory * 1024);
+      if ('deviceMemory' in nav && typeof nav.deviceMemory === 'number') {
+        availableRamMb = Math.round(nav.deviceMemory * 1024);
       }
       if (navigator.storage && navigator.storage.estimate) {
         try {
@@ -137,9 +142,9 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
           }
         } catch { /* ignore */ }
       }
-      if ('getBattery' in navigator) {
+      if ('getBattery' in nav && nav.getBattery) {
         try {
-          const b = await (navigator as any).getBattery();
+          const b = await nav.getBattery();
           batteryLevel = Math.round(b.level * 100);
           isCharging = b.charging;
         } catch { /* ignore */ }
@@ -156,7 +161,9 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     return {
       availableRamMb,
       cpuCores,
-      architecture: typeof navigator !== 'undefined' ? (navigator as any).userAgentData?.platform || navigator.platform || null : null,
+      architecture: typeof navigator !== 'undefined'
+        ? (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform || navigator.platform || null
+        : null,
       androidApiLevel: null, // Web browser environment is not Android OS
       availableStorageMb,
       batteryLevel,
@@ -169,7 +176,10 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
   }
 
   public async isSpeechRecognitionAvailable(): Promise<{ available: boolean }> {
-    const isAvail = typeof window !== 'undefined' && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    const w = typeof window === 'undefined'
+      ? undefined
+      : (window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown });
+    const isAvail = Boolean(w && (w.SpeechRecognition || w.webkitSpeechRecognition));
     return { available: isAvail };
   }
 
@@ -430,8 +440,8 @@ export async function getOfflineAiStatus(): Promise<{
 }> {
   try {
     const caps = await OfflineAi.getCapabilities();
-    const isNativeReady = !!(caps.isNativeEngineAvailable ?? (caps as any).nativeLibraryLoaded);
-    const freeMb = (caps.availableStorageMb ?? (caps as any).freeSpaceMb) ?? 0;
+    const isNativeReady = !!(caps.isNativeEngineAvailable ?? caps.nativeLibraryLoaded);
+    const freeMb = (caps.availableStorageMb ?? caps.freeSpaceMb) ?? 0;
     if (!isNativeReady) {
       return {
         nativeReady: false,
@@ -443,7 +453,7 @@ export async function getOfflineAiStatus(): Promise<{
     const models = await OfflineAi.listSpeechModels();
     return {
       nativeReady: true,
-      modelsInstalled: models.filter((m: any) => m.installed).map((m: any) => m.id),
+      modelsInstalled: models.filter((m) => m.installed).map((m) => m.id),
       freeSpaceMb: freeMb,
       message: 'On-device Whisper transcription engine ready.',
     };

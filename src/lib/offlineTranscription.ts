@@ -21,16 +21,52 @@ export interface OfflineTranscriptResult {
   }>;
 }
 
+/**
+ * Minimal Web Speech API shapes. The DOM lib does not ship them for every
+ * target, and the engine only uses this subset.
+ */
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  length: number;
+  [index: number]: SpeechRecognitionAlternativeLike;
+}
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: { length: number; [index: number]: SpeechRecognitionResultLike };
+}
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+type SpeechRecognitionWindow = Window & {
+  SpeechRecognition?: SpeechRecognitionCtor;
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+  webkitAudioContext?: typeof AudioContext;
+};
+
 export class OfflineTranscriptionEngine {
   /**
    * Check if browser has native Web Speech API recognition capabilities
    */
   public static isSpeechRecognitionSupported(): boolean {
     if (typeof window === 'undefined') return false;
-    return Boolean(
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition
-    );
+    const w = window as SpeechRecognitionWindow;
+    return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
   }
 
   /**
@@ -39,13 +75,14 @@ export class OfflineTranscriptionEngine {
   public static createSpeechRecognizer(callbacks: {
     onInterim?: (text: string) => void;
     onFinal?: (text: string) => void;
-    onError?: (error: any) => void;
+    onError?: (error: SpeechRecognitionErrorEventLike) => void;
     onEnd?: () => void;
     lang?: string;
-  }): any | null {
+  }): SpeechRecognitionLike | null {
     if (!this.isSpeechRecognitionSupported()) return null;
 
-    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const w = window as SpeechRecognitionWindow;
+    const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition;
     try {
       const recognition = new SpeechRec();
       recognition.continuous = true;
@@ -55,7 +92,7 @@ export class OfflineTranscriptionEngine {
 
       let accumulatedFinal = '';
 
-      recognition.onresult = (event: any) => {
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
         let currentInterim = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
@@ -76,7 +113,7 @@ export class OfflineTranscriptionEngine {
         }
       };
 
-      recognition.onerror = (event: any) => {
+      recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
         // Ignore aborted or no-speech events gracefully
         if (event.error === 'no-speech' || event.error === 'aborted') {
           return;
@@ -174,7 +211,7 @@ export class OfflineTranscriptionEngine {
     hasVoiceActivity: boolean;
     segments: Array<{ start: number; end: number; energyRms: number }>;
   }> {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const AudioCtx = window.AudioContext || (window as SpeechRecognitionWindow).webkitAudioContext;
     if (!AudioCtx) {
       return { duration: 0, hasVoiceActivity: false, segments: [] };
     }
