@@ -2,7 +2,34 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { spawn, execSync } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
+
+/**
+ * Runs ffprobe/ffmpeg with argument vectors (no shell), so a path or a
+ * numeric parameter can never be interpreted as a shell metacharacter.
+ * `2>/dev/null` from the old commands is replaced by stdio ignore.
+ */
+function runFfmpeg(args: string[], timeout: number): void {
+  execFileSync('ffmpeg', args, { timeout, stdio: ['ignore', 'ignore', 'ignore'] });
+}
+
+function runFfprobe(filePath: string, timeout: number): string {
+  return execFileSync(
+    'ffprobe',
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
+    { timeout }
+  )
+    .toString()
+    .trim();
+}
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
@@ -126,12 +153,18 @@ app.use((req, res, next) => {
 
   const origin = req.headers.origin;
   if (origin) {
-    const host = req.get('host');
-    const isLocalhost = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    const isSameHost = host && (origin === `http://${host}` || origin === `https://${host}`);
-    const allowedEnvOrigin = process.env.APP_URL && origin === process.env.APP_URL;
+    // Credentialed CORS must be driven by a configured allow-list, never by the
+    // request's own Host/Origin headers (both are attacker-controlled).
+    const configuredOrigins = (process.env.APP_URL || '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+    const isLocalhost =
+      process.env.NODE_ENV !== 'production' &&
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const isAllowed = configuredOrigins.includes(origin);
 
-    if (isLocalhost || isSameHost || allowedEnvOrigin) {
+    if (isLocalhost || isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.setHeader(
@@ -581,12 +614,7 @@ async function processAndTranscribeAudio(
     // 1. Probe duration using ffprobe
     let durationSec = 0;
     try {
-      const probeOut = execSync(
-        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${inputFilePath}"`,
-        { timeout: 10000 }
-      )
-        .toString()
-        .trim();
+      const probeOut = runFfprobe(inputFilePath, 10000);
       durationSec = parseFloat(probeOut) || 0;
     } catch (probeErr) {
       console.warn('ffprobe duration check notice:', probeErr);
@@ -598,9 +626,21 @@ async function processAndTranscribeAudio(
     let convertedSuccessfully = false;
 
     try {
-      execSync(
-        `ffmpeg -y -i "${inputFilePath}" -vn -ac 1 -ar 24000 -ab 32k "${optimizedMp3Path}" 2>/dev/null`,
-        { timeout: 60000 }
+      runFfmpeg(
+        [
+          '-y',
+          '-i',
+          inputFilePath,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '24000',
+          '-ab',
+          '32k',
+          optimizedMp3Path,
+        ],
+        60000
       );
       if (fs.existsSync(optimizedMp3Path) && fs.statSync(optimizedMp3Path).size > 0) {
         usedAudioPath = optimizedMp3Path;
@@ -635,9 +675,24 @@ async function processAndTranscribeAudio(
         chunkPromises.push(
           (async () => {
             try {
-              execSync(
-                `ffmpeg -y -ss ${chunkStart} -t ${chunkLen} -i "${optimizedMp3Path}" -ac 1 -ar 24000 -ab 32k "${chunkFile}" 2>/dev/null`,
-                { timeout: 20000 }
+              runFfmpeg(
+                [
+                  '-y',
+                  '-ss',
+                  String(chunkStart),
+                  '-t',
+                  String(chunkLen),
+                  '-i',
+                  optimizedMp3Path,
+                  '-ac',
+                  '1',
+                  '-ar',
+                  '24000',
+                  '-ab',
+                  '32k',
+                  chunkFile,
+                ],
+                20000
               );
             } catch (cutErr) {
               console.warn(`Segment ${i} cut notice:`, cutErr);
@@ -946,12 +1001,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
     // Check duration with ffprobe
     let durationSec = 0;
     try {
-      const probeOut = execSync(
-        `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${sourcePath}"`,
-        { timeout: 15000 }
-      )
-        .toString()
-        .trim();
+      const probeOut = runFfprobe(sourcePath, 15000);
       durationSec = parseFloat(probeOut) || 0;
     } catch (probeErr) {
       console.warn('ffprobe check notice in session init:', probeErr);
@@ -962,9 +1012,9 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
     const optimizedPath = path.join(tempDir, `${sessionId}_optimized.mp3`);
     let converted = false;
     try {
-      execSync(
-        `ffmpeg -y -i "${sourcePath}" -vn -ac 1 -ar 24000 -ab 32k "${optimizedPath}" 2>/dev/null`,
-        { timeout: 60000 }
+      runFfmpeg(
+        ['-y', '-i', sourcePath, '-vn', '-ac', '1', '-ar', '24000', '-ab', '32k', optimizedPath],
+        60000
       );
       if (fs.existsSync(optimizedPath) && fs.statSync(optimizedPath).size > 0) {
         converted = true;
@@ -976,12 +1026,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
     const workingAudioPath = converted ? optimizedPath : sourcePath;
     if (durationSec === 0) {
       try {
-        const probeOut = execSync(
-          `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${workingAudioPath}"`,
-          { timeout: 10000 }
-        )
-          .toString()
-          .trim();
+        const probeOut = runFfprobe(workingAudioPath, 10000);
         durationSec = parseFloat(probeOut) || 60;
       } catch {
         durationSec = 60;
@@ -1076,9 +1121,24 @@ app.post('/api/audio/transcribe-session/segment', async (req, res) => {
 
   try {
     const segLen = Math.max(0.5, segment.endSec - segment.startSec);
-    execSync(
-      `ffmpeg -y -ss ${segment.startSec} -t ${segLen} -i "${session.optimizedAudioPath}" -ac 1 -ar 24000 -ab 32k "${segmentFile}" 2>/dev/null`,
-      { timeout: 30000 }
+    runFfmpeg(
+      [
+        '-y',
+        '-ss',
+        String(segment.startSec),
+        '-t',
+        String(segLen),
+        '-i',
+        session.optimizedAudioPath,
+        '-ac',
+        '1',
+        '-ar',
+        '24000',
+        '-ab',
+        '32k',
+        segmentFile,
+      ],
+      30000
     );
 
     if (!fs.existsSync(segmentFile) || fs.statSync(segmentFile).size === 0) {
