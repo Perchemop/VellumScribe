@@ -6,7 +6,6 @@ import {
   EyeOff,
   CheckCircle2,
   AlertCircle,
-  
   Clipboard,
   X,
   Sparkles,
@@ -15,9 +14,9 @@ import {
   Zap,
   Mic,
   Check,
-  
   ChevronDown,
-  ChevronUp} from 'lucide-react';
+  ChevronUp,
+} from 'lucide-react';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { useModalBackHandler } from '../lib/modalBackStack';
 import { asErrorLike } from '../lib/errorLike';
@@ -41,7 +40,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
 }) => {
   useModalBackHandler(isOpen, onClose, 'ai-studio-key-modal');
   const isAdvancedProvider = ['groq', 'deepgram'].includes(initialProvider);
-  const [selectedProvider, setSelectedProvider] = useState<'google' | 'groq' | 'deepgram' | 'offline_rules'>(initialProvider);
+  const [selectedProvider, setSelectedProvider] = useState<
+    'google' | 'groq' | 'deepgram' | 'offline_rules'
+  >(initialProvider);
   const [showAdvancedProviders, setShowAdvancedProviders] = useState(isAdvancedProvider);
   const [keyInput, setKeyInput] = useState<string>('');
   const [showKey, setShowKey] = useState<boolean>(false);
@@ -52,7 +53,10 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   } | null>(null);
   const [, setFileFeedback] = useState<string | null>(null);
 
-  const loadProviderKey = (provider: 'google' | 'groq' | 'deepgram' | 'offline_rules', currentSettings = AiSettingsManager.getSettings()) => {
+  const loadProviderKey = (
+    provider: 'google' | 'groq' | 'deepgram' | 'offline_rules',
+    currentSettings = AiSettingsManager.getSettings()
+  ) => {
     if (provider === 'google') {
       setKeyInput(currentSettings.googleApiKey || currentSettings.apiKey || '');
     } else if (provider === 'groq') {
@@ -74,7 +78,6 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     }
   }, [isOpen, initialProvider]);
 
-
   const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'offline_rules') => {
     if (['groq', 'deepgram'].includes(prov)) {
       setShowAdvancedProviders(true);
@@ -92,7 +95,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     });
     setVerifyStatus({
       success: true,
-      message: '100% Offline Rule Engine activated. Notes summaries and action items will process locally on-device without network requests or API keys.',
+      message:
+        '100% Offline Rule Engine activated. Notes summaries and action items will process locally on-device without network requests or API keys.',
     });
     setTimeout(() => {
       if (onSuccess) onSuccess();
@@ -142,10 +146,19 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         if (res.success) {
           AiSettingsManager.setGoogleApiKey(trimmed);
           AiSettingsManager.updateSettings({ primaryLlmProvider: 'google' });
-          setVerifyStatus({ success: true, message: res.message || 'Connected to Google AI Studio!' });
-          setTimeout(() => { if (onSuccess) onSuccess(); onClose(); }, 1000);
+          setVerifyStatus({
+            success: true,
+            message: res.message || 'Connected to Google AI Studio!',
+          });
+          setTimeout(() => {
+            if (onSuccess) onSuccess();
+            onClose();
+          }, 1000);
         } else {
-          setVerifyStatus({ success: false, message: res.message || 'Google AI Studio verification failed.' });
+          setVerifyStatus({
+            success: false,
+            message: res.message || 'Google AI Studio verification failed.',
+          });
         }
       } else if (selectedProvider === 'groq') {
         const trimmed = keyInput.trim();
@@ -157,11 +170,20 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         const res = await AiSettingsManager.testGroqKey(trimmed);
         if (res.success) {
           AiSettingsManager.setGroqApiKey(trimmed);
-          AiSettingsManager.updateSettings({ primaryLlmProvider: 'groq', primaryTranscriptionProvider: 'groq_whisper' });
+          AiSettingsManager.updateSettings({
+            primaryLlmProvider: 'groq',
+            primaryTranscriptionProvider: 'groq_whisper',
+          });
           setVerifyStatus({ success: true, message: res.message || 'Connected to Groq Cloud!' });
-          setTimeout(() => { if (onSuccess) onSuccess(); onClose(); }, 1000);
+          setTimeout(() => {
+            if (onSuccess) onSuccess();
+            onClose();
+          }, 1000);
         } else {
-          setVerifyStatus({ success: false, message: res.message || 'Groq key verification failed.' });
+          setVerifyStatus({
+            success: false,
+            message: res.message || 'Groq key verification failed.',
+          });
         }
       } else if (selectedProvider === 'deepgram') {
         const trimmed = keyInput.trim();
@@ -175,14 +197,23 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           AiSettingsManager.setDeepgramApiKey(trimmed);
           AiSettingsManager.updateSettings({ primaryTranscriptionProvider: 'deepgram' });
           setVerifyStatus({ success: true, message: res.message || 'Connected to Deepgram!' });
-          setTimeout(() => { if (onSuccess) onSuccess(); onClose(); }, 1000);
+          setTimeout(() => {
+            if (onSuccess) onSuccess();
+            onClose();
+          }, 1000);
         } else {
-          setVerifyStatus({ success: false, message: res.message || 'Deepgram key verification failed.' });
+          setVerifyStatus({
+            success: false,
+            message: res.message || 'Deepgram key verification failed.',
+          });
         }
       }
     } catch (_err) {
       const err = asErrorLike(_err);
-      setVerifyStatus({ success: false, message: err.message || 'Error communicating with provider.' });
+      setVerifyStatus({
+        success: false,
+        message: err.message || 'Error communicating with provider.',
+      });
     } finally {
       setIsVerifying(false);
     }
@@ -318,7 +349,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   Google AI Studio (Gemini 3.7 / 3.6 / OCR)
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400/90 leading-relaxed">
-                  Free tier provides 15 RPM / 1,500 RPD for multimodal summaries, audio transcription, and handwritten notes OCR.
+                  Free tier provides 15 RPM / 1,500 RPD for multimodal summaries, audio
+                  transcription, and handwritten notes OCR.
                 </p>
               </div>
             </div>
@@ -332,7 +364,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   Groq Cloud (Llama 3.3 70B &amp; Whisper Large v3)
                 </p>
                 <p className="text-xs text-orange-700 dark:text-orange-400/90 leading-relaxed">
-                  Ultra-fast LPU inference with generous free tier credits for Llama 3.3 70B text synthesis and Whisper audio transcription.
+                  Ultra-fast LPU inference with generous free tier credits for Llama 3.3 70B text
+                  synthesis and Whisper audio transcription.
                 </p>
               </div>
             </div>
@@ -346,7 +379,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   Deepgram Speech Intelligence
                 </p>
                 <p className="text-xs text-cyan-700 dark:text-cyan-400/90 leading-relaxed">
-                  Provides $200 free credit upon signup for Nova-3 automated speech-to-text with word-level accuracy.
+                  Provides $200 free credit upon signup for Nova-3 automated speech-to-text with
+                  word-level accuracy.
                 </p>
               </div>
             </div>
@@ -361,7 +395,9 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     Zero Setup Built-in Offline Engine
                   </p>
                   <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
-                    No API keys or network connection required. Extracts action items, meeting minutes, and executive summaries directly inside the browser using deterministic natural language heuristics.
+                    No API keys or network connection required. Extracts action items, meeting
+                    minutes, and executive summaries directly inside the browser using deterministic
+                    natural language heuristics.
                   </p>
                 </div>
               </div>
@@ -392,14 +428,21 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   selectedProvider === 'google'
                     ? 'https://aistudio.google.com/app/apikey'
                     : selectedProvider === 'groq'
-                    ? 'https://console.groq.com/keys'
-                    : 'https://console.deepgram.com/'
+                      ? 'https://console.groq.com/keys'
+                      : 'https://console.deepgram.com/'
                 }
                 target="_blank"
                 rel="noreferrer"
                 className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-colors min-h-[44px]"
               >
-                <span>Open {selectedProvider === 'google' ? 'AI Studio' : selectedProvider === 'groq' ? 'Groq Console' : 'Deepgram'}</span>
+                <span>
+                  Open{' '}
+                  {selectedProvider === 'google'
+                    ? 'AI Studio'
+                    : selectedProvider === 'groq'
+                      ? 'Groq Console'
+                      : 'Deepgram'}
+                </span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -413,7 +456,15 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   <span className="w-5 h-5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center font-bold text-xs">
                     2
                   </span>
-                  <span>Paste {selectedProvider === 'google' ? 'AIzaSy...' : selectedProvider === 'groq' ? 'gsk_...' : 'Deepgram'} Key</span>
+                  <span>
+                    Paste{' '}
+                    {selectedProvider === 'google'
+                      ? 'AIzaSy...'
+                      : selectedProvider === 'groq'
+                        ? 'gsk_...'
+                        : 'Deepgram'}{' '}
+                    Key
+                  </span>
                 </label>
                 <button
                   type="button"
@@ -437,8 +488,8 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     selectedProvider === 'google'
                       ? 'AIzaSy...'
                       : selectedProvider === 'groq'
-                      ? 'gsk_...'
-                      : 'Paste Deepgram key...'
+                        ? 'gsk_...'
+                        : 'Paste Deepgram key...'
                   }
                   className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-mono text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-20"
                 />
@@ -482,13 +533,13 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                 )}
                 <span className="leading-snug">{verifyStatus.message}</span>
               </div>
-
             </div>
           )}
 
           {/* Privacy Footnote */}
           <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
-            All API keys are strictly retained on your local device in encrypted browser storage. Zero keys are logged or stored on remote servers.
+            All API keys are strictly retained on your local device in encrypted browser storage.
+            Zero keys are logged or stored on remote servers.
           </p>
         </div>
 
@@ -528,4 +579,3 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     </div>
   );
 };
-

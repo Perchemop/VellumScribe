@@ -104,18 +104,26 @@ export class MediaRepository {
         path: `media/${key}`,
         data: base64,
         directory: Directory.Data,
-        recursive: true
+        recursive: true,
       });
     } else {
       await idb.put(key, blob);
     }
   }
 
-  static async saveBinary(key: string, blob: Blob, _mimeType?: string, _noteId?: number): Promise<void> {
+  static async saveBinary(
+    key: string,
+    blob: Blob,
+    _mimeType?: string,
+    _noteId?: number
+  ): Promise<void> {
     return this.putBinary(key, blob);
   }
 
-  static async getBinary(key: string, mimeType: string = 'application/octet-stream'): Promise<Blob | null> {
+  static async getBinary(
+    key: string,
+    mimeType: string = 'application/octet-stream'
+  ): Promise<Blob | null> {
     if (Capacitor.isNativePlatform()) {
       try {
         const res = await Filesystem.readFile({
@@ -143,7 +151,9 @@ export class MediaRepository {
           path: `media/${key}`,
           directory: Directory.Data,
         });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else {
       await idb.delete(key);
     }

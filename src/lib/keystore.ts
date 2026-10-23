@@ -56,9 +56,7 @@ export class AndroidKeystoreManager {
   }
 
   private static maskValue(rawValue: string): string {
-    return rawValue.length > 4
-      ? '••••••••••••••••' + rawValue.slice(-4)
-      : '••••••••••••';
+    return rawValue.length > 4 ? '••••••••••••••••' + rawValue.slice(-4) : '••••••••••••';
   }
 
   /**
@@ -82,7 +80,8 @@ export class AndroidKeystoreManager {
     if (Capacitor.isNativePlatform()) {
       try {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-        const res = (await SecureStorage.get(`vellumscribe.secret.${alias}`)) as string | { value?: string } | null;
+        const res = (await SecureStorage.get(`vellumscribe.secret.${alias}`)) as
+          string | { value?: string } | null;
         if (typeof res === 'string') return res;
         if (res && typeof res.value === 'string') return res.value;
       } catch (e) {
@@ -156,7 +155,11 @@ export class AndroidKeystoreManager {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
         await SecureStorage.remove(`vellumscribe.secret.${alias}`);
       } catch (e) {
-        AppLogger.warn('Keystore', '[Keystore] Failed to remove native secure value (continuing to clear local metadata)', e);
+        AppLogger.warn(
+          'Keystore',
+          '[Keystore] Failed to remove native secure value (continuing to clear local metadata)',
+          e
+        );
       }
     }
     this.save(this.getStored().filter((s) => s.alias !== alias));
@@ -184,7 +187,8 @@ export class AndroidKeystoreManager {
     let migratedCount = 0;
     try {
       // 1. Check legacy Gemini API key
-      const legacyGeminiKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key');
+      const legacyGeminiKey =
+        localStorage.getItem('gemini_api_key') || localStorage.getItem('vs_gemini_api_key');
       if (legacyGeminiKey && legacyGeminiKey.trim()) {
         await this.saveSecret('gemini_api_key', legacyGeminiKey.trim(), 'api_key');
         localStorage.removeItem('gemini_api_key');

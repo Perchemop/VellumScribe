@@ -71,9 +71,12 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-zinc-100">Something interrupted your session</h2>
+              <h2 className="text-lg font-semibold text-zinc-100">
+                Something interrupted your session
+              </h2>
               <p className="text-xs text-zinc-400 leading-relaxed">
-                An unexpected interface exception occurred. Your local notes and recordings remain safely persisted in storage.
+                An unexpected interface exception occurred. Your local notes and recordings remain
+                safely persisted in storage.
               </p>
             </div>
 

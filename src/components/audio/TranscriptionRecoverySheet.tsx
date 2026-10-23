@@ -1,5 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud, Mic, AlertTriangle, RefreshCw, X, CheckCircle2, Loader2, Download } from 'lucide-react';
+import {
+  Cloud,
+  Mic,
+  AlertTriangle,
+  RefreshCw,
+  X,
+  CheckCircle2,
+  Loader2,
+  Download,
+} from 'lucide-react';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionOrchestrator } from '../../services/TranscriptionOrchestrator';
 import { PrivacyManager } from '../../lib/privacyManager';
@@ -83,7 +92,9 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
 
     try {
       if (!PrivacyManager.isNetworkAllowed()) {
-        throw new Error('Network is blocked by Privacy Mode. Allow network in Settings to use Cloud AI.');
+        throw new Error(
+          'Network is blocked by Privacy Mode. Allow network in Settings to use Cloud AI.'
+        );
       }
       if (!PrivacyManager.hasCloudAiConsent()) {
         throw new Error('Cloud AI consent is required. Grant consent in Settings → Privacy.');
@@ -163,9 +174,7 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
   const modelMissing = inferenceReady && !hasModel;
 
   let statusTitle = 'Checking offline engine…';
-  let statusBody =
-    errorText ||
-    'Checking whether on-device Whisper is ready on this device.';
+  let statusBody = errorText || 'Checking whether on-device Whisper is ready on this device.';
 
   if (caps.phase === 'ready') {
     if (inferenceReady && hasModel) {
@@ -200,7 +209,9 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div
         className="w-full sm:max-w-lg bg-white dark:bg-stone-900 rounded-t-2xl sm:rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"

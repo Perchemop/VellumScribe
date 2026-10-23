@@ -9,16 +9,17 @@ Append here for every slice; never rewrite history.
 
 ## Current state
 
-| Signal | State |
-| --- | --- |
-| `npm run verify` | ✅ **GREEN on CI (all three OS runners)** — `typecheck` + `lint` (0 warnings) + `check:orphans` + 86 tests. Run `1cbc192` on `opencode/ci`. |
-| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job now also runs `check:orphans` (✅ 119 files) and the 86-test suite (✅). |
-| Test suite | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`). |
-| Working tree | clean, committed and pushed |
-| GitHub Actions | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green. |
-| Android APK | ✅ **built in CI** — artifact `VellumScribe-Android-APKs-real`, `versionName=3.1.0 versionCode=30100`, **`signed=false`** |
-| Signed APK | ⛔ not produced — no keystore yet (Q-002) |
-| Guide adoption | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md` |
+| Signal           | State                                                                                                                                                                                                      |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run verify` | ✅ **GREEN on CI (all three OS runners)** — `typecheck` + `lint` (0 warnings) + `check:orphans` + 86 tests. Run `1cbc192` on `opencode/ci`.                                                                |
+| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                           |
+| Lint ceiling     | `--max-warnings=0` (warnings denied, guide §4). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job now also runs `check:orphans` (✅ 119 files) and the 86-test suite (✅). |
+| Test suite       | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`).                                                                                                                               |
+| Working tree     | clean, committed and pushed                                                                                                                                                                                |
+| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                            |
+| Android APK      | ✅ **built in CI** — artifact `VellumScribe-Android-APKs-real`, `versionName=3.1.0 versionCode=30100`, **`signed=false`**                                                                                  |
+| Signed APK       | ⛔ not produced — no keystore yet (Q-002)                                                                                                                                                                  |
+| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                |
 
 **Status sentence:** code compiles and tests pass; CI is operational on three
 OS runners with a real (unsigned) APK. The active blocker is lint:
@@ -56,22 +57,22 @@ docs-writer `opencode/big-pickle`. Provider order: OpenCode free → NVIDIA free
 
 **Added:**
 
-| File | Purpose |
-| --- | --- |
-| `docs/project-brief.md` | Discovery answers A–E |
-| `docs/scope.md` | In / out / undecided scope |
-| `docs/inspiration.md` | Clean-room statement for whisper + Obsidian |
-| `docs/product-name.md` | Locked name and usage rules |
-| `docs/assumptions-and-questions.md` | 6 facts, 4 assumptions, 11 open questions |
-| `docs/parity.md` | Capability tracker with test evidence |
-| `docs/development.md` | Commands, constraints, per-slice workflow |
-| `docs/qc/manual-checklists.md` | 7 manual QC sections |
-| `IMPLEMENTATION_PLAN.md` | Tracks A–D of vertical slices |
-| `REQUIREMENTS_TRACEABILITY.md` | 31 requirements → files → tests |
-| `DECISIONS.md` | 14 decisions with rejected alternatives |
-| `PROGRESS.md` | This file |
-| `ATTRIBUTION.md` | Verified licences for all 46 dependencies + vendored MIT whisper.cpp/ggml |
-| `.opencode/agents/*.md` | orchestrator, coder, explorer, reviewer |
+| File                                | Purpose                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `docs/project-brief.md`             | Discovery answers A–E                                                     |
+| `docs/scope.md`                     | In / out / undecided scope                                                |
+| `docs/inspiration.md`               | Clean-room statement for whisper + Obsidian                               |
+| `docs/product-name.md`              | Locked name and usage rules                                               |
+| `docs/assumptions-and-questions.md` | 6 facts, 4 assumptions, 11 open questions                                 |
+| `docs/parity.md`                    | Capability tracker with test evidence                                     |
+| `docs/development.md`               | Commands, constraints, per-slice workflow                                 |
+| `docs/qc/manual-checklists.md`      | 7 manual QC sections                                                      |
+| `IMPLEMENTATION_PLAN.md`            | Tracks A–D of vertical slices                                             |
+| `REQUIREMENTS_TRACEABILITY.md`      | 31 requirements → files → tests                                           |
+| `DECISIONS.md`                      | 14 decisions with rejected alternatives                                   |
+| `PROGRESS.md`                       | This file                                                                 |
+| `ATTRIBUTION.md`                    | Verified licences for all 46 dependencies + vendored MIT whisper.cpp/ggml |
+| `.opencode/agents/*.md`             | orchestrator, coder, explorer, reviewer                                   |
 
 **Coverage reality check:** 13 of 31 traceable requirements have automated
 tests. **R-2 (notes & capture) has none** — tracked as slices C-1…C-3.
@@ -125,12 +126,12 @@ Pushed as `5d68e2b`. This was the first time this repository's own commits
 ran through the pipeline (the 2026-10-16 pushes produced no runs at all —
 Actions was down then).
 
-| Run | Workflow | Result |
-| --- | --- | --- |
-| `39566612176` | CI | ✅ `verify (ubuntu-latest)`, `verify (windows-latest)`, `verify (macos-latest)` all green |
-| `39566612176` | CI · `format (staged, non-blocking)` | ❌ red **by design** (Q-004); `continue-on-error`, workflow still `success` |
-| `39566612217` | Security Scanning | ✅ Dependency Audit + CodeQL green |
-| `39566612127` | Build Android APK | ✅ artifact `VellumScribe-Android-APKs-real` |
+| Run           | Workflow                             | Result                                                                                    |
+| ------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `39566612176` | CI                                   | ✅ `verify (ubuntu-latest)`, `verify (windows-latest)`, `verify (macos-latest)` all green |
+| `39566612176` | CI · `format (staged, non-blocking)` | ❌ red **by design** (Q-004); `continue-on-error`, workflow still `success`               |
+| `39566612217` | Security Scanning                    | ✅ Dependency Audit + CodeQL green                                                        |
+| `39566612127` | Build Android APK                    | ✅ artifact `VellumScribe-Android-APKs-real`                                              |
 
 The Android build logged, for both tasks:
 
@@ -169,6 +170,24 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
 
+## 2026-10-23 — Slice B-3: Prettier baseline + required format gate (D-407, Q-004 resolved)
+
+- One dedicated mechanical `prettier --write .` pass, committed on its own:
+  **148 tracked files** reformatted.
+- `android/app/src/main/assets/**` (the web bundle `cap sync` copies into the
+  Android project) added to `.prettierignore` — generated output must never be
+  reformatted. Reverted the reformat of the 30 generated asset files.
+- The `format` CI job is promoted from `continue-on-error: true`
+  (`format (staged, non-blocking)`) to a **required** gate named `format`
+  running `npm run format:check`. Guide §4's required-CI list is now complete.
+- `docs/qc/manual-checklists.md` was reworded slightly: a list continuation
+  starting with `signed=…` made Prettier's markdown printer non-idempotent
+  (it alternated the indent on every pass), so the sentence now fits one line.
+- Verified locally: `prettier --check .` → "All matched files use Prettier code
+  style!", `eslint src` → 0 warnings (no semantic change).
+
+---
+
 ## 2026-10-23 — Slice B-7 (DONE): lint gate is GREEN (275 → 0) 🎉
 
 **`npm run verify` passes end-to-end on all three OS runners** — the first time
@@ -205,12 +224,12 @@ Every remaining warning is `@typescript-eslint/no-explicit-any`. Typed row shape
 payload shapes and boundary casts — no blanket `any → unknown` sweeps that would
 break call sites. Verified after each sub-batch on CI (typecheck green):
 
-| Sub-slice | Files | Remaining |
-| --- | --- | --- |
-| B-7a | `lib/storage.ts` (46) | 183 |
-| B-7b | `lib/sqlite/sqliteRepository.ts` (18), `lib/geminiService.ts` (17) | 148 |
-| B-7c | `repositories/*` (31), `services/AiResultValidator.ts` (13) | 104 |
-| B-7d | `lib/logger.ts` (9), `lib/sqlite/sqliteEngine.ts` (8), `lib/offlineTranscription.ts` (9), `lib/cloudBackupCrypto.ts` (7), `plugins/offline-ai/index.ts` (11), `services/AiProvenanceService.ts` (7) | **53** |
+| Sub-slice | Files                                                                                                                                                                                               | Remaining |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| B-7a      | `lib/storage.ts` (46)                                                                                                                                                                               | 183       |
+| B-7b      | `lib/sqlite/sqliteRepository.ts` (18), `lib/geminiService.ts` (17)                                                                                                                                  | 148       |
+| B-7c      | `repositories/*` (31), `services/AiResultValidator.ts` (13)                                                                                                                                         | 104       |
+| B-7d      | `lib/logger.ts` (9), `lib/sqlite/sqliteEngine.ts` (8), `lib/offlineTranscription.ts` (9), `lib/cloudBackupCrypto.ts` (7), `plugins/offline-ai/index.ts` (11), `services/AiProvenanceService.ts` (7) | **53**    |
 
 Highlights:
 
@@ -300,11 +319,11 @@ warnings (0 errors), orphans ✅, Security ✅.
 
 **Verification** — `ci.sh run`, run on `opencode/ci`:
 
-| Check | Result |
-| --- | --- |
-| `typecheck` | ✅ pass (one regression caught and fixed: `setStats` is used at line 1604) |
-| `lint` | ❌ 275 warnings (0 errors) — down from 332; `no-unused-vars` now 0 |
-| `format (staged, non-blocking)` | ❌ (expected; slice B-3 owns the baseline) |
+| Check                           | Result                                                                     |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `typecheck`                     | ✅ pass (one regression caught and fixed: `setStats` is used at line 1604) |
+| `lint`                          | ❌ 275 warnings (0 errors) — down from 332; `no-unused-vars` now 0         |
+| `format (staged, non-blocking)` | ❌ (expected; slice B-3 owns the baseline)                                 |
 
 Remaining mix: `no-explicit-any` 229, `jsx-a11y/click-events-have-key-events`
 15, `react-hooks/set-state-in-effect` 12, `react-hooks/exhaustive-deps` 10,
@@ -349,12 +368,12 @@ any local model hosting"); logged as `D-405`.
 
 **Verification** — `ci.sh run`, run `39766964875` on `opencode/ci`:
 
-| Check | Result |
-| --- | --- |
-| `typecheck` | ✅ pass (after fixing one bad import specifier, `lib/errorLike` → `./lib/errorLike`) |
-| `lint` | ❌ 332 warnings (0 errors) — active blocker, down from 656 |
-| `format (staged, non-blocking)` | ❌ 182 files (expected; slice B-3 owns the baseline) |
-| `orphans` / `tests` | not reached (lint aborts `npm run verify`) |
+| Check                           | Result                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| `typecheck`                     | ✅ pass (after fixing one bad import specifier, `lib/errorLike` → `./lib/errorLike`) |
+| `lint`                          | ❌ 332 warnings (0 errors) — active blocker, down from 656                           |
+| `format (staged, non-blocking)` | ❌ 182 files (expected; slice B-3 owns the baseline)                                 |
+| `orphans` / `tests`             | not reached (lint aborts `npm run verify`)                                           |
 
 Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 `no-unused-vars` ≈57, `jsx-a11y/click-events-have-key-events` 15,

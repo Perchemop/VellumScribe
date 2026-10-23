@@ -16,11 +16,7 @@ import {
   SearchResult,
 } from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
-import {
-  NoteRepository,
-  NotesPageOptions,
-  NotesPageResult,
-} from '../repositories/NoteRepository';
+import { NoteRepository, NotesPageOptions, NotesPageResult } from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 import {
@@ -190,7 +186,9 @@ export class StorageManager {
     try {
       const notes = this.getNotes().filter((n) => n.event_id === id);
       if (notes.length > 0) {
-        let general = this.getEvents().find((e) => e.title.toLowerCase() === 'general' && e.id !== id);
+        let general = this.getEvents().find(
+          (e) => e.title.toLowerCase() === 'general' && e.id !== id
+        );
         if (!general) {
           general = this.addEvent({
             title: 'General',
@@ -237,7 +235,10 @@ export class StorageManager {
     }
   }
 
-  public static async getNotesKeyset(beforeUpdatedAt?: string, limit: number = 50): Promise<NoteRecord[]> {
+  public static async getNotesKeyset(
+    beforeUpdatedAt?: string,
+    limit: number = 50
+  ): Promise<NoteRecord[]> {
     const res = await NoteRepository.list({ limit, cursor: beforeUpdatedAt, status: 'active' });
     return res.notes;
   }
@@ -316,7 +317,11 @@ export class StorageManager {
   ): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
-    if (expectedVersion !== undefined && existing.version !== undefined && existing.version !== expectedVersion) {
+    if (
+      expectedVersion !== undefined &&
+      existing.version !== undefined &&
+      existing.version !== expectedVersion
+    ) {
       try {
         SqliteRepository.recordSyncConflict({
           entity_type: 'note',
@@ -329,7 +334,10 @@ export class StorageManager {
       } catch (e) {
         AppLogger.warn('StorageManager', 'Failed to record sync conflict', e);
       }
-      AppLogger.warn('StorageManager', `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`);
+      AppLogger.warn(
+        'StorageManager',
+        `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`
+      );
       return null;
     }
     const updated: NoteRecord = {
@@ -605,7 +613,12 @@ export class StorageManager {
   public static async verifyAndUnlockNote(
     note: NoteRecord,
     pin: string
-  ): Promise<{ success: boolean; payload?: NotePayloadData; errorMessage?: string; message?: string }> {
+  ): Promise<{
+    success: boolean;
+    payload?: NotePayloadData;
+    errorMessage?: string;
+    message?: string;
+  }> {
     if (!note.is_locked) {
       return {
         success: true,
@@ -680,7 +693,10 @@ export class StorageManager {
     });
   }
 
-  public static async lockNoteTransactionally(noteId: number, pin: string): Promise<NoteRecord | null> {
+  public static async lockNoteTransactionally(
+    noteId: number,
+    pin: string
+  ): Promise<NoteRecord | null> {
     return this.setNotePinLock(noteId, pin);
   }
 
@@ -750,7 +766,9 @@ export class StorageManager {
     return this.transcriptsCache ?? [];
   }
 
-  public static getTranscriptForRecording(recordingId: string | number): TranscriptRecord | undefined {
+  public static getTranscriptForRecording(
+    recordingId: string | number
+  ): TranscriptRecord | undefined {
     return this.getTranscripts().find((t) => String(t.recording_id) === String(recordingId));
   }
 
@@ -803,7 +821,9 @@ export class StorageManager {
     this.ocrScansCache = null;
   }
 
-  public static getSyncConflicts(status: 'open' | 'resolved' | 'ignored' = 'open'): SyncConflictRecord[] {
+  public static getSyncConflicts(
+    status: 'open' | 'resolved' | 'ignored' = 'open'
+  ): SyncConflictRecord[] {
     try {
       return typeof SqliteRepository.getSyncConflicts === 'function'
         ? SqliteRepository.getSyncConflicts(status)
@@ -958,8 +978,7 @@ export class StorageManager {
     let notes = this.getNotes();
     if (q) {
       notes = notes.filter(
-        (n) =>
-          (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
+        (n) => (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
       );
     }
     if (options.status) notes = notes.filter((n) => n.status === options.status);
@@ -1049,9 +1068,7 @@ export class StorageManager {
   public static exportNotesAsMarkdown(ids?: number[]): string {
     let notes = this.getNotes();
     if (ids && ids.length) notes = notes.filter((n) => ids.includes(n.id));
-    return notes
-      .map((n) => `# ${n.title || 'Untitled'}\n\n${n.body || ''}`)
-      .join('\n\n---\n\n');
+    return notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body || ''}`).join('\n\n---\n\n');
   }
 
   public static importLegacyUnencryptedBackup(json: string): { success: boolean; error?: string } {

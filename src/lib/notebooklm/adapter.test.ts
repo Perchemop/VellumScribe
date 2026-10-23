@@ -46,8 +46,20 @@ describe('NotebookLMAdapter', () => {
       modelId: 'whisper-base',
       durationMs: 75000,
       segments: [
-        { sequence: 1, start_ms: 0, end_ms: 15000, speaker_id: 'spk_1', text: 'Good morning everyone.' },
-        { sequence: 2, start_ms: 15000, end_ms: 45000, speaker_id: 'spk_2', text: 'Here are the Q3 metrics.' },
+        {
+          sequence: 1,
+          start_ms: 0,
+          end_ms: 15000,
+          speaker_id: 'spk_1',
+          text: 'Good morning everyone.',
+        },
+        {
+          sequence: 2,
+          start_ms: 15000,
+          end_ms: 45000,
+          speaker_id: 'spk_2',
+          text: 'Here are the Q3 metrics.',
+        },
       ],
       speakers: [
         { speaker_id: 'spk_1', label: 'Speaker 1', name: 'Alice Chen' },

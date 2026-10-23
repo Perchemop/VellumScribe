@@ -77,7 +77,11 @@ class TranscriptionProgressManagerImpl {
         try {
           listener(session);
         } catch (err) {
-          AppLogger.error('TranscriptionProgressManager', 'TranscriptionProgressManager listener error:', err);
+          AppLogger.error(
+            'TranscriptionProgressManager',
+            'TranscriptionProgressManager listener error:',
+            err
+          );
         }
       });
     }

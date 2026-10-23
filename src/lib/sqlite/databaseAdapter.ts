@@ -30,7 +30,11 @@ export interface DatabaseAdapter {
   getLastInsertId?(): number;
   checkIntegrity(): Promise<{ ok: boolean; result: string }>;
   checkIntegritySync?(): boolean;
-  vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }>;
+  vacuum(): Promise<{
+    originalSizeBytes: number;
+    compactedSizeBytes: number;
+    bytesReclaimed: number;
+  }>;
   close(): Promise<void>;
   getDurabilityStatus(): DurabilityStatus;
   exportBinary?(): Uint8Array;
@@ -164,7 +168,9 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
         );
       `);
 
-      const appliedRes = await this.conn.query('SELECT version FROM schema_migrations ORDER BY version ASC;');
+      const appliedRes = await this.conn.query(
+        'SELECT version FROM schema_migrations ORDER BY version ASC;'
+      );
       const appliedSet = new Set<number>((appliedRes.values || []).map((r) => r.version));
 
       for (const mig of MIGRATIONS) {
@@ -357,10 +363,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       [Date.now()]
     );
 
-    AppLogger.info(
-      'NativeSqliteAdapter',
-      'Legacy sql.js → native SQLite migration finished.'
-    );
+    AppLogger.info('NativeSqliteAdapter', 'Legacy sql.js → native SQLite migration finished.');
   }
 
   async execute(sql: string, params: unknown[] = []): Promise<void> {
@@ -494,9 +497,11 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     SqliteEngine.run(sql, params);
     const lastId = SqliteEngine.getLastInsertId();
     if (this.db) {
-      this.conn.run(sql, params).catch((err: unknown) =>
-        AppLogger.warn('NativeSqliteAdapter', 'Async native sync run error', err)
-      );
+      this.conn
+        .run(sql, params)
+        .catch((err: unknown) =>
+          AppLogger.warn('NativeSqliteAdapter', 'Async native sync run error', err)
+        );
     }
     return { changes: 1, lastInsertRowId: lastId };
   }
@@ -534,8 +539,7 @@ export class WebSqliteAdapter implements DatabaseAdapter {
 
   getDurabilityStatus(): DurabilityStatus {
     return (
-      SqliteEngine.getDurabilityStatus?.() ||
-      (SqliteEngine.isDirtyState?.() ? 'pending' : 'saved')
+      SqliteEngine.getDurabilityStatus?.() || (SqliteEngine.isDirtyState?.() ? 'pending' : 'saved')
     );
   }
 

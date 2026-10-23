@@ -25,7 +25,10 @@ export default tseslint.config(
       'jsx-a11y/click-events-have-key-events': 'warn',
       '@typescript-eslint/no-explicit-any': 'warn',
       'no-console': 'warn',
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'no-empty': 'warn',
       'no-useless-assignment': 'warn',
       'prefer-const': 'warn',
@@ -44,6 +47,14 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'android/**', 'scripts/**', 'data/**', 'database/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      'android/**',
+      'scripts/**',
+      'data/**',
+      'database/**',
+    ],
   }
 );

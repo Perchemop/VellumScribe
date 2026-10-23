@@ -54,7 +54,11 @@ export class TranscriptService {
   /**
    * Rename a speaker across a transcription
    */
-  public static renameSpeaker(transcriptionId: number, speakerId: string, customName: string): void {
+  public static renameSpeaker(
+    transcriptionId: number,
+    speakerId: string,
+    customName: string
+  ): void {
     TranscriptionRepository.updateSpeakerName(transcriptionId, speakerId, customName.trim());
   }
 

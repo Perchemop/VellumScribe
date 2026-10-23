@@ -27,10 +27,10 @@ const allFilesToSearch = [
   ...allSrcFiles,
   path.resolve('server.ts'),
   path.resolve('index.html'),
-].filter(f => fs.existsSync(f));
+].filter((f) => fs.existsSync(f));
 
 // Read all file contents
-const fileContents = allFilesToSearch.map(f => ({
+const fileContents = allFilesToSearch.map((f) => ({
   path: f,
   content: fs.readFileSync(f, 'utf8'),
 }));
@@ -47,7 +47,8 @@ const orphans = [];
 
 for (const file of allSrcFiles) {
   if (entryPoints.has(file)) continue;
-  if (file.endsWith('.test.ts') || file.endsWith('.test.tsx') || file.endsWith('.spec.ts')) continue;
+  if (file.endsWith('.test.ts') || file.endsWith('.test.tsx') || file.endsWith('.spec.ts'))
+    continue;
   if (file.endsWith('.d.ts')) continue;
 
   const baseNameWithoutExt = path.basename(file, path.extname(file));
@@ -77,8 +78,10 @@ for (const file of allSrcFiles) {
 
 if (orphans.length > 0) {
   console.error(`[check:orphans] Found ${orphans.length} unreferenced source file(s):`);
-  orphans.forEach(f => console.error(`  - ${f}`));
+  orphans.forEach((f) => console.error(`  - ${f}`));
   process.exit(1);
 } else {
-  console.log(`[check:orphans] All ${allSrcFiles.length} source files in src/ have valid importers or entry points.`);
+  console.log(
+    `[check:orphans] All ${allSrcFiles.length} source files in src/ have valid importers or entry points.`
+  );
 }

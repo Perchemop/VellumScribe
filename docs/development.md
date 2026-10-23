@@ -13,7 +13,7 @@ concrete commands, files and rules that apply here.
    `IMPLEMENTATION_PLAN.md` and every requirement in
    `REQUIREMENTS_TRACEABILITY.md`.
 2. **Never claim unverified work is complete.** A slice is Done only when
-   CI is green via `ci.sh` *and* the QC checklist for it has been walked.
+   CI is green via `ci.sh` _and_ the QC checklist for it has been walked.
    If CI is down or a gate is failing, say so explicitly rather than implying
    CI passed.
 3. **Never invent requirements.** Open questions live in
@@ -34,6 +34,7 @@ concrete commands, files and rules that apply here.
 ## 2. Commands
 
 Light / read-only (safe on this machine):
+
 ```bash
 git status          # read-only
 git diff            # read-only
@@ -43,6 +44,7 @@ npm run format:check
 ```
 
 Heavy / CI-only (never run on this machine — guide §4):
+
 ```bash
 npm install --legacy-peer-deps   # heavy; blocked locally
 npm ci                           # heavy; blocked locally
@@ -56,6 +58,7 @@ npm run build                    # vite build + esbuild
 ```
 
 Verify a change with CI:
+
 ```bash
 ~/.config/opencode/scripts/ci.sh run "<short description>"
 # commits the working tree to opencode/ci, opens a PR to main,
@@ -63,6 +66,7 @@ Verify a change with CI:
 ```
 
 Android (CI only — see §3):
+
 ```bash
 npx cap sync android
 ./gradlew assembleDebug assembleRelease
@@ -92,12 +96,12 @@ The local machine has ~2.7 GiB RAM, no JDK, no Android SDK/NDK/CMake.
 
 These must never regress:
 
-| Invariant | Where it lives |
-| --- | --- |
-| Application ID stays `com.vellumscribe.app` | `android/app/build.gradle` |
-| `versionCode` strictly increases per release | derived from `package.json` (`major*10000 + minor*100 + patch`) |
-| Same signing key across debug and release | `signingConfigs` in `android/app/build.gradle` |
-| Keystore never committed | `.gitignore` covers `*.jks`, `*.keystore`, `android/keystore.properties` |
+| Invariant                                    | Where it lives                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------ |
+| Application ID stays `com.vellumscribe.app`  | `android/app/build.gradle`                                               |
+| `versionCode` strictly increases per release | derived from `package.json` (`major*10000 + minor*100 + patch`)          |
+| Same signing key across debug and release    | `signingConfigs` in `android/app/build.gradle`                           |
+| Keystore never committed                     | `.gitignore` covers `*.jks`, `*.keystore`, `android/keystore.properties` |
 
 A new APK only updates an installed copy if the **application ID and the
 signing key both match**. Verify per `docs/BUILD_RELEASE.md` §5 before any
@@ -126,12 +130,12 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
 Agent definitions live in `.opencode/agents/`. Roles are wired to the
 provider that is actually connected (currently OpenCode free / Big Pickle):
 
-| Role | Agent file | Use for |
-| --- | --- | --- |
+| Role             | Agent file                         | Use for                                     |
+| ---------------- | ---------------------------------- | ------------------------------------------- |
 | Lead / Architect | `.opencode/agents/orchestrator.md` | Discovery, scope, decisions, slice planning |
-| Coder | `.opencode/agents/coder.md` | Implementing a slice |
-| Explorer | `.opencode/agents/explorer.md` | Codebase search, mapping, audits |
-| Reviewer | `.opencode/agents/reviewer.md` | Post-slice review, gate verification |
+| Coder            | `.opencode/agents/coder.md`        | Implementing a slice                        |
+| Explorer         | `.opencode/agents/explorer.md`     | Codebase search, mapping, audits            |
+| Reviewer         | `.opencode/agents/reviewer.md`     | Post-slice review, gate verification        |
 
 When a stronger free provider (Gemini, Groq) is connected, only the `model:`
 field in those files changes — role structure stays.
@@ -175,19 +179,19 @@ runs the repository's CI. Always cite a run ID you actually inspected.
 
 ## 8. Documentation set
 
-| File | Purpose |
-| --- | --- |
-| `docs/project-brief.md` | Why the app exists |
-| `docs/scope.md` | What is in and out of scope |
-| `docs/inspiration.md` | Clean-room inspiration statement |
-| `docs/product-name.md` | Locked name and usage rules |
-| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions |
-| `docs/architecture.md` | *(this repo uses `docs/ARCHITECTURE.md`)* |
-| `docs/parity.md` | Capability tracker |
-| `docs/qc/manual-checklists.md` | Manual QC |
-| `IMPLEMENTATION_PLAN.md` | Vertical slices |
-| `REQUIREMENTS_TRACEABILITY.md` | Requirement → file → test |
-| `DECISIONS.md` | Decision log |
-| `PROGRESS.md` | Running status |
-| `ATTRIBUTION.md` | Third-party licences |
-| `CHANGELOG.md` | User-visible history |
+| File                                | Purpose                                   |
+| ----------------------------------- | ----------------------------------------- |
+| `docs/project-brief.md`             | Why the app exists                        |
+| `docs/scope.md`                     | What is in and out of scope               |
+| `docs/inspiration.md`               | Clean-room inspiration statement          |
+| `docs/product-name.md`              | Locked name and usage rules               |
+| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions    |
+| `docs/architecture.md`              | _(this repo uses `docs/ARCHITECTURE.md`)_ |
+| `docs/parity.md`                    | Capability tracker                        |
+| `docs/qc/manual-checklists.md`      | Manual QC                                 |
+| `IMPLEMENTATION_PLAN.md`            | Vertical slices                           |
+| `REQUIREMENTS_TRACEABILITY.md`      | Requirement → file → test                 |
+| `DECISIONS.md`                      | Decision log                              |
+| `PROGRESS.md`                       | Running status                            |
+| `ATTRIBUTION.md`                    | Third-party licences                      |
+| `CHANGELOG.md`                      | User-visible history                      |

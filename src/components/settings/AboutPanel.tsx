@@ -15,12 +15,16 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({ onOpenOnboardingGuide })
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">VellumScribe</h3>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+              VellumScribe
+            </h3>
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
               v{CURRENT_APP_VERSION}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 mt-0.5">Offline-first notes · on-device voice · optional cloud</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Offline-first notes · on-device voice · optional cloud
+          </p>
         </div>
       </div>
 

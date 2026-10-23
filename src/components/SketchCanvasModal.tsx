@@ -1,11 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import {
-  X,
-  RotateCcw,
-  Trash2,
-  Check,
-  PenTool,
-  Eraser} from 'lucide-react';
+import { X, RotateCcw, Trash2, Check, PenTool, Eraser } from 'lucide-react';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SketchCanvasModalProps {
@@ -76,8 +70,9 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
     }
   }, [initialDataUrl, saveHistoryState]);
 
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDrawing = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');

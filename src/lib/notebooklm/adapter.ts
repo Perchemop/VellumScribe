@@ -93,9 +93,12 @@ export class NotebookLMAdapter {
     created_at?: string | number;
     updated_at?: string | number;
   }): string {
-    const createdDate = note.created_at ? new Date(note.created_at).toISOString() : new Date().toISOString();
+    const createdDate = note.created_at
+      ? new Date(note.created_at).toISOString()
+      : new Date().toISOString();
     const updatedDate = note.updated_at ? new Date(note.updated_at).toISOString() : createdDate;
-    const tagsStr = note.tags && note.tags.length > 0 ? note.tags.map((t) => `#${t}`).join(' ') : 'None';
+    const tagsStr =
+      note.tags && note.tags.length > 0 ? note.tags.map((t) => `#${t}`).join(' ') : 'None';
 
     return `# ${note.title || 'Untitled Note'}
 
@@ -124,7 +127,13 @@ ${note.content || '(Empty content)'}
     engine: string;
     modelId: string;
     durationMs?: number;
-    segments: Array<{ sequence: number; start_ms: number; end_ms: number; speaker_id?: string | null; text: string }>;
+    segments: Array<{
+      sequence: number;
+      start_ms: number;
+      end_ms: number;
+      speaker_id?: string | null;
+      text: string;
+    }>;
     speakers?: Array<{ speaker_id: string; label: string; name?: string | null }>;
     summary?: string;
     actionItems?: Array<{ text: string; priority?: string }>;
@@ -173,7 +182,9 @@ ${note.content || '(Empty content)'}
         const startMin = Math.floor(seg.start_ms / 60000);
         const startSec = Math.floor((seg.start_ms % 60000) / 1000);
         const timecode = `${startMin.toString().padStart(2, '0')}:${startSec.toString().padStart(2, '0')}`;
-        const speakerName = seg.speaker_id ? speakerMap.get(seg.speaker_id) || seg.speaker_id : 'Speaker';
+        const speakerName = seg.speaker_id
+          ? speakerMap.get(seg.speaker_id) || seg.speaker_id
+          : 'Speaker';
         formatted += `**[${timecode}] ${speakerName}:** ${seg.text}\n\n`;
       });
     }
@@ -230,9 +241,11 @@ ${note.content || '(Empty content)'}
       const res = db.runSync(sql, params);
       id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
     } else {
-      db.run(sql, params).then((res) => {
-        id = res.lastInsertRowId || 0;
-      }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async saveConnection failed', e));
+      db.run(sql, params)
+        .then((res) => {
+          id = res.lastInsertRowId || 0;
+        })
+        .catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async saveConnection failed', e));
     }
 
     return {
@@ -309,7 +322,9 @@ ${note.content || '(Empty content)'}
       if (db.runSync) {
         db.runSync(sql, updateParams);
       } else {
-        db.run(sql, updateParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async update source failed', e));
+        db.run(sql, updateParams).catch((e) =>
+          AppLogger.warn('NotebookLMAdapter', 'Async update source failed', e)
+        );
       }
 
       return {
@@ -342,9 +357,11 @@ ${note.content || '(Empty content)'}
         const res = db.runSync(sql, insertParams);
         id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
       } else {
-        db.run(sql, insertParams).then((res) => {
-          id = res.lastInsertRowId || 0;
-        }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async insert source failed', e));
+        db.run(sql, insertParams)
+          .then((res) => {
+            id = res.lastInsertRowId || 0;
+          })
+          .catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async insert source failed', e));
       }
 
       return {
@@ -488,7 +505,9 @@ ${note.content || '(Empty content)'}
     if (db.runSync) {
       db.runSync(sql, sqlParams);
     } else {
-      db.run(sql, sqlParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async enqueueSyncJob failed', e));
+      db.run(sql, sqlParams).catch((e) =>
+        AppLogger.warn('NotebookLMAdapter', 'Async enqueueSyncJob failed', e)
+      );
     }
 
     AppLogger.info('NotebookLMAdapter', `Enqueued durable NotebookLM sync job: ${jobId}`);
@@ -528,7 +547,7 @@ ${note.content || '(Empty content)'}
       if (job.action === 'create' || job.action === 'update') {
         const payload = job.content_payload || '';
         const title = `${job.local_entity_type.toUpperCase()} #${job.local_entity_id}`;
-        
+
         const uploadResult = await this.uploadSource({
           connection,
           title,
@@ -552,7 +571,11 @@ ${note.content || '(Empty content)'}
         );
         return true;
       } else if (job.action === 'delete') {
-        const existingMapping = this.getSourceMapping(job.connection_id, job.local_entity_type, job.local_entity_id);
+        const existingMapping = this.getSourceMapping(
+          job.connection_id,
+          job.local_entity_type,
+          job.local_entity_id
+        );
         if (existingMapping && existingMapping.remote_source_id) {
           await this.deleteRemoteSource(existingMapping.remote_source_id);
         }
@@ -636,7 +659,8 @@ ${note.content || '(Empty content)'}
    * Download or export bundle as a file
    */
   public static exportBundleToFile(bundle: NotebookLMBundle, filename?: string): void {
-    const targetFilename = filename || `${bundle.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_notebooklm.md`;
+    const targetFilename =
+      filename || `${bundle.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_notebooklm.md`;
     const blob = new Blob([bundle.content], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

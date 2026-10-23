@@ -2,7 +2,13 @@ import { StorageManager } from './storage';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { SqliteRepository } from './sqlite/sqliteRepository';
 import { AppLogger } from './logger';
-import { EventRecord, NoteRecord, RecordingRecord, TranscriptRecord, OcrScanRecord } from '../types';
+import {
+  EventRecord,
+  NoteRecord,
+  RecordingRecord,
+  TranscriptRecord,
+  OcrScanRecord,
+} from '../types';
 import { asErrorLike } from './errorLike';
 
 export interface ImportPreviewResult {
@@ -133,10 +139,18 @@ export class ImportSafetyPipeline {
       };
     }
 
-    const notesList: NoteRecord[] = Array.isArray(schema.notes) ? schema.notes : Array.isArray(parsed.notes) ? parsed.notes : [];
+    const notesList: NoteRecord[] = Array.isArray(schema.notes)
+      ? schema.notes
+      : Array.isArray(parsed.notes)
+        ? parsed.notes
+        : [];
     const eventsList: EventRecord[] = Array.isArray(schema.events) ? schema.events : [];
-    const recordingsList: RecordingRecord[] = Array.isArray(schema.recordings) ? schema.recordings : [];
-    const transcriptsList: TranscriptRecord[] = Array.isArray(schema.transcripts) ? schema.transcripts : [];
+    const recordingsList: RecordingRecord[] = Array.isArray(schema.recordings)
+      ? schema.recordings
+      : [];
+    const transcriptsList: TranscriptRecord[] = Array.isArray(schema.transcripts)
+      ? schema.transcripts
+      : [];
     const ocrScansList: OcrScanRecord[] = Array.isArray(schema.ocr_scans) ? schema.ocr_scans : [];
 
     // Check basic entity structure
@@ -145,7 +159,10 @@ export class ImportSafetyPipeline {
         warnings.push('Encountered non-object note item in array.');
         continue;
       }
-      if (typeof note.body !== 'string' && typeof (note as { content?: unknown }).content !== 'string') {
+      if (
+        typeof note.body !== 'string' &&
+        typeof (note as { content?: unknown }).content !== 'string'
+      ) {
         warnings.push(`Note ID ${note.id || 'unassigned'} is missing body text.`);
       }
     }
@@ -272,7 +289,10 @@ export class ImportSafetyPipeline {
       }
       StorageManager.refreshCaches();
 
-      AppLogger.info('ImportSafetyPipeline', `Successfully imported ${notes.length} notes with full integrity verification.`);
+      AppLogger.info(
+        'ImportSafetyPipeline',
+        `Successfully imported ${notes.length} notes with full integrity verification.`
+      );
 
       return {
         success: true,
@@ -281,7 +301,11 @@ export class ImportSafetyPipeline {
       };
     } catch (_importErr) {
       const importErr = asErrorLike(_importErr);
-      AppLogger.error('ImportSafetyPipeline', 'Import execution failed; initiating automatic rollback', importErr);
+      AppLogger.error(
+        'ImportSafetyPipeline',
+        'Import execution failed; initiating automatic rollback',
+        importErr
+      );
 
       // Rollback to safety snapshot
       try {
