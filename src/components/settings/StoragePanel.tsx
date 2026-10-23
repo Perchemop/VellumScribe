@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Database, RefreshCw, CheckCircle2, AlertCircle, Download, ShieldCheck } from 'lucide-react';
+import {
+  Database,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Download,
+  ShieldCheck,
+} from 'lucide-react';
 import { StorageManager } from '../../lib/storage';
 import { SqliteStats } from '../../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
+import { asBlobPart } from '../../lib/binary';
 
 interface StoragePanelProps {
   onRefreshNotes?: () => void;
 }
 
-export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) => {
+export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes: _onRefreshNotes }) => {
   const [stats, setStats] = useState<SqliteStats | null>(null);
   const [lastDurableSave, setLastDurableSave] = useState<number | null>(null);
   const [isVacuuming, setIsVacuuming] = useState(false);
@@ -47,7 +56,9 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
               <Database className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Local storage</div>
+              <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Local storage
+              </div>
               <p className="text-xs text-zinc-500">Notes and media stay on this device.</p>
             </div>
           </div>
@@ -64,19 +75,27 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-zinc-200/80 dark:border-zinc-800 text-xs">
           <div>
             <span className="text-zinc-500 block">Size</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{formatBytes(stats?.databaseSizeBytes || 0)}</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {formatBytes(stats?.databaseSizeBytes || 0)}
+            </span>
           </div>
           <div>
             <span className="text-zinc-500 block">Notes</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{stats?.notesCount || 0}</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {stats?.notesCount || 0}
+            </span>
           </div>
           <div>
             <span className="text-zinc-500 block">Recordings</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{stats?.recordingsCount || 0}</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {stats?.recordingsCount || 0}
+            </span>
           </div>
           <div>
             <span className="text-zinc-500 block">Last save</span>
-            <span className="font-medium text-zinc-800 dark:text-zinc-200">{formatTimestamp(lastDurableSave)}</span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {formatTimestamp(lastDurableSave)}
+            </span>
           </div>
         </div>
       </div>
@@ -89,7 +108,11 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
               : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
           }`}
         >
-          {message.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+          {message.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          )}
           <span>{message.text}</span>
         </div>
       )}
@@ -107,7 +130,8 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
                 type: 'success',
                 text: `Compacted · reclaimed ${(result.bytesReclaimed / 1024).toFixed(0)} KB`,
               });
-            } catch (err: any) {
+            } catch (_err) {
+              const err = asErrorLike(_err);
               setMessage({ type: 'error', text: err.message || 'Compact failed' });
             } finally {
               setIsVacuuming(false);
@@ -146,7 +170,7 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes }) =>
           onClick={() => {
             try {
               const binary = StorageManager.exportSqliteBinary();
-              const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
+              const blob = new Blob([asBlobPart(binary)], { type: 'application/x-sqlite3' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;

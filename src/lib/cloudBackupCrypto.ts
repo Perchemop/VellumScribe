@@ -1,5 +1,7 @@
 import { toHex, fromHex, generateSalt } from './cryptoUtils';
 import { AppLogger } from './logger';
+import { asBufferSource } from './binary';
+import { asErrorLike } from './errorLike';
 
 const CLIENT_VAULT_KEY_STORAGE = 'vs_client_vault_key_v1';
 const PBKDF2_ITERATIONS = 210000;
@@ -15,6 +17,16 @@ export interface EncryptedCloudBackupEnvelope {
   iv: string;
   ciphertext: string;
   createdAt: string;
+}
+
+/** Fields read from an encrypted backup envelope (the rest is ignored). */
+interface BackupEnvelope {
+  vellumscribe_archive?: boolean;
+  schema?: string;
+  version?: string | number;
+  ciphertext?: string;
+  iv?: string;
+  salt?: string;
 }
 
 export class CloudBackupCrypto {
@@ -68,7 +80,10 @@ export class CloudBackupCrypto {
           );
         }
 
-        const legacyKey = typeof localStorage !== 'undefined' ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE) : null;
+        const legacyKey =
+          typeof localStorage !== 'undefined'
+            ? localStorage.getItem(CLIENT_VAULT_KEY_STORAGE)
+            : null;
         if (legacyKey && legacyKey.trim()) {
           key = legacyKey.trim();
           await AndroidKeystoreManager.saveSecret('client_vault_key', key, 'sqlite_cipher_key');
@@ -85,7 +100,8 @@ export class CloudBackupCrypto {
       }
       this.cachedVaultKey = key;
       return key;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       if (err?.message?.includes('Failing closed')) {
         throw err;
       }
@@ -96,13 +112,17 @@ export class CloudBackupCrypto {
   public static getOrCreateClientVaultKey(): string {
     if (this.cachedVaultKey) return this.cachedVaultKey;
     try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('vellumscribe_keystore_metadata_v2') : null;
+      const raw =
+        typeof localStorage !== 'undefined'
+          ? localStorage.getItem('vellumscribe_keystore_metadata_v2')
+          : null;
       if (raw && raw.includes('"alias":"client_vault_key"')) {
         throw new Error(
           'Device master vault key is registered in secure storage metadata but could not be retrieved synchronously. Refusing to create ephemeral key.'
         );
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       if (e?.message?.includes('Refusing')) throw e;
     }
 
@@ -124,7 +144,7 @@ export class CloudBackupCrypto {
       try {
         const cs = new CompressionStream('gzip');
         const writer = cs.writable.getWriter();
-        writer.write(data as any);
+        writer.write(asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = cs.readable.getReader();
@@ -142,18 +162,27 @@ export class CloudBackupCrypto {
         }
         return result;
       } catch (e) {
-        AppLogger.warn('CloudBackupCrypto', 'GZIP compression failed, falling back to raw bytes', e);
+        AppLogger.warn(
+          'CloudBackupCrypto',
+          'GZIP compression failed, falling back to raw bytes',
+          e
+        );
       }
     }
     return data;
   }
 
   public static async decompressGzip(data: Uint8Array): Promise<Uint8Array> {
-    if (data.length > 2 && data[0] === 0x1f && data[1] === 0x8b && typeof DecompressionStream !== 'undefined') {
+    if (
+      data.length > 2 &&
+      data[0] === 0x1f &&
+      data[1] === 0x8b &&
+      typeof DecompressionStream !== 'undefined'
+    ) {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
-        writer.write(data as any);
+        writer.write(asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = ds.readable.getReader();
@@ -192,7 +221,7 @@ export class CloudBackupCrypto {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: fromHex(saltHex) as any,
+        salt: asBufferSource(fromHex(saltHex)),
         iterations: PBKDF2_ITERATIONS,
         hash: 'SHA-256',
       },
@@ -217,7 +246,7 @@ export class CloudBackupCrypto {
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
-      compressedBytes as any
+      asBufferSource(compressedBytes)
     );
     const envelope: EncryptedCloudBackupEnvelope = {
       vellumscribe_archive: true,
@@ -239,11 +268,15 @@ export class CloudBackupCrypto {
     passphraseOrOptions?: string | { userPassphrase?: string; allowLegacyUnencrypted?: boolean }
   ): Promise<string> {
     const userPassphrase =
-      typeof passphraseOrOptions === 'string' ? passphraseOrOptions : passphraseOrOptions?.userPassphrase;
+      typeof passphraseOrOptions === 'string'
+        ? passphraseOrOptions
+        : passphraseOrOptions?.userPassphrase;
     const allowLegacy =
-      typeof passphraseOrOptions === 'object' ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted) : false;
+      typeof passphraseOrOptions === 'object'
+        ? Boolean(passphraseOrOptions?.allowLegacyUnencrypted)
+        : false;
 
-    let rawText = '';
+    let rawText: string;
     if (typeof data === 'string') {
       rawText = data;
     } else if (data instanceof Blob) {
@@ -252,9 +285,9 @@ export class CloudBackupCrypto {
       rawText = new TextDecoder().decode(data);
     }
 
-    let envelope: any = null;
+    let envelope: BackupEnvelope;
     try {
-      envelope = JSON.parse(rawText);
+      envelope = JSON.parse(rawText) as BackupEnvelope;
     } catch {
       throw new Error('Invalid backup archive: Content is not valid JSON or encrypted envelope.');
     }
@@ -265,11 +298,15 @@ export class CloudBackupCrypto {
           'Legacy unencrypted backup detected. Unencrypted backups cannot be restored via encrypted cloud restore. Please use explicit Legacy Unencrypted Import mode.'
         );
       }
-      AppLogger.warn('CloudBackupCrypto', 'Importing legacy unencrypted backup bundle via explicit migration mode.');
+      AppLogger.warn(
+        'CloudBackupCrypto',
+        'Importing legacy unencrypted backup bundle via explicit migration mode.'
+      );
       return rawText;
     }
 
-    if (envelope.vellumscribe_archive !== true || !envelope.ciphertext || !envelope.iv || !envelope.salt) {
+    const { ciphertext: cipherHex, iv: ivHex, salt: saltHex } = envelope;
+    if (envelope.vellumscribe_archive !== true || !cipherHex || !ivHex || !saltHex) {
       throw new Error('Unsupported or corrupted encrypted backup envelope.');
     }
 
@@ -277,19 +314,21 @@ export class CloudBackupCrypto {
       userPassphrase?.trim() ||
       this.getUserBackupPassphrase() ||
       (await this.getClientVaultKeyAsync());
-    const key = await this.deriveKey(passphrase, envelope.salt);
-    const iv = fromHex(envelope.iv);
-    const ciphertext = fromHex(envelope.ciphertext);
+    const key = await this.deriveKey(passphrase, saltHex);
+    const iv = fromHex(ivHex);
+    const ciphertext = fromHex(cipherHex);
 
     let decryptedBuffer: ArrayBuffer;
     try {
       decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as any },
+        { name: 'AES-GCM', iv: asBufferSource(iv) },
         key,
-        ciphertext as any
+        asBufferSource(ciphertext)
       );
     } catch {
-      throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');
+      throw new Error(
+        'Backup decryption failed: Incorrect encryption key or corrupted ciphertext.'
+      );
     }
 
     const decompressedBytes = await this.decompressGzip(new Uint8Array(decryptedBuffer));

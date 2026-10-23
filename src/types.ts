@@ -49,7 +49,15 @@ export interface NoteRecord {
 
 export type CloudStorageProvider = 'google_drive' | 'microsoft' | 'nextcloud' | 'webdav';
 
-export type SyncState = 'idle' | 'queued' | 'preparing' | 'uploading' | 'verifying' | 'completed' | 'partial_failure' | 'failed';
+export type SyncState =
+  | 'idle'
+  | 'queued'
+  | 'preparing'
+  | 'uploading'
+  | 'verifying'
+  | 'completed'
+  | 'partial_failure'
+  | 'failed';
 
 export interface SyncHistoryRecord {
   id: string;
@@ -335,14 +343,19 @@ export interface StructuredAiExtraction {
 }
 
 export type Result<T> =
-  | { ok: true; value: T }
-  | { ok: false; code: string; message: string; cause?: unknown };
+  { ok: true; value: T } | { ok: false; code: string; message: string; cause?: unknown };
 
 export interface AiAction {
-  type: 'create_note' | 'update_note' | 'create_checklist' | 'create_reminder' | 'search_notes' | 'delete_note';
+  type:
+    | 'create_note'
+    | 'update_note'
+    | 'create_checklist'
+    | 'create_reminder'
+    | 'search_notes'
+    | 'delete_note';
   description: string;
   requiresConfirmation?: boolean;
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 export interface AiCommandResult {
@@ -414,5 +427,3 @@ export interface LocalSnapshotRecord {
   payload_blob: string;
   created_at: number;
 }
-
-

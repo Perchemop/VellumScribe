@@ -12,7 +12,35 @@ export interface AiProvenanceRecord {
   provider: string;
   prompt_hash?: string;
   generated_at: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+}
+
+/** Raw rows from the `ai_provenance` table (see schema.ts). */
+interface AiProvenanceRow {
+  id: string;
+  // constrained by the writer; the column itself is free text
+  target_entity_type: 'note' | 'checklist' | 'transcript' | 'summary';
+  target_entity_id: number;
+  source_entity_type?: string;
+  source_entity_id?: number;
+  model_id: string;
+  provider: string;
+  prompt_hash?: string;
+  generated_at: number;
+  metadata_json?: string;
+}
+
+/** Raw rows from the `ai_operations` telemetry table. */
+export interface AiOperationRow {
+  id: string;
+  operation: string;
+  provider: string;
+  model: string;
+  duration_ms: number;
+  input_characters: number;
+  output_characters: number;
+  status: string;
+  created_at: number;
 }
 
 export class AiProvenanceService {
@@ -45,9 +73,14 @@ export class AiProvenanceService {
       if (db.runSync) {
         db.runSync(sql, params);
       } else {
-        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordProvenance failed', err));
+        db.run(sql, params).catch((err) =>
+          AppLogger.warn('AiProvenanceService', 'Async recordProvenance failed', err)
+        );
       }
-      AppLogger.debug('AiProvenanceService', `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`);
+      AppLogger.debug(
+        'AiProvenanceService',
+        `Recorded AI provenance for ${data.target_entity_type} #${data.target_entity_id} (${data.model_id})`
+      );
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to record AI provenance', e);
     }
@@ -56,21 +89,26 @@ export class AiProvenanceService {
   /**
    * Retrieves provenance records for a given entity
    */
-  public static getProvenance(targetEntityType: string, targetEntityId: number): AiProvenanceRecord | null {
+  public static getProvenance(
+    targetEntityType: string,
+    targetEntityId: number
+  ): AiProvenanceRecord | null {
     try {
       const db = getDatabaseAdapter();
       const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
       const params = [targetEntityType, targetEntityId];
 
-      const rows = db.querySync ? db.querySync<any>(sql, params) : [];
+      const rows = db.querySync ? db.querySync<AiProvenanceRow>(sql, params) : [];
       if (!rows || rows.length === 0) return null;
 
       const r = rows[0];
-      let metadata: Record<string, any> | undefined;
+      let metadata: Record<string, unknown> | undefined;
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
 
       return {
@@ -93,21 +131,26 @@ export class AiProvenanceService {
   /**
    * Async variant to retrieve provenance records for a given entity
    */
-  public static async getProvenanceAsync(targetEntityType: string, targetEntityId: number): Promise<AiProvenanceRecord | null> {
+  public static async getProvenanceAsync(
+    targetEntityType: string,
+    targetEntityId: number
+  ): Promise<AiProvenanceRecord | null> {
     try {
       const db = getDatabaseAdapter();
       const sql = `SELECT * FROM ai_provenance WHERE target_entity_type = ? AND target_entity_id = ? ORDER BY generated_at DESC LIMIT 1`;
       const params = [targetEntityType, targetEntityId];
 
-      const rows = await db.query<any>(sql, params);
+      const rows = await db.query<AiProvenanceRow>(sql, params);
       if (!rows || rows.length === 0) return null;
 
       const r = rows[0];
-      let metadata: Record<string, any> | undefined;
+      let metadata: Record<string, unknown> | undefined;
       if (r.metadata_json) {
         try {
           metadata = JSON.parse(r.metadata_json);
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
 
       return {
@@ -159,19 +202,21 @@ export class AiProvenanceService {
       if (db.runSync) {
         db.runSync(sql, params);
       } else {
-        db.run(sql, params).catch((err) => AppLogger.warn('AiProvenanceService', 'Async recordAiOperation failed', err));
+        db.run(sql, params).catch((err) =>
+          AppLogger.warn('AiProvenanceService', 'Async recordAiOperation failed', err)
+        );
       }
     } catch (e) {
       AppLogger.warn('AiProvenanceService', 'Failed to log AI operation to SQLite', e);
     }
   }
 
-  public static getAiOperations(limit = 50): any[] {
+  public static getAiOperations(limit = 50): AiOperationRow[] {
     try {
       const db = getDatabaseAdapter();
       const sql = `SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`;
       if (db.querySync) {
-        return db.querySync(sql, [limit]);
+        return db.querySync<AiOperationRow>(sql, [limit]);
       }
       return [];
     } catch {
@@ -179,10 +224,13 @@ export class AiProvenanceService {
     }
   }
 
-  public static async getAiOperationsAsync(limit = 50): Promise<any[]> {
+  public static async getAiOperationsAsync(limit = 50): Promise<AiOperationRow[]> {
     try {
       const db = getDatabaseAdapter();
-      return await db.query(`SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`, [limit]);
+      return await db.query<AiOperationRow>(
+        `SELECT * FROM ai_operations ORDER BY created_at DESC LIMIT ?;`,
+        [limit]
+      );
     } catch {
       return [];
     }

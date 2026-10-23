@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Moon,
   Sun,
@@ -9,8 +9,6 @@ import {
   Clock,
   Settings,
   Archive,
-  Key,
-  Sparkles,
   X,
   Info,
 } from 'lucide-react';
@@ -36,6 +34,8 @@ import { AppLogo } from './components/AppLogo';
 import { SyncStatus } from './components/SyncStatus';
 import { ReminderService } from './services/ReminderService';
 import { ListDensityProvider } from './context/ListDensityContext';
+import { AppLogger } from './lib/logger';
+import { asErrorLike } from './lib/errorLike';
 
 export default function App() {
   const {
@@ -57,26 +57,39 @@ export default function App() {
     isOnline,
   } = useApp();
 
-  const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>('notes');
+  const [activeView, setActiveView] = useState<'notes' | 'recents' | 'archive' | 'settings'>(
+    'notes'
+  );
   const [settingsSubtab, setSettingsSubtab] = useState<
     'cloud' | 'ai' | 'offline-ai' | 'storage' | 'security' | 'diagnostics' | 'about'
   >('cloud');
   const [showFabSpeedDial, setShowFabSpeedDial] = useState(false);
   const [focusMode, setFocusMode] = useState<boolean>(false);
-  const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(() => !hasCompletedOnboarding());
+  const [showOnboardingGuide, setShowOnboardingGuide] = useState<boolean>(
+    () => !hasCompletedOnboarding()
+  );
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
+
+  // Mount-only bootstrap: capture the latest context values in refs so the
+  // effect does not need to re-run (it starts migrations and update checks).
+  const notesRef = useRef(notes);
+  const showToastRef = useRef(showToast);
+  useEffect(() => {
+    notesRef.current = notes;
+    showToastRef.current = showToast;
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const cloudError = params.get('cloud_error');
     if (cloudError) {
-      showToast(`Cloud Notice: ${cloudError}`);
+      showToastRef.current(`Cloud Notice: ${cloudError}`);
       window.history.replaceState({}, document.title, '/');
     } else if (params.get('cloud') === 'connected') {
       CloudSyncEngine.fetchConfig().then(() => {
         setActiveView('settings');
         setSettingsSubtab('cloud');
-        showToast('Cloud account connected successfully.');
+        showToastRef.current('Cloud account connected successfully.');
         window.history.replaceState({}, document.title, '/');
       });
     } else {
@@ -100,7 +113,9 @@ export default function App() {
         .catch(() => {});
     }
 
-    ReminderService.reconcileReminders(notes).catch((e) => console.warn('Reminder reconciliation', e));
+    ReminderService.reconcileReminders(notesRef.current).catch((e) =>
+      AppLogger.warn('App', 'Reminder reconciliation', e)
+    );
   }, []);
 
   useEffect(() => {
@@ -161,16 +176,24 @@ export default function App() {
             });
           }
 
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+          if (
+            typeof window !== 'undefined' &&
+            'Notification' in window &&
+            Notification.permission === 'granted'
+          ) {
             try {
               new Notification(`Reminder: ${note.title || 'Untitled Note'}`, {
                 body: note.body ? note.body.slice(0, 100) : 'Note reminder due',
                 icon: '/favicon.ico',
               });
-            } catch {}
+            } catch {
+              /* ignore */
+            }
           }
         }
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     };
 
     checkReminders();
@@ -220,7 +243,14 @@ export default function App() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [showFabSpeedDial, showOnboardingGuide, showUpdateModal, selectedNoteId, activeView]);
+  }, [
+    showFabSpeedDial,
+    showOnboardingGuide,
+    showUpdateModal,
+    selectedNoteId,
+    setSelectedNoteId,
+    activeView,
+  ]);
 
   const handleCreateEvent = (newEvent: Omit<EventRecord, 'id'>) => {
     const created = StorageManager.addEvent(newEvent);
@@ -249,7 +279,12 @@ export default function App() {
     try {
       const newNote = StorageManager.addNote({
         event_id: targetEventId,
-        title: type === 'checklist' ? 'New To-Do List' : type === 'sketch' ? 'New Sketch Note' : 'Untitled Note',
+        title:
+          type === 'checklist'
+            ? 'New To-Do List'
+            : type === 'sketch'
+              ? 'New Sketch Note'
+              : 'Untitled Note',
         body:
           type === 'checklist'
             ? 'Notes & subtasks'
@@ -257,7 +292,8 @@ export default function App() {
               ? 'Visual annotations'
               : '## Thoughts\n\nBegin typing here...',
         note_type: type,
-        checklist_items: type === 'checklist' ? [{ id: '1', text: 'First task', completed: false }] : undefined,
+        checklist_items:
+          type === 'checklist' ? [{ id: '1', text: 'First task', completed: false }] : undefined,
         created_at: new Date().toISOString(),
         tags: [type === 'checklist' ? 'Tasks' : type === 'sketch' ? 'Drawings' : 'General'],
         is_pinned: false,
@@ -269,8 +305,9 @@ export default function App() {
       if (createdGeneralCategory) {
         showToast('Created note under new "General" category');
       }
-    } catch (e: any) {
-      console.error('Failed to create new note:', e);
+    } catch (_e) {
+      const e = asErrorLike(_e);
+      AppLogger.error('App', 'Failed to create new note:', e);
       showToast(
         e.message
           ? `Could not create note: ${e.message}`
@@ -484,7 +521,9 @@ export default function App() {
                       notes={notes}
                       events={events}
                       onSelectNote={(nid) => setSelectedNoteId(nid)}
-                      onCreateNote={(eid, type) => handleCreateNote(eid || selectedEventId || undefined, type)}
+                      onCreateNote={(eid, type) =>
+                        handleCreateNote(eid || selectedEventId || undefined, type)
+                      }
                     />
                   )}
                 </div>
@@ -497,7 +536,9 @@ export default function App() {
                   setSelectedNoteId(nid);
                   setActiveView('notes');
                 }}
-                onCreateNote={(eid, type) => handleCreateNote(eid || selectedEventId || undefined, type)}
+                onCreateNote={(eid, type) =>
+                  handleCreateNote(eid || selectedEventId || undefined, type)
+                }
               />
             ) : activeView === 'archive' ? (
               <ArchiveSection
@@ -511,10 +552,10 @@ export default function App() {
               />
             ) : (
               <SettingsView
-      initialSubtab={settingsSubtab}
-      onRefreshNotes={refreshData}
-      onBackToNotes={() => setActiveView('notes')}
-    />
+                initialSubtab={settingsSubtab}
+                onRefreshNotes={refreshData}
+                onBackToNotes={() => setActiveView('notes')}
+              />
             )}
           </main>
 

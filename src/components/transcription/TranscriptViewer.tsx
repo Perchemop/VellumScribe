@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import {
   Play,
-  Clock,
   User,
-  CheckCircle2,
   Copy,
   Check,
   Sparkles,
   Edit2,
   FileText,
   ListTodo,
-  Share2,
   BookOpen,
   Mic,
 } from 'lucide-react';
@@ -46,7 +43,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
   const [notebookLmExported, setNotebookLmExported] = useState(false);
   const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null);
   const [speakerNameInput, setSpeakerNameInput] = useState('');
-  const [structuredExtraction, setStructuredExtraction] = useState<StructuredAiExtraction | null>(null);
+  const [structuredExtraction, setStructuredExtraction] = useState<StructuredAiExtraction | null>(
+    null
+  );
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const currentMs = currentAudioTimeSec * 1000;
@@ -175,7 +174,11 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             title="Export structured markdown source formatted for Google NotebookLM"
             className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 transition-colors"
           >
-            {notebookLmExported ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <BookOpen className="w-3.5 h-3.5 text-blue-600" />}
+            {notebookLmExported ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+            )}
             {notebookLmExported ? 'Exported & Copied' : 'NotebookLM Export'}
           </button>
           <button
@@ -183,7 +186,11 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             onClick={handleCopyTranscript}
             className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 transition-colors"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
             {copied ? 'Copied' : 'Copy'}
           </button>
         </div>
@@ -196,7 +203,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             whisper.cpp (On-Device Native)
           </span>
-        ) : transcription.engine.includes('speech_recognizer') || transcription.engine.includes('android_speech') ? (
+        ) : transcription.engine.includes('speech_recognizer') ||
+          transcription.engine.includes('android_speech') ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
             <Mic className="w-3 h-3 text-teal-500" />
             Android SpeechRecognizer (OS On-Device)
@@ -224,7 +232,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
         ) : (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
             <Mic className="w-3 h-3 text-sky-500" />
-            {transcription.engine ? `${transcription.engine}` : 'Live Microphone Dictation (OS/Web)'}
+            {transcription.engine
+              ? `${transcription.engine}`
+              : 'Live Microphone Dictation (OS/Web)'}
           </span>
         )}
 
@@ -248,7 +258,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             </p>
           ) : (
             segments.map((seg) => {
-              const isActive = activeSegment?.id === seg.id || activeSegment?.sequence === seg.sequence;
+              const isActive =
+                activeSegment?.id === seg.id || activeSegment?.sequence === seg.sequence;
               const startStr = TranscriptService.formatTimeMs(seg.start_ms);
               const endStr = TranscriptService.formatTimeMs(seg.end_ms);
 
@@ -262,6 +273,14 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                       ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-xs'
                       : 'bg-stone-50/70 dark:bg-stone-900/50 border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
                   }`}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (onSeekAudio) onSeekAudio(seg.start_ms / 1000);
+                    }
+                  }}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-2">
@@ -294,9 +313,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] text-stone-400">
-                      Segment {seg.sequence}
-                    </span>
+                    <span className="text-[10px] text-stone-400">Segment {seg.sequence}</span>
                   </div>
 
                   <p className="text-xs leading-relaxed text-stone-800 dark:text-stone-200 font-normal">
@@ -340,7 +357,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                 </h5>
 
                 {structuredExtraction.actionItems.length === 0 ? (
-                  <p className="text-xs text-stone-500 italic">No action items detected in transcript.</p>
+                  <p className="text-xs text-stone-500 italic">
+                    No action items detected in transcript.
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {structuredExtraction.actionItems.map((item, idx) => (
@@ -349,9 +368,13 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                         className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs flex items-start justify-between gap-3"
                       >
                         <div className="space-y-1">
-                          <p className="font-medium text-stone-900 dark:text-stone-100">{item.text}</p>
+                          <p className="font-medium text-stone-900 dark:text-stone-100">
+                            {item.text}
+                          </p>
                           <div className="flex items-center gap-2 text-[10px] text-stone-500">
-                            <span>Priority: <span className="capitalize">{item.priority}</span></span>
+                            <span>
+                              Priority: <span className="capitalize">{item.priority}</span>
+                            </span>
                             {item.sourceSegments.length > 0 && (
                               <>
                                 <span>•</span>
@@ -365,7 +388,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              const targetSeg = segments.find((s) => s.sequence === item.sourceSegments[0]);
+                              const targetSeg = segments.find(
+                                (s) => s.sequence === item.sourceSegments[0]
+                              );
                               if (targetSeg) onSeekAudio(targetSeg.start_ms / 1000);
                             }}
                             className="px-2 py-1 rounded-md bg-stone-200 dark:bg-stone-800 hover:bg-emerald-600 hover:text-white text-[10px] font-mono shrink-0 transition-colors"
@@ -388,7 +413,9 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                 className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-medium inline-flex items-center gap-2 hover:bg-emerald-700 transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
-                {isGeneratingAi ? 'Extracting Insights Locally...' : 'Extract Tasks & Summary with Local AI'}
+                {isGeneratingAi
+                  ? 'Extracting Insights Locally...'
+                  : 'Extract Tasks & Summary with Local AI'}
               </button>
             </div>
           )}

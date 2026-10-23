@@ -7,6 +7,8 @@ import { Camera } from '@capacitor/camera';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Browser } from '@capacitor/browser';
 import { App } from '@capacitor/app';
+import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 
 export class NativeBridge {
   public static isNative(): boolean {
@@ -28,11 +30,15 @@ export class NativeBridge {
         const req = await Camera.requestPermissions({ permissions: ['camera'] });
         return req.camera === 'granted';
       }
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function') {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.mediaDevices &&
+        typeof navigator.mediaDevices.getUserMedia === 'function'
+      ) {
         return true;
       }
     } catch (e) {
-      console.warn('Camera permission check encountered exception:', e);
+      AppLogger.warn('NativeBridge', 'Camera permission check encountered exception:', e);
     }
     return false;
   }
@@ -50,7 +56,7 @@ export class NativeBridge {
       }
       return true;
     } catch (e) {
-      console.warn('Filesystem permission check encountered exception:', e);
+      AppLogger.warn('NativeBridge', 'Filesystem permission check encountered exception:', e);
       return true;
     }
   }
@@ -106,13 +112,17 @@ export class NativeBridge {
         this.hapticImpact('light');
         return true;
       }
-      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.clipboard &&
+        navigator.clipboard.writeText
+      ) {
         await navigator.clipboard.writeText(text);
         this.hapticImpact('light');
         return true;
       }
     } catch (e) {
-      console.warn('Clipboard write failed, attempting textarea fallback', e);
+      AppLogger.warn('NativeBridge', 'Clipboard write failed, attempting textarea fallback', e);
     }
 
     try {
@@ -164,8 +174,9 @@ export class NativeBridge {
           return { success: true, message: 'Shared successfully via Android share sheet.' };
         }
       }
-    } catch (err: any) {
-      console.warn('Native share failed, falling back to browser download', err);
+    } catch (_err) {
+      const err = asErrorLike(_err);
+      AppLogger.warn('NativeBridge', 'Native share failed, falling back to browser download', err);
     }
 
     // Web download fallback
@@ -181,7 +192,8 @@ export class NativeBridge {
       URL.revokeObjectURL(url);
       this.hapticImpact('light');
       return { success: true, message: `File "${fileName}" saved successfully.` };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { success: false, message: `Download failed: ${e.message}` };
     }
   }
@@ -210,7 +222,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Share dismissed or failed', e);
+      AppLogger.warn('NativeBridge', 'Share dismissed or failed', e);
     }
 
     // Fallback to clipboard
@@ -236,7 +248,7 @@ export class NativeBridge {
         }
       }
     } catch (e) {
-      console.warn('Notification permission check failed:', e);
+      AppLogger.warn('NativeBridge', 'Notification permission check failed:', e);
     }
     return false;
   }
@@ -266,7 +278,11 @@ export class NativeBridge {
             {
               id: noteId,
               title: `Reminder: ${title || 'Untitled Note'}`,
-              body: body ? (body.length > 120 ? body.slice(0, 117) + '...' : body) : 'Note reminder due',
+              body: body
+                ? body.length > 120
+                  ? body.slice(0, 117) + '...'
+                  : body
+                : 'Note reminder due',
               schedule: { at: scheduledDate, allowWhileIdle: true },
               sound: undefined,
               actionTypeId: '',
@@ -277,7 +293,11 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native reminder scheduling failed, relying on web watcher fallback:', e);
+      AppLogger.warn(
+        'NativeBridge',
+        'Native reminder scheduling failed, relying on web watcher fallback:',
+        e
+      );
     }
     return false;
   }
@@ -292,7 +312,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native reminder cancellation failed:', e);
+      AppLogger.warn('NativeBridge', 'Native reminder cancellation failed:', e);
     }
     return false;
   }
@@ -307,7 +327,7 @@ export class NativeBridge {
         return true;
       }
     } catch (e) {
-      console.warn('Native Browser.open failed:', e);
+      AppLogger.warn('NativeBridge', 'Native Browser.open failed:', e);
     }
     return false;
   }
@@ -320,7 +340,9 @@ export class NativeBridge {
       if (this.isNative()) {
         await Browser.close();
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }
 
   /**
@@ -338,7 +360,9 @@ export class NativeBridge {
           handlePromise.then((h) => h.remove()).catch(() => {});
         };
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return () => {};
   }
 
@@ -355,7 +379,9 @@ export class NativeBridge {
           handle.remove();
         };
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return () => {};
   }
 }

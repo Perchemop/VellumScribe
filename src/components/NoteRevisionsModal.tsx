@@ -1,16 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  History,
-  X,
-  RotateCcw,
-  Clock,
-  Check,
-  FileText,
-  AlertCircle,
-  PlusCircle,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+import { History, X, RotateCcw, Clock, Check, PlusCircle } from 'lucide-react';
 import { NoteRecord, NoteRevisionRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { VersionControlManager } from '../lib/versionControl';
@@ -86,12 +75,16 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
     <div
       id="note-revisions-modal-backdrop"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div
         id="note-revisions-modal-card"
         className="bg-white dark:bg-[#121215] border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden text-zinc-900 dark:text-zinc-100"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between gap-3">
@@ -104,7 +97,8 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                 Revision History
               </h2>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[280px] sm:max-w-md">
-                {note.title || 'Untitled Note'} &middot; {revisions.length} revision{revisions.length !== 1 ? 's' : ''}
+                {note.title || 'Untitled Note'} &middot; {revisions.length} revision
+                {revisions.length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -202,7 +196,8 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                       Revision #{selectedRevision.version_number}
                     </h3>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                      {new Date(selectedRevision.created_at).toLocaleString()} &middot; {selectedRevision.source || 'Local'}
+                      {new Date(selectedRevision.created_at).toLocaleString()} &middot;{' '}
+                      {selectedRevision.source || 'Local'}
                     </p>
                   </div>
                   <button
@@ -212,7 +207,11 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors shadow-2xs disabled:opacity-50"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{restoringId === selectedRevision.id ? 'Restoring...' : 'Restore This Version'}</span>
+                    <span>
+                      {restoringId === selectedRevision.id
+                        ? 'Restoring...'
+                        : 'Restore This Version'}
+                    </span>
                   </button>
                 </div>
 

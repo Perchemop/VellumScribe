@@ -34,7 +34,7 @@ export const AppLogo: React.FC<AppLogoProps> = ({
       >
         {/* Subtle decorative inner corner sheen */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-white/20 opacity-60 pointer-events-none" />
-        
+
         {/* Geometric Vellum Monogram SVG */}
         <svg
           width={iconDimension[size]}
@@ -51,18 +51,8 @@ export const AppLogo: React.FC<AppLogoProps> = ({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <path
-            d="M12 19.5V11"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <circle
-            cx="12"
-            cy="8.5"
-            r="1.75"
-            fill="currentColor"
-          />
+          <path d="M12 19.5V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="12" cy="8.5" r="1.75" fill="currentColor" />
         </svg>
       </div>
 

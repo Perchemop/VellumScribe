@@ -1,8 +1,9 @@
-import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
+import initSqlJs, { Database, SqlJsStatic, SqlValue } from 'sql.js';
 import { AppLogger } from '../logger';
-import { MIGRATIONS, CURRENT_SCHEMA_VERSION } from './schema';
+import { MIGRATIONS } from './schema';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
+import { asErrorLike } from '../errorLike';
 
 const DB_INDEXED_DB_NAME = 'vellumscribe_sqlite_db';
 const DB_STORE_NAME = 'sqlite_binary';
@@ -41,13 +42,28 @@ export interface RecoveryState {
   unrecoverableError?: string;
 }
 
+/** sql.js expects an ArrayBuffer; the Node path reads the wasm file as a Buffer view. */
+function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+  return data instanceof Uint8Array
+    ? (data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer)
+    : data;
+}
+
 // Global memory fallback for Node test environments where indexedDB is not polyfilled
-const globalMemoryFallback = (globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ || {
-  binary: null as Uint8Array | null,
-  previousBinary: null as Uint8Array | null,
-  corruptedSnapshots: [] as Array<{ timestamp: number; data: Uint8Array }>,
+interface SqliteMemoryStore {
+  binary: Uint8Array | null;
+  previousBinary: Uint8Array | null;
+  corruptedSnapshots: Array<{ timestamp: number; data: Uint8Array }>;
+}
+const globalStore = globalThis as typeof globalThis & {
+  __VELLUMSCRIBE_SQLITE_STORE__?: SqliteMemoryStore;
 };
-(globalThis as any).__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
+const globalMemoryFallback: SqliteMemoryStore = globalStore.__VELLUMSCRIBE_SQLITE_STORE__ || {
+  binary: null,
+  previousBinary: null,
+  corruptedSnapshots: [],
+};
+globalStore.__VELLUMSCRIBE_SQLITE_STORE__ = globalMemoryFallback;
 
 /**
  * IndexedDB storage for SQLite binary database snapshots with previous/current crash recovery
@@ -107,7 +123,7 @@ class SqliteIndexedDbStorage {
       return new Promise((resolve, reject) => {
         const tx = db.transaction(DB_STORE_NAME, 'readonly');
         const store = tx.objectStore(DB_STORE_NAME);
-        
+
         // Try current first
         const req = store.get(DB_RECORD_KEY);
         req.onsuccess = () => {
@@ -118,7 +134,11 @@ class SqliteIndexedDbStorage {
             const legacyReq = store.get(DB_LEGACY_KEY);
             legacyReq.onsuccess = () => {
               if (legacyReq.result) {
-                resolve(legacyReq.result instanceof Uint8Array ? legacyReq.result : new Uint8Array(legacyReq.result));
+                resolve(
+                  legacyReq.result instanceof Uint8Array
+                    ? legacyReq.result
+                    : new Uint8Array(legacyReq.result)
+                );
               } else {
                 resolve(null);
               }
@@ -213,7 +233,7 @@ export class SqliteEngine {
   private static db: Database | null = null;
   private static isInitialized = false;
   private static initPromise: Promise<void> | null = null;
-  private static saveTimeout: any = null;
+  private static saveTimeout: ReturnType<typeof setTimeout> | null = null;
   private static isDirty = false;
   private static durabilityStatus: 'saved' | 'saving' | 'pending' | 'failed' = 'saved';
   private static transactionDepth = 0;
@@ -256,7 +276,11 @@ export class SqliteEngine {
           wasmBinary = await response.arrayBuffer();
         }
       } catch (err) {
-        AppLogger.warn('SqliteEngine', 'Direct fetch for /sql-wasm.wasm failed, falling back to default locator', err);
+        AppLogger.warn(
+          'SqliteEngine',
+          'Direct fetch for /sql-wasm.wasm failed, falling back to default locator',
+          err
+        );
       }
     }
 
@@ -264,26 +288,22 @@ export class SqliteEngine {
       locateFile: (file) => {
         if (file.endsWith('.wasm')) {
           if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-            try {
-              const path = require('path');
-              return path.resolve(process.cwd(), 'node_modules/sql.js/dist', file);
-            } catch {
-              return `node_modules/sql.js/dist/${file}`;
-            }
+            return `${process.cwd()}/node_modules/sql.js/dist/${file}`;
           }
           return '/sql-wasm.wasm';
         }
         return file;
       },
-      ...(wasmBinary ? { wasmBinary: wasmBinary as any } : {}),
+      ...(wasmBinary ? { wasmBinary: toArrayBuffer(wasmBinary) } : {}),
       printErr: (msg: string) => {
         if (
           typeof msg === 'string' &&
-          (msg.includes('wasm streaming compile failed') || msg.includes('falling back to ArrayBuffer instantiation'))
+          (msg.includes('wasm streaming compile failed') ||
+            msg.includes('falling back to ArrayBuffer instantiation'))
         ) {
           return;
         }
-        console.error(msg);
+        AppLogger.error('SqliteEngine', msg);
       },
     });
 
@@ -342,13 +362,20 @@ export class SqliteEngine {
             if (check.length > 0 && check[0].values[0][0] === 'ok') {
               this.db = testDb;
               this.db.run('PRAGMA foreign_keys = ON;');
-              AppLogger.info('SqliteEngine', `Loaded valid SQLite database (${binaryData.length} bytes)`);
+              AppLogger.info(
+                'SqliteEngine',
+                `Loaded valid SQLite database (${binaryData.length} bytes)`
+              );
             } else {
               throw new Error('Integrity check failed on primary database');
             }
           } catch (loadErr) {
-            AppLogger.warn('SqliteEngine', 'Primary SQLite database corrupted or unreadable. Preserving artifact and initiating recovery...', loadErr);
-            
+            AppLogger.warn(
+              'SqliteEngine',
+              'Primary SQLite database corrupted or unreadable. Preserving artifact and initiating recovery...',
+              loadErr
+            );
+
             // 1. Preserve corrupt copy as timestamped artifact
             const timestamp = Date.now();
             const corruptPath = `databases/corrupt_${timestamp}.sqlite`;
@@ -364,7 +391,11 @@ export class SqliteEngine {
                 });
               }
             } catch (presErr) {
-              AppLogger.error('SqliteEngine', 'Failed to preserve corrupt database snapshot', presErr);
+              AppLogger.error(
+                'SqliteEngine',
+                'Failed to preserve corrupt database snapshot',
+                presErr
+              );
             }
 
             // 2. Attempt recovery from native previous.sqlite
@@ -398,7 +429,9 @@ export class SqliteEngine {
                   if (check.length > 0 && check[0].values[0][0] === 'ok') {
                     recoveredDb = testIdbDb;
                   }
-                } catch {}
+                } catch {
+                  /* ignore */
+                }
               }
             }
 
@@ -409,19 +442,27 @@ export class SqliteEngine {
               this.recoveryState = {
                 hasError: false,
                 isRecovered: true,
-                message: 'We recovered your most recent safe copy. Your original database has been preserved.',
+                message:
+                  'We recovered your most recent safe copy. Your original database has been preserved.',
                 corruptedBackupPath: corruptPath,
               };
-              AppLogger.info('SqliteEngine', 'CRASH RECOVERY SUCCESSFUL: Restored from previous valid SQLite backup.');
+              AppLogger.info(
+                'SqliteEngine',
+                'CRASH RECOVERY SUCCESSFUL: Restored from previous valid SQLite backup.'
+              );
             } else {
               // 4. Do NOT silently wipe user data!
               this.recoveryState = {
                 hasError: true,
                 isRecovered: false,
-                unrecoverableError: 'Your data could not be recovered automatically. Your existing database and backups have been preserved. Do not uninstall VellumScribe.',
+                unrecoverableError:
+                  'Your data could not be recovered automatically. Your existing database and backups have been preserved. Do not uninstall VellumScribe.',
                 corruptedBackupPath: corruptPath,
               };
-              AppLogger.error('SqliteEngine', 'Recovery from backup failed; opening isolated scratch session to preserve disk artifacts');
+              AppLogger.error(
+                'SqliteEngine',
+                'Recovery from backup failed; opening isolated scratch session to preserve disk artifacts'
+              );
               this.db = new this.SQL.Database();
               this.db.run('PRAGMA foreign_keys = ON;');
             }
@@ -444,8 +485,12 @@ export class SqliteEngine {
         this.setupLifecycleHooks();
 
         this.isInitialized = true;
-        AppLogger.info('SqliteEngine', 'SQLite Engine successfully initialized and migrations applied');
-      } catch (err: any) {
+        AppLogger.info(
+          'SqliteEngine',
+          'SQLite Engine successfully initialized and migrations applied'
+        );
+      } catch (_err) {
+        const err = asErrorLike(_err);
         AppLogger.error('SqliteEngine', 'Fatal SQLite initialization error', err);
         throw err;
       }
@@ -481,8 +526,11 @@ export class SqliteEngine {
 
     for (const migration of MIGRATIONS) {
       if (!appliedVersions.has(migration.version)) {
-        AppLogger.info('SqliteEngine', `Applying SQLite migration v${migration.version}: ${migration.description}`);
-        
+        AppLogger.info(
+          'SqliteEngine',
+          `Applying SQLite migration v${migration.version}: ${migration.description}`
+        );
+
         // Run migration in a transaction
         this.db.run('BEGIN TRANSACTION;');
         try {
@@ -496,12 +544,18 @@ export class SqliteEngine {
           AppLogger.info('SqliteEngine', `Successfully applied migration v${migration.version}`);
         } catch (e) {
           this.db.run('ROLLBACK;');
-          AppLogger.error('SqliteEngine', `Failed migration v${migration.version}, restoring pre-migration state`, e);
+          AppLogger.error(
+            'SqliteEngine',
+            `Failed migration v${migration.version}, restoring pre-migration state`,
+            e
+          );
           try {
             this.db.close();
             this.db = new this.SQL!.Database(preMigrationBinary);
             this.db.run('PRAGMA foreign_keys = ON;');
-          } catch {}
+          } catch {
+            /* ignore */
+          }
           throw e;
         }
       }
@@ -520,19 +574,24 @@ export class SqliteEngine {
   /**
    * Execute SQL query returning structured rows
    */
-  public static query<T = any>(sql: string, params: any[] = []): T[] {
+  public static query<T = unknown>(sql: string, params: unknown[] = []): T[] {
     const db = this.getDb();
     try {
       const stmt = db.prepare(sql);
-      stmt.bind(params);
+      // The adapter contract is `unknown[]`; sql.js only binds SqlValue.
+      stmt.bind(params as SqlValue[]);
       const rows: T[] = [];
       while (stmt.step()) {
         rows.push(stmt.getAsObject() as unknown as T);
       }
       stmt.free();
       return rows;
-    } catch (e: any) {
-      AppLogger.error('SqliteEngine', `Query execution error: "${sql}"`, { params, error: e?.message });
+    } catch (_e) {
+      const e = asErrorLike(_e);
+      AppLogger.error('SqliteEngine', `Query execution error: "${sql}"`, {
+        params,
+        error: e?.message,
+      });
       throw e;
     }
   }
@@ -540,13 +599,17 @@ export class SqliteEngine {
   /**
    * Execute write/DML statements
    */
-  public static run(sql: string, params: any[] = []): void {
+  public static run(sql: string, params: unknown[] = []): void {
     const db = this.getDb();
     try {
-      db.run(sql, params);
+      db.run(sql, params as SqlValue[]);
       this.markDirty();
-    } catch (e: any) {
-      AppLogger.error('SqliteEngine', `Run execution error: "${sql}"`, { params, error: e?.message });
+    } catch (_e) {
+      const e = asErrorLike(_e);
+      AppLogger.error('SqliteEngine', `Run execution error: "${sql}"`, {
+        params,
+        error: e?.message,
+      });
       throw e;
     }
   }
@@ -554,7 +617,7 @@ export class SqliteEngine {
   /**
    * Execute write/DML statements (alias for run)
    */
-  public static execute(sql: string, params: any[] = []): void {
+  public static execute(sql: string, params: unknown[] = []): void {
     this.run(sql, params);
   }
 
@@ -657,7 +720,10 @@ export class SqliteEngine {
     if (typeof window !== 'undefined') {
       window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden' && this.isDirty) {
-          AppLogger.info('SqliteEngine', 'Document hidden; triggering immediate SQLite persistence flush');
+          AppLogger.info(
+            'SqliteEngine',
+            'Document hidden; triggering immediate SQLite persistence flush'
+          );
           this.flush().catch((e) => AppLogger.error('SqliteEngine', 'Visibility flush failed', e));
         }
       });
@@ -680,8 +746,13 @@ export class SqliteEngine {
         .then(({ App }) => {
           App.addListener('appStateChange', ({ isActive }) => {
             if (!isActive && this.isDirty) {
-              AppLogger.info('SqliteEngine', 'Native app backgrounded; triggering immediate SQLite persistence flush');
-              this.flush().catch((e) => AppLogger.error('SqliteEngine', 'Background flush failed', e));
+              AppLogger.info(
+                'SqliteEngine',
+                'Native app backgrounded; triggering immediate SQLite persistence flush'
+              );
+              this.flush().catch((e) =>
+                AppLogger.error('SqliteEngine', 'Background flush failed', e)
+              );
             }
           });
         })
@@ -860,7 +931,8 @@ export class SqliteEngine {
         };
       }
       return { status: 'corrupted', details: 'No response from PRAGMA integrity_check' };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { status: 'corrupted', details: e?.message || 'Check failed' };
     }
   }
@@ -868,7 +940,11 @@ export class SqliteEngine {
   /**
    * Reclaims unused space and defragments B-trees via VACUUM & PRAGMA optimize
    */
-  public static async vacuum(): Promise<{ originalSizeBytes: number; compactedSizeBytes: number; bytesReclaimed: number }> {
+  public static async vacuum(): Promise<{
+    originalSizeBytes: number;
+    compactedSizeBytes: number;
+    bytesReclaimed: number;
+  }> {
     const db = this.getDb();
     const originalBinary = db.export();
     const originalSizeBytes = originalBinary.length;

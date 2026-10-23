@@ -80,8 +80,9 @@ export const ConflictResolverPanel: React.FC = () => {
       </div>
 
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Conflicts appear when a note was edited with a stale version (optimistic concurrency).
-        Your local copy remains the current data; resolve dismisses the warning, or review payloads below.
+        Conflicts appear when a note was edited with a stale version (optimistic concurrency). Your
+        local copy remains the current data; resolve dismisses the warning, or review payloads
+        below.
       </p>
 
       {conflicts.length === 0 ? (
@@ -104,9 +105,7 @@ export const ConflictResolverPanel: React.FC = () => {
                   </p>
                   <p className="text-zinc-500 dark:text-zinc-400 mt-0.5">
                     Local v{c.local_version_id} vs expected/remote v{c.remote_version_id}
-                    {c.detected_at
-                      ? ` · ${new Date(c.detected_at).toLocaleString()}`
-                      : ''}
+                    {c.detected_at ? ` · ${new Date(c.detected_at).toLocaleString()}` : ''}
                   </p>
                 </div>
               </div>
@@ -119,7 +118,9 @@ export const ConflictResolverPanel: React.FC = () => {
                   </pre>
                 </div>
                 <div className="rounded-lg bg-white/80 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 p-2">
-                  <p className="font-semibold text-zinc-700 dark:text-zinc-300 mb-1">Stale / remote</p>
+                  <p className="font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
+                    Stale / remote
+                  </p>
                   <pre className="whitespace-pre-wrap break-words text-zinc-600 dark:text-zinc-400 font-sans">
                     {previewPayload(c.remote_payload)}
                   </pre>

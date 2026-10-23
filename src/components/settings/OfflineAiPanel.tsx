@@ -4,6 +4,7 @@ import { OfflineAi, VERIFIED_SPEECH_MODELS } from '../../plugins/offline-ai';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { AiCapabilities, SpeechModelProfile } from '../../types';
 import { AppLogger } from '../../lib/logger';
+import { asErrorLike } from '../../lib/errorLike';
 
 /** Compact on-device Whisper status + model install. */
 export const OfflineAiPanel: React.FC = () => {
@@ -33,7 +34,8 @@ export const OfflineAiPanel: React.FC = () => {
           };
         })
       );
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       AppLogger.warn('OfflineAiPanel', 'Failed to load offline AI status', err);
       setErrorMessage(err.message || 'Could not query on-device AI.');
     } finally {
@@ -55,7 +57,8 @@ export const OfflineAiPanel: React.FC = () => {
       if (!res.installed) throw new Error(res.error || 'Install failed');
       setSuccessMessage(`${model.displayName} installed`);
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err.message || 'Download failed');
     } finally {
       setDownloadingModelId(null);
@@ -69,12 +72,13 @@ export const OfflineAiPanel: React.FC = () => {
       await OfflineAi.deleteSpeechModel({ modelId });
       setSuccessMessage('Model removed');
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setErrorMessage(err.message || 'Remove failed');
     }
   };
 
-  const formatMb = (bytes: number | null | undefined) => (((bytes || 0) / (1024 * 1024)).toFixed(0));
+  const formatMb = (bytes: number | null | undefined) => ((bytes || 0) / (1024 * 1024)).toFixed(0);
   const isInferenceReady = Boolean(caps?.inferenceRuntimeReady);
   const isLibraryLoaded = Boolean(caps?.nativeLibraryLoaded);
 
@@ -146,7 +150,9 @@ export const OfflineAiPanel: React.FC = () => {
       )}
 
       <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span></h4>
+        <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
+          Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span>
+        </h4>
         {models.map((model) => {
           const isInstalled = !!model.installed;
           const isDownloading = downloadingModelId === model.id;
@@ -159,7 +165,9 @@ export const OfflineAiPanel: React.FC = () => {
                 <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
                   {model.displayName}
                   {isInstalled && (
-                    <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400">Installed</span>
+                    <span className="ml-2 text-[10px] text-emerald-600 dark:text-emerald-400">
+                      Installed
+                    </span>
                   )}
                 </div>
                 <div className="text-[11px] text-zinc-500">~{formatMb(model.downloadBytes)} MB</div>

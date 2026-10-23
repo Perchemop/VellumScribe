@@ -1,9 +1,19 @@
+declare global {
+  interface Window {
+    /** Native audio file-picker hook, installed while the audio sheet is open. */
+    __vellumScribePickAudio?: () => void;
+  }
+}
+
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Lock, FileText } from 'lucide-react';
 import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
 import { StorageManager } from '../lib/storage';
 import { AudioRecordingManager } from '../services/AudioRecordingManager';
-import { TranscriptionOrchestrator, resolveTranscriptionPolicy } from '../services/TranscriptionOrchestrator';
+import {
+  TranscriptionOrchestrator,
+  resolveTranscriptionPolicy,
+} from '../services/TranscriptionOrchestrator';
 import { MediaRepository } from '../lib/MediaRepository';
 import { NotePayloadData } from '../lib/cryptoUtils';
 import { describeAudioImport } from '../lib/audioImportNotices';
@@ -20,6 +30,7 @@ import { ReminderService } from '../services/ReminderService';
 import { ModalLoadingFallback } from './ModalLoadingFallback';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ModalErrorFallback } from './ModalErrorFallback';
+import { asErrorLike } from '../lib/errorLike';
 
 const SketchCanvasModal = lazy(() =>
   import('./SketchCanvasModal').then((m) => ({ default: m.SketchCanvasModal }))
@@ -60,7 +71,6 @@ const TranscriptionRecoverySheet = lazy(() =>
 const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
   google: 'Google Gemini',
   groq: 'Groq',
-  ollama: 'Ollama (self-hosted endpoint)',
   offline_rules: 'Offline rules engine',
 };
 
@@ -89,9 +99,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 }) => {
   const [title, setTitle] = useState(note.title || '');
   const [body, setBody] = useState(note.body || '');
-  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(
-    note.checklist_items || []
-  );
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(note.checklist_items || []);
   const [sketchData, setSketchData] = useState<string | undefined>(note.sketch_data);
   const [eventId, setEventId] = useState(note.event_id);
   const [reminderAt, setReminderAt] = useState<string>(note.reminder_at || '');
@@ -127,11 +135,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [heldPin, setHeldPin] = useState<string | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
   const audioFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isImportingAudio, setIsImportingAudio] = useState(false);
+  const [, setIsImportingAudio] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const pendingTranscriptionErrorRef = useRef<string | null>(null);
-
 
   const handleUploadAudioFile = async (file: File) => {
     if (!file) return;
@@ -167,13 +174,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             }
           );
           if (tr?.transcript) {
-            const newBody = body ? `${body}
+            const newBody = body
+              ? `${body}
 
-${tr.transcript}` : tr.transcript;
+${tr.transcript}`
+              : tr.transcript;
             setBody(newBody);
             persistText(title, newBody);
           }
-        } catch (txErr: any) {
+        } catch (_txErr) {
+          const txErr = asErrorLike(_txErr);
           setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
           setRecoveryError(txErr?.message || 'Transcription failed');
           setShowRecoverySheet(true);
@@ -182,7 +192,8 @@ ${tr.transcript}` : tr.transcript;
       const refreshed = StorageManager.getNoteById(note.id);
       if (refreshed) onNoteUpdated(refreshed);
       refreshRecordings();
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setImportStatus(e?.message || 'Could not import audio file');
     } finally {
       setIsImportingAudio(false);
@@ -197,12 +208,12 @@ ${tr.transcript}` : tr.transcript;
   };
 
   useEffect(() => {
-    (window as any).__vellumScribePickAudio = () => {
+    window.__vellumScribePickAudio = () => {
       audioFileInputRef.current?.click();
     };
     return () => {
       try {
-        delete (window as any).__vellumScribePickAudio;
+        delete window.__vellumScribePickAudio;
       } catch {
         /* ignore */
       }
@@ -247,7 +258,19 @@ ${tr.transcript}` : tr.transcript;
     setHeldPin(null);
     setRecordings(StorageManager.getRecordingsForNote(note.id));
     setOcrScans(StorageManager.getOcrScansForNote(note.id));
-  }, [note.id, note.updated_at, note.is_locked]);
+  }, [
+    note.id,
+    note.updated_at,
+    note.is_locked,
+    note.title,
+    note.body,
+    note.checklist_items,
+    note.created_at,
+    note.event_id,
+    note.location_name,
+    note.reminder_at,
+    note.sketch_data,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -274,7 +297,7 @@ ${tr.transcript}` : tr.transcript;
     return () => {
       cancelled = true;
     };
-  }, [note.id, note.sketch_media_key]);
+  }, [note.id, note.sketch_media_key, sketchData]);
 
   useEffect(() => {
     if (focusMode) {
@@ -316,11 +339,7 @@ ${tr.transcript}` : tr.transcript;
     };
 
     if (note.is_locked && heldPin) {
-      void StorageManager.saveUnlockedNote(
-        note.id,
-        { title: nextTitle, body: nextBody },
-        heldPin
-      )
+      void StorageManager.saveUnlockedNote(note.id, { title: nextTitle, body: nextBody }, heldPin)
         .then((updated) => {
           SearchIndexQueue.enqueue(note.id);
           finish(updated);
@@ -450,7 +469,10 @@ ${tr.transcript}` : tr.transcript;
         }}
       />
       {importStatus && (
-        <div role="status" className="px-4 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shrink-0">
+        <div
+          role="status"
+          className="px-4 py-2 text-xs bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shrink-0"
+        >
           {importStatus}
         </div>
       )}
@@ -492,26 +514,49 @@ ${tr.transcript}` : tr.transcript;
 
       {focusMode && (
         <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-850 flex items-center justify-between shrink-0">
-          <button type="button" className="min-h-[44px] px-3 text-sm text-zinc-600 dark:text-zinc-300" onClick={onClose} aria-label="Back">
+          <button
+            type="button"
+            className="min-h-[44px] px-3 text-sm text-zinc-600 dark:text-zinc-300"
+            onClick={onClose}
+            aria-label="Back"
+          >
             ← Back
           </button>
           <span className="text-[11px] text-zinc-400" aria-live="polite">
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Focus mode'}
           </span>
-          <button type="button" className="min-h-[44px] px-3 text-sm font-medium text-indigo-600 dark:text-indigo-400" onClick={() => onToggleFocus?.()}>
+          <button
+            type="button"
+            className="min-h-[44px] px-3 text-sm font-medium text-indigo-600 dark:text-indigo-400"
+            onClick={() => onToggleFocus?.()}
+          >
             Done
           </button>
         </div>
       )}
 
       {recoveredDraft && !lockedGate && (
-        <div role="status" aria-live="polite" className="px-4 py-2.5 border-b border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-xs flex flex-wrap items-center justify-between gap-2 shrink-0">
-          <span className="text-amber-900 dark:text-amber-100">Unsaved draft recovered from a previous session.</span>
+        <div
+          role="status"
+          aria-live="polite"
+          className="px-4 py-2.5 border-b border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 text-xs flex flex-wrap items-center justify-between gap-2 shrink-0"
+        >
+          <span className="text-amber-900 dark:text-amber-100">
+            Unsaved draft recovered from a previous session.
+          </span>
           <span className="flex items-center gap-2">
-            <button type="button" className="px-2.5 py-1 rounded-lg bg-amber-800 text-white dark:bg-amber-200 dark:text-amber-950 font-medium" onClick={applyRecoveredDraft}>
+            <button
+              type="button"
+              className="px-2.5 py-1 rounded-lg bg-amber-800 text-white dark:bg-amber-200 dark:text-amber-950 font-medium"
+              onClick={applyRecoveredDraft}
+            >
               Restore
             </button>
-            <button type="button" className="px-2.5 py-1 rounded-lg text-amber-800 dark:text-amber-200 underline" onClick={discardRecoveredDraft}>
+            <button
+              type="button"
+              className="px-2.5 py-1 rounded-lg text-amber-800 dark:text-amber-200 underline"
+              onClick={discardRecoveredDraft}
+            >
               Discard
             </button>
           </span>
@@ -531,11 +576,19 @@ ${tr.transcript}` : tr.transcript;
             className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900"
           />
           {reminderAt && (
-            <button type="button" className="text-rose-600 underline" onClick={() => void handleSetReminder('')}>
+            <button
+              type="button"
+              className="text-rose-600 underline"
+              onClick={() => void handleSetReminder('')}
+            >
               Clear
             </button>
           )}
-          <button type="button" className="text-zinc-500 underline" onClick={() => setShowReminderPicker(false)}>
+          <button
+            type="button"
+            className="text-zinc-500 underline"
+            onClick={() => setShowReminderPicker(false)}
+          >
             Done
           </button>
         </div>
@@ -549,16 +602,26 @@ ${tr.transcript}` : tr.transcript;
             value={locationName}
             onChange={(e) => setLocationName(e.target.value)}
             onBlur={() => {
-              const updated = StorageManager.updateNote(note.id, { location_name: locationName || undefined });
+              const updated = StorageManager.updateNote(note.id, {
+                location_name: locationName || undefined,
+              });
               if (updated) onNoteUpdated(updated);
             }}
             placeholder="Place name or address"
             className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 min-w-[12rem] flex-1"
           />
-          <button type="button" className="px-2 py-1 rounded-lg bg-sky-700 text-white dark:bg-sky-300 dark:text-sky-950 font-medium" onClick={handleDetectLocation}>
+          <button
+            type="button"
+            className="px-2 py-1 rounded-lg bg-sky-700 text-white dark:bg-sky-300 dark:text-sky-950 font-medium"
+            onClick={handleDetectLocation}
+          >
             Use GPS
           </button>
-          <button type="button" className="text-zinc-500 underline" onClick={() => setShowLocationPicker(false)}>
+          <button
+            type="button"
+            className="text-zinc-500 underline"
+            onClick={() => setShowLocationPicker(false)}
+          >
             Done
           </button>
         </div>
@@ -571,7 +634,9 @@ ${tr.transcript}` : tr.transcript;
               <Lock className="w-7 h-7 text-amber-700 dark:text-amber-300" />
             </div>
             <div>
-              <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">This note is locked</p>
+              <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                This note is locked
+              </p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm">
                 Unlock to view and edit contents. Content stays encrypted until you authenticate.
               </p>
@@ -660,7 +725,9 @@ ${tr.transcript}` : tr.transcript;
                 </ul>
               </div>
             )}
-            {locationName && <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {locationName}</p>}
+            {locationName && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">📍 {locationName}</p>
+            )}
           </>
         )}
       </div>
@@ -742,9 +809,11 @@ ${tr.transcript}` : tr.transcript;
             recordingId={recordings.length > 0 ? recordings[recordings.length - 1].id : undefined}
             onTranscribeSuccess={(transcript) => {
               if (transcript) {
-                const newBody = body ? `${body}
+                const newBody = body
+                  ? `${body}
 
-${transcript}` : transcript;
+${transcript}`
+                  : transcript;
                 handleBodyChange(newBody);
               }
               setShowRecoverySheet(false);
@@ -766,7 +835,11 @@ ${transcript}` : transcript;
           />
         )}
         {showShareModal && (
-          <NoteShareModal note={note} event={events.find((e) => e.id === eventId)} onClose={() => setShowShareModal(false)} />
+          <NoteShareModal
+            note={note}
+            event={events.find((e) => e.id === eventId)}
+            onClose={() => setShowShareModal(false)}
+          />
         )}
         {showRevisionsModal && (
           <ErrorBoundary
@@ -792,15 +865,19 @@ ${transcript}` : transcript;
             />
           </ErrorBoundary>
         )}
-        {showSettingsModal && <SettingsModal onClose={() => setShowSettingsModal(false)} onSettingsUpdated={() => {}} />}
-        {showAiKeyModal && <AiStudioKeyModal isOpen={showAiKeyModal} onClose={() => setShowAiKeyModal(false)} />}
+        {showSettingsModal && (
+          <SettingsModal onClose={() => setShowSettingsModal(false)} onSettingsUpdated={() => {}} />
+        )}
+        {showAiKeyModal && (
+          <AiStudioKeyModal isOpen={showAiKeyModal} onClose={() => setShowAiKeyModal(false)} />
+        )}
         {showAiSummaryModal && (
           <AiSummaryModal
             isOpen={showAiSummaryModal}
             note={{ ...note, title, body }}
             onClose={() => setShowAiSummaryModal(false)}
             onApplySummary={(summaryText: string, mode: 'append' | 'prepend' | 'replace') => {
-              let newBody = body;
+              let newBody: string;
               if (mode === 'replace') newBody = summaryText;
               else if (mode === 'prepend') newBody = `${summaryText}\n\n---\n\n${body}`;
               else newBody = body ? `${body}\n\n${summaryText}` : summaryText;

@@ -4,10 +4,10 @@ This document describes the cloud backup integration in VellumScribe, including 
 
 ## Supported Cloud Destinations
 
-| Provider | Connect Method | Upload / Streaming | Status |
-|---|---|---|---|
-| **Google Drive** | 1-Click OAuth 2.0 (`/api/cloud/google_drive/connect`) | Direct & Resumable Chunked (`application/octet-stream`) | Fully Implemented & Functional |
-| **Microsoft OneDrive** | 1-Click OAuth 2.0 (`/api/cloud/microsoft/connect`) | Direct & Resumable Chunked (Microsoft Graph AppFolder) | Fully Implemented & Functional |
+| Provider               | Connect Method                                        | Upload / Streaming                                      | Status                         |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------------- | ------------------------------ |
+| **Google Drive**       | 1-Click OAuth 2.0 (`/api/cloud/google_drive/connect`) | Direct & Resumable Chunked (`application/octet-stream`) | Fully Implemented & Functional |
+| **Microsoft OneDrive** | 1-Click OAuth 2.0 (`/api/cloud/microsoft/connect`)    | Direct & Resumable Chunked (Microsoft Graph AppFolder)  | Fully Implemented & Functional |
 
 ---
 

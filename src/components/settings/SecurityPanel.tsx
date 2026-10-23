@@ -3,13 +3,16 @@ import { Lock, Clock, Trash2, CheckCircle2, AlertTriangle, RefreshCw } from 'luc
 import { UnlockSessionManager } from '../../lib/UnlockSessionManager';
 import { StorageManager } from '../../lib/storage';
 import { AndroidKeystoreManager } from '../../lib/keystore';
+import { asErrorLike } from '../../lib/errorLike';
 
 interface SecurityPanelProps {
   onRefreshNotes?: () => void;
 }
 
 export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) => {
-  const [timeoutMins, setTimeoutMins] = useState(() => UnlockSessionManager.getSessionTimeoutMinutes());
+  const [timeoutMins, setTimeoutMins] = useState(() =>
+    UnlockSessionManager.getSessionTimeoutMinutes()
+  );
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isWiping, setIsWiping] = useState(false);
@@ -31,7 +34,8 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
       <div className="p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
         <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Note locks</div>
         <p className="text-xs text-zinc-500 mt-0.5">
-          Optional PIN protection. {hardwareKeystoreReady ? 'Hardware keystore available.' : 'Device secure storage.'}
+          Optional PIN protection.{' '}
+          {hardwareKeystoreReady ? 'Hardware keystore available.' : 'Device secure storage.'}
         </p>
       </div>
 
@@ -52,7 +56,9 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
         <div className="flex items-center gap-2.5 min-w-0">
           <Clock className="w-4 h-4 text-zinc-500 shrink-0" />
           <div className="min-w-0">
-            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Unlock timeout</div>
+            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Unlock timeout
+            </div>
             <div className="text-xs text-zinc-500">How long notes stay unlocked</div>
           </div>
         </div>
@@ -78,7 +84,9 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
         <div className="flex items-center gap-2.5 min-w-0">
           <Lock className="w-4 h-4 text-zinc-500 shrink-0" />
           <div className="min-w-0">
-            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Lock all notes</div>
+            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Lock all notes
+            </div>
             <div className="text-xs text-zinc-500">Clear unlock sessions now</div>
           </div>
         </div>
@@ -98,8 +106,12 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
         <div className="flex items-start gap-2.5">
           <Trash2 className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
           <div>
-            <div className="text-sm font-semibold text-rose-700 dark:text-rose-400">Erase all data</div>
-            <p className="text-xs text-zinc-500 mt-0.5">Deletes every note and recording on this device. Cannot be undone.</p>
+            <div className="text-sm font-semibold text-rose-700 dark:text-rose-400">
+              Erase all data
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Deletes every note and recording on this device. Cannot be undone.
+            </p>
           </div>
         </div>
         <div className="flex justify-end">
@@ -121,7 +133,8 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
                 await StorageManager.vacuumDatabase();
                 onRefreshNotes?.();
                 flash('All data erased');
-              } catch (err: any) {
+              } catch (_err) {
+                const err = asErrorLike(_err);
                 setErrorMessage(err.message || 'Erase failed');
               } finally {
                 setIsWiping(false);
@@ -129,7 +142,11 @@ export const SecurityPanel: React.FC<SecurityPanelProps> = ({ onRefreshNotes }) 
             }}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-50 flex items-center gap-1.5"
           >
-            {isWiping ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {isWiping ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="w-3.5 h-3.5" />
+            )}
             {isWiping ? 'Erasing…' : 'Erase all'}
           </button>
         </div>

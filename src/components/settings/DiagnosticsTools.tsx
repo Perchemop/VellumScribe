@@ -46,10 +46,13 @@ export const DiagnosticsTools: React.FC = () => {
     <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-2xl space-y-4">
       <div className="flex items-center gap-2">
         <FileText className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Diagnostics tools</h3>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          Diagnostics tools
+        </h3>
       </div>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Export recent in-app logs (secrets are redacted) or rebuild the full-text search index if search results look stale.
+        Export recent in-app logs (secrets are redacted) or rebuild the full-text search index if
+        search results look stale.
       </p>
       <div className="flex flex-wrap gap-2">
         <button

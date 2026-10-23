@@ -23,7 +23,9 @@ export const BackupPassphrasePanel: React.FC = () => {
       return;
     }
     CloudBackupCrypto.setUserBackupPassphrase(phrase);
-    setMsg('Passphrase set for this browser session. New backups will use it until you close the tab.');
+    setMsg(
+      'Passphrase set for this browser session. New backups will use it until you close the tab.'
+    );
     setPhrase('');
     setConfirm('');
   };
@@ -46,8 +48,8 @@ export const BackupPassphrasePanel: React.FC = () => {
       </div>
       <p className="text-xs text-zinc-500 leading-relaxed">
         Optional. Encrypt cloud backups with a passphrase you can re-enter on another device.
-        Without this, backups use a device-bound vault key and may not restore elsewhere.
-        The passphrase stays in this tab session only — it is never uploaded.
+        Without this, backups use a device-bound vault key and may not restore elsewhere. The
+        passphrase stays in this tab session only — it is never uploaded.
       </p>
       <input
         type="password"

@@ -8,13 +8,65 @@ import {
 } from '../types';
 import { AppLogger } from '../lib/logger';
 
+/** Raw rows from the `transcriptions` table (see schema.ts). */
+interface TranscriptionRow {
+  id: number;
+  recording_id: number;
+  engine: string;
+  engine_version?: string;
+  model_id: string;
+  model_checksum?: string;
+  language?: string;
+  status: string;
+  text?: string;
+  created_at: number;
+  started_at?: number;
+  completed_at?: number;
+  error_code?: string;
+  error_message?: string;
+}
+
+/** Raw rows from the `transcription_segments` table. */
+interface TranscriptionSegmentRow {
+  id: number;
+  transcription_id: number;
+  sequence: number;
+  start_ms: number;
+  end_ms: number;
+  speaker_id?: string | null;
+  text: string;
+  confidence?: number | null;
+}
+
+/** Raw rows from the `transcription_speakers` table. */
+interface TranscriptionSpeakerRow {
+  id: number;
+  transcription_id: number;
+  speaker_id: string;
+  label: string;
+  name?: string | null;
+}
+
+/** Raw rows from the `transcription_jobs` table. */
+interface TranscriptionJobRow {
+  id: string;
+  transcription_id: number;
+  recording_id?: number;
+  model_id?: string;
+  status?: string;
+  current_chunk?: number;
+  total_chunks?: number;
+  last_error?: string;
+  updated_at?: number;
+}
+
 export class TranscriptionRepository {
   /**
    * Get transcription record by ID asynchronously
    */
   public static async getByIdAsync(id: number): Promise<TranscriptionEntity | null> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<TranscriptionRow>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE id = ?`,
@@ -29,12 +81,14 @@ export class TranscriptionRepository {
    */
   public static getById(id: number): TranscriptionEntity | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+    const rows = db.querySync
+      ? db.querySync<TranscriptionRow>(
+          `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE id = ?`,
-      [id]
-    ) : [];
+          [id]
+        )
+      : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -42,9 +96,11 @@ export class TranscriptionRepository {
   /**
    * Get latest transcription for a recording asynchronously
    */
-  public static async getLatestForRecordingAsync(recordingId: number): Promise<TranscriptionEntity | null> {
+  public static async getLatestForRecordingAsync(
+    recordingId: number
+  ): Promise<TranscriptionEntity | null> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<TranscriptionRow>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? ORDER BY id DESC LIMIT 1`,
@@ -59,12 +115,14 @@ export class TranscriptionRepository {
    */
   public static getLatestForRecording(recordingId: number): TranscriptionEntity | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+    const rows = db.querySync
+      ? db.querySync<TranscriptionRow>(
+          `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? ORDER BY id DESC LIMIT 1`,
-      [recordingId]
-    ) : [];
+          [recordingId]
+        )
+      : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -77,7 +135,7 @@ export class TranscriptionRepository {
     modelId: string
   ): Promise<TranscriptionEntity | null> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<TranscriptionRow>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? AND model_id = ? ORDER BY id DESC LIMIT 1`,
@@ -95,12 +153,14 @@ export class TranscriptionRepository {
     modelId: string
   ): TranscriptionEntity | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+    const rows = db.querySync
+      ? db.querySync<TranscriptionRow>(
+          `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions WHERE recording_id = ? AND model_id = ? ORDER BY id DESC LIMIT 1`,
-      [recordingId, modelId]
-    ) : [];
+          [recordingId, modelId]
+        )
+      : [];
     if (!rows || rows.length === 0) return null;
     return this.mapTranscription(rows[0]);
   }
@@ -110,7 +170,7 @@ export class TranscriptionRepository {
    */
   public static async getIncompleteJobsAsync(): Promise<TranscriptionEntity[]> {
     const db = getDatabaseAdapter();
-    const rows = await db.query<any>(
+    const rows = await db.query<TranscriptionRow>(
       `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions 
@@ -125,20 +185,24 @@ export class TranscriptionRepository {
    */
   public static getIncompleteJobs(): TranscriptionEntity[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
+    const rows = db.querySync
+      ? db.querySync<TranscriptionRow>(
+          `SELECT id, recording_id, engine, engine_version, model_id, model_checksum, language,
               status, text, created_at, started_at, completed_at, error_code, error_message
        FROM transcriptions 
        WHERE status IN ('QUEUED', 'PROCESSING') 
        ORDER BY id ASC`
-    ) : [];
+        )
+      : [];
     return rows.map((r) => this.mapTranscription(r));
   }
 
   /**
    * Insert or update transcription job
    */
-  public static save(job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }): TranscriptionEntity {
+  public static save(
+    job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }
+  ): TranscriptionEntity {
     const db = getDatabaseAdapter();
     let id = job.id;
     const now = Date.now();
@@ -209,7 +273,9 @@ export class TranscriptionRepository {
     };
   }
 
-  public static saveTranscription(job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }): TranscriptionEntity {
+  public static saveTranscription(
+    job: Partial<TranscriptionEntity> & { recording_id: number; model_id: string }
+  ): TranscriptionEntity {
     return this.save(job);
   }
 
@@ -219,14 +285,29 @@ export class TranscriptionRepository {
   public static updateStatus(
     id: number,
     status: TranscriptionDurableStatus,
-    patchOrErrorCode?: { text?: string; started_at?: number; completed_at?: number; error_code?: OfflineAiErrorCode; error_message?: string } | OfflineAiErrorCode | string,
+    patchOrErrorCode?:
+      | {
+          text?: string;
+          started_at?: number;
+          completed_at?: number;
+          error_code?: OfflineAiErrorCode;
+          error_message?: string;
+        }
+      | OfflineAiErrorCode
+      | string,
     errorMessage?: string
   ): void {
     const db = getDatabaseAdapter();
     const updates: string[] = ['status = ?'];
-    const params: any[] = [status];
+    const params: unknown[] = [status];
 
-    let patch: { text?: string; started_at?: number; completed_at?: number; error_code?: OfflineAiErrorCode; error_message?: string } = {};
+    let patch: {
+      text?: string;
+      started_at?: number;
+      completed_at?: number;
+      error_code?: OfflineAiErrorCode;
+      error_message?: string;
+    } = {};
 
     if (typeof patchOrErrorCode === 'string') {
       patch.error_code = patchOrErrorCode as OfflineAiErrorCode;
@@ -268,12 +349,19 @@ export class TranscriptionRepository {
   public static commitCompletedTranscription(
     transcriptionId: number,
     fullText: string,
-    segments: Array<{ sequence: number; start_ms: number; end_ms: number; speaker_id?: string | null; text: string; confidence?: number | null }>,
+    segments: Array<{
+      sequence: number;
+      start_ms: number;
+      end_ms: number;
+      speaker_id?: string | null;
+      text: string;
+      confidence?: number | null;
+    }>,
     speakers: Array<{ speaker_id: string; label: string; name?: string | null }> = []
   ): void {
     const db = getDatabaseAdapter();
     const now = Date.now();
-    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: any) => cb();
+    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: () => void) => cb();
     runInTx(() => {
       // 1. Update transcription record
       db.runSync?.(
@@ -284,7 +372,9 @@ export class TranscriptionRepository {
       );
 
       // 2. Clear any stale segments for this transcription
-      db.runSync?.('DELETE FROM transcription_segments WHERE transcription_id = ?', [transcriptionId]);
+      db.runSync?.('DELETE FROM transcription_segments WHERE transcription_id = ?', [
+        transcriptionId,
+      ]);
 
       // 3. Insert validated segments
       for (const seg of segments) {
@@ -304,7 +394,9 @@ export class TranscriptionRepository {
       }
 
       // 4. Insert speakers if any
-      db.runSync?.('DELETE FROM transcription_speakers WHERE transcription_id = ?', [transcriptionId]);
+      db.runSync?.('DELETE FROM transcription_speakers WHERE transcription_id = ?', [
+        transcriptionId,
+      ]);
       for (const spk of speakers) {
         db.runSync?.(
           `INSERT INTO transcription_speakers (transcription_id, speaker_id, label, name)
@@ -314,7 +406,10 @@ export class TranscriptionRepository {
       }
     });
 
-    AppLogger.info('TranscriptionRepository', `Committed transcription #${transcriptionId} with ${segments.length} segments`);
+    AppLogger.info(
+      'TranscriptionRepository',
+      `Committed transcription #${transcriptionId} with ${segments.length} segments`
+    );
   }
 
   /**
@@ -322,13 +417,15 @@ export class TranscriptionRepository {
    */
   public static getSegments(transcriptionId: number): TranscriptionSegmentRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, transcription_id, sequence, start_ms, end_ms, speaker_id, text, confidence
+    const rows = db.querySync
+      ? db.querySync<TranscriptionSegmentRow>(
+          `SELECT id, transcription_id, sequence, start_ms, end_ms, speaker_id, text, confidence
        FROM transcription_segments 
        WHERE transcription_id = ? 
        ORDER BY sequence ASC`,
-      [transcriptionId]
-    ) : [];
+          [transcriptionId]
+        )
+      : [];
     return rows.map((r) => ({
       id: r.id,
       transcription_id: r.transcription_id,
@@ -346,13 +443,15 @@ export class TranscriptionRepository {
    */
   public static getSpeakers(transcriptionId: number): TranscriptionSpeakerRecord[] {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, transcription_id, speaker_id, label, name
+    const rows = db.querySync
+      ? db.querySync<TranscriptionSpeakerRow>(
+          `SELECT id, transcription_id, speaker_id, label, name
        FROM transcription_speakers 
        WHERE transcription_id = ? 
        ORDER BY id ASC`,
-      [transcriptionId]
-    ) : [];
+          [transcriptionId]
+        )
+      : [];
     return rows.map((r) => ({
       id: r.id,
       transcription_id: r.transcription_id,
@@ -378,7 +477,7 @@ export class TranscriptionRepository {
    */
   public static delete(id: number): void {
     const db = getDatabaseAdapter();
-    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: any) => cb();
+    const runInTx = db.transactionSync ? db.transactionSync.bind(db) : (cb: () => void) => cb();
     runInTx(() => {
       db.runSync?.('DELETE FROM transcription_jobs WHERE transcription_id = ?', [id]);
       db.runSync?.('DELETE FROM transcription_segments WHERE transcription_id = ?', [id]);
@@ -425,17 +524,19 @@ export class TranscriptionRepository {
     );
   }
 
-  public static getJob(jobId: string): any | null {
+  public static getJob(jobId: string): TranscriptionJobRow | null {
     const db = getDatabaseAdapter();
-    const rows = db.querySync ? db.querySync<any>(
-      `SELECT id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at
+    const rows = db.querySync
+      ? db.querySync<TranscriptionJobRow>(
+          `SELECT id, transcription_id, recording_id, model_id, status, current_chunk, total_chunks, last_error, updated_at
        FROM transcription_jobs WHERE id = ?`,
-      [jobId]
-    ) : [];
+          [jobId]
+        )
+      : [];
     return rows && rows.length > 0 ? rows[0] : null;
   }
 
-  private static mapTranscription(r: any): TranscriptionEntity {
+  private static mapTranscription(r: TranscriptionRow): TranscriptionEntity {
     return {
       id: r.id,
       recording_id: r.recording_id,

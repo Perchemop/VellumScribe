@@ -1,4 +1,4 @@
-import { hashPin, verifyPin } from './cryptoUtils';
+import { AppLogger } from './logger';
 
 export class UnlockSessionManager {
   private static activeSessions: Map<number, { key: CryptoKey; expiresAt: number }> = new Map();
@@ -34,7 +34,7 @@ export class UnlockSessionManager {
       });
       return true;
     } catch (e) {
-      console.error('Failed to create unlock session', e);
+      AppLogger.error('UnlockSessionManager', 'Failed to create unlock session', e);
       return false;
     }
   }
@@ -52,13 +52,19 @@ export class UnlockSessionManager {
   }
 
   private static getEffectiveTimeoutMs(): number {
-    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vellum_unlock_timeout_minutes') : null;
+    const stored =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem('vellum_unlock_timeout_minutes')
+        : null;
     const mins = stored ? parseInt(stored, 10) : 5;
     return mins <= 0 ? 24 * 60 * 60 * 1000 : mins * 60 * 1000;
   }
 
   static getSessionTimeoutMinutes(): number {
-    const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('vellum_unlock_timeout_minutes') : null;
+    const stored =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem('vellum_unlock_timeout_minutes')
+        : null;
     return stored ? parseInt(stored, 10) : 5;
   }
 

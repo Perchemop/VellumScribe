@@ -7,35 +7,29 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
-  Shield,
   WifiOff,
-  Sparkles,
   Sliders,
   RefreshCw,
 } from 'lucide-react';
 import { OfflineAiManager, StorageBreakdown } from '../../services/OfflineAiManager';
 import { SpeechModelProfile, AiCapabilities } from '../../types';
+import { asErrorLike } from '../../lib/errorLike';
 
 export const OfflineAiSettings: React.FC = () => {
   const [capabilities, setCapabilities] = useState<AiCapabilities | null>(null);
   const [models, setModels] = useState<SpeechModelProfile[]>([]);
   const [storage, setStorage] = useState<StorageBreakdown | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [installingModelId, setInstallingModelId] = useState<string | null>(null);
 
   // User preferences
-  const [speechRecognitionEnabled, setSpeechRecognitionEnabled] = useState(true);
   const [autoTranscribe, setAutoTranscribe] = useState(true);
   const [speakerDetection, setSpeakerDetection] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [threadCount, setThreadCount] = useState(4);
   const [vadSensitivity, setVadSensitivity] = useState('medium');
   const [chunkDurationSec, setChunkDurationSec] = useState(20);
-
-  useEffect(() => {
-    loadData();
-  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -51,6 +45,10 @@ export const OfflineAiSettings: React.FC = () => {
     setLoading(false);
   };
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
   const handleInstallModel = async (modelId: string) => {
     setInstallingModelId(modelId);
     setActionFeedback(null);
@@ -62,7 +60,8 @@ export const OfflineAiSettings: React.FC = () => {
         setActionFeedback(`Installation failed: ${res.error}`);
       }
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setActionFeedback(`Error installing model: ${err?.message}`);
     } finally {
       setInstallingModelId(null);
@@ -74,7 +73,8 @@ export const OfflineAiSettings: React.FC = () => {
       await OfflineAiManager.getInstance().deleteModel(modelId);
       setActionFeedback(`Model '${modelId}' removed.`);
       await loadData();
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setActionFeedback(`Error deleting model: ${err?.message}`);
     }
   };
@@ -95,7 +95,10 @@ export const OfflineAiSettings: React.FC = () => {
   };
 
   return (
-    <div id="offline-ai-settings-container" className="space-y-6 text-stone-800 dark:text-stone-200">
+    <div
+      id="offline-ai-settings-container"
+      className="space-y-6 text-stone-800 dark:text-stone-200"
+    >
       {/* 1. Offline AI Status Header (Section 28) */}
       <div
         id="offline-ai-status-card"
@@ -132,7 +135,9 @@ export const OfflineAiSettings: React.FC = () => {
           </div>
           <span className="flex items-center gap-1 text-xs text-stone-600 dark:text-stone-400 font-medium">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            {capabilities?.isNativeEngineAvailable ? 'Native Engine Ready' : 'Architecture Configured'}
+            {capabilities?.isNativeEngineAvailable
+              ? 'Native Engine Ready'
+              : 'Architecture Configured'}
           </span>
         </div>
 
@@ -149,7 +154,9 @@ export const OfflineAiSettings: React.FC = () => {
           </div>
           <div>
             <span className="text-stone-500 dark:text-stone-400 block">Network Policy</span>
-            <strong className="text-stone-900 dark:text-stone-100">Zero Fabricated Transcripts</strong>
+            <strong className="text-stone-900 dark:text-stone-100">
+              Zero Fabricated Transcripts
+            </strong>
           </div>
           <div>
             <span className="text-stone-500 dark:text-stone-400 block">Checkpointing</span>
@@ -194,7 +201,9 @@ export const OfflineAiSettings: React.FC = () => {
             <div>
               <span className="text-stone-500 block">Storage</span>
               <strong className="text-stone-800 dark:text-stone-200">
-                {capabilities.availableStorageMb ? `${capabilities.availableStorageMb} MB free` : 'Available'}
+                {capabilities.availableStorageMb
+                  ? `${capabilities.availableStorageMb} MB free`
+                  : 'Available'}
               </strong>
             </div>
             <div>
@@ -383,7 +392,10 @@ export const OfflineAiSettings: React.FC = () => {
       </div>
 
       {/* 6. Advanced Settings (Section 61) */}
-      <div id="offline-ai-advanced-section" className="pt-2 border-t border-stone-200 dark:border-stone-800">
+      <div
+        id="offline-ai-advanced-section"
+        className="pt-2 border-t border-stone-200 dark:border-stone-800"
+      >
         <button
           id="btn-toggle-advanced-settings"
           onClick={() => setShowAdvanced(!showAdvanced)}

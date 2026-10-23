@@ -1,10 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud, Mic, AlertTriangle, RefreshCw, X, CheckCircle2, Loader2, Download } from 'lucide-react';
+import {
+  Cloud,
+  Mic,
+  AlertTriangle,
+  RefreshCw,
+  X,
+  CheckCircle2,
+  Loader2,
+  Download,
+} from 'lucide-react';
 import { useModalBackHandler } from '../../lib/modalBackStack';
 import { TranscriptionOrchestrator } from '../../services/TranscriptionOrchestrator';
 import { PrivacyManager } from '../../lib/privacyManager';
 import { RecordingRepository } from '../../repositories/RecordingRepository';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
+import { asErrorLike } from '../../lib/errorLike';
 
 export interface TranscriptionRecoverySheetProps {
   isOpen: boolean;
@@ -61,7 +71,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
           libLoaded: Boolean(c.nativeLibraryLoaded),
           installedModels: list.filter((m) => m.installed).map((m) => m.id),
         });
-      } catch (e: any) {
+      } catch (_e) {
+        const e = asErrorLike(_e);
         if (!cancelled) {
           setCaps({ phase: 'error', message: e?.message || 'Could not read offline AI status' });
         }
@@ -81,7 +92,9 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
 
     try {
       if (!PrivacyManager.isNetworkAllowed()) {
-        throw new Error('Network is blocked by Privacy Mode. Allow network in Settings to use Cloud AI.');
+        throw new Error(
+          'Network is blocked by Privacy Mode. Allow network in Settings to use Cloud AI.'
+        );
       }
       if (!PrivacyManager.hasCloudAiConsent()) {
         throw new Error('Cloud AI consent is required. Grant consent in Settings → Privacy.');
@@ -119,7 +132,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
 
       setCloudSuccess(result.transcript);
       onTranscribeSuccess?.(result.transcript);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setCloudError(e?.message || 'Cloud transcription failed.');
     } finally {
       setIsCloudTranscribing(false);
@@ -147,7 +161,8 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
           : prev
       );
       setInstallProgress(100);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setInstallError(e?.message || 'Model download failed');
     } finally {
       setIsInstalling(false);
@@ -159,9 +174,7 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
   const modelMissing = inferenceReady && !hasModel;
 
   let statusTitle = 'Checking offline engine…';
-  let statusBody =
-    errorText ||
-    'Checking whether on-device Whisper is ready on this device.';
+  let statusBody = errorText || 'Checking whether on-device Whisper is ready on this device.';
 
   if (caps.phase === 'ready') {
     if (inferenceReady && hasModel) {
@@ -196,11 +209,13 @@ export const TranscriptionRecoverySheet: React.FC<TranscriptionRecoverySheetProp
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
     >
       <div
         className="w-full sm:max-w-lg bg-white dark:bg-stone-900 rounded-t-2xl sm:rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-slide-up"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900/60">
           <div className="flex items-center gap-2.5 min-w-0">

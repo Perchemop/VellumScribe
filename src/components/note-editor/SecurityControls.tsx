@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, Unlock, Shield, CloudOff, Cloud } from 'lucide-react';
+import { Lock, Shield, CloudOff, Cloud } from 'lucide-react';
 
 interface SecurityControlsProps {
   isLocked: boolean;
@@ -21,7 +21,9 @@ export const SecurityControls: React.FC<SecurityControlsProps> = ({
   return (
     <div className="p-3.5 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200/80 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${isLocked ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500'}`}>
+        <div
+          className={`p-2 rounded-lg ${isLocked ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500'}`}
+        >
           {isLocked ? <Lock className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
         </div>
         <div>
@@ -64,7 +66,11 @@ export const SecurityControls: React.FC<SecurityControlsProps> = ({
             }`}
             title={cloudSaveEnabled ? 'Cloud backup enabled' : 'Air-gapped (Local Only)'}
           >
-            {cloudSaveEnabled ? <Cloud className="w-3.5 h-3.5 text-sky-500" /> : <CloudOff className="w-3.5 h-3.5 text-amber-500" />}
+            {cloudSaveEnabled ? (
+              <Cloud className="w-3.5 h-3.5 text-sky-500" />
+            ) : (
+              <CloudOff className="w-3.5 h-3.5 text-amber-500" />
+            )}
             <span>{cloudSaveEnabled ? 'Cloud Sync On' : 'Local Only'}</span>
           </button>
         )}

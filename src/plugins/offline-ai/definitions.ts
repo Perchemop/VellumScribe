@@ -23,13 +23,9 @@ export interface OfflineAiPlugin {
     source: 'download' | 'localFile';
   }): Promise<ModelInstallResult>;
 
-  cancelModelDownload(options: {
-    modelId: string;
-  }): Promise<void>;
+  cancelModelDownload(options: { modelId: string }): Promise<void>;
 
-  deleteSpeechModel(options: {
-    modelId: string;
-  }): Promise<void>;
+  deleteSpeechModel(options: { modelId: string }): Promise<void>;
 
   startTranscription(options: {
     recordingId: string | number;
@@ -42,13 +38,9 @@ export interface OfflineAiPlugin {
     preferBatteryOverSpeed?: boolean;
   }): Promise<{ jobId: string }>;
 
-  getTranscriptionStatus(options: {
-    jobId: string;
-  }): Promise<TranscriptionJobStatus>;
+  getTranscriptionStatus(options: { jobId: string }): Promise<TranscriptionJobStatus>;
 
-  cancelTranscription(options: {
-    jobId: string;
-  }): Promise<void>;
+  cancelTranscription(options: { jobId: string }): Promise<void>;
 
   isSpeechRecognitionAvailable(): Promise<{ available: boolean }>;
 

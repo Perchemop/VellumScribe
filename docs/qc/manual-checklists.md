@@ -96,8 +96,8 @@ Run verification via `~/.config/opencode/scripts/ci.sh run "<description>"`
 - [ ] The staged format job is allowed to fail without failing the workflow
       (Q-004) — confirm the workflow conclusion is still `success` while format
       is non-blocking.
-- [ ] The Android workflow logs `VELLUM: <task> -> versionName=… versionCode=…
-      signed=…` and currently reports `signed=false` until Q-002 is closed.
+- [ ] The Android workflow logs `VELLUM: <task> -> versionName=… versionCode=… signed=…`
+      and currently reports `signed=false` until Q-002 is closed.
 - [ ] Tagged releases fail loudly if no signing key is configured.
 - [ ] Artifact `VellumScribe-Android-APKs-real` is attached to the run.
 - [ ] Never claim a gate passed without inspecting the CI run output.

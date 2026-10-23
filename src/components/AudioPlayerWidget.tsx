@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Play,
   Pause,
@@ -12,25 +12,22 @@ import {
   Sparkles,
   Loader2,
   AlertCircle,
-  WifiOff,
   Mic,
-  HelpCircle,
-  ArrowUpRight,
 } from 'lucide-react';
 import { RecordingRecord, TranscriptionJobStatus } from '../types';
-import { SQLiteDatabase } from '../lib/storage';
-import { MediaRepository, SecureMediaRepository } from '../lib/MediaRepository';
-import { UnlockSessionManager } from '../lib/UnlockSessionManager';
-import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { OfflineAiManager } from '../services/OfflineAiManager';
 import { TranscriptService, FullTranscriptView } from '../services/TranscriptService';
 import { TranscriptViewer } from './transcription/TranscriptViewer';
 import { LiveRegion } from './common/LiveRegion';
+import { AppLogger } from '../lib/logger';
+import { asErrorLike } from '../lib/errorLike';
 
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
 // keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
 const TranscriptionRecoverySheet = React.lazy(() =>
-  import('./audio/TranscriptionRecoverySheet').then((m) => ({ default: m.TranscriptionRecoverySheet }))
+  import('./audio/TranscriptionRecoverySheet').then((m) => ({
+    default: m.TranscriptionRecoverySheet,
+  }))
 );
 
 interface AudioPlayerWidgetProps {
@@ -68,14 +65,14 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const synthTimerRef = useRef<number | null>(null);
   const hasRealUrl = !!(recording.audio_url && recording.audio_url.startsWith('blob:'));
 
-  const refreshTranscriptData = () => {
+  const refreshTranscriptData = useCallback(() => {
     const updated = TranscriptService.getFullTranscriptForRecording(recording.id);
     setFullTranscript(updated);
-  };
+  }, [recording.id]);
 
   useEffect(() => {
     refreshTranscriptData();
-  }, [recording.id]);
+  }, [refreshTranscriptData]);
 
   useEffect(() => {
     return () => {
@@ -121,14 +118,16 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             clearInterval(pollInterval);
             setIsTranscribing(false);
           }
-        } catch (e: any) {
+        } catch (_e) {
+          const e = asErrorLike(_e);
           clearInterval(pollInterval);
           setIsTranscribing(false);
           setTranscribeError(e?.message || 'Could not verify speech recognition job status.');
           setShowRecoverySheet(true);
         }
       }, 300);
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       setIsTranscribing(false);
       const errorMsg = OfflineAiManager.mapErrorCodeToUserMessage(err?.message);
       setTranscribeError(errorMsg);
@@ -158,7 +157,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   // Web Audio Synthesizer fallback for demo / synthetic recordings
   const playSyntheticAudioDemo = () => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
@@ -191,7 +192,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         }
       }, 250);
     } catch (err) {
-      console.warn('Web Audio synthesis not allowed yet without user gesture:', err);
+      AppLogger.warn(
+        'AudioPlayerWidget',
+        'Web Audio synthesis not allowed yet without user gesture:',
+        err
+      );
     }
   };
 
@@ -264,7 +269,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             ref={audioRef}
             src={recording.audio_url}
             onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-            onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)}
+            onLoadedMetadata={() =>
+              audioRef.current &&
+              setDuration(audioRef.current.duration || recording.duration_seconds)
+            }
             onEnded={() => {
               setIsPlaying(false);
               setCurrentTime(0);
@@ -303,7 +311,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           ref={audioRef}
           src={recording.audio_url}
           onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-          onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)}
+          onLoadedMetadata={() =>
+            audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)
+          }
           onEnded={() => {
             setIsPlaying(false);
             setCurrentTime(0);
@@ -314,7 +324,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       {/* Top Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className={`p-2 rounded-xl ${isPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400'}`}>
+          <div
+            className={`p-2 rounded-xl ${isPlaying ? 'bg-red-500 text-white animate-pulse' : 'bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400'}`}
+          >
             <FileAudio className="w-4 h-4" />
           </div>
           <div className="min-w-0">
@@ -434,7 +446,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
                     : 'bg-stone-200 dark:bg-stone-800'
                 }`}
                 style={{
-                  height: isPlaying && isPlayed ? `${Math.min(22, h * (1 + Math.sin(i * 1.5 + currentTime * 8) * 0.25))}px` : `${h}px`,
+                  height:
+                    isPlaying && isPlayed
+                      ? `${Math.min(22, h * (1 + Math.sin(i * 1.5 + currentTime * 8) * 0.25))}px`
+                      : `${h}px`,
                 }}
               />
             );
@@ -468,7 +483,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             onClick={handleTogglePlay}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-semibold shadow-xs transition-colors"
           >
-            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+            {isPlaying ? (
+              <Pause className="w-3.5 h-3.5" />
+            ) : (
+              <Play className="w-3.5 h-3.5 ml-0.5" />
+            )}
             <span>{isPlaying ? 'Pause' : 'Play'}</span>
           </button>
 
@@ -485,7 +504,11 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             title={isMuted ? 'Unmute' : 'Mute'}
             className="p-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-lg transition-colors"
           >
-            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-500" /> : <Volume2 className="w-3.5 h-3.5" />}
+            {isMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-red-500" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
 
@@ -516,7 +539,9 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             <div className="flex-1 space-y-0.5">
               <p className="font-semibold text-amber-300">Couldn't Transcribe Offline</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-300 leading-relaxed">
-                {transcribeError.includes('Whisper') || transcribeError.includes('runtime') || transcribeError.includes('unavailable')
+                {transcribeError.includes('Whisper') ||
+                transcribeError.includes('runtime') ||
+                transcribeError.includes('unavailable')
                   ? 'On-device Whisper tensor inference is not compiled into this binary yet. You can use live dictation while recording or optional Cloud Gemini AI.'
                   : transcribeError}
               </p>

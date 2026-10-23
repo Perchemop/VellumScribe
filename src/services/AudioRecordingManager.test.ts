@@ -254,7 +254,12 @@ describe('AudioRecordingManager.stopRecording metadata', () => {
       mediaRecorder: unknown;
       stopRecording: (noteId?: number) => Promise<{
         wasConverted?: boolean;
-        recording?: { media_key: string; sample_rate?: number; channels?: number; mime_type: string };
+        recording?: {
+          media_key: string;
+          sample_rate?: number;
+          channels?: number;
+          mime_type: string;
+        };
       }>;
     };
 
@@ -280,4 +285,3 @@ describe('AudioRecordingManager.stopRecording metadata', () => {
     expect(result.recording?.channels).toBeUndefined();
   });
 });
-
