@@ -31,35 +31,24 @@ interface BackupEnvelope {
 
 export class CloudBackupCrypto {
   private static cachedVaultKey: string | null = null;
-  private static readonly BACKUP_PASSPHRASE_SESSION = 'vs_cloud_backup_passphrase';
-  private static readonly BACKUP_PASSPHRASE_HINT = 'vs_cloud_backup_passphrase_hint';
+  /**
+   * Held in memory only, and nothing derived from it is persisted — not even
+   * its length. localStorage/sessionStorage are readable by any script on the
+   * origin and survive on disk, so the user is asked again on restart.
+   */
+  private static sessionPassphrase: string | null = null;
 
   public static setUserBackupPassphrase(passphrase: string | null): void {
-    try {
-      if (!passphrase || !passphrase.trim()) {
-        sessionStorage.removeItem(this.BACKUP_PASSPHRASE_SESSION);
-        localStorage.removeItem(this.BACKUP_PASSPHRASE_HINT);
-        return;
-      }
-      const trimmed = passphrase.trim();
-      sessionStorage.setItem(this.BACKUP_PASSPHRASE_SESSION, trimmed);
-      localStorage.setItem(this.BACKUP_PASSPHRASE_HINT, String(trimmed.length));
-    } catch {
-      /* ignore */
-    }
+    this.sessionPassphrase = passphrase?.trim() || null;
   }
 
   public static getUserBackupPassphrase(): string | undefined {
-    try {
-      return sessionStorage.getItem(this.BACKUP_PASSPHRASE_SESSION) || undefined;
-    } catch {
-      return undefined;
-    }
+    return this.sessionPassphrase || undefined;
   }
 
   public static hasUserBackupPassphraseConfigured(): boolean {
     try {
-      return Boolean(localStorage.getItem(this.BACKUP_PASSPHRASE_HINT));
+      return Boolean(this.sessionPassphrase);
     } catch {
       return false;
     }
