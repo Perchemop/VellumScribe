@@ -16,7 +16,15 @@ function runFfmpeg(args: string[], timeout: number): void {
 function runFfprobe(filePath: string, timeout: number): string {
   return execFileSync(
     'ffprobe',
-    ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'default=noprint_wrappers=1:nokey=1',
+      filePath,
+    ],
     { timeout }
   )
     .toString()
@@ -619,7 +627,19 @@ async function processAndTranscribeAudio(
 
     try {
       runFfmpeg(
-        ['-y', '-i', inputFilePath, '-vn', '-ac', '1', '-ar', '24000', '-ab', '32k', optimizedMp3Path],
+        [
+          '-y',
+          '-i',
+          inputFilePath,
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '24000',
+          '-ab',
+          '32k',
+          optimizedMp3Path,
+        ],
         60000
       );
       if (fs.existsSync(optimizedMp3Path) && fs.statSync(optimizedMp3Path).size > 0) {
@@ -656,7 +676,22 @@ async function processAndTranscribeAudio(
           (async () => {
             try {
               runFfmpeg(
-                ['-y', '-ss', String(chunkStart), '-t', String(chunkLen), '-i', optimizedMp3Path, '-ac', '1', '-ar', '24000', '-ab', '32k', chunkFile],
+                [
+                  '-y',
+                  '-ss',
+                  String(chunkStart),
+                  '-t',
+                  String(chunkLen),
+                  '-i',
+                  optimizedMp3Path,
+                  '-ac',
+                  '1',
+                  '-ar',
+                  '24000',
+                  '-ab',
+                  '32k',
+                  chunkFile,
+                ],
                 20000
               );
             } catch (cutErr) {
@@ -1087,7 +1122,22 @@ app.post('/api/audio/transcribe-session/segment', async (req, res) => {
   try {
     const segLen = Math.max(0.5, segment.endSec - segment.startSec);
     runFfmpeg(
-      ['-y', '-ss', String(segment.startSec), '-t', String(segLen), '-i', session.optimizedAudioPath, '-ac', '1', '-ar', '24000', '-ab', '32k', segmentFile],
+      [
+        '-y',
+        '-ss',
+        String(segment.startSec),
+        '-t',
+        String(segLen),
+        '-i',
+        session.optimizedAudioPath,
+        '-ac',
+        '1',
+        '-ar',
+        '24000',
+        '-ab',
+        '32k',
+        segmentFile,
+      ],
       30000
     );
 
