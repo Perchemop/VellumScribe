@@ -4,6 +4,39 @@ import {
   SpeechModelProfile,
 } from '../types';
 
+/** Raw item shape inside an untrusted AI extraction payload. */
+interface AiExtractionItem {
+  text?: string;
+  owner?: string;
+  dueDate?: string;
+  priority?: string;
+  sourceSegments?: unknown;
+}
+
+/** Raw entity shape inside an untrusted AI extraction payload. */
+interface AiExtractionEntity {
+  name?: string;
+  type?: string;
+  sourceSegments?: unknown;
+}
+
+/** Top-level shape of an untrusted AI extraction payload. */
+interface AiExtractionPayload {
+  summary?: unknown;
+  actionItems?: unknown;
+  decisions?: unknown;
+  risks?: unknown;
+  entities?: unknown;
+}
+
+/** Keeps only 1-based segment indexes that exist in the source transcript. */
+function inRange(sourceSegments: unknown, totalSegmentsCount: number): number[] {
+  if (!Array.isArray(sourceSegments)) return [];
+  return sourceSegments.filter(
+    (s): s is number => typeof s === 'number' && Number.isInteger(s) && s >= 1 && s <= totalSegmentsCount
+  );
+}
+
 export class AiResultValidator {
   /**
    * Validates speech model profile integrity
@@ -70,7 +103,7 @@ export class AiResultValidator {
    * Validates structured AI extraction result:
    * Enforces strict schema, no hallucinated metadata, provenance sourceSegments
    */
-  public static validateExtraction(data: any, totalSegmentsCount: number): StructuredAiExtraction {
+  public static validateExtraction(data: unknown, totalSegmentsCount: number): StructuredAiExtraction {
     if (!data || typeof data !== 'object') {
       return {
         summary: '',
@@ -81,53 +114,51 @@ export class AiResultValidator {
       };
     }
 
-    const summary = typeof data.summary === 'string' ? data.summary.trim() : '';
+    const payload = data as AiExtractionPayload;
 
-    const actionItems = Array.isArray(data.actionItems)
-      ? data.actionItems
-          .filter((item: any) => item && typeof item.text === 'string' && item.text.trim())
-          .map((item: any) => ({
+    const summary = typeof payload.summary === 'string' ? payload.summary.trim() : '';
+
+    const actionItems = Array.isArray(payload.actionItems)
+      ? (payload.actionItems as AiExtractionItem[])
+          .filter((item): item is AiExtractionItem & { text: string } =>
+            Boolean(item) && typeof item.text === 'string' && item.text.trim().length > 0)
+          .map((item) => ({
             text: item.text.trim(),
             owner: typeof item.owner === 'string' && item.owner.trim() ? item.owner.trim() : null,
             dueDate: typeof item.dueDate === 'string' && item.dueDate.trim() ? item.dueDate.trim() : null,
-            priority: ['low', 'medium', 'high', 'unknown'].includes(item.priority) ? item.priority : 'unknown',
-            sourceSegments: Array.isArray(item.sourceSegments)
-              ? item.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            priority: ['low', 'medium', 'high', 'unknown'].includes(item.priority ?? '') ? item.priority ?? 'unknown' : 'unknown',
+            sourceSegments: inRange(item.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const decisions = Array.isArray(data.decisions)
-      ? data.decisions
-          .filter((d: any) => d && typeof d.text === 'string' && d.text.trim())
-          .map((d: any) => ({
+    const decisions = Array.isArray(payload.decisions)
+      ? (payload.decisions as AiExtractionItem[])
+          .filter((d): d is AiExtractionItem & { text: string } =>
+            Boolean(d) && typeof d.text === 'string' && d.text.trim().length > 0)
+          .map((d) => ({
             text: d.text.trim(),
-            sourceSegments: Array.isArray(d.sourceSegments)
-              ? d.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(d.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const risks = Array.isArray(data.risks)
-      ? data.risks
-          .filter((r: any) => r && typeof r.text === 'string' && r.text.trim())
-          .map((r: any) => ({
+    const risks = Array.isArray(payload.risks)
+      ? (payload.risks as AiExtractionItem[])
+          .filter((r): r is AiExtractionItem & { text: string } =>
+            Boolean(r) && typeof r.text === 'string' && r.text.trim().length > 0)
+          .map((r) => ({
             text: r.text.trim(),
-            sourceSegments: Array.isArray(r.sourceSegments)
-              ? r.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(r.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const entities = Array.isArray(data.entities)
-      ? data.entities
-          .filter((e: any) => e && typeof e.name === 'string' && e.name.trim())
-          .map((e: any) => ({
+    const entities = Array.isArray(payload.entities)
+      ? (payload.entities as AiExtractionEntity[])
+          .filter((e): e is AiExtractionEntity & { name: string } =>
+            Boolean(e) && typeof e.name === 'string' && e.name.trim().length > 0)
+          .map((e) => ({
             name: e.name.trim(),
             type: typeof e.type === 'string' ? e.type.trim() : 'entity',
-            sourceSegments: Array.isArray(e.sourceSegments)
-              ? e.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(e.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
