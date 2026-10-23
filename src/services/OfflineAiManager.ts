@@ -25,8 +25,9 @@ export interface StorageBreakdown {
 
 function normalizeModelList(raw: unknown): SpeechModelProfile[] {
   if (Array.isArray(raw)) return raw as SpeechModelProfile[];
-  if (raw && typeof raw === 'object' && Array.isArray((raw as any).models)) {
-    return (raw as any).models as SpeechModelProfile[];
+  const models = (raw as { models?: unknown }).models;
+  if (models !== undefined && Array.isArray(models)) {
+    return models as SpeechModelProfile[];
   }
   return [];
 }

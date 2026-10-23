@@ -82,7 +82,7 @@ export class AudioRecordingManager {
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private animationFrameId: number | null = null;
-  private speechRecognizer: any = null;
+  private speechRecognizer: { start(): void; stop(): void } | null = null;
   private nativeSpeechListener: PluginListenerHandle | null = null;
 
   private startTime = 0;
@@ -115,7 +115,7 @@ export class AudioRecordingManager {
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 },
       });
 
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         try {
           this.audioContext = new AudioCtx();
@@ -388,7 +388,7 @@ export class AudioRecordingManager {
         durationSeconds = Math.max(1, Math.round(finalBlob.size / 32000));
         durationMs = durationSeconds * 1000;
       } else if (typeof window !== 'undefined') {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           const ctx = new AudioCtx();
           // Always release the context, even when decoding rejects, so the
@@ -516,7 +516,7 @@ export class AudioRecordingManager {
       return new Blob([rawBuffer], { type: 'audio/wav' });
     }
     const AudioCtx =
-      typeof window !== 'undefined' ? window.AudioContext || (window as any).webkitAudioContext : undefined;
+      typeof window !== 'undefined' ? window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext : undefined;
     if (!AudioCtx) return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
     let audioCtx: AudioContext | null = null;
     try {

@@ -3,6 +3,33 @@ import { AppLogger } from '../logger';
 import { generatePrefixedId } from '../uuid';
 import { asErrorLike } from '../errorLike';
 
+/** Raw rows from the `notebooklm_connections` table (see schema.ts). */
+interface NotebookLmConnectionRow {
+  id: number;
+  name: string;
+  backend: string;
+  notebook_id?: string | null;
+  notebook_url?: string | null;
+  status: 'connected' | 'disconnected' | 'pending';
+  created_at: number;
+  updated_at: number;
+}
+
+/** Raw rows from the `notebooklm_sync_jobs` table. */
+interface NotebookLmSyncJobRow {
+  id: string;
+  connection_id: number;
+  local_entity_type: string;
+  local_entity_id: number;
+  status: string;
+  action: string;
+  content_payload?: string | null;
+  retry_count?: number;
+  error_message?: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface NotebookLMConnection {
   id: number;
   name: string;
@@ -30,7 +57,7 @@ export interface NotebookLMBundle {
   title: string;
   createdAt: string;
   sourceType: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   content: string;
   sha256Hash: string;
 }
@@ -161,7 +188,7 @@ ${note.content || '(Empty content)'}
     title: string;
     sourceType: 'note' | 'transcript' | 'bundle';
     content: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<NotebookLMBundle> {
     const sha256Hash = await this.computeHash(params.content);
     return {
@@ -227,7 +254,7 @@ ${note.content || '(Empty content)'}
     const db = getDatabaseAdapter();
     const sql = `SELECT id, name, backend, notebook_id, notebook_url, status, created_at, updated_at
        FROM notebooklm_connections ORDER BY id ASC`;
-    const rows = db.querySync ? db.querySync<any>(sql) : [];
+    const rows = db.querySync ? db.querySync<NotebookLmConnectionRow>(sql) : [];
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -389,7 +416,7 @@ ${note.content || '(Empty content)'}
     title: string;
     content: string;
     sourceType?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<{ remoteSourceId: string; contentHash: string; syncedAt: number }> {
     const res = await fetch('/api/notebooklm/upload-source', {
       method: 'POST',
@@ -473,7 +500,7 @@ ${note.content || '(Empty content)'}
    */
   public static async processSyncJob(jobId: string): Promise<boolean> {
     const db = getDatabaseAdapter();
-    const jobs = await db.query<any>(
+    const jobs = await db.query<NotebookLmSyncJobRow>(
       `SELECT * FROM notebooklm_sync_jobs WHERE id = ?`,
       [jobId]
     );
@@ -578,10 +605,10 @@ ${note.content || '(Empty content)'}
   /**
    * List recent NotebookLM sync jobs
    */
-  public static listSyncJobs(limit = 20): any[] {
+  public static listSyncJobs(limit = 20): NotebookLmSyncJobRow[] {
     const db = getDatabaseAdapter();
     const sql = `SELECT * FROM notebooklm_sync_jobs ORDER BY created_at DESC LIMIT ?`;
-    return db.querySync ? db.querySync(sql, [limit]) : [];
+    return db.querySync ? db.querySync<NotebookLmSyncJobRow>(sql, [limit]) : [];
   }
 
   /**

@@ -157,12 +157,15 @@ export async function deriveAesKey(pin: string, salt: string, iterations = PBKDF
   );
 }
 
+import { ChecklistItem } from '../types';
+import { asBufferSource } from './binary';
+
 export interface PrivateNotePayloadV1 {
   payload_version: 1;
   title?: string;
   body: string;
   tags?: string[];
-  checklist_items?: any[];
+  checklist_items?: ChecklistItem[];
   sketch_data?: string;
   sketch_media_key?: string;
   attachment_references?: string[];
@@ -180,7 +183,7 @@ export interface NotePayloadData {
   payload_version?: number;
   title?: string;
   body: string;
-  checklist_items?: any[];
+  checklist_items?: ChecklistItem[];
   sketch_data?: string;
   sketch_media_key?: string;
   attachment_references?: string[];
@@ -354,7 +357,7 @@ export async function encryptBinaryPayloadWithKey(payload: Uint8Array, key: Cryp
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
-    payload as any
+    asBufferSource(payload)
   );
   return {
     iv: toHex(iv),
@@ -367,9 +370,9 @@ export async function decryptBinaryPayloadWithKey(encryptedDataHex: string, ivHe
     const iv = fromHex(ivHex);
     const ciphertext = fromHex(encryptedDataHex);
     const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as any },
+      { name: 'AES-GCM', iv: asBufferSource(iv) },
       key,
-      ciphertext as any
+      asBufferSource(ciphertext)
     );
     return new Uint8Array(decryptedBuffer);
   } catch {

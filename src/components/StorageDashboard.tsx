@@ -17,6 +17,7 @@ import { StorageManager } from '../lib/storage';
 import { SqliteStats, SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { PrivacyManager, PrivacySettings } from '../lib/privacyManager';
 import { asErrorLike } from '../lib/errorLike';
+import { asBlobPart } from '../lib/binary';
 
 interface StorageDashboardProps {
   onRefreshNotes?: () => void;
@@ -106,7 +107,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
   const handleExportSqlite = () => {
     try {
       const binary = StorageManager.exportSqliteBinary();
-      const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
+      const blob = new Blob([asBlobPart(binary)], { type: 'application/x-sqlite3' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
