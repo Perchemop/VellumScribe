@@ -1757,6 +1757,10 @@ app.post('/api/local-whisper/verify', async (req, res) => {
     }
     const endpoint = rawEndpoint;
     const testUrl = endpoint.replace(/\/transcriptions$/, '/models');
+    const probeValidation = validateSafeUrl(testUrl, { allowLocalhost: true });
+    if (!probeValidation.valid) {
+      return res.status(400).json({ success: false, error: probeValidation.error });
+    }
     const response = await fetch(testUrl, {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
@@ -2734,6 +2738,12 @@ app.post('/api/cloud/:provider/connect-credentials', async (req, res) => {
       targetPath,
       parsed.origin + (parsed.pathname.endsWith('/') ? parsed.pathname : parsed.pathname + '/')
     ).toString();
+    // `targetPath` is caller-controlled, so validate the *derived* URL too:
+    // an absolute remotePath would otherwise replace the validated host.
+    const derivedValidation = validateSafeUrl(fullUrl, { allowLocalhost: false });
+    if (!derivedValidation.valid) {
+      return res.status(400).json({ error: derivedValidation.error });
+    }
     const authHeader =
       'Basic ' + Buffer.from(`${username.trim()}:${password.trim()}`).toString('base64');
 
