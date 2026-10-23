@@ -41,7 +41,7 @@ describe('OAuth Deep Links & Speech Recognition Lifecycle (Review Archive 45)', 
   describe('NativeBridge App URL and Browser Lifecycle Listeners', () => {
     it('registers and invokes appUrlOpen callback on deep-link arrival', async () => {
       let registeredCallback: ((url: string) => void) | null = null;
-      vi.spyOn(NativeBridge, 'addAppUrlListener').mockImplementation((cb: any) => {
+      vi.spyOn(NativeBridge, 'addAppUrlListener').mockImplementation((cb) => {
         registeredCallback = cb;
         return () => {
           registeredCallback = null;
@@ -63,7 +63,7 @@ describe('OAuth Deep Links & Speech Recognition Lifecycle (Review Archive 45)', 
 
     it('registers and cleans up browserFinished listener for OAuth cancellation handling', async () => {
       let finishedCallback: (() => void) | null = null;
-      vi.spyOn(NativeBridge, 'addBrowserFinishedListener').mockImplementation(async (cb: any) => {
+      vi.spyOn(NativeBridge, 'addBrowserFinishedListener').mockImplementation(async (cb) => {
         finishedCallback = cb;
         return () => {
           finishedCallback = null;

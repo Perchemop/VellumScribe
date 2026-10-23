@@ -82,7 +82,7 @@ export class AndroidKeystoreManager {
     if (Capacitor.isNativePlatform()) {
       try {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
-        const res = await SecureStorage.get(`vellumscribe.secret.${alias}`) as any;
+        const res = (await SecureStorage.get(`vellumscribe.secret.${alias}`)) as string | { value?: string } | null;
         if (typeof res === 'string') return res;
         if (res && typeof res.value === 'string') return res.value;
       } catch (e) {

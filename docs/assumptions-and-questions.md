@@ -124,3 +124,16 @@ private repo), not the code.
 Evidence — CI `39566612176` (Linux + Windows + macOS green), Security
 Scanning `39566612217` (green), Build Android APK `39566612127` (green,
 artifact `VellumScribe-Android-APKs-real`). Recorded as fact F-007.
+
+**Q-011. SQLite has no delete path for recordings or OCR scans.**
+While typing `lib/storage.ts` (slice B-7a) three dead guards were removed —
+`deleteRecording`, `deleteOcrScan` and `cleanOrphanedMedia` probed
+`SqliteRepository` for methods that do not exist anywhere in the codebase, so
+those branches were never taken. `StorageManager.deleteRecording()` /
+`deleteOcrScan()` therefore only invalidate the in-memory cache, and
+`cleanOrphanedMedia()` always reports `{ cleanedCount: 0 }` (real pruning lives
+on `SqliteRepository.findOrphanMediaKeys()` / `removeOrphanMediaRecord()`, which
+the storage dashboard already calls directly). Behaviour is unchanged, but the
+rows stay in SQLite after a delete. **Decision needed:** add the missing
+`SqliteRepository` deletes, or document the cascade/cleanup path as a known
+limitation.

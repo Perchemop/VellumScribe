@@ -367,11 +367,14 @@ export class AiSettingsManager {
 
       const current = this.getSettings();
       const updated = { ...current, ...settings };
-      const toSave = { ...updated };
-      delete (toSave as any).googleApiKey;
-      delete (toSave as any).groqApiKey;
-      delete (toSave as any).deepgramApiKey;
-      delete (toSave as any).apiKey;
+      // API keys live in the keystore, never in the settings blob.
+      const {
+        googleApiKey: _googleApiKey,
+        groqApiKey: _groqApiKey,
+        deepgramApiKey: _deepgramApiKey,
+        apiKey: _apiKey,
+        ...toSave
+      } = updated;
 
       StorageManager.setItem(STORAGE_KEYS.SETTINGS, toSave);
     } catch (e) {
@@ -523,7 +526,7 @@ export class AiSettingsManager {
         const latency = Date.now() - startTime;
 
         if (res.ok && data?.data) {
-          const modelList = (data.data as Array<any>).map((m) => m.id);
+          const modelList = (data.data as Array<{ id: string }>).map((m) => m.id);
           return {
             success: true,
             message: `Connected to Groq Cloud in ${latency}ms! ${modelList.length} LPU models available.`,

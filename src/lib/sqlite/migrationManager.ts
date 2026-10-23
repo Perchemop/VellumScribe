@@ -275,7 +275,7 @@ export class MigrationManager {
   /**
    * Restore legacy data from pre-migration backup snapshot if needed
    */
-  public static getLegacyBackupSnapshot(): any | null {
+  public static getLegacyBackupSnapshot(): unknown | null {
     try {
       const snap = localStorage.getItem(LEGACY_STORAGE_KEYS.PRE_MIGRATION_BACKUP);
       return snap ? JSON.parse(snap) : null;

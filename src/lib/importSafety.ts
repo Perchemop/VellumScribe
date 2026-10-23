@@ -18,7 +18,32 @@ export interface ImportPreviewResult {
   };
   warnings: string[];
   error?: string;
-  payload?: any;
+  payload?: ImportPayload;
+}
+
+/** Parsed, validated import bundle handed from preview to execution. */
+export interface ImportPayload {
+  events: EventRecord[];
+  notes: NoteRecord[];
+  recordings: RecordingRecord[];
+  transcripts: TranscriptRecord[];
+  ocrScans: OcrScanRecord[];
+}
+
+/**
+ * Loosely-typed import bundle. Every collection is validated with
+ * `Array.isArray` before it is used, so the fields stay optional here.
+ */
+interface ImportBundle {
+  format?: string;
+  version?: string | number;
+  database_type?: string;
+  schema?: ImportBundle;
+  notes?: NoteRecord[];
+  events?: EventRecord[];
+  recordings?: RecordingRecord[];
+  transcripts?: TranscriptRecord[];
+  ocr_scans?: OcrScanRecord[];
 }
 
 export interface ImportExecutionResult {
@@ -45,9 +70,9 @@ export class ImportSafetyPipeline {
     const warnings: string[] = [];
 
     // Stage 1: Validate Format (JSON Structure)
-    let parsed: any;
+    let parsed: ImportBundle;
     try {
-      parsed = JSON.parse(rawJson);
+      parsed = JSON.parse(rawJson) as ImportBundle;
     } catch (_e) {
       const e = asErrorLike(_e);
       return {
@@ -120,7 +145,7 @@ export class ImportSafetyPipeline {
         warnings.push('Encountered non-object note item in array.');
         continue;
       }
-      if (typeof note.body !== 'string' && typeof (note as any).content !== 'string') {
+      if (typeof note.body !== 'string' && typeof (note as { content?: unknown }).content !== 'string') {
         warnings.push(`Note ID ${note.id || 'unassigned'} is missing body text.`);
       }
     }
@@ -198,9 +223,15 @@ export class ImportSafetyPipeline {
         // Import notes
         for (const note of notes) {
           // Normalize legacy fields if present
+          const legacyContent = (note as { content?: unknown }).content;
           const normalizedNote: NoteRecord = {
             ...note,
-            body: typeof note.body === 'string' ? note.body : ((note as any).content || ''),
+            body:
+              typeof note.body === 'string'
+                ? note.body
+                : typeof legacyContent === 'string'
+                  ? legacyContent
+                  : '',
             title: typeof note.title === 'string' ? note.title : 'Untitled',
             updated_at: note.updated_at || new Date().toISOString(),
           };

@@ -342,7 +342,7 @@ export interface AiAction {
   type: 'create_note' | 'update_note' | 'create_checklist' | 'create_reminder' | 'search_notes' | 'delete_note';
   description: string;
   requiresConfirmation?: boolean;
-  payload: any;
+  payload: Record<string, unknown>;
 }
 
 export interface AiCommandResult {

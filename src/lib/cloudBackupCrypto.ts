@@ -1,5 +1,6 @@
 import { toHex, fromHex, generateSalt } from './cryptoUtils';
 import { AppLogger } from './logger';
+import { asBufferSource } from './binary';
 import { asErrorLike } from './errorLike';
 
 const CLIENT_VAULT_KEY_STORAGE = 'vs_client_vault_key_v1';
@@ -132,17 +133,12 @@ export class CloudBackupCrypto {
     return ephemeralKey;
   }
 
-  /** TS 5.7+ widens Uint8Array over its buffer; the DOM lib narrows BufferSource. */
-  private static asBufferSource(data: Uint8Array): BufferSource {
-    return data as unknown as BufferSource;
-  }
-
   public static async compressGzip(data: Uint8Array): Promise<Uint8Array> {
     if (typeof CompressionStream !== 'undefined') {
       try {
         const cs = new CompressionStream('gzip');
         const writer = cs.writable.getWriter();
-        writer.write(this.asBufferSource(data));
+        writer.write(asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = cs.readable.getReader();
@@ -171,7 +167,7 @@ export class CloudBackupCrypto {
       try {
         const ds = new DecompressionStream('gzip');
         const writer = ds.writable.getWriter();
-        writer.write(this.asBufferSource(data));
+        writer.write(asBufferSource(data));
         writer.close();
         const chunks: Uint8Array[] = [];
         const reader = ds.readable.getReader();
@@ -210,7 +206,7 @@ export class CloudBackupCrypto {
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: this.asBufferSource(fromHex(saltHex)),
+        salt: asBufferSource(fromHex(saltHex)),
         iterations: PBKDF2_ITERATIONS,
         hash: 'SHA-256',
       },
@@ -235,7 +231,7 @@ export class CloudBackupCrypto {
     const ciphertextBuffer = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
       key,
-      this.asBufferSource(compressedBytes)
+      asBufferSource(compressedBytes)
     );
     const envelope: EncryptedCloudBackupEnvelope = {
       vellumscribe_archive: true,
@@ -303,9 +299,9 @@ export class CloudBackupCrypto {
     let decryptedBuffer: ArrayBuffer;
     try {
       decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: this.asBufferSource(iv) },
+        { name: 'AES-GCM', iv: asBufferSource(iv) },
         key,
-        this.asBufferSource(ciphertext)
+        asBufferSource(ciphertext)
       );
     } catch {
       throw new Error('Backup decryption failed: Incorrect encryption key or corrupted ciphertext.');

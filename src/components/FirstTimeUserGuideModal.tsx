@@ -38,7 +38,7 @@ export function hasCompletedOnboarding(): boolean {
       const sess = sessionStorage.getItem(STORAGE_KEY);
       if (sess === 'true' || sess === '1') return true;
     }
-    const item = StorageManager.getItem<any>(STORAGE_KEY, null);
+    const item = StorageManager.getItem<unknown>(STORAGE_KEY, null);
     if (item === true || item === 'true' || item === 1 || item === '1') return true;
     // Returning installs: any existing notes means skip the first-run tour
     try {

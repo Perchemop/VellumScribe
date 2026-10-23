@@ -377,7 +377,8 @@ export class AppUpdateManager {
   }> {
     localStorage.setItem(STORAGE_KEYS.LAST_UPDATE_CHECK, new Date().toISOString());
     const latestRelease = APP_CHANGELOGS[0];
-    const manifestUrl = (import.meta as any).env?.VITE_UPDATE_MANIFEST_URL as string | undefined;
+    const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+    const manifestUrl = env?.VITE_UPDATE_MANIFEST_URL as string | undefined;
 
     if (!manifestUrl) {
       return {

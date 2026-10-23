@@ -12,7 +12,7 @@ Append here for every slice; never rewrite history.
 | Signal | State |
 | --- | --- |
 | `npm run verify` | ⚠ **last known green locally:** typecheck clean, lint 0 errors / 656 warnings, orphan check clean across 118 files, 86 tests passing. Heavy verification no longer runs on this machine (guide §4) — it runs on GitHub Actions via `ci.sh`. |
-| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 229 warnings (all `no-explicit-any`; 656 → 229 via slices B-4…B-6) — this is the active blocker (see Q-005). |
+| Lint ceiling | `--max-warnings=0` (warnings denied, guide §4). **CI lint currently FAILS** on 53 warnings (all `no-explicit-any`; 656 → 53 via slices B-4…B-7) — this is the active blocker (see Q-005). |
 | Test suite | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`). |
 | Working tree | clean, committed and pushed |
 | GitHub Actions | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green. |
@@ -23,8 +23,8 @@ Append here for every slice; never rewrite history.
 **Status sentence:** code compiles and tests pass; CI is operational on three
 OS runners with a real (unsigned) APK. The active blocker is lint:
 `--max-warnings=0` now denies warnings (guide §4), so CI lint fails until the
-remaining 229 `no-explicit-any` warnings are burned down via `ci.sh` iterations
-(B-4: 656 → 332, B-5: 332 → 275, B-6: 275 → 229). Per guide §4,
+remaining 53 `no-explicit-any` warnings are burned down via `ci.sh` iterations
+(B-4 → 332, B-5 → 275, B-6 → 229, B-7 → 53). Per guide §4,
 fixing CI is the first task.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
@@ -168,6 +168,46 @@ Slice A-1 is Done; A-2 is Ready and blocked only on the keystore.
   `docs/scope.md` and D-004.
 - `npm run verify` re-run: green (0 errors, 656 warnings, 118 files
   orphan-clean, 86 tests). Workflow YAML parses cleanly.
+
+## 2026-10-23 — Slice B-7 (in progress): type the `no-explicit-any` sites (275 → 53)
+
+Every remaining warning is `@typescript-eslint/no-explicit-any`. Typed row shapes,
+payload shapes and boundary casts — no blanket `any → unknown` sweeps that would
+break call sites. Verified after each sub-batch on CI (typecheck green):
+
+| Sub-slice | Files | Remaining |
+| --- | --- | --- |
+| B-7a | `lib/storage.ts` (46) | 183 |
+| B-7b | `lib/sqlite/sqliteRepository.ts` (18), `lib/geminiService.ts` (17) | 148 |
+| B-7c | `repositories/*` (31), `services/AiResultValidator.ts` (13) | 104 |
+| B-7d | `lib/logger.ts` (9), `lib/sqlite/sqliteEngine.ts` (8), `lib/offlineTranscription.ts` (9), `lib/cloudBackupCrypto.ts` (7), `plugins/offline-ai/index.ts` (11), `services/AiProvenanceService.ts` (7) | **53** |
+
+Highlights:
+
+- `lib/storage.ts` — ~35 `(SqliteRepository as any)` probes collapsed to direct
+  calls: all 13 methods they guarded exist, and three guards referenced methods
+  **that do not exist anywhere** (`deleteRecording`, `deleteOcrScan`,
+  `cleanOrphanedMedia`) — removed as dead code and the follow-up gap logged as
+  **Q-011** (SQLite has no recording/OCR delete path).
+- `lib/geminiService.ts` — `GeminiPart`, `GeminiGenerateResponse`,
+  `TranscribeSessionInit`, `ServerSummaryResponse` shapes; `parts` is now typed,
+  the Google response is narrowed once instead of `(p: any)`, and `(blob as any).name`
+  became `blob instanceof File`. `SummaryRequestOptions.transcripts/ocrScans/checklists`
+  are now `Array<string | TranscriptRecord/OcrScanRecord/ChecklistItem>`.
+- `services/AiResultValidator.ts` — untrusted AI payloads get a real
+  `AiExtractionPayload` shape with type predicates, plus a shared
+  `inRange(sourceSegments, total)` helper (this also fixed the previous
+  silent `priority` widening).
+- `lib/logger.ts` — logged payloads are `unknown` (redaction already sanitises
+  them); `lib/sqlite/sqliteEngine.ts` — typed SQLite memory store, typed save
+  timer, `toArrayBuffer()` helper for the wasm payload.
+- `lib/cloudBackupCrypto.ts` — one `asBufferSource()` helper replaces five
+  `as any` byte casts, and the backup envelope is a `BackupEnvelope` interface.
+
+**Verification** — `ci.sh run`: `typecheck` ✅ on all three OSes, `lint` ❌ 53
+warnings (0 errors), orphans ✅, Security ✅.
+
+---
 
 ## 2026-10-23 — Slice B-6: a11y, hook facts, rule scope (275 → 229)
 
@@ -319,8 +359,8 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 ## Open blockers (carry into next session)
 
 1. **Q-005 (ACTIVE) — lint warnings denied, CI failing.** `--max-warnings=0`
-   fails on the remaining 229 `no-explicit-any` warnings (656 → 229 across
-   B-4…B-6). Burn down in slices of ≤50 via
+   fails on the remaining 53 `no-explicit-any` warnings (656 → 53 across
+   B-4…B-7). Burn down in slices of ≤50 via
    `ci.sh` iterations (edit locally, verify on CI). Until this is resolved,
    CI lint is red and per guide §4 this is the first task to fix.
 2. **Q-002 — no release keystore (release blocker).** Generate it per

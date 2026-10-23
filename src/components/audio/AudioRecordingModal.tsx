@@ -56,7 +56,7 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
   // contributing to process kills on file pick.
   const [mode, setMode] = useState<'idle' | 'recording' | 'uploading'>('idle');
 
-  const timerRef = useRef<any>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleCleanup = useCallback(() => {
