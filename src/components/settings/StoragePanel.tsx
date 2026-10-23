@@ -4,7 +4,7 @@ import { StorageManager } from '../../lib/storage';
 import { SqliteStats } from '../../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../../lib/logger';
 import { asErrorLike } from '../../lib/errorLike';
-import { asBlobPart } from '../lib/binary';
+import { asBlobPart } from '../../lib/binary';
 
 interface StoragePanelProps {
   onRefreshNotes?: () => void;

@@ -19,7 +19,7 @@ interface NotebookLmConnectionRow {
 interface NotebookLmSyncJobRow {
   id: string;
   connection_id: number;
-  local_entity_type: string;
+  local_entity_type: 'note' | 'transcript' | 'summary' | 'action_items' | 'bundle';
   local_entity_id: number;
   status: string;
   action: string;

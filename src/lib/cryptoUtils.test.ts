@@ -69,7 +69,10 @@ describe('hashPin / verifyPin', () => {
 });
 
 describe('encryptNotePayload / decryptNotePayload', () => {
-  const payload = { body: 'Secret meeting notes', checklist_items: [{ text: 'Ship it', done: false }] };
+  const payload = {
+    body: 'Secret meeting notes',
+    checklist_items: [{ id: 'chk_1', text: 'Ship it', completed: false }],
+  };
 
   it('round-trips a note payload with the correct PIN and salt', async () => {
     const salt = generateSalt();
