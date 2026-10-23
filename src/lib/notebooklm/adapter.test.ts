@@ -92,7 +92,10 @@ describe('NotebookLMAdapter', () => {
       status: 'synced',
     });
 
-    const sources = SqliteEngine.query<{ id: number }>('SELECT * FROM notebooklm_sources WHERE connection_id = ?', [conn.id]);
+    const sources = SqliteEngine.query<{ id: number; sync_status?: string; content_hash?: string }>(
+      'SELECT * FROM notebooklm_sources WHERE connection_id = ?',
+      [conn.id]
+    );
     expect(sources.length).toBe(1);
     expect(sources[0].sync_status).toBe('synced');
     expect(sources[0].content_hash).toBe('mock_hash_123');

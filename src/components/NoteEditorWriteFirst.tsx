@@ -1,3 +1,10 @@
+declare global {
+  interface Window {
+    /** Native audio file-picker hook, installed while the audio sheet is open. */
+    __vellumScribePickAudio?: () => void;
+  }
+}
+
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { Lock, FileText } from 'lucide-react';
 import { NoteRecord, EventRecord, ChecklistItem, RecordingRecord, OcrScanRecord } from '../types';
