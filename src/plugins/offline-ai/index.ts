@@ -5,7 +5,6 @@ import {
   SpeechModelProfile,
   ModelInstallResult,
   TranscriptionJobStatus,
-  TranscriptionDurableStatus,
 } from '../../types';
 import { RecordingRepository } from '../../repositories/RecordingRepository';
 import { TranscriptionRepository } from '../../repositories/TranscriptionRepository';
@@ -27,7 +26,8 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     sha256: '313426e82da9486c476722d56a31c5ab1e4cf7e7f62d8ea2e0807b1a2080fa0a',
     license: 'MIT',
     version: '1.5.4',
-    description: 'Ultra-fast speech recognition with minimal memory footprint. Ideal for quick memos and low-power devices.',
+    description:
+      'Ultra-fast speech recognition with minimal memory footprint. Ideal for quick memos and low-power devices.',
   },
   {
     id: 'whisper-base',
@@ -43,7 +43,8 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     sha256: '41b71457492c10b7b137f8f60bfb72f85e43a91081552a488c037cb97c55127d',
     license: 'MIT',
     version: '1.5.4',
-    description: 'Recommended default model. Excellent balance of high accuracy and processing speed for meetings and dictations.',
+    description:
+      'Recommended default model. Excellent balance of high accuracy and processing speed for meetings and dictations.',
   },
   {
     id: 'whisper-small',
@@ -59,7 +60,8 @@ export const VERIFIED_SPEECH_MODELS: SpeechModelProfile[] = [
     sha256: '36a8d6728c3a1059f0f9b31d87e5ccbe133cf2efb529944f2fb9a7a671ef07c7',
     license: 'MIT',
     version: '1.5.4',
-    description: 'High accuracy transcription suitable for complex vocabulary, technical terminology, and multilingual meetings.',
+    description:
+      'High accuracy transcription suitable for complex vocabulary, technical terminology, and multilingual meetings.',
   },
 ];
 
@@ -125,11 +127,16 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     let isCharging: boolean | null = null;
 
     if (typeof navigator !== 'undefined') {
+      const nav = navigator as Navigator & {
+        deviceMemory?: number;
+        getBattery?: () => Promise<{ level: number; charging: boolean }>;
+        userAgentData?: { platform?: string };
+      };
       if ('hardwareConcurrency' in navigator && typeof navigator.hardwareConcurrency === 'number') {
         cpuCores = navigator.hardwareConcurrency;
       }
-      if ('deviceMemory' in (navigator as any) && typeof (navigator as any).deviceMemory === 'number') {
-        availableRamMb = Math.round((navigator as any).deviceMemory * 1024);
+      if ('deviceMemory' in nav && typeof nav.deviceMemory === 'number') {
+        availableRamMb = Math.round(nav.deviceMemory * 1024);
       }
       if (navigator.storage && navigator.storage.estimate) {
         try {
@@ -137,14 +144,18 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
           if (est.quota && est.usage) {
             availableStorageMb = Math.round((est.quota - est.usage) / (1024 * 1024));
           }
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
-      if ('getBattery' in navigator) {
+      if ('getBattery' in nav && nav.getBattery) {
         try {
-          const b = await (navigator as any).getBattery();
+          const b = await nav.getBattery();
           batteryLevel = Math.round(b.level * 100);
           isCharging = b.charging;
-        } catch {}
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -158,7 +169,13 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     return {
       availableRamMb,
       cpuCores,
-      architecture: typeof navigator !== 'undefined' ? (navigator as any).userAgentData?.platform || navigator.platform || null : null,
+      architecture:
+        typeof navigator !== 'undefined'
+          ? (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData
+              ?.platform ||
+            navigator.platform ||
+            null
+          : null,
       androidApiLevel: null, // Web browser environment is not Android OS
       availableStorageMb,
       batteryLevel,
@@ -171,7 +188,11 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
   }
 
   public async isSpeechRecognitionAvailable(): Promise<{ available: boolean }> {
-    const isAvail = typeof window !== 'undefined' && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    const w =
+      typeof window === 'undefined'
+        ? undefined
+        : (window as Window & { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown });
+    const isAvail = Boolean(w && (w.SpeechRecognition || w.webkitSpeechRecognition));
     return { available: isAvail };
   }
 
@@ -197,7 +218,11 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
   }): Promise<ModelInstallResult> {
     const model = VERIFIED_SPEECH_MODELS.find((m) => m.id === options.modelId);
     if (!model) {
-      return { modelId: options.modelId, installed: false, error: 'Model not found in verified manifest' };
+      return {
+        modelId: options.modelId,
+        installed: false,
+        error: 'Model not found in verified manifest',
+      };
     }
 
     // Verify disk storage requirement
@@ -241,7 +266,8 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
       modelId: options.modelId,
       installed: false,
       checksumVerified: false,
-      error: 'Model installation requires verified model binary artifact. Native on-device storage is required on Android.',
+      error:
+        'Model installation requires verified model binary artifact. Native on-device storage is required on Android.',
     };
   }
 
@@ -269,11 +295,16 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     startChunk?: number;
     preferBatteryOverSpeed?: boolean;
   }): Promise<{ jobId: string }> {
-    const recordingIdNum = typeof options.recordingId === 'string' ? parseInt(options.recordingId, 10) : options.recordingId;
+    const recordingIdNum =
+      typeof options.recordingId === 'string'
+        ? parseInt(options.recordingId, 10)
+        : options.recordingId;
     const jobId = `job_${recordingIdNum}_${Date.now()}`;
 
     if (!this.installedModelIds.has(options.modelId)) {
-      throw new Error(`OFFLINE_AI_MODEL_MISSING: Speech recognition model '${options.modelId}' is not installed.`);
+      throw new Error(
+        `OFFLINE_AI_MODEL_MISSING: Speech recognition model '${options.modelId}' is not installed.`
+      );
     }
 
     const jobStatus: TranscriptionJobStatus = {
@@ -376,10 +407,11 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     // If running in browser/web context without native libwhisper.so or compiled WASM runtime,
     // fail honestly with zero fabricated text.
     job.status = 'FAILED';
-    const failError = 'OFFLINE_AI_ENGINE_NOT_AVAILABLE: On-device speech recognition requires native Android Whisper runtime or compiled WebAssembly model binary. Zero fabricated text generated.';
+    const failError =
+      'OFFLINE_AI_ENGINE_NOT_AVAILABLE: On-device speech recognition requires native Android Whisper runtime or compiled WebAssembly model binary. Zero fabricated text generated.';
     job.error = failError;
     job.phaseLabel = 'Native speech engine not available in browser';
-    
+
     TranscriptionRepository.updateStatus(
       transcriptionEntity.id,
       'FAILED',
@@ -406,7 +438,12 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
       job.phaseLabel = 'Transcription cancelled';
     }
     if (transcriptionId) {
-      TranscriptionRepository.updateStatus(transcriptionId, 'CANCELLED', 'OFFLINE_AI_CANCELLED', 'User cancelled transcription');
+      TranscriptionRepository.updateStatus(
+        transcriptionId,
+        'CANCELLED',
+        'OFFLINE_AI_CANCELLED',
+        'User cancelled transcription'
+      );
       TranscriptionRepository.saveJobCheckpoint({
         id: jobId,
         transcription_id: transcriptionId,
@@ -432,20 +469,21 @@ export async function getOfflineAiStatus(): Promise<{
 }> {
   try {
     const caps = await OfflineAi.getCapabilities();
-    const isNativeReady = !!(caps.isNativeEngineAvailable ?? (caps as any).nativeLibraryLoaded);
-    const freeMb = (caps.availableStorageMb ?? (caps as any).freeSpaceMb) ?? 0;
+    const isNativeReady = !!(caps.isNativeEngineAvailable ?? caps.nativeLibraryLoaded);
+    const freeMb = caps.availableStorageMb ?? caps.freeSpaceMb ?? 0;
     if (!isNativeReady) {
       return {
         nativeReady: false,
         modelsInstalled: [],
         freeSpaceMb: freeMb,
-        message: 'Native Whisper library missing. Rebuild the Android app with NDK support enabled.',
+        message:
+          'Native Whisper library missing. Rebuild the Android app with NDK support enabled.',
       };
     }
     const models = await OfflineAi.listSpeechModels();
     return {
       nativeReady: true,
-      modelsInstalled: models.filter((m: any) => m.installed).map((m: any) => m.id),
+      modelsInstalled: models.filter((m) => m.installed).map((m) => m.id),
       freeSpaceMb: freeMb,
       message: 'On-device Whisper transcription engine ready.',
     };

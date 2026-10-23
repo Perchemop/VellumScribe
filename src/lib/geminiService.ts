@@ -1,10 +1,47 @@
 import { AiSettingsManager, SummaryFormat } from './aiSettings';
 import { NativeBridge } from './nativeBridge';
 import { OfflineTranscriptionEngine } from './offlineTranscription';
-import { PrivacyManager, CloudAiConsentRequiredError } from './privacyManager';
-import { PartialTranscriptionSession, TranscriptionProgress } from '../types';
+import { PrivacyManager } from './privacyManager';
+import {
+  ChecklistItem,
+  OcrScanRecord,
+  PartialTranscriptionSession,
+  TranscriptionProgress,
+  TranscriptRecord,
+} from '../types';
 import { TranscriptionProgressManager } from './transcriptionProgressManager';
 import { generatePrefixedId } from './uuid';
+import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
+
+/** One part of a Google AI `generateContent` request. */
+export interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType?: string; data?: string };
+}
+
+/** Shape of the fields the app reads from a `generateContent` response. */
+interface GeminiGenerateResponse {
+  candidates?: Array<{ text?: string; content?: { parts?: Array<{ text?: string }> } }>;
+  error?: { code?: number; status?: string; message?: string };
+}
+
+/** Shape of the fields the app reads from the transcription-session init response. */
+interface TranscribeSessionInit {
+  sessionId: string;
+  totalSegments?: number;
+  durationSec?: number;
+  segments?: Array<{ startStr: string; endStr: string }>;
+}
+
+/** Shape of the fields the app reads from the server summary proxy response. */
+interface ServerSummaryResponse {
+  summary?: string;
+  format?: SummaryFormat;
+  source?: string;
+  keyUsed?: SummaryResult['keyUsed'];
+  error?: string;
+}
 
 export interface OcrResult {
   ocrText: string;
@@ -25,6 +62,8 @@ export interface TranscribeAudioOptions {
   resumeSession?: PartialTranscriptionSession | null;
   recordingId?: number | string;
   signal?: AbortSignal;
+  mimeType?: string;
+  originalFileName?: string;
 }
 
 export interface MeetingMinutesResult {
@@ -39,9 +78,9 @@ export interface SummaryRequestOptions {
   format?: SummaryFormat;
   eventTitle?: string;
   currentBody?: string;
-  transcripts?: any[];
-  ocrScans?: any[];
-  checklists?: any[];
+  transcripts?: Array<string | TranscriptRecord>;
+  ocrScans?: Array<string | OcrScanRecord>;
+  checklists?: Array<string | ChecklistItem>;
   customInstructions?: string;
 }
 
@@ -49,7 +88,7 @@ export interface SummaryResult {
   summary: string;
   format: SummaryFormat;
   source?: string;
-  keyUsed?: 'custom' | 'server_env' | 'local_offline' | 'ollama';
+  keyUsed?: 'custom' | 'server_env' | 'local_offline';
 }
 
 function stripBase64Prefix(dataUriOrBase64: string): string {
@@ -88,7 +127,7 @@ class OfflineSynthesisEngine {
     let allTranscripts = '';
     if (Array.isArray(options.transcripts)) {
       allTranscripts = options.transcripts
-        .map((t: any) => (typeof t === 'string' ? t : t?.transcript_text || ''))
+        .map((t) => (typeof t === 'string' ? t : t?.transcript_text || ''))
         .filter(Boolean)
         .join(' ');
     }
@@ -96,13 +135,16 @@ class OfflineSynthesisEngine {
     let allOcr = '';
     if (Array.isArray(options.ocrScans)) {
       allOcr = options.ocrScans
-        .map((s: any) => (typeof s === 'string' ? s : s?.ocr_text || ''))
+        .map((s) => (typeof s === 'string' ? s : s?.ocr_text || ''))
         .filter(Boolean)
         .join(' ');
     }
 
     const fullRaw = `${rawBody} ${allTranscripts} ${allOcr}`.trim();
-    const rawLines = fullRaw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rawLines = fullRaw
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     const sentences = fullRaw
       .split(/(?<=[.?!])\s+/)
       .map((s) => s.trim())
@@ -131,23 +173,42 @@ class OfflineSynthesisEngine {
       });
     }
 
-    let output = '';
+    let output: string;
 
     switch (format) {
       case 'action_items': {
-        const items = detectedActions.length > 0
-          ? detectedActions.map((a) => `- [ ] ${a}`).join('\n')
-          : `- [ ] Review notes and finalize next milestones for "${title}"\n- [ ] Distribute action items to stakeholders\n- [ ] Schedule follow-up discussion`;
+        const items =
+          detectedActions.length > 0
+            ? detectedActions.map((a) => `- [ ] ${a}`).join('\n')
+            : `- [ ] Review notes and finalize next milestones for "${title}"\n- [ ] Distribute action items to stakeholders\n- [ ] Schedule follow-up discussion`;
         output = `### Action Items & Deliverables (${title})\n\n${items}`;
         break;
       }
       case 'tldr': {
-        const keySentences = sentences.slice(0, 3).map((s) => `- ${s}`).join('\n');
+        const keySentences = sentences
+          .slice(0, 3)
+          .map((s) => `- ${s}`)
+          .join('\n');
         output = `### TL;DR Summary (${title})\n\n**Core Insight:** ${sentences[0] || 'Session notes recorded offline.'}\n\n${keySentences || '- Key insights captured locally in VellumScribe.'}`;
         break;
       }
       case 'outline': {
-        output = `### Outline: ${title}\n\n#### 1. Overview\n${sentences.slice(0, 2).map((s) => `- ${s}`).join('\n') || '- No details recorded.'}\n\n#### 2. Key Discussion Topics\n${sentences.slice(2, 6).map((s) => `- ${s}`).join('\n') || '- Further items pending.'}\n\n#### 3. Next Steps\n${detectedActions.slice(0, 3).map((a) => `- ${a}`).join('\n') || '- Follow up scheduled.'}`;
+        output = `### Outline: ${title}\n\n#### 1. Overview\n${
+          sentences
+            .slice(0, 2)
+            .map((s) => `- ${s}`)
+            .join('\n') || '- No details recorded.'
+        }\n\n#### 2. Key Discussion Topics\n${
+          sentences
+            .slice(2, 6)
+            .map((s) => `- ${s}`)
+            .join('\n') || '- Further items pending.'
+        }\n\n#### 3. Next Steps\n${
+          detectedActions
+            .slice(0, 3)
+            .map((a) => `- ${a}`)
+            .join('\n') || '- Follow up scheduled.'
+        }`;
         break;
       }
       case 'clean_notes': {
@@ -161,9 +222,19 @@ class OfflineSynthesisEngine {
       }
       case 'executive':
       default: {
-        const summaryText = sentences.slice(0, 2).join(' ') || 'Comprehensive session notes preserved in local storage.';
-        const keyDecisions = sentences.slice(2, 5).map((s) => `- ${s}`).join('\n') || '- Baseline criteria and requirements noted.';
-        const actionItems = (detectedActions.length > 0 ? detectedActions : ['Review session highlights and archive documentation'])
+        const summaryText =
+          sentences.slice(0, 2).join(' ') ||
+          'Comprehensive session notes preserved in local storage.';
+        const keyDecisions =
+          sentences
+            .slice(2, 5)
+            .map((s) => `- ${s}`)
+            .join('\n') || '- Baseline criteria and requirements noted.';
+        const actionItems = (
+          detectedActions.length > 0
+            ? detectedActions
+            : ['Review session highlights and archive documentation']
+        )
           .slice(0, 4)
           .map((a) => `- [ ] ${a}`)
           .join('\n');
@@ -185,7 +256,7 @@ class OfflineSynthesisEngine {
 export class GeminiApiService {
   public static getInstance() {
     return {
-      transcribeAudio: (audioBlob: Blob | string, options?: any) => {
+      transcribeAudio: (audioBlob: Blob | string, options?: TranscribeAudioOptions) => {
         return GeminiApiService.transcribeAudio(
           audioBlob,
           options?.mimeType || 'audio/webm',
@@ -214,17 +285,24 @@ export class GeminiApiService {
    * Direct Google AI Studio REST API call (runs on-device in Android APK, iOS, Web, Standalone)
    */
   private static async executeDirectGoogleAi(
-    parts: Array<any>,
-    preferredModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
+    parts: GeminiPart[],
+    preferredModels = [
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+    ]
   ): Promise<{ text: string; model: string }> {
     PrivacyManager.assertNetworkAllowed('Google AI Studio');
     PrivacyManager.assertCloudAiConsent('Google AI Studio');
-    const apiKey = (AiSettingsManager.getGoogleApiKey() || (await AiSettingsManager.getApiKeyAsync())).trim();
+    const apiKey = (
+      AiSettingsManager.getGoogleApiKey() || (await AiSettingsManager.getApiKeyAsync())
+    ).trim();
     if (!apiKey) {
       throw new Error('Google AI Studio API key not configured.');
     }
 
-    let lastError: any = null;
+    let lastError: unknown = null;
 
     for (const model of preferredModels) {
       try {
@@ -244,11 +322,11 @@ export class GeminiApiService {
           }),
         });
 
-        const data = await res.json().catch(() => null);
+        const data = (await res.json().catch(() => null)) as GeminiGenerateResponse | null;
 
         if (res.ok && data) {
           const rawText =
-            data.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') ||
+            data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') ||
             data.candidates?.[0]?.text ||
             '';
           return {
@@ -268,12 +346,17 @@ export class GeminiApiService {
             errMsg = `Google AI Studio Permission Denied (403): The caller does not have permission. Please verify your key at https://aistudio.google.com/app/apikey.`;
           }
           lastError = new Error(errMsg);
-          if (data.error.code === 404 || data.error.code === 429 || data.error.status === 'NOT_FOUND') {
+          if (
+            data.error.code === 404 ||
+            data.error.code === 429 ||
+            data.error.status === 'NOT_FOUND'
+          ) {
             continue;
           }
           throw lastError;
         }
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         lastError = err;
         if (
           err.message &&
@@ -293,7 +376,10 @@ export class GeminiApiService {
   /**
    * Direct Groq LLM synthesis
    */
-  private static async executeGroqChat(prompt: string, model = 'llama-3.3-70b-versatile'): Promise<string> {
+  private static async executeGroqChat(
+    prompt: string,
+    model = 'llama-3.3-70b-versatile'
+  ): Promise<string> {
     PrivacyManager.assertNetworkAllowed('Groq AI');
     const key = AiSettingsManager.getGroqApiKey().trim();
     if (!key) throw new Error('Groq API key not configured.');
@@ -334,41 +420,6 @@ export class GeminiApiService {
   }
 
   /**
-   * Direct Local Ollama synthesis
-   */
-  private static async executeOllama(prompt: string, endpoint: string, model: string): Promise<string> {
-    PrivacyManager.assertNetworkAllowed('Ollama Endpoint');
-    const cleanEndpoint = (endpoint || 'http://localhost:11434').replace(/\/+$/, '');
-
-    // 1. Direct browser fetch
-    try {
-      const res = await fetch(`${cleanEndpoint}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, prompt, stream: false }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data?.response) {
-        return data.response;
-      }
-    } catch {
-      // Try server proxy
-    }
-
-    // 2. Server proxy fallback
-    const proxyRes = await fetch('/api/ollama/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint: cleanEndpoint, model, prompt }),
-    });
-    const proxyData = await proxyRes.json().catch(() => null);
-    if (proxyRes.ok && proxyData?.text) {
-      return proxyData.text;
-    }
-    throw new Error(proxyData?.error || `Could not connect to Ollama at ${cleanEndpoint}`);
-  }
-
-  /**
    * Handwritten note OCR using Google AI Studio
    */
   public static async scanHandwrittenNote(
@@ -378,7 +429,8 @@ export class GeminiApiService {
     const cleanBase64 = stripBase64Prefix(imageBase64);
     const sanitizedMime = cleanMimeType(mimeType, 'image/jpeg');
     const localKey = (await AiSettingsManager.getApiKeyAsync()).trim();
-    const prompt = 'Extract all handwritten and printed text accurately and verbatim. Preserve layout, headings, lists, tables, and bullet points in clean GitHub-flavored Markdown. Return ONLY the extracted text, without commentary or markdown code fences.';
+    const prompt =
+      'Extract all handwritten and printed text accurately and verbatim. Preserve layout, headings, lists, tables, and bullet points in clean GitHub-flavored Markdown. Return ONLY the extracted text, without commentary or markdown code fences.';
 
     if (NativeBridge.isNative() || localKey) {
       try {
@@ -399,8 +451,13 @@ export class GeminiApiService {
           confidence: 0.98,
           source: directResult.model,
         };
-      } catch (directErr: any) {
-        if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
+        if (
+          NativeBridge.isNative() ||
+          directErr.message?.includes('API key') ||
+          directErr.message?.includes('permission')
+        ) {
           throw directErr;
         }
       }
@@ -424,8 +481,12 @@ export class GeminiApiService {
         };
       }
       throw new Error(data?.error || 'OCR extraction failed');
-    } catch (err: any) {
-      throw new Error(err.message || 'Failed to extract text from handwritten note with Gemini AI.');
+    } catch (_err) {
+      const err = asErrorLike(_err);
+      throw new Error(
+        err.message || 'Failed to extract text from handwritten note with Gemini AI.',
+        { cause: _err }
+      );
     }
   }
 
@@ -473,7 +534,8 @@ export class GeminiApiService {
             chunkIndex: i,
             totalChunks,
             chunkBase64: sliceBase64,
-            originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+            originalFileName:
+              originalFileName || (blob instanceof File ? blob.name : undefined) || 'recording.wav',
             mimeType,
           }),
         });
@@ -548,7 +610,9 @@ export class GeminiApiService {
       : originalFileName || 'current_recording';
 
     const isBlob = audioBlobOrBase64 instanceof Blob;
-    const isLargeAudio = (isBlob && audioBlobOrBase64.size > 8 * 1024 * 1024) || (!isBlob && cleanBase64.length > 10 * 1024 * 1024);
+    const isLargeAudio =
+      (isBlob && audioBlobOrBase64.size > 8 * 1024 * 1024) ||
+      (!isBlob && cleanBase64.length > 10 * 1024 * 1024);
 
     let uploadId: string | undefined;
 
@@ -594,7 +658,10 @@ export class GeminiApiService {
               chunkIndex: i,
               totalChunks,
               chunkBase64: sliceBase64,
-              originalFileName: originalFileName || (blob as any).name || 'recording.wav',
+              originalFileName:
+                originalFileName ||
+                (blob instanceof File ? blob.name : undefined) ||
+                'recording.wav',
               mimeType: sanitizedMime,
               assembleOnly: true,
             }),
@@ -665,10 +732,10 @@ export class GeminiApiService {
     const initHeaders = await this.getHeaders();
     initHeaders['Content-Type'] = 'application/json';
 
-    let initData: any;
-    let sessionId: string = '';
+    let initData: TranscribeSessionInit;
+    let sessionId: string;
     let totalSegments: number = 1;
-    let serverSegments: any[] = [];
+    let serverSegments: Array<{ startStr: string; endStr: string }>;
 
     try {
       const initRes = await fetch('/api/audio/transcribe-session/init', {
@@ -692,8 +759,13 @@ export class GeminiApiService {
       sessionId = initData.sessionId;
       totalSegments = initData.totalSegments || 1;
       serverSegments = initData.segments || [];
-    } catch (networkInitErr: any) {
-      console.warn('Network or cloud API not available for audio transcription session, falling back to on-device acoustic analysis:', networkInitErr);
+    } catch (_networkInitErr) {
+      const networkInitErr = asErrorLike(_networkInitErr);
+      AppLogger.warn(
+        'GeminiService',
+        'Network or cloud API not available for audio transcription session, falling back to on-device acoustic analysis:',
+        networkInitErr
+      );
       const offlineResult = await OfflineTranscriptionEngine.transcribeAudio(
         audioBlobOrBase64,
         sanitizedMime
@@ -712,8 +784,12 @@ export class GeminiApiService {
     }
 
     // Check for prior partial progress to resume
-    const existingSession = options?.resumeSession || TranscriptionProgressManager.getSession(sessionKey);
-    const completedMap = new Map<number, { index: number; startStr: string; endStr: string; text: string }>();
+    const existingSession =
+      options?.resumeSession || TranscriptionProgressManager.getSession(sessionKey);
+    const completedMap = new Map<
+      number,
+      { index: number; startStr: string; endStr: string; text: string }
+    >();
 
     if (existingSession && existingSession.completedSegments) {
       existingSession.completedSegments.forEach((seg) => {
@@ -835,8 +911,13 @@ export class GeminiApiService {
           sessionId,
           canResume: true,
         });
-      } catch (segErr: any) {
-        console.warn(`Transcription segment ${i + 1} notice, using on-device recovery:`, segErr?.message || segErr);
+      } catch (_segErr) {
+        const segErr = asErrorLike(_segErr);
+        AppLogger.warn(
+          'GeminiService',
+          `Transcription segment ${i + 1} notice, using on-device recovery:`,
+          segErr?.message || segErr
+        );
         // Resilient fallback for segment
         completedMap.set(i, {
           index: i,
@@ -895,7 +976,7 @@ export class GeminiApiService {
         }
       }
     } catch (finErr) {
-      console.warn('Finalize call notice, using local merged segments:', finErr);
+      AppLogger.warn('GeminiService', 'Finalize call notice, using local merged segments:', finErr);
     }
 
     // Mark completed and clear session from storage
@@ -988,18 +1069,33 @@ export class GeminiApiService {
         });
         const res = await fetch('/api/groq/transcribe', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${settings.groqApiKey}` },
-          body: JSON.stringify({ audioBase64: cleanBase64, mimeType: sanitizedMime, apiKey: settings.groqApiKey }),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${settings.groqApiKey}`,
+          },
+          body: JSON.stringify({
+            audioBase64: cleanBase64,
+            mimeType: sanitizedMime,
+            apiKey: settings.groqApiKey,
+          }),
           signal: options?.signal,
         });
         const data = await res.json().catch(() => null);
         if (res.ok && data?.transcript) {
           options?.onProgress?.({ percent: 100, status: 'Completed', phase: 'completed' });
-          return { transcript: data.transcript, source: data.source || 'groq/whisper-large-v3-turbo' };
+          return {
+            transcript: data.transcript,
+            source: data.source || 'groq/whisper-large-v3-turbo',
+          };
         }
         throw new Error(data?.error || 'Groq transcription failed');
-      } catch (groqErr: any) {
-        console.warn('Groq Whisper failed, checking alternative providers:', groqErr);
+      } catch (_groqErr) {
+        const groqErr = asErrorLike(_groqErr);
+        AppLogger.warn(
+          'GeminiService',
+          'Groq Whisper failed, checking alternative providers:',
+          groqErr
+        );
       }
     }
 
@@ -1029,8 +1125,9 @@ export class GeminiApiService {
           return { transcript: data.transcript, source: data.source || 'deepgram/nova-3' };
         }
         throw new Error(data?.error || 'Deepgram transcription failed');
-      } catch (dgErr: any) {
-        console.warn('Deepgram failed, checking alternative providers:', dgErr);
+      } catch (_dgErr) {
+        const dgErr = asErrorLike(_dgErr);
+        AppLogger.warn('GeminiService', 'Deepgram failed, checking alternative providers:', dgErr);
       }
     }
 
@@ -1059,15 +1156,21 @@ export class GeminiApiService {
           return { transcript: data.transcript, source: 'local_whisper' };
         }
         throw new Error(data?.error || 'Local Whisper server failed');
-      } catch (lwErr: any) {
-        console.warn('Local Whisper failed, checking alternative providers:', lwErr);
+      } catch (_lwErr) {
+        const lwErr = asErrorLike(_lwErr);
+        AppLogger.warn(
+          'GeminiService',
+          'Local Whisper failed, checking alternative providers:',
+          lwErr
+        );
       }
     }
 
     // 5. Direct Google AI Studio SDK (if custom API key is configured and selected)
     const localKey = (settings.googleApiKey || settings.apiKey || '').trim();
     if (provider === 'google' && (NativeBridge.isNative() || localKey)) {
-      const prompt = 'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
+      const prompt =
+        'Accurately transcribe this audio recording into clean, speaker-attributed verbatim text. Identify distinct speakers if audible and preserve technical terms. Return ONLY the transcript.';
       try {
         options?.onProgress?.({
           percent: 30,
@@ -1093,8 +1196,13 @@ export class GeminiApiService {
             source: directResult.model,
           };
         }
-      } catch (directErr: any) {
-        console.warn('Direct Google AI transcription failed, checking server proxy fallback:', directErr);
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
+        AppLogger.warn(
+          'GeminiService',
+          'Direct Google AI transcription failed, checking server proxy fallback:',
+          directErr
+        );
       }
     }
 
@@ -1109,8 +1217,13 @@ export class GeminiApiService {
         originalFileName,
         options
       );
-    } catch (sessionErr: any) {
-      console.warn('Resumable session transcription notice:', sessionErr?.message || sessionErr);
+    } catch (_sessionErr) {
+      const sessionErr = asErrorLike(_sessionErr);
+      AppLogger.warn(
+        'GeminiService',
+        'Resumable session transcription notice:',
+        sessionErr?.message || sessionErr
+      );
       // If error occurred online or user aborted, rethrow so UI can display specific failure and offer Resume
       if (navigator.onLine || sessionErr?.name === 'AbortError') {
         throw sessionErr;
@@ -1142,7 +1255,7 @@ export class GeminiApiService {
   }
 
   /**
-   * Multi-provider Structured Summary Generation (Google, Groq, Ollama, Offline Rules)
+   * Multi-provider Structured Summary Generation (Google, Groq, Offline Rules)
    */
   public static async generateSummary(options: SummaryRequestOptions): Promise<SummaryResult> {
     const settings = AiSettingsManager.getSettings();
@@ -1160,7 +1273,7 @@ export class GeminiApiService {
     let transcriptsText = '';
     if (Array.isArray(options.transcripts)) {
       transcriptsText = options.transcripts
-        .map((t: any) => (typeof t === 'string' ? t : t?.transcript_text || ''))
+        .map((t) => (typeof t === 'string' ? t : t?.transcript_text || ''))
         .filter(Boolean)
         .join('\n\n');
     }
@@ -1168,7 +1281,7 @@ export class GeminiApiService {
     let ocrText = '';
     if (Array.isArray(options.ocrScans)) {
       ocrText = options.ocrScans
-        .map((s: any) => (typeof s === 'string' ? s : s?.ocr_text || ''))
+        .map((s) => (typeof s === 'string' ? s : s?.ocr_text || ''))
         .filter(Boolean)
         .join('\n\n');
     }
@@ -1176,7 +1289,7 @@ export class GeminiApiService {
     let checklistText = '';
     if (Array.isArray(options.checklists)) {
       checklistText = options.checklists
-        .map((c: any) => (typeof c === 'string' ? c : `[${c.is_completed ? 'x' : ' '}] ${c.text || ''}`))
+        .map((c) => (typeof c === 'string' ? c : `[${c.is_completed ? 'x' : ' '}] ${c.text || ''}`))
         .filter(Boolean)
         .join('\n');
     }
@@ -1190,7 +1303,7 @@ export class GeminiApiService {
       .filter(Boolean)
       .join('\n\n');
 
-    let formatPrompt = '';
+    let formatPrompt: string;
     switch (options.format) {
       case 'action_items':
         formatPrompt = `Extract ALL actionable tasks, deliverables, deadlines, and follow-ups. Format exclusively as an interactive markdown checklist with empty checkboxes [ ] (or checked [x] if already completed). Include assignee and deadline in parentheses if mentioned.`;
@@ -1227,41 +1340,24 @@ Formatting Directives:
     // 1. Route to Groq if selected
     if (llmProvider === 'groq') {
       try {
-        const groqText = await this.executeGroqChat(fullPrompt, settings.groqModel || 'llama-3.3-70b-versatile');
+        const groqText = await this.executeGroqChat(
+          fullPrompt,
+          settings.groqModel || 'llama-3.3-70b-versatile'
+        );
         return {
           summary: groqText,
           format: options.format || 'executive',
           source: `groq/${settings.groqModel || 'llama-3.3-70b'}`,
           keyUsed: 'custom',
         };
-      } catch (groqErr: any) {
+      } catch (_groqErr) {
+        const groqErr = asErrorLike(_groqErr);
         if (!settings.autoFallbackToLocal) throw groqErr;
-        console.warn('Groq synthesis failed, attempting fallback:', groqErr);
+        AppLogger.warn('GeminiService', 'Groq synthesis failed, attempting fallback:', groqErr);
       }
     }
 
-    // 2. Route to Local Ollama if selected
-    if (llmProvider === 'ollama') {
-      try {
-        const ollamaText = await this.executeOllama(
-          fullPrompt,
-          settings.ollamaEndpoint || 'http://localhost:11434',
-          settings.ollamaModel || 'llama3.2'
-        );
-        return {
-          summary: ollamaText,
-          format: options.format || 'executive',
-          source: `ollama/${settings.ollamaModel || 'llama3.2'}`,
-          keyUsed: 'ollama',
-        };
-      } catch (ollamaErr: any) {
-        if (!settings.autoFallbackToLocal) throw ollamaErr;
-        console.warn('Ollama synthesis failed, executing built-in offline engine fallback:', ollamaErr);
-        return OfflineSynthesisEngine.synthesize(options);
-      }
-    }
-
-    // 3. Route to Google AI Studio (Default)
+    // 2. Route to Google AI Studio (Default)
     const googleKey = (settings.googleApiKey || settings.apiKey || '').trim();
 
     if (NativeBridge.isNative() || googleKey) {
@@ -1276,10 +1372,19 @@ Formatting Directives:
           source: directResult.model,
           keyUsed: 'custom',
         };
-      } catch (directErr: any) {
-        if (NativeBridge.isNative() || directErr.message?.includes('API key') || directErr.message?.includes('permission')) {
+      } catch (_directErr) {
+        const directErr = asErrorLike(_directErr);
+        if (
+          NativeBridge.isNative() ||
+          directErr.message?.includes('API key') ||
+          directErr.message?.includes('permission')
+        ) {
           if (settings.autoFallbackToLocal) {
-            console.warn('Google AI Studio error, falling back to offline engine:', directErr);
+            AppLogger.warn(
+              'GeminiService',
+              'Google AI Studio error, falling back to offline engine:',
+              directErr
+            );
             return OfflineSynthesisEngine.synthesize(options);
           }
           throw directErr;
@@ -1307,12 +1412,17 @@ Formatting Directives:
 
       const contentType = res.headers.get('content-type') || '';
       const text = await res.text();
-      let data: any = {};
+      let data: ServerSummaryResponse = {};
 
-      if (contentType.includes('application/json') || (!text.trim().startsWith('<') && text.trim().startsWith('{'))) {
+      if (
+        contentType.includes('application/json') ||
+        (!text.trim().startsWith('<') && text.trim().startsWith('{'))
+      ) {
         try {
-          data = JSON.parse(text);
-        } catch {}
+          data = JSON.parse(text) as ServerSummaryResponse;
+        } catch {
+          /* ignore */
+        }
       }
 
       if (res.ok && data.summary !== undefined) {
@@ -1325,12 +1435,17 @@ Formatting Directives:
       }
 
       throw new Error(data?.error || 'Summary generation failed');
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       if (settings.autoFallbackToLocal) {
-        console.warn('All cloud summarization failed, returning offline synthesis:', err);
+        AppLogger.warn(
+          'GeminiService',
+          'All cloud summarization failed, returning offline synthesis:',
+          err
+        );
         return OfflineSynthesisEngine.synthesize(options);
       }
-      throw new Error(err.message || 'Failed to generate AI summary with Gemini.');
+      throw new Error(err.message || 'Failed to generate AI summary with Gemini.', { cause: _err });
     }
   }
 

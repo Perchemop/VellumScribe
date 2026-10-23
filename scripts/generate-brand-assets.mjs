@@ -147,7 +147,8 @@ function renderSquare(size, { shape = 'rounded', bg = ICON_BG } = {}) {
           const u = ((x + (sx + 0.5) / SS) / size) * 100;
           const v = ((y + (sy + 0.5) / SS) / size) * 100;
           if (bg) {
-            bgA += shape === 'circle' ? (circleInside(u, v) ? 1 : 0) : (roundedRectInside(u, v) ? 1 : 0);
+            bgA +=
+              shape === 'circle' ? (circleInside(u, v) ? 1 : 0) : roundedRectInside(u, v) ? 1 : 0;
           }
           markA += markCoverage(u, v);
         }
@@ -157,11 +158,16 @@ function renderSquare(size, { shape = 'rounded', bg = ICON_BG } = {}) {
       markA /= n;
       const i = (y * size + x) * 4;
       if (bg) {
-        writeRgb(out, i, [
-          bg[0] * (1 - markA) + INK[0] * markA,
-          bg[1] * (1 - markA) + INK[1] * markA,
-          bg[2] * (1 - markA) + INK[2] * markA,
-        ], bgA);
+        writeRgb(
+          out,
+          i,
+          [
+            bg[0] * (1 - markA) + INK[0] * markA,
+            bg[1] * (1 - markA) + INK[1] * markA,
+            bg[2] * (1 - markA) + INK[2] * markA,
+          ],
+          bgA
+        );
       } else {
         writeRgb(out, i, INK, markA);
       }
@@ -195,11 +201,16 @@ function renderSplash(width, height) {
       }
       markA /= SS * SS;
       const i = (y * width + x) * 4;
-      writeRgb(out, i, [
-        SPLASH_BG[0] * (1 - markA) + INK[0] * markA,
-        SPLASH_BG[1] * (1 - markA) + INK[1] * markA,
-        SPLASH_BG[2] * (1 - markA) + INK[2] * markA,
-      ], 1);
+      writeRgb(
+        out,
+        i,
+        [
+          SPLASH_BG[0] * (1 - markA) + INK[0] * markA,
+          SPLASH_BG[1] * (1 - markA) + INK[1] * markA,
+          SPLASH_BG[2] * (1 - markA) + INK[2] * markA,
+        ],
+        1
+      );
     }
   }
   return out;
@@ -229,13 +240,34 @@ for (const [name, scale] of Object.entries(DENSITIES)) {
   const legacy = Math.round(48 * scale);
   const adaptive = Math.round(108 * scale);
   const dir = `mipmap-${name}`;
-  write(`${dir}/ic_launcher.png`, encodePng(legacy, legacy, renderSquare(legacy, { shape: 'rounded' })));
-  write(`${dir}/ic_launcher_round.png`, encodePng(legacy, legacy, renderSquare(legacy, { shape: 'circle' })));
-  write(`${dir}/ic_launcher_foreground.png`, encodePng(adaptive, adaptive, renderSquare(adaptive, { bg: null })));
+  write(
+    `${dir}/ic_launcher.png`,
+    encodePng(legacy, legacy, renderSquare(legacy, { shape: 'rounded' }))
+  );
+  write(
+    `${dir}/ic_launcher_round.png`,
+    encodePng(legacy, legacy, renderSquare(legacy, { shape: 'circle' }))
+  );
+  write(
+    `${dir}/ic_launcher_foreground.png`,
+    encodePng(adaptive, adaptive, renderSquare(adaptive, { bg: null }))
+  );
 }
 
-const SPLASH_PORT = { mdpi: [320, 480], hdpi: [480, 800], xhdpi: [720, 1280], xxhdpi: [960, 1600], xxxhdpi: [1280, 1920] };
-const SPLASH_LAND = { mdpi: [480, 320], hdpi: [800, 480], xhdpi: [1280, 720], xxhdpi: [1600, 960], xxxhdpi: [1920, 1280] };
+const SPLASH_PORT = {
+  mdpi: [320, 480],
+  hdpi: [480, 800],
+  xhdpi: [720, 1280],
+  xxhdpi: [960, 1600],
+  xxxhdpi: [1280, 1920],
+};
+const SPLASH_LAND = {
+  mdpi: [480, 320],
+  hdpi: [800, 480],
+  xhdpi: [1280, 720],
+  xxhdpi: [1600, 960],
+  xxxhdpi: [1920, 1280],
+};
 
 for (const [name, [w, h]] of Object.entries(SPLASH_PORT)) {
   write(`drawable-port-${name}/splash.png`, encodePng(w, h, renderSplash(w, h)));

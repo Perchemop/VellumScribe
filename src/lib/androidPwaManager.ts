@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { AppLogger } from './logger';
 
 export interface AndroidInstallGuide {
   browser: string;
@@ -7,8 +8,14 @@ export interface AndroidInstallGuide {
 
 type InstallListener = (canInstall: boolean) => void;
 
+/** Minimal shape of Chromium's `beforeinstallprompt` event. */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 class AndroidPwaManagerClass {
-  private deferredPrompt: any = null;
+  private deferredPrompt: BeforeInstallPromptEvent | null = null;
   private listeners: Set<InstallListener> = new Set();
   private initialized = false;
 
@@ -21,9 +28,10 @@ class AndroidPwaManagerClass {
     this.initialized = true;
 
     window.addEventListener('beforeinstallprompt', (e: Event) => {
+      const promptEvent = e as BeforeInstallPromptEvent;
       // Prevent standard browser mini-infobar from appearing on mobile
       e.preventDefault();
-      this.deferredPrompt = e;
+      this.deferredPrompt = promptEvent;
       this.notifyListeners();
     });
 
@@ -65,7 +73,7 @@ class AndroidPwaManagerClass {
       }
       return { outcome: 'dismissed' };
     } catch (err) {
-      console.warn('Install prompt error:', err);
+      AppLogger.warn('AndroidPwaManager', 'Install prompt error:', err);
       return { outcome: 'unavailable' };
     }
   }
@@ -85,7 +93,7 @@ class AndroidPwaManagerClass {
     if (Capacitor.isNativePlatform()) return true;
     return (
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
       document.referrer.includes('android-app://')
     );
   }
@@ -95,7 +103,7 @@ class AndroidPwaManagerClass {
     if (typeof window === 'undefined') return false;
     return (
       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-      (window.innerWidth <= 768)
+      window.innerWidth <= 768
     );
   }
 

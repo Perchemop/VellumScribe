@@ -1,14 +1,50 @@
-import {
-  TranscriptionSegmentRecord,
-  StructuredAiExtraction,
-  SpeechModelProfile,
-} from '../types';
+import { TranscriptionSegmentRecord, StructuredAiExtraction, SpeechModelProfile } from '../types';
+
+/** Raw item shape inside an untrusted AI extraction payload. */
+interface AiExtractionItem {
+  text?: string;
+  owner?: string;
+  dueDate?: string;
+  priority?: string;
+  sourceSegments?: unknown;
+}
+
+/** Raw entity shape inside an untrusted AI extraction payload. */
+interface AiExtractionEntity {
+  name?: string;
+  type?: string;
+  sourceSegments?: unknown;
+}
+
+const PRIORITY_LEVELS = ['low', 'medium', 'high', 'unknown'] as const;
+type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
+
+/** Top-level shape of an untrusted AI extraction payload. */
+interface AiExtractionPayload {
+  summary?: unknown;
+  actionItems?: unknown;
+  decisions?: unknown;
+  risks?: unknown;
+  entities?: unknown;
+}
+
+/** Keeps only 1-based segment indexes that exist in the source transcript. */
+function inRange(sourceSegments: unknown, totalSegmentsCount: number): number[] {
+  if (!Array.isArray(sourceSegments)) return [];
+  return sourceSegments.filter(
+    (s): s is number =>
+      typeof s === 'number' && Number.isInteger(s) && s >= 1 && s <= totalSegmentsCount
+  );
+}
 
 export class AiResultValidator {
   /**
    * Validates speech model profile integrity
    */
-  public static validateModelProfile(model: SpeechModelProfile): { valid: boolean; error?: string } {
+  public static validateModelProfile(model: SpeechModelProfile): {
+    valid: boolean;
+    error?: string;
+  } {
     if (!model.id || !model.displayName) {
       return { valid: false, error: 'Model ID and display name are required.' };
     }
@@ -27,15 +63,16 @@ export class AiResultValidator {
    * 2. start_ms <= end_ms
    * 3. No fabricated confidence values
    */
-  public static validateSegments(
-    segments: TranscriptionSegmentRecord[]
-  ): { valid: boolean; error?: string; sanitizedSegments: TranscriptionSegmentRecord[] } {
+  public static validateSegments(segments: TranscriptionSegmentRecord[]): {
+    valid: boolean;
+    error?: string;
+    sanitizedSegments: TranscriptionSegmentRecord[];
+  } {
     if (!Array.isArray(segments) || segments.length === 0) {
       return { valid: false, error: 'No transcription segments provided.', sanitizedSegments: [] };
     }
 
     const sanitized: TranscriptionSegmentRecord[] = [];
-    let lastEndMs = 0;
 
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
@@ -50,7 +87,12 @@ export class AiResultValidator {
 
       // Sanitize confidence: per Section 18, never allow fake manufactured precision (e.g. 0.95, 0.98)
       let cleanConfidence: number | null = null;
-      if (typeof seg.confidence === 'number' && !isNaN(seg.confidence) && seg.confidence >= 0 && seg.confidence <= 1) {
+      if (
+        typeof seg.confidence === 'number' &&
+        !isNaN(seg.confidence) &&
+        seg.confidence >= 0 &&
+        seg.confidence <= 1
+      ) {
         // If an engine honestly reports confidence, keep it, otherwise null
         cleanConfidence = seg.confidence;
       }
@@ -61,8 +103,6 @@ export class AiResultValidator {
         text: (seg.text || '').trim(),
         confidence: cleanConfidence,
       });
-
-      lastEndMs = seg.end_ms;
     }
 
     return { valid: true, sanitizedSegments: sanitized };
@@ -72,7 +112,10 @@ export class AiResultValidator {
    * Validates structured AI extraction result:
    * Enforces strict schema, no hallucinated metadata, provenance sourceSegments
    */
-  public static validateExtraction(data: any, totalSegmentsCount: number): StructuredAiExtraction {
+  public static validateExtraction(
+    data: unknown,
+    totalSegmentsCount: number
+  ): StructuredAiExtraction {
     if (!data || typeof data !== 'object') {
       return {
         summary: '',
@@ -83,53 +126,62 @@ export class AiResultValidator {
       };
     }
 
-    const summary = typeof data.summary === 'string' ? data.summary.trim() : '';
+    const payload = data as AiExtractionPayload;
 
-    const actionItems = Array.isArray(data.actionItems)
-      ? data.actionItems
-          .filter((item: any) => item && typeof item.text === 'string' && item.text.trim())
-          .map((item: any) => ({
+    const summary = typeof payload.summary === 'string' ? payload.summary.trim() : '';
+
+    const actionItems = Array.isArray(payload.actionItems)
+      ? (payload.actionItems as AiExtractionItem[])
+          .filter(
+            (item): item is AiExtractionItem & { text: string } =>
+              Boolean(item) && typeof item.text === 'string' && item.text.trim().length > 0
+          )
+          .map((item) => ({
             text: item.text.trim(),
             owner: typeof item.owner === 'string' && item.owner.trim() ? item.owner.trim() : null,
-            dueDate: typeof item.dueDate === 'string' && item.dueDate.trim() ? item.dueDate.trim() : null,
-            priority: ['low', 'medium', 'high', 'unknown'].includes(item.priority) ? item.priority : 'unknown',
-            sourceSegments: Array.isArray(item.sourceSegments)
-              ? item.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            dueDate:
+              typeof item.dueDate === 'string' && item.dueDate.trim() ? item.dueDate.trim() : null,
+            priority: (PRIORITY_LEVELS as readonly string[]).includes(item.priority ?? '')
+              ? (item.priority as PriorityLevel)
+              : 'unknown',
+            sourceSegments: inRange(item.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const decisions = Array.isArray(data.decisions)
-      ? data.decisions
-          .filter((d: any) => d && typeof d.text === 'string' && d.text.trim())
-          .map((d: any) => ({
+    const decisions = Array.isArray(payload.decisions)
+      ? (payload.decisions as AiExtractionItem[])
+          .filter(
+            (d): d is AiExtractionItem & { text: string } =>
+              Boolean(d) && typeof d.text === 'string' && d.text.trim().length > 0
+          )
+          .map((d) => ({
             text: d.text.trim(),
-            sourceSegments: Array.isArray(d.sourceSegments)
-              ? d.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(d.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const risks = Array.isArray(data.risks)
-      ? data.risks
-          .filter((r: any) => r && typeof r.text === 'string' && r.text.trim())
-          .map((r: any) => ({
+    const risks = Array.isArray(payload.risks)
+      ? (payload.risks as AiExtractionItem[])
+          .filter(
+            (r): r is AiExtractionItem & { text: string } =>
+              Boolean(r) && typeof r.text === 'string' && r.text.trim().length > 0
+          )
+          .map((r) => ({
             text: r.text.trim(),
-            sourceSegments: Array.isArray(r.sourceSegments)
-              ? r.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(r.sourceSegments, totalSegmentsCount),
           }))
       : [];
 
-    const entities = Array.isArray(data.entities)
-      ? data.entities
-          .filter((e: any) => e && typeof e.name === 'string' && e.name.trim())
-          .map((e: any) => ({
+    const entities = Array.isArray(payload.entities)
+      ? (payload.entities as AiExtractionEntity[])
+          .filter(
+            (e): e is AiExtractionEntity & { name: string } =>
+              Boolean(e) && typeof e.name === 'string' && e.name.trim().length > 0
+          )
+          .map((e) => ({
             name: e.name.trim(),
             type: typeof e.type === 'string' ? e.type.trim() : 'entity',
-            sourceSegments: Array.isArray(e.sourceSegments)
-              ? e.sourceSegments.filter((s: any) => typeof s === 'number' && s >= 1 && s <= totalSegmentsCount)
-              : [],
+            sourceSegments: inRange(e.sourceSegments, totalSegmentsCount),
           }))
       : [];
 

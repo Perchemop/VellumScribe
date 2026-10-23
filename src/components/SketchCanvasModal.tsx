@@ -1,13 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
-import {
-  X,
-  RotateCcw,
-  Trash2,
-  Check,
-  PenTool,
-  Eraser,
-  Download,
-} from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { X, RotateCcw, Trash2, Check, PenTool, Eraser } from 'lucide-react';
 import { useModalBackHandler } from '../lib/modalBackStack';
 
 interface SketchCanvasModalProps {
@@ -39,6 +31,15 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
   const [tool, setTool] = useState<'pen' | 'eraser'>('pen');
   const [history, setHistory] = useState<ImageData[]>([]);
 
+  const saveHistoryState = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setHistory((prev) => [...prev.slice(-15), snapshot]);
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -67,18 +68,11 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
     } else {
       saveHistoryState();
     }
-  }, []);
+  }, [initialDataUrl, saveHistoryState]);
 
-  const saveHistoryState = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    setHistory((prev) => [...prev.slice(-15), snapshot]);
-  };
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDrawing = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');

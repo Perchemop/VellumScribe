@@ -1,12 +1,10 @@
 import React, { useRef } from 'react';
 import {
-  FileText,
   Clock,
   Plus,
   Pin,
   Mic,
   Camera,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
   CheckSquare,
@@ -90,7 +88,8 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
             VellumScribe Studio
           </h2>
           <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
-            Distraction-free multimodal notes with markdown writing, interactive checklists, canvas sketching, and Gemini intelligence.
+            Distraction-free multimodal notes with markdown writing, interactive checklists, canvas
+            sketching, and Gemini intelligence.
           </p>
         </div>
 
@@ -153,6 +152,14 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                   key={note.id}
                   onClick={() => onSelectNote(note.id)}
                   className="w-64 shrink-0 p-4 rounded-2xl bg-zinc-50/70 dark:bg-[#121216]/70 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-100/60 dark:hover:bg-[#16161c] transition-all cursor-pointer space-y-3 snap-start group relative"
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectNote(note.id);
+                    }
+                  }}
                 >
                   {note.is_pinned && (
                     <div className="absolute top-3 right-3 text-zinc-400">
@@ -175,15 +182,21 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                       {note.title || 'Untitled Note'}
                     </h3>
                     <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
-                      {isLocked ? 'Protected note with PIN security' : note.body || 'No text added...'}
+                      {isLocked
+                        ? 'Protected note with PIN security'
+                        : note.body || 'No text added...'}
                     </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-1 text-xs text-zinc-400 font-mono">
                     <div className="flex items-center gap-1.5">
                       {isLocked && <Lock className="w-3 h-3 text-amber-500" />}
-                      {note.reminder_at && <Bell className="w-3 h-3 text-amber-600 dark:text-amber-400" />}
-                      {note.location_name && <MapPin className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+                      {note.reminder_at && (
+                        <Bell className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                      )}
+                      {note.location_name && (
+                        <MapPin className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                      )}
                       {recordings.length > 0 && (
                         <span className="flex items-center gap-0.5">
                           <Mic className="w-3 h-3" />
@@ -199,10 +212,15 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                       {note.checklist_items && note.checklist_items.length > 0 && (
                         <span className="flex items-center gap-0.5">
                           <CheckSquare className="w-3 h-3" />
-                          <span>{note.checklist_items.filter((c) => c.completed).length}/{note.checklist_items.length}</span>
+                          <span>
+                            {note.checklist_items.filter((c) => c.completed).length}/
+                            {note.checklist_items.length}
+                          </span>
                         </span>
                       )}
-                      {(note.sketch_data || note.sketch_media_key) && <PenTool className="w-3 h-3 text-indigo-500" />}
+                      {(note.sketch_data || note.sketch_media_key) && (
+                        <PenTool className="w-3 h-3 text-indigo-500" />
+                      )}
                     </div>
 
                     <span>{formatRelativeTime(note.updated_at || note.created_at)}</span>

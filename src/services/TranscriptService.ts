@@ -1,7 +1,6 @@
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { RecordingRepository } from '../repositories/RecordingRepository';
 import { SearchIndexQueue } from '../lib/SearchIndexQueue';
-import { SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import {
   TranscriptionEntity,
   TranscriptionSegmentRecord,
@@ -55,7 +54,11 @@ export class TranscriptService {
   /**
    * Rename a speaker across a transcription
    */
-  public static renameSpeaker(transcriptionId: number, speakerId: string, customName: string): void {
+  public static renameSpeaker(
+    transcriptionId: number,
+    speakerId: string,
+    customName: string
+  ): void {
     TranscriptionRepository.updateSpeakerName(transcriptionId, speakerId, customName.trim());
   }
 

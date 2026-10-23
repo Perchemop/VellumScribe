@@ -1,6 +1,34 @@
 import { getDatabaseAdapter } from '../sqlite/databaseAdapter';
 import { AppLogger } from '../logger';
 import { generatePrefixedId } from '../uuid';
+import { asErrorLike } from '../errorLike';
+
+/** Raw rows from the `notebooklm_connections` table (see schema.ts). */
+interface NotebookLmConnectionRow {
+  id: number;
+  name: string;
+  backend: string;
+  notebook_id?: string | null;
+  notebook_url?: string | null;
+  status: 'connected' | 'disconnected' | 'pending';
+  created_at: number;
+  updated_at: number;
+}
+
+/** Raw rows from the `notebooklm_sync_jobs` table. */
+interface NotebookLmSyncJobRow {
+  id: string;
+  connection_id: number;
+  local_entity_type: 'note' | 'transcript' | 'summary' | 'action_items' | 'bundle';
+  local_entity_id: number;
+  status: string;
+  action: string;
+  content_payload?: string | null;
+  retry_count?: number;
+  error_message?: string | null;
+  created_at: number;
+  updated_at: number;
+}
 
 export interface NotebookLMConnection {
   id: number;
@@ -29,7 +57,7 @@ export interface NotebookLMBundle {
   title: string;
   createdAt: string;
   sourceType: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   content: string;
   sha256Hash: string;
 }
@@ -65,9 +93,12 @@ export class NotebookLMAdapter {
     created_at?: string | number;
     updated_at?: string | number;
   }): string {
-    const createdDate = note.created_at ? new Date(note.created_at).toISOString() : new Date().toISOString();
+    const createdDate = note.created_at
+      ? new Date(note.created_at).toISOString()
+      : new Date().toISOString();
     const updatedDate = note.updated_at ? new Date(note.updated_at).toISOString() : createdDate;
-    const tagsStr = note.tags && note.tags.length > 0 ? note.tags.map((t) => `#${t}`).join(' ') : 'None';
+    const tagsStr =
+      note.tags && note.tags.length > 0 ? note.tags.map((t) => `#${t}`).join(' ') : 'None';
 
     return `# ${note.title || 'Untitled Note'}
 
@@ -96,7 +127,13 @@ ${note.content || '(Empty content)'}
     engine: string;
     modelId: string;
     durationMs?: number;
-    segments: Array<{ sequence: number; start_ms: number; end_ms: number; speaker_id?: string | null; text: string }>;
+    segments: Array<{
+      sequence: number;
+      start_ms: number;
+      end_ms: number;
+      speaker_id?: string | null;
+      text: string;
+    }>;
     speakers?: Array<{ speaker_id: string; label: string; name?: string | null }>;
     summary?: string;
     actionItems?: Array<{ text: string; priority?: string }>;
@@ -145,7 +182,9 @@ ${note.content || '(Empty content)'}
         const startMin = Math.floor(seg.start_ms / 60000);
         const startSec = Math.floor((seg.start_ms % 60000) / 1000);
         const timecode = `${startMin.toString().padStart(2, '0')}:${startSec.toString().padStart(2, '0')}`;
-        const speakerName = seg.speaker_id ? speakerMap.get(seg.speaker_id) || seg.speaker_id : 'Speaker';
+        const speakerName = seg.speaker_id
+          ? speakerMap.get(seg.speaker_id) || seg.speaker_id
+          : 'Speaker';
         formatted += `**[${timecode}] ${speakerName}:** ${seg.text}\n\n`;
       });
     }
@@ -160,7 +199,7 @@ ${note.content || '(Empty content)'}
     title: string;
     sourceType: 'note' | 'transcript' | 'bundle';
     content: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<NotebookLMBundle> {
     const sha256Hash = await this.computeHash(params.content);
     return {
@@ -202,9 +241,11 @@ ${note.content || '(Empty content)'}
       const res = db.runSync(sql, params);
       id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
     } else {
-      db.run(sql, params).then((res) => {
-        id = res.lastInsertRowId || 0;
-      }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async saveConnection failed', e));
+      db.run(sql, params)
+        .then((res) => {
+          id = res.lastInsertRowId || 0;
+        })
+        .catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async saveConnection failed', e));
     }
 
     return {
@@ -226,7 +267,7 @@ ${note.content || '(Empty content)'}
     const db = getDatabaseAdapter();
     const sql = `SELECT id, name, backend, notebook_id, notebook_url, status, created_at, updated_at
        FROM notebooklm_connections ORDER BY id ASC`;
-    const rows = db.querySync ? db.querySync<any>(sql) : [];
+    const rows = db.querySync ? db.querySync<NotebookLmConnectionRow>(sql) : [];
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -281,7 +322,9 @@ ${note.content || '(Empty content)'}
       if (db.runSync) {
         db.runSync(sql, updateParams);
       } else {
-        db.run(sql, updateParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async update source failed', e));
+        db.run(sql, updateParams).catch((e) =>
+          AppLogger.warn('NotebookLMAdapter', 'Async update source failed', e)
+        );
       }
 
       return {
@@ -314,9 +357,11 @@ ${note.content || '(Empty content)'}
         const res = db.runSync(sql, insertParams);
         id = res.lastInsertRowId || db.getLastInsertId?.() || 0;
       } else {
-        db.run(sql, insertParams).then((res) => {
-          id = res.lastInsertRowId || 0;
-        }).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async insert source failed', e));
+        db.run(sql, insertParams)
+          .then((res) => {
+            id = res.lastInsertRowId || 0;
+          })
+          .catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async insert source failed', e));
       }
 
       return {
@@ -388,7 +433,7 @@ ${note.content || '(Empty content)'}
     title: string;
     content: string;
     sourceType?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
   }): Promise<{ remoteSourceId: string; contentHash: string; syncedAt: number }> {
     const res = await fetch('/api/notebooklm/upload-source', {
       method: 'POST',
@@ -460,7 +505,9 @@ ${note.content || '(Empty content)'}
     if (db.runSync) {
       db.runSync(sql, sqlParams);
     } else {
-      db.run(sql, sqlParams).catch((e) => AppLogger.warn('NotebookLMAdapter', 'Async enqueueSyncJob failed', e));
+      db.run(sql, sqlParams).catch((e) =>
+        AppLogger.warn('NotebookLMAdapter', 'Async enqueueSyncJob failed', e)
+      );
     }
 
     AppLogger.info('NotebookLMAdapter', `Enqueued durable NotebookLM sync job: ${jobId}`);
@@ -472,7 +519,7 @@ ${note.content || '(Empty content)'}
    */
   public static async processSyncJob(jobId: string): Promise<boolean> {
     const db = getDatabaseAdapter();
-    const jobs = await db.query<any>(
+    const jobs = await db.query<NotebookLmSyncJobRow>(
       `SELECT * FROM notebooklm_sync_jobs WHERE id = ?`,
       [jobId]
     );
@@ -500,7 +547,7 @@ ${note.content || '(Empty content)'}
       if (job.action === 'create' || job.action === 'update') {
         const payload = job.content_payload || '';
         const title = `${job.local_entity_type.toUpperCase()} #${job.local_entity_id}`;
-        
+
         const uploadResult = await this.uploadSource({
           connection,
           title,
@@ -524,7 +571,11 @@ ${note.content || '(Empty content)'}
         );
         return true;
       } else if (job.action === 'delete') {
-        const existingMapping = this.getSourceMapping(job.connection_id, job.local_entity_type, job.local_entity_id);
+        const existingMapping = this.getSourceMapping(
+          job.connection_id,
+          job.local_entity_type,
+          job.local_entity_id
+        );
         if (existingMapping && existingMapping.remote_source_id) {
           await this.deleteRemoteSource(existingMapping.remote_source_id);
         }
@@ -539,7 +590,8 @@ ${note.content || '(Empty content)'}
         return true;
       }
       return false;
-    } catch (err: any) {
+    } catch (_err) {
+      const err = asErrorLike(_err);
       const errMsg = err?.message || 'Sync failed';
       const newRetries = (job.retry_count || 0) + 1;
       await db.run(
@@ -576,10 +628,10 @@ ${note.content || '(Empty content)'}
   /**
    * List recent NotebookLM sync jobs
    */
-  public static listSyncJobs(limit = 20): any[] {
+  public static listSyncJobs(limit = 20): NotebookLmSyncJobRow[] {
     const db = getDatabaseAdapter();
     const sql = `SELECT * FROM notebooklm_sync_jobs ORDER BY created_at DESC LIMIT ?`;
-    return db.querySync ? db.querySync(sql, [limit]) : [];
+    return db.querySync ? db.querySync<NotebookLmSyncJobRow>(sql, [limit]) : [];
   }
 
   /**
@@ -607,7 +659,8 @@ ${note.content || '(Empty content)'}
    * Download or export bundle as a file
    */
   public static exportBundleToFile(bundle: NotebookLMBundle, filename?: string): void {
-    const targetFilename = filename || `${bundle.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_notebooklm.md`;
+    const targetFilename =
+      filename || `${bundle.title.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_notebooklm.md`;
     const blob = new Blob([bundle.content], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

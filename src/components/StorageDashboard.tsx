@@ -16,6 +16,8 @@ import {
 import { StorageManager } from '../lib/storage';
 import { SqliteStats, SqliteRepository } from '../lib/sqlite/sqliteRepository';
 import { PrivacyManager, PrivacySettings } from '../lib/privacyManager';
+import { asErrorLike } from '../lib/errorLike';
+import { asBlobPart } from '../lib/binary';
 
 interface StorageDashboardProps {
   onRefreshNotes?: () => void;
@@ -23,7 +25,10 @@ interface StorageDashboardProps {
 
 export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNotes }) => {
   const [stats, setStats] = useState<SqliteStats>(() => StorageManager.getSqliteStats());
-  const [integrityResult, setIntegrityResult] = useState<{ status: 'ok' | 'corrupted'; details: string } | null>(null);
+  const [integrityResult, setIntegrityResult] = useState<{
+    status: 'ok' | 'corrupted';
+    details: string;
+  } | null>(null);
   const [isCheckingIntegrity, setIsCheckingIntegrity] = useState(false);
   const [isVacuuming, setIsVacuuming] = useState(false);
   const [orphanKeys, setOrphanKeys] = useState<string[]>([]);
@@ -49,7 +54,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           ? 'SQLite PRAGMA integrity_check PASSED: Database is healthy.'
           : `Integrity check failed: ${result.details}`
       );
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Integrity check failed: ${e?.message || 'Unknown error'}`);
     } finally {
       setIsCheckingIntegrity(false);
@@ -73,7 +79,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           `SQLite VACUUM complete: Database is already fully optimized (${formatBytes(res.compactedSizeBytes)}).`
         );
       }
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Vacuum failed: ${e?.message || 'Unknown error'}`);
     } finally {
       setIsVacuuming(false);
@@ -103,7 +110,7 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
   const handleExportSqlite = () => {
     try {
       const binary = StorageManager.exportSqliteBinary();
-      const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
+      const blob = new Blob([asBlobPart(binary)], { type: 'application/x-sqlite3' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -112,7 +119,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
       URL.revokeObjectURL(url);
       setFeedbackMessage('SQLite database (.sqlite) exported successfully.');
       setTimeout(() => setFeedbackMessage(null), 3000);
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       setFeedbackMessage(`Export failed: ${e.message}`);
     }
   };
@@ -131,7 +139,8 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         if (onRefreshNotes) onRefreshNotes();
         setFeedbackMessage('SQLite database successfully imported and verified!');
         setTimeout(() => setFeedbackMessage(null), 4000);
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         setFeedbackMessage(`Import failed: ${err.message}`);
       }
     };
@@ -188,7 +197,9 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
                   v{stats.schemaVersion} Active
                 </span>
               </h3>
-              <p className="text-xs text-slate-500">Single source of truth with ACID transactions & FTS search</p>
+              <p className="text-xs text-slate-500">
+                Single source of truth with ACID transactions & FTS search
+              </p>
             </div>
           </div>
           <button
@@ -204,7 +215,9 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
             <span className="text-xs text-slate-500 block">Database Size</span>
-            <span className="text-lg font-bold text-slate-800 font-mono">{formatBytes(stats.databaseSizeBytes)}</span>
+            <span className="text-lg font-bold text-slate-800 font-mono">
+              {formatBytes(stats.databaseSizeBytes)}
+            </span>
           </div>
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
             <span className="text-xs text-slate-500 block">Total Notes</span>
@@ -224,15 +237,34 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
         </div>
 
         <div className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-100 mb-4">
-          <span className="font-semibold text-slate-700 block mb-1">Relational Table Row Counts:</span>
+          <span className="font-semibold text-slate-700 block mb-1">
+            Relational Table Row Counts:
+          </span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div>Events: <strong className="text-slate-800">{stats.eventsCount}</strong></div>
-            <div>Versions: <strong className="text-slate-800">{stats.versionsCount}</strong></div>
-            <div>Recordings: <strong className="text-slate-800">{stats.recordingsCount}</strong></div>
-            <div>Transcripts: <strong className="text-slate-800">{stats.transcriptsCount}</strong></div>
-            <div>OCR Scans: <strong className="text-slate-800">{stats.ocrScansCount}</strong></div>
-            <div>Media Catalog: <strong className="text-slate-800">{stats.mediaFilesCount}</strong></div>
-            <div>Orphans: <strong className={orphanKeys.length > 0 ? 'text-amber-600' : 'text-slate-800'}>{orphanKeys.length}</strong></div>
+            <div>
+              Events: <strong className="text-slate-800">{stats.eventsCount}</strong>
+            </div>
+            <div>
+              Versions: <strong className="text-slate-800">{stats.versionsCount}</strong>
+            </div>
+            <div>
+              Recordings: <strong className="text-slate-800">{stats.recordingsCount}</strong>
+            </div>
+            <div>
+              Transcripts: <strong className="text-slate-800">{stats.transcriptsCount}</strong>
+            </div>
+            <div>
+              OCR Scans: <strong className="text-slate-800">{stats.ocrScansCount}</strong>
+            </div>
+            <div>
+              Media Catalog: <strong className="text-slate-800">{stats.mediaFilesCount}</strong>
+            </div>
+            <div>
+              Orphans:{' '}
+              <strong className={orphanKeys.length > 0 ? 'text-amber-600' : 'text-slate-800'}>
+                {orphanKeys.length}
+              </strong>
+            </div>
           </div>
         </div>
 
@@ -267,17 +299,23 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
       <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-lg border ${privacy.privateOfflineMode ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+            <div
+              className={`p-2.5 rounded-lg border ${privacy.privateOfflineMode ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+            >
               <WifiOff className="w-5 h-5" />
             </div>
             <div>
               <h4 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
                 Private Offline Mode (Air-Gapped)
                 {privacy.privateOfflineMode && (
-                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">ACTIVE</span>
+                  <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    ACTIVE
+                  </span>
                 )}
               </h4>
-              <p className="text-xs text-slate-500">Blocks 100% of outbound network traffic for complete on-device isolation</p>
+              <p className="text-xs text-slate-500">
+                Blocks 100% of outbound network traffic for complete on-device isolation
+              </p>
             </div>
           </div>
           <button
@@ -299,7 +337,9 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           Open Database Portability & Raw Backup
         </h4>
         <p className="text-xs text-slate-500 mb-4">
-          Export or restore native binary SQLite (<code className="font-mono text-slate-700">.sqlite</code>) databases without vendor lock-in.
+          Export or restore native binary SQLite (
+          <code className="font-mono text-slate-700">.sqlite</code>) databases without vendor
+          lock-in.
         </p>
 
         <div className="flex flex-wrap gap-3">
@@ -314,7 +354,12 @@ export const StorageDashboard: React.FC<StorageDashboardProps> = ({ onRefreshNot
           <label className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer border border-slate-200">
             <Upload className="w-4 h-4" />
             <span>Import .sqlite Database</span>
-            <input type="file" accept=".sqlite,.db,.sqlite3" onChange={handleImportSqlite} className="hidden" />
+            <input
+              type="file"
+              accept=".sqlite,.db,.sqlite3"
+              onChange={handleImportSqlite}
+              className="hidden"
+            />
           </label>
 
           <button

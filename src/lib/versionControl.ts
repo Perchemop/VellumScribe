@@ -31,7 +31,7 @@ export class VersionControlManager {
     const nextVersionNum = (note.version || existing.length || 0) + 1;
 
     // Compute deterministic SHA-256 checksum of body
-    let checksum = '';
+    let checksum: string;
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(note.body || '');

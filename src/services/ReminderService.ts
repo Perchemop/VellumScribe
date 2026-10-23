@@ -42,7 +42,10 @@ export class ReminderService {
     try {
       const hasPerm = await this.requestPermission();
       if (!hasPerm) {
-        AppLogger.warn('ReminderService', 'Notification permission not granted; scheduled reminder may not show at OS level.');
+        AppLogger.warn(
+          'ReminderService',
+          'Notification permission not granted; scheduled reminder may not show at OS level.'
+        );
       }
 
       if (Capacitor.isNativePlatform()) {
@@ -50,7 +53,10 @@ export class ReminderService {
         await this.cancelReminder(note.id);
 
         const bodySnippet = note.body
-          ? note.body.replace(/[#*`_~]/g, '').trim().slice(0, 120)
+          ? note.body
+              .replace(/[#*`_~]/g, '')
+              .trim()
+              .slice(0, 120)
           : 'You have a scheduled note reminder in VellumScribe';
 
         await LocalNotifications.schedule({
@@ -70,10 +76,17 @@ export class ReminderService {
             },
           ],
         });
-        AppLogger.info('ReminderService', `Scheduled OS-level reminder for note ${note.id} at ${reminderDate.toISOString()}`);
+        AppLogger.info(
+          'ReminderService',
+          `Scheduled OS-level reminder for note ${note.id} at ${reminderDate.toISOString()}`
+        );
       }
     } catch (err) {
-      AppLogger.error('ReminderService', `Failed to schedule native reminder for note ${note.id}`, err);
+      AppLogger.error(
+        'ReminderService',
+        `Failed to schedule native reminder for note ${note.id}`,
+        err
+      );
     }
   }
 
@@ -101,7 +114,11 @@ export class ReminderService {
     try {
       const now = Date.now();
       const futureNotes = notes.filter(
-        (n) => n.reminder_at && new Date(n.reminder_at).getTime() > now && n.status !== 'archived' && n.status !== 'trash'
+        (n) =>
+          n.reminder_at &&
+          new Date(n.reminder_at).getTime() > now &&
+          n.status !== 'archived' &&
+          n.status !== 'trash'
       );
 
       if (Capacitor.isNativePlatform()) {

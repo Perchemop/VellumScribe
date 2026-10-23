@@ -31,7 +31,10 @@ describe('NoteRepository item_changes auditing', () => {
       operation: string;
       version: number;
       sync_state: string;
-    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ?', ['note', String(created.id)]);
+    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ?', [
+      'note',
+      String(created.id),
+    ]);
 
     expect(changesAfterCreate.length).toBe(1);
     expect(changesAfterCreate[0].operation).toBe('create');
@@ -47,7 +50,10 @@ describe('NoteRepository item_changes auditing', () => {
       id: string;
       operation: string;
       version: number;
-    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ? ORDER BY rowid ASC', ['note', String(created.id)]);
+    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ? ORDER BY rowid ASC', [
+      'note',
+      String(created.id),
+    ]);
 
     expect(changesAfterUpdate.length).toBe(2);
     expect(changesAfterUpdate[1].operation).toBe('update');
@@ -59,7 +65,10 @@ describe('NoteRepository item_changes auditing', () => {
     const changesAfterDelete = await db.query<{
       id: string;
       operation: string;
-    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ? ORDER BY rowid ASC', ['note', String(created.id)]);
+    }>('SELECT * FROM item_changes WHERE entity_type = ? AND entity_id = ? ORDER BY rowid ASC', [
+      'note',
+      String(created.id),
+    ]);
 
     expect(changesAfterDelete.length).toBe(3);
     expect(changesAfterDelete[2].operation).toBe('delete');

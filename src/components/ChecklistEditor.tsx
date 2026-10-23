@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Plus,
-  Trash2,
-  CheckSquare,
-  Square,
-  GripVertical,
-  Check,
-} from 'lucide-react';
+import { Plus, Trash2, CheckSquare, Square } from 'lucide-react';
 import { ChecklistItem } from '../types';
 import { NativeBridge } from '../lib/nativeBridge';
 import { generatePrefixedId } from '../lib/uuid';
@@ -16,10 +9,7 @@ interface ChecklistEditorProps {
   onChange: (items: ChecklistItem[]) => void;
 }
 
-export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
-  items,
-  onChange,
-}) => {
+export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChange }) => {
   const [newItemText, setNewItemText] = useState('');
 
   const handleAddItem = (e: React.FormEvent) => {
@@ -45,9 +35,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({
   };
 
   const handleTextChange = (id: string, newText: string) => {
-    const updated = items.map((item) =>
-      item.id === id ? { ...item, text: newText } : item
-    );
+    const updated = items.map((item) => (item.id === id ? { ...item, text: newText } : item));
     onChange(updated);
   };
 

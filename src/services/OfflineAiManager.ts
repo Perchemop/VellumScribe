@@ -11,10 +11,10 @@ import {
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { RecordingRepository } from '../repositories/RecordingRepository';
 import { AiResultValidator } from './AiResultValidator';
-import { TranscriptService } from './TranscriptService';
 import { AppLogger } from '../lib/logger';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { MediaRepository } from '../lib/MediaRepository';
+import { asErrorLike } from '../lib/errorLike';
 
 export interface StorageBreakdown {
   modelsBytes: number;
@@ -25,8 +25,9 @@ export interface StorageBreakdown {
 
 function normalizeModelList(raw: unknown): SpeechModelProfile[] {
   if (Array.isArray(raw)) return raw as SpeechModelProfile[];
-  if (raw && typeof raw === 'object' && Array.isArray((raw as any).models)) {
-    return (raw as any).models as SpeechModelProfile[];
+  const models = (raw as { models?: unknown }).models;
+  if (models !== undefined && Array.isArray(models)) {
+    return models as SpeechModelProfile[];
   }
   return [];
 }
@@ -68,14 +69,7 @@ export class OfflineAiManager {
   /**
    * Recommend speech recognition model based on device capabilities
    */
-  public recommendSpeechModel(capabilities: AiCapabilities): SpeechModelProfile | null {
-    const ram = capabilities.availableRamMb;
-    let targetId = 'whisper-base';
-    if (ram !== null && ram < 3000) {
-      targetId = 'whisper-tiny';
-    } else if (ram !== null && ram >= 6000 && (capabilities.cpuCores || 4) >= 8) {
-      targetId = 'whisper-small';
-    }
+  public recommendSpeechModel(_capabilities: AiCapabilities): SpeechModelProfile | null {
     return null; // Evaluated dynamically against listSpeechModels
   }
 
@@ -162,11 +156,18 @@ export class OfflineAiManager {
       try {
         const mediaBlob = await MediaRepository.getBinary(recording.media_key);
         if (!mediaBlob && !recording.file_path) {
-          throw new Error('OFFLINE_AI_AUDIO_INVALID: Recording audio data could not be located in local media storage.');
+          throw new Error(
+            'OFFLINE_AI_AUDIO_INVALID: Recording audio data could not be located in local media storage.'
+          );
         }
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         if (err?.message?.includes('OFFLINE_AI')) throw err;
-        AppLogger.warn('OfflineAiManager', 'Could not verify media key binary: ' + recording.media_key, err);
+        AppLogger.warn(
+          'OfflineAiManager',
+          'Could not verify media key binary: ' + recording.media_key,
+          err
+        );
       }
     }
 
@@ -178,10 +179,14 @@ export class OfflineAiManager {
       caps.isCharging === false &&
       recording.duration_seconds > 600
     ) {
-      AppLogger.warn('OfflineAiManager', `Battery low (${caps.batteryLevel}%), long transcription.`);
+      AppLogger.warn(
+        'OfflineAiManager',
+        `Battery low (${caps.batteryLevel}%), long transcription.`
+      );
     }
 
-    const selectedLanguage = options?.language && options.language.trim().length > 0 ? options.language.trim() : 'auto';
+    const selectedLanguage =
+      options?.language && options.language.trim().length > 0 ? options.language.trim() : 'auto';
 
     // Native plugin reads recordingId via getString — always pass a string.
     return await OfflineAi.startTranscription({
@@ -313,7 +318,9 @@ export class OfflineAiManager {
     try {
       const db = getDatabaseAdapter();
       // 1. Recordings storage
-      const recRows = await db.query<{ total: number }>('SELECT SUM(file_size) as total FROM recordings');
+      const recRows = await db.query<{ total: number }>(
+        'SELECT SUM(file_size) as total FROM recordings'
+      );
       const recordingsBytes = recRows[0]?.total || 0;
 
       // 2. Transcripts storage
@@ -357,7 +364,7 @@ export class OfflineAiManager {
   public async cleanTemporaryFiles(): Promise<void> {
     try {
       const db = getDatabaseAdapter();
-      const sql = "DELETE FROM transcriptions WHERE status = ?";
+      const sql = 'DELETE FROM transcriptions WHERE status = ?';
       const params = ['CANCELLED'];
       await db.run(sql, params);
       AppLogger.info('OfflineAiManager', 'Cleaned temporary cancelled jobs.');
@@ -416,14 +423,28 @@ export class OfflineAiManager {
       .filter((s) => s.length > 5);
 
     // Identify Action Items with provenance
-    const actionKeywords = ['todo', 'action', 'confirm', 'send', 'review', 'prepare', 'check', 'follow up', 'schedule', 'deliver'];
+    const actionKeywords = [
+      'todo',
+      'action',
+      'confirm',
+      'send',
+      'review',
+      'prepare',
+      'check',
+      'follow up',
+      'schedule',
+      'deliver',
+    ];
     const actionItems: StructuredAiExtraction['actionItems'] = [];
     const decisions: StructuredAiExtraction['decisions'] = [];
     const risks: StructuredAiExtraction['risks'] = [];
 
     sentences.forEach((sent, index) => {
       const lower = sent.toLowerCase();
-      const approxSegment = Math.min(segmentsCount, Math.max(1, Math.floor((index / Math.max(1, sentences.length)) * segmentsCount) + 1));
+      const approxSegment = Math.min(
+        segmentsCount,
+        Math.max(1, Math.floor((index / Math.max(1, sentences.length)) * segmentsCount) + 1)
+      );
 
       if (actionKeywords.some((k) => lower.includes(k))) {
         actionItems.push({
@@ -433,12 +454,21 @@ export class OfflineAiManager {
           priority: lower.includes('urgent') || lower.includes('asap') ? 'high' : 'medium',
           sourceSegments: [approxSegment],
         });
-      } else if (lower.includes('decide') || lower.includes('agreed') || lower.includes('approved')) {
+      } else if (
+        lower.includes('decide') ||
+        lower.includes('agreed') ||
+        lower.includes('approved')
+      ) {
         decisions.push({
           text: sent,
           sourceSegments: [approxSegment],
         });
-      } else if (lower.includes('risk') || lower.includes('warning') || lower.includes('delay') || lower.includes('issue')) {
+      } else if (
+        lower.includes('risk') ||
+        lower.includes('warning') ||
+        lower.includes('delay') ||
+        lower.includes('issue')
+      ) {
         risks.push({
           text: sent,
           sourceSegments: [approxSegment],

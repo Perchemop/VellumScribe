@@ -16,12 +16,9 @@ import {
   SearchResult,
 } from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
-import {
-  NoteRepository,
-  NotesPageOptions,
-  NotesPageResult,
-} from '../repositories/NoteRepository';
+import { NoteRepository, NotesPageOptions, NotesPageResult } from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
+import { asErrorLike } from './errorLike';
 import {
   hashPin,
   verifyPin,
@@ -67,7 +64,8 @@ export class StorageManager {
         this.refreshCaches();
         this.isInitialized = true;
         AppLogger.info('StorageManager', 'Storage gateway ready');
-      } catch (err: any) {
+      } catch (_err) {
+        const err = asErrorLike(_err);
         AppLogger.error('StorageManager', 'Initialization failed', err);
         this.initPromise = null;
         this.isInitialized = false;
@@ -188,7 +186,9 @@ export class StorageManager {
     try {
       const notes = this.getNotes().filter((n) => n.event_id === id);
       if (notes.length > 0) {
-        let general = this.getEvents().find((e) => e.title.toLowerCase() === 'general' && e.id !== id);
+        let general = this.getEvents().find(
+          (e) => e.title.toLowerCase() === 'general' && e.id !== id
+        );
         if (!general) {
           general = this.addEvent({
             title: 'General',
@@ -235,7 +235,10 @@ export class StorageManager {
     }
   }
 
-  public static async getNotesKeyset(beforeUpdatedAt?: string, limit: number = 50): Promise<NoteRecord[]> {
+  public static async getNotesKeyset(
+    beforeUpdatedAt?: string,
+    limit: number = 50
+  ): Promise<NoteRecord[]> {
     const res = await NoteRepository.list({ limit, cursor: beforeUpdatedAt, status: 'active' });
     return res.notes;
   }
@@ -314,7 +317,11 @@ export class StorageManager {
   ): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
-    if (expectedVersion !== undefined && existing.version !== undefined && existing.version !== expectedVersion) {
+    if (
+      expectedVersion !== undefined &&
+      existing.version !== undefined &&
+      existing.version !== expectedVersion
+    ) {
       try {
         SqliteRepository.recordSyncConflict({
           entity_type: 'note',
@@ -327,7 +334,10 @@ export class StorageManager {
       } catch (e) {
         AppLogger.warn('StorageManager', 'Failed to record sync conflict', e);
       }
-      AppLogger.warn('StorageManager', `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`);
+      AppLogger.warn(
+        'StorageManager',
+        `Sync conflict detected on note #${id}: expected version ${expectedVersion}, but found ${existing.version}`
+      );
       return null;
     }
     const updated: NoteRecord = {
@@ -353,8 +363,8 @@ export class StorageManager {
     _skipFts?: boolean
   ): NoteRecord | null {
     try {
-      if (typeof (SqliteRepository as any).updateNoteText === 'function') {
-        const updated = (SqliteRepository as any).updateNoteText(id, title, body, _skipFts);
+      if (typeof SqliteRepository.updateNoteText === 'function') {
+        const updated = SqliteRepository.updateNoteText(id, title, body, _skipFts);
         if (updated && this.notesCache) {
           const i = this.notesCache.findIndex((n) => n.id === id);
           if (i >= 0) this.notesCache[i] = updated;
@@ -387,7 +397,7 @@ export class StorageManager {
   }
 
   public static unarchiveNote(id: number): void {
-    this.updateNote(id, { status: 'active', archived_at: undefined as any });
+    this.updateNote(id, { status: 'active', archived_at: undefined });
   }
 
   public static trashNote(id: number): void {
@@ -395,7 +405,7 @@ export class StorageManager {
   }
 
   public static restoreNote(id: number): void {
-    this.updateNote(id, { status: 'active', trashed_at: undefined as any });
+    this.updateNote(id, { status: 'active', trashed_at: undefined });
   }
 
   public static emptyTrash(): void {
@@ -582,9 +592,9 @@ export class StorageManager {
       if (verified.payload) {
         return this.updateNote(note.id, {
           is_locked: false,
-          pin_hash: undefined as any,
-          pin_salt: undefined as any,
-          encrypted_payload: undefined as any,
+          pin_hash: undefined,
+          pin_salt: undefined,
+          encrypted_payload: undefined,
           title: verified.payload.title || note.title,
           body: verified.payload.body || '',
           checklist_items: verified.payload.checklist_items || [],
@@ -594,16 +604,21 @@ export class StorageManager {
 
     return this.updateNote(note.id, {
       is_locked: false,
-      pin_hash: undefined as any,
-      pin_salt: undefined as any,
-      encrypted_payload: undefined as any,
+      pin_hash: undefined,
+      pin_salt: undefined,
+      encrypted_payload: undefined,
     });
   }
 
   public static async verifyAndUnlockNote(
     note: NoteRecord,
     pin: string
-  ): Promise<{ success: boolean; payload?: NotePayloadData; errorMessage?: string; message?: string }> {
+  ): Promise<{
+    success: boolean;
+    payload?: NotePayloadData;
+    errorMessage?: string;
+    message?: string;
+  }> {
     if (!note.is_locked) {
       return {
         success: true,
@@ -678,14 +693,17 @@ export class StorageManager {
     });
   }
 
-  public static async lockNoteTransactionally(noteId: number, pin: string): Promise<NoteRecord | null> {
+  public static async lockNoteTransactionally(
+    noteId: number,
+    pin: string
+  ): Promise<NoteRecord | null> {
     return this.setNotePinLock(noteId, pin);
   }
 
   public static getNoteRevisions(noteId: number): NoteRevisionRecord[] {
     try {
-      return typeof (SqliteRepository as any).getNoteRevisions === 'function'
-        ? (SqliteRepository as any).getNoteRevisions(noteId)
+      return typeof SqliteRepository.getNoteRevisions === 'function'
+        ? SqliteRepository.getNoteRevisions(noteId)
         : [];
     } catch {
       return [];
@@ -703,8 +721,8 @@ export class StorageManager {
     if (this.recordingsCache) return this.recordingsCache;
     try {
       this.recordingsCache =
-        typeof (SqliteRepository as any).getAllRecordings === 'function'
-          ? (SqliteRepository as any).getAllRecordings()
+        typeof SqliteRepository.getAllRecordings === 'function'
+          ? SqliteRepository.getAllRecordings()
           : [];
     } catch {
       this.recordingsCache = [];
@@ -716,11 +734,11 @@ export class StorageManager {
     return this.getRecordings().filter((r) => r.note_id === noteId);
   }
 
-  public static addRecording(rec: any): any {
-    const row = { ...rec, id: rec.id ?? Date.now() };
+  public static addRecording(rec: Omit<RecordingRecord, 'id'> & { id?: number }): RecordingRecord {
+    const row: RecordingRecord = { ...rec, id: rec.id ?? Date.now() };
     try {
-      if (typeof (SqliteRepository as any).saveRecording === 'function') {
-        (SqliteRepository as any).saveRecording(row);
+      if (typeof SqliteRepository.saveRecording === 'function') {
+        SqliteRepository.saveRecording(row);
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'saveRecording failed', e);
@@ -729,14 +747,9 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteRecording(id: string | number): void {
-    try {
-      if (typeof (SqliteRepository as any).deleteRecording === 'function') {
-        (SqliteRepository as any).deleteRecording(id);
-      }
-    } catch (e) {
-      AppLogger.warn('StorageManager', 'deleteRecording failed', e);
-    }
+  public static deleteRecording(_id: string | number): void {
+    // SQLite has no recording-delete path yet (see Q-011); only the in-memory
+    // cache is invalidated here.
     this.recordingsCache = null;
   }
 
@@ -744,8 +757,8 @@ export class StorageManager {
     if (this.transcriptsCache) return this.transcriptsCache;
     try {
       this.transcriptsCache =
-        typeof (SqliteRepository as any).getAllTranscripts === 'function'
-          ? (SqliteRepository as any).getAllTranscripts()
+        typeof SqliteRepository.getAllTranscripts === 'function'
+          ? SqliteRepository.getAllTranscripts()
           : [];
     } catch {
       this.transcriptsCache = [];
@@ -753,15 +766,17 @@ export class StorageManager {
     return this.transcriptsCache ?? [];
   }
 
-  public static getTranscriptForRecording(recordingId: string | number): TranscriptRecord | undefined {
+  public static getTranscriptForRecording(
+    recordingId: string | number
+  ): TranscriptRecord | undefined {
     return this.getTranscripts().find((t) => String(t.recording_id) === String(recordingId));
   }
 
-  public static addTranscript(t: any): any {
-    const row = { ...t, id: t.id ?? Date.now() };
+  public static addTranscript(t: Omit<TranscriptRecord, 'id'> & { id?: number }): TranscriptRecord {
+    const row: TranscriptRecord = { ...t, id: t.id ?? Date.now() };
     try {
-      if (typeof (SqliteRepository as any).saveTranscript === 'function') {
-        (SqliteRepository as any).saveTranscript(row);
+      if (typeof SqliteRepository.saveTranscript === 'function') {
+        SqliteRepository.saveTranscript(row);
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'saveTranscript failed', e);
@@ -774,8 +789,8 @@ export class StorageManager {
     if (this.ocrScansCache) return this.ocrScansCache;
     try {
       this.ocrScansCache =
-        typeof (SqliteRepository as any).getAllOcrScans === 'function'
-          ? (SqliteRepository as any).getAllOcrScans()
+        typeof SqliteRepository.getAllOcrScans === 'function'
+          ? SqliteRepository.getAllOcrScans()
           : [];
     } catch {
       this.ocrScansCache = [];
@@ -787,11 +802,11 @@ export class StorageManager {
     return this.getOcrScans().filter((s) => s.note_id === noteId);
   }
 
-  public static addOcrScan(scan: any): any {
-    const row = { ...scan, id: scan.id ?? Date.now() };
+  public static addOcrScan(scan: Omit<OcrScanRecord, 'id'> & { id?: number }): OcrScanRecord {
+    const row: OcrScanRecord = { ...scan, id: scan.id ?? Date.now() };
     try {
-      if (typeof (SqliteRepository as any).saveOcrScan === 'function') {
-        (SqliteRepository as any).saveOcrScan(row);
+      if (typeof SqliteRepository.saveOcrScan === 'function') {
+        SqliteRepository.saveOcrScan(row);
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'saveOcrScan failed', e);
@@ -800,21 +815,18 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteOcrScan(id: string | number): void {
-    try {
-      if (typeof (SqliteRepository as any).deleteOcrScan === 'function') {
-        (SqliteRepository as any).deleteOcrScan(id);
-      }
-    } catch (e) {
-      AppLogger.warn('StorageManager', 'deleteOcrScan failed', e);
-    }
+  public static deleteOcrScan(_id: string | number): void {
+    // SQLite has no OCR-scan delete path yet (see Q-011); only the in-memory
+    // cache is invalidated here.
     this.ocrScansCache = null;
   }
 
-  public static getSyncConflicts(status: 'open' | 'resolved' | 'ignored' = 'open'): SyncConflictRecord[] {
+  public static getSyncConflicts(
+    status: 'open' | 'resolved' | 'ignored' = 'open'
+  ): SyncConflictRecord[] {
     try {
-      return typeof (SqliteRepository as any).getSyncConflicts === 'function'
-        ? (SqliteRepository as any).getSyncConflicts(status)
+      return typeof SqliteRepository.getSyncConflicts === 'function'
+        ? SqliteRepository.getSyncConflicts(status)
         : [];
     } catch {
       return [];
@@ -823,8 +835,8 @@ export class StorageManager {
 
   public static resolveSyncConflict(id: string): void {
     try {
-      if (typeof (SqliteRepository as any).resolveSyncConflict === 'function') {
-        (SqliteRepository as any).resolveSyncConflict(id);
+      if (typeof SqliteRepository.resolveSyncConflict === 'function') {
+        SqliteRepository.resolveSyncConflict(id);
       }
     } catch (e) {
       AppLogger.warn('StorageManager', 'resolveSyncConflict failed', e);
@@ -833,8 +845,8 @@ export class StorageManager {
 
   public static getSqliteStats(): SqliteStats {
     try {
-      if (typeof (SqliteRepository as any).getDatabaseStats === 'function') {
-        return (SqliteRepository as any).getDatabaseStats();
+      if (typeof SqliteRepository.getDatabaseStats === 'function') {
+        return SqliteRepository.getDatabaseStats();
       }
     } catch {
       /* fall through */
@@ -894,7 +906,8 @@ export class StorageManager {
         status: r.ok ? 'ok' : 'corrupted',
         details: r.result,
       };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return {
         ok: false,
         result: e?.message || 'integrity check failed',
@@ -917,15 +930,8 @@ export class StorageManager {
   }
 
   public static async cleanOrphanedMedia(): Promise<{ cleanedCount: number }> {
-    try {
-      if (typeof (SqliteRepository as any).cleanOrphanedMedia === 'function') {
-        const n = await (SqliteRepository as any).cleanOrphanedMedia();
-        const count = typeof n === 'number' ? n : (n?.cleanedCount ?? 0);
-        return { cleanedCount: count };
-      }
-    } catch (e) {
-      AppLogger.warn('StorageManager', 'cleanOrphanedMedia failed', e);
-    }
+    // Media pruning lives on SqliteRepository (findOrphanMediaKeys /
+    // removeOrphanMediaRecord); this helper has no separate sweep to run.
     return { cleanedCount: 0 };
   }
 
@@ -964,13 +970,7 @@ export class StorageManager {
 
   public static searchNotes(options: SearchOptions): SearchResult {
     try {
-      if (typeof (SqliteRepository as any).searchNotesWithCount === 'function') {
-        return (SqliteRepository as any).searchNotesWithCount(options);
-      }
-      if (typeof (SqliteRepository as any).searchNotes === 'function') {
-        const arr = (SqliteRepository as any).searchNotes(options);
-        return Array.isArray(arr) ? { notes: arr, totalCount: arr.length } : arr;
-      }
+      return SqliteRepository.searchNotesWithCount(options);
     } catch (e) {
       AppLogger.warn('StorageManager', 'searchNotes failed', e);
     }
@@ -978,8 +978,7 @@ export class StorageManager {
     let notes = this.getNotes();
     if (q) {
       notes = notes.filter(
-        (n) =>
-          (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
+        (n) => (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
       );
     }
     if (options.status) notes = notes.filter((n) => n.status === options.status);
@@ -1024,7 +1023,8 @@ export class StorageManager {
       if (Array.isArray(data.notes)) this.saveNotes(data.notes);
       this.refreshCaches();
       return { success: true };
-    } catch (e: any) {
+    } catch (_e) {
+      const e = asErrorLike(_e);
       return { success: false, error: e?.message || 'import failed' };
     }
   }
@@ -1068,9 +1068,7 @@ export class StorageManager {
   public static exportNotesAsMarkdown(ids?: number[]): string {
     let notes = this.getNotes();
     if (ids && ids.length) notes = notes.filter((n) => ids.includes(n.id));
-    return notes
-      .map((n) => `# ${n.title || 'Untitled'}\n\n${n.body || ''}`)
-      .join('\n\n---\n\n');
+    return notes.map((n) => `# ${n.title || 'Untitled'}\n\n${n.body || ''}`).join('\n\n---\n\n');
   }
 
   public static importLegacyUnencryptedBackup(json: string): { success: boolean; error?: string } {

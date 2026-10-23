@@ -17,11 +17,11 @@ TranscriptionRepository (durable job status)
 
 ### Engine selection (honest)
 
-| Policy | Order |
-|--------|--------|
-| `offline_only` | Whisper if ready → live-text web offline → **fail closed** |
-| `local_first` | Whisper → live-text offline → cloud Gemini |
-| `cloud_only` / `cloud_allowed` | Cloud first (when network allowed) |
+| Policy                         | Order                                                      |
+| ------------------------------ | ---------------------------------------------------------- |
+| `offline_only`                 | Whisper if ready → live-text web offline → **fail closed** |
+| `local_first`                  | Whisper → live-text offline → cloud Gemini                 |
+| `cloud_only` / `cloud_allowed` | Cloud first (when network allowed)                         |
 
 Placeholder transcripts ("### Audio Recording…", "speech activity detected…") are rejected and treated as engine failure — good honesty gate.
 
@@ -36,12 +36,12 @@ Placeholder transcripts ("### Audio Recording…", "speech activity detected…"
 
 ### Remaining product / device gaps
 
-| Item | Notes |
-|------|--------|
-| REAL Whisper | Requires NDK REAL build + model download; STUB correctly fails closed |
-| Recovery sheet props | Editor often opens sheet without `recordingId` / `audioBlob` — cloud button needs a recording; improve wiring to pass last recording id |
-| Live dictation capture | Must pass `liveCapturedText` into orchestrator for true offline web path without Whisper |
-| OS SpeechRecognizer | OEM language packs still required (KNOWN_LIMITATIONS) |
+| Item                   | Notes                                                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| REAL Whisper           | Requires NDK REAL build + model download; STUB correctly fails closed                                                                   |
+| Recovery sheet props   | Editor often opens sheet without `recordingId` / `audioBlob` — cloud button needs a recording; improve wiring to pass last recording id |
+| Live dictation capture | Must pass `liveCapturedText` into orchestrator for true offline web path without Whisper                                                |
+| OS SpeechRecognizer    | OEM language packs still required (KNOWN_LIMITATIONS)                                                                                   |
 
 ### Strengths
 

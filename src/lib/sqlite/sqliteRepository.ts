@@ -73,6 +73,20 @@ export interface NotesPageResult {
   hasMore: boolean;
 }
 
+/** Raw rows from the `checklists` table, hydrated into ChecklistItem entries. */
+export interface ChecklistRow {
+  id: string; // checklists.id is TEXT PRIMARY KEY (see schema.ts)
+  note_id: number;
+  text: string;
+  completed: unknown; // stored as 0/1 in SQLite
+}
+
+/** Raw rows from the `note_tags` table. */
+export interface TagRow {
+  note_id: number;
+  tag_name: string;
+}
+
 export class SqliteRepository {
   private static get db() {
     return getDatabaseAdapter();
@@ -83,7 +97,10 @@ export class SqliteRepository {
     return await adapter.query<T>(sql, params);
   }
 
-  public static async runAsync(sql: string, params: unknown[] = []): Promise<{ changes: number; lastInsertRowId?: number }> {
+  public static async runAsync(
+    sql: string,
+    params: unknown[] = []
+  ): Promise<{ changes: number; lastInsertRowId?: number }> {
     const adapter = this.db;
     return await adapter.run(sql, params);
   }
@@ -98,15 +115,22 @@ export class SqliteRepository {
     if (adapter.querySync) {
       return adapter.querySync<T>(sql, params);
     }
-    throw new Error('SqliteRepository: Synchronous query unsupported on current adapter. Use queryAsync.');
+    throw new Error(
+      'SqliteRepository: Synchronous query unsupported on current adapter. Use queryAsync.'
+    );
   }
 
-  private static run(sql: string, params: unknown[] = []): { changes: number; lastInsertRowId?: number } {
+  private static run(
+    sql: string,
+    params: unknown[] = []
+  ): { changes: number; lastInsertRowId?: number } {
     const adapter = this.db;
     if (adapter.runSync) {
       return adapter.runSync(sql, params);
     }
-    throw new Error('SqliteRepository: Synchronous run unsupported on current adapter. Use runAsync.');
+    throw new Error(
+      'SqliteRepository: Synchronous run unsupported on current adapter. Use runAsync.'
+    );
   }
 
   private static transaction<T>(fn: () => T): T {
@@ -114,7 +138,9 @@ export class SqliteRepository {
     if (adapter.transactionSync) {
       return adapter.transactionSync(fn);
     }
-    throw new Error('SqliteRepository: Synchronous transaction unsupported on current adapter. Use transactionAsync.');
+    throw new Error(
+      'SqliteRepository: Synchronous transaction unsupported on current adapter. Use transactionAsync.'
+    );
   }
 
   private static getLastInsertId(): number {
@@ -128,13 +154,13 @@ export class SqliteRepository {
    * Efficient batch hydrator for note items (checklists and tags)
    * Prevents full database loading and eliminates N+1 query overhead
    */
-  private static populateNotesBatch(noteRows: any[]): NoteRecord[] {
+  private static populateNotesBatch(noteRows: NoteRecord[]): NoteRecord[] {
     if (!noteRows || noteRows.length === 0) return [];
     const noteIds = noteRows.map((r) => r.id);
     const placeholders = noteIds.map(() => '?').join(',');
 
     // Fetch checklists only for this batch
-    const chkRows = this.query<any>(
+    const chkRows = this.query<ChecklistRow>(
       `SELECT id, note_id, text, completed, position FROM checklists WHERE note_id IN (${placeholders}) ORDER BY position ASC, id ASC`,
       noteIds
     );
@@ -149,7 +175,7 @@ export class SqliteRepository {
     }
 
     // Fetch tags only for this batch
-    const tagRows = this.query<any>(
+    const tagRows = this.query<TagRow>(
       `SELECT note_id, tag_name FROM note_tags WHERE note_id IN (${placeholders})`,
       noteIds
     );
@@ -170,7 +196,10 @@ export class SqliteRepository {
       is_locked: Boolean(row.is_locked),
       lock_mode: row.lock_mode || undefined,
       security_type: row.security_type || undefined,
-      cloud_save_enabled: row.cloud_save_enabled !== undefined && row.cloud_save_enabled !== null ? Boolean(row.cloud_save_enabled) : true,
+      cloud_save_enabled:
+        row.cloud_save_enabled !== undefined && row.cloud_save_enabled !== null
+          ? Boolean(row.cloud_save_enabled)
+          : true,
       pin_hash: row.pin_hash || undefined,
       pin_salt: row.pin_salt || undefined,
       encrypted_payload: row.encrypted_payload || undefined,
@@ -193,7 +222,7 @@ export class SqliteRepository {
   // --- NOTES CRUD ---
 
   public static getAllNotes(): NoteRecord[] {
-    const rawNotes = this.query<any>(`
+    const rawNotes = this.query<NoteRecord>(`
       SELECT n.*, e.title as event_title, e.color as event_color
       FROM notes n
       LEFT JOIN events e ON n.event_id = e.id
@@ -203,7 +232,7 @@ export class SqliteRepository {
   }
 
   public static getNoteById(id: number): NoteRecord | null {
-    const rawNotes = this.query<any>('SELECT * FROM notes WHERE id = ?', [id]);
+    const rawNotes = this.query<NoteRecord>('SELECT * FROM notes WHERE id = ?', [id]);
     if (rawNotes.length === 0) return null;
     const populated = this.populateNotesBatch(rawNotes);
     return populated.length > 0 ? populated[0] : null;
@@ -336,10 +365,12 @@ export class SqliteRepository {
       }
 
       // 2. Targeted Checklists differential synchronization
-      const existingChecklists = this.query<{ id: string; text: string; completed: number; position: number }>(
-        'SELECT id, text, completed, position FROM checklists WHERE note_id = ?',
-        [noteId]
-      );
+      const existingChecklists = this.query<{
+        id: string;
+        text: string;
+        completed: number;
+        position: number;
+      }>('SELECT id, text, completed, position FROM checklists WHERE note_id = ?', [noteId]);
       const existingChkMap = new Map(existingChecklists.map((c) => [c.id, c]));
       const incomingChkIds = new Set<string>();
 
@@ -352,7 +383,11 @@ export class SqliteRepository {
           const completedNum = item.completed ? 1 : 0;
 
           if (existing) {
-            if (existing.text !== item.text || existing.completed !== completedNum || existing.position !== i) {
+            if (
+              existing.text !== item.text ||
+              existing.completed !== completedNum ||
+              existing.position !== i
+            ) {
               this.run(
                 'UPDATE checklists SET text = ?, completed = ?, position = ? WHERE id = ? AND note_id = ?',
                 [item.text, completedNum, i, chkId, noteId]
@@ -384,7 +419,10 @@ export class SqliteRepository {
       for (const tag of incomingTagSet) {
         if (!existingTagSet.has(tag)) {
           this.run('INSERT OR IGNORE INTO tags (name) VALUES (?)', [tag]);
-          this.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [noteId, tag]);
+          this.run('INSERT OR IGNORE INTO note_tags (note_id, tag_name) VALUES (?, ?)', [
+            noteId,
+            tag,
+          ]);
         }
       }
       for (const tag of existingTagSet) {
@@ -422,7 +460,13 @@ export class SqliteRepository {
         );
       }
 
-      this.recordItemChange('note', noteId, isExisting ? 'update' : 'create', note.version || 1, note);
+      this.recordItemChange(
+        'note',
+        noteId,
+        isExisting ? 'update' : 'create',
+        note.version || 1,
+        note
+      );
 
       return {
         ...note,
@@ -437,7 +481,12 @@ export class SqliteRepository {
    * Fast field-specific updater for editor typing.
    * Updates only title and/or body in-place without expensive checklist or tag recalculation.
    */
-  public static updateNoteText(id: number, title?: string, body?: string, skipFts = false): NoteRecord | null {
+  public static updateNoteText(
+    id: number,
+    title?: string,
+    body?: string,
+    skipFts = false
+  ): NoteRecord | null {
     const existing = this.getNoteById(id);
     if (!existing) return null;
 
@@ -446,10 +495,12 @@ export class SqliteRepository {
     const now = new Date().toISOString();
 
     this.transaction(() => {
-      this.run(
-        'UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?',
-        [newTitle, newBody, now, id]
-      );
+      this.run('UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?', [
+        newTitle,
+        newBody,
+        now,
+        id,
+      ]);
 
       if (!existing.is_locked && !skipFts) {
         try {
@@ -546,7 +597,7 @@ export class SqliteRepository {
     } = options;
 
     const trimmed = (query || '').trim();
-    const params: any[] = [];
+    const params: unknown[] = [];
     let whereClause = '1=1';
 
     if (status) {
@@ -583,7 +634,8 @@ export class SqliteRepository {
     }
 
     if (hasAttachments) {
-      whereClause += ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
+      whereClause +=
+        ' AND (n.sketch_media_key IS NOT NULL OR EXISTS (SELECT 1 FROM recordings rec2 WHERE rec2.note_id = n.id) OR EXISTS (SELECT 1 FROM ocr_scans ocr2 WHERE ocr2.note_id = n.id))';
     }
 
     if (dateFrom) {
@@ -632,13 +684,17 @@ export class SqliteRepository {
             ORDER BY n.is_pinned DESC, n.updated_at DESC
             LIMIT ? OFFSET ?
           `;
-          const rows = this.query<any>(matchSql, [ftsExpression, ...params, limit, offset]);
+          const rows = this.query<NoteRecord>(matchSql, [ftsExpression, ...params, limit, offset]);
           return {
             notes: this.populateNotesBatch(rows),
             totalCount,
           };
         } catch (ftsErr) {
-          AppLogger.warn('SqliteRepository', 'FTS query syntax error, falling back to LIKE search', ftsErr);
+          AppLogger.warn(
+            'SqliteRepository',
+            'FTS query syntax error, falling back to LIKE search',
+            ftsErr
+          );
         }
       }
 
@@ -672,7 +728,7 @@ export class SqliteRepository {
         ORDER BY n.is_pinned DESC, n.updated_at DESC
         LIMIT ? OFFSET ?
       `;
-      const rows = this.query<any>(fallbackSql, [...likeParams, limit, offset]);
+      const rows = this.query<NoteRecord>(fallbackSql, [...likeParams, limit, offset]);
       return {
         notes: this.populateNotesBatch(rows),
         totalCount,
@@ -699,7 +755,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, n.updated_at DESC
       LIMIT ? OFFSET ?
     `;
-    const rows = this.query<any>(sql, [...params, limit, offset]);
+    const rows = this.query<NoteRecord>(sql, [...params, limit, offset]);
     return {
       notes: this.populateNotesBatch(rows),
       totalCount,
@@ -744,7 +800,7 @@ export class SqliteRepository {
       };
     }
 
-    const params: any[] = [];
+    const params: unknown[] = [];
     let where = '1=1';
 
     if (status) {
@@ -758,7 +814,8 @@ export class SqliteRepository {
     }
 
     if (tag) {
-      where += ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
+      where +=
+        ' AND EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_name = ?)';
       params.push(tag);
     }
 
@@ -779,7 +836,8 @@ export class SqliteRepository {
     const totalPages = Math.ceil(totalCount / pageSize) || 1;
     const offset = (page - 1) * pageSize;
 
-    const safeSortCol = sortBy === 'created_at' ? 'n.created_at' : sortBy === 'title' ? 'n.title' : 'n.updated_at';
+    const safeSortCol =
+      sortBy === 'created_at' ? 'n.created_at' : sortBy === 'title' ? 'n.title' : 'n.updated_at';
     const safeDirection = sortDirection.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     const sql = `
@@ -789,7 +847,7 @@ export class SqliteRepository {
       ORDER BY n.is_pinned DESC, ${safeSortCol} ${safeDirection}
       LIMIT ? OFFSET ?
     `;
-    const rows = this.query<any>(sql, [...params, pageSize, offset]);
+    const rows = this.query<NoteRecord>(sql, [...params, pageSize, offset]);
     const notes = this.populateNotesBatch(rows);
 
     return {
@@ -805,7 +863,9 @@ export class SqliteRepository {
   // --- EVENTS / NOTEBOOKS CRUD ---
 
   public static getAllEvents(): EventRecord[] {
-    const rawEvents = this.query<any>('SELECT * FROM events ORDER BY event_date DESC, created_at DESC');
+    const rawEvents = this.query<EventRecord>(
+      'SELECT * FROM events ORDER BY event_date DESC, created_at DESC'
+    );
     return rawEvents.map((r) => ({
       id: r.id,
       title: r.title,
@@ -872,7 +932,7 @@ export class SqliteRepository {
   // --- VERSION CONTROL & RETENTION POLICY ---
 
   public static getNoteVersions(noteId: number): DocumentVersion[] {
-    const rows = this.query<any>(
+    const rows = this.query<DocumentVersion>(
       'SELECT * FROM note_versions WHERE note_id = ? ORDER BY version_number DESC',
       [noteId]
     );
@@ -898,7 +958,7 @@ export class SqliteRepository {
       const verId = version.id || `ver_${noteId}_${verNum}`;
 
       // Deduplication: Check if latest version has identical body
-      const latest = this.query<any>(
+      const latest = this.query<{ body: string }>(
         'SELECT body FROM note_versions WHERE note_id = ? ORDER BY version_number DESC LIMIT 1',
         [noteId]
       );
@@ -980,7 +1040,7 @@ export class SqliteRepository {
   // --- RECORDINGS, TRANSCRIPTS & OCR ---
 
   public static getAllRecordings(): RecordingRecord[] {
-    const rows = this.query<any>('SELECT * FROM recordings ORDER BY created_at DESC');
+    const rows = this.query<RecordingRecord>('SELECT * FROM recordings ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -1042,7 +1102,7 @@ export class SqliteRepository {
   }
 
   public static getAllTranscripts(): TranscriptRecord[] {
-    const rows = this.query<any>('SELECT * FROM transcripts ORDER BY created_at DESC');
+    const rows = this.query<TranscriptRecord>('SELECT * FROM transcripts ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       recording_id: r.recording_id,
@@ -1086,7 +1146,7 @@ export class SqliteRepository {
   }
 
   public static getAllOcrScans(): OcrScanRecord[] {
-    const rows = this.query<any>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
+    const rows = this.query<OcrScanRecord>('SELECT * FROM ocr_scans ORDER BY created_at DESC');
     return rows.map((r) => ({
       id: r.id,
       note_id: r.note_id,
@@ -1169,16 +1229,22 @@ export class SqliteRepository {
   public static getDatabaseStats(): SqliteStats {
     const notesCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM notes')[0]?.c || 0;
     const eventsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM events')[0]?.c || 0;
-    const checklistsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM checklists')[0]?.c || 0;
-    const versionsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM note_versions')[0]?.c || 0;
-    const mediaFilesCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM media_files')[0]?.c || 0;
-    const recordingsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM recordings')[0]?.c || 0;
-    const transcriptsCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM transcripts')[0]?.c || 0;
-    const ocrScansCount = this.query<{ c: number }>('SELECT COUNT(*) as c FROM ocr_scans')[0]?.c || 0;
+    const checklistsCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM checklists')[0]?.c || 0;
+    const versionsCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM note_versions')[0]?.c || 0;
+    const mediaFilesCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM media_files')[0]?.c || 0;
+    const recordingsCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM recordings')[0]?.c || 0;
+    const transcriptsCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM transcripts')[0]?.c || 0;
+    const ocrScansCount =
+      this.query<{ c: number }>('SELECT COUNT(*) as c FROM ocr_scans')[0]?.c || 0;
 
     let binarySize = 0;
     try {
-      const binary = (this.db.exportBinary ? this.db.exportBinary() : new Uint8Array());
+      const binary = this.db.exportBinary ? this.db.exportBinary() : new Uint8Array();
       binarySize = binary.byteLength;
     } catch {
       // ignore
@@ -1186,13 +1252,17 @@ export class SqliteRepository {
 
     let activeVersion = CURRENT_SCHEMA_VERSION;
     try {
-      const vRes = this.query<{ version: number }>('SELECT MAX(version) as version FROM schema_migrations');
+      const vRes = this.query<{ version: number }>(
+        'SELECT MAX(version) as version FROM schema_migrations'
+      );
       if (vRes.length > 0 && typeof vRes[0].version === 'number' && vRes[0].version > 0) {
         activeVersion = vRes[0].version;
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
 
-    const integrity = (this.db.checkIntegritySync ? this.db.checkIntegritySync() : true);
+    const integrity = this.db.checkIntegritySync ? this.db.checkIntegritySync() : true;
 
     return {
       notesCount,
@@ -1210,8 +1280,12 @@ export class SqliteRepository {
   }
 
   public static findOrphanMediaKeys(): string[] {
-    const mediaRows = this.query<{ media_key: string; note_id: number | null }>('SELECT media_key, note_id FROM media_files');
-    const existingNotes = new Set(this.query<{ id: number }>('SELECT id FROM notes').map((n) => n.id));
+    const mediaRows = this.query<{ media_key: string; note_id: number | null }>(
+      'SELECT media_key, note_id FROM media_files'
+    );
+    const existingNotes = new Set(
+      this.query<{ id: number }>('SELECT id FROM notes').map((n) => n.id)
+    );
 
     const orphans: string[] = [];
     for (const m of mediaRows) {
@@ -1233,14 +1307,14 @@ export class SqliteRepository {
     entityId: string | number,
     operation: 'create' | 'update' | 'delete',
     version: number,
-    payload: any
+    payload: unknown
   ): void {
     try {
       const id = generatePrefixedId(`chg_${Date.now()}`);
       const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
       let hash = 0;
       for (let i = 0; i < payloadStr.length; i++) {
-        hash = ((hash << 5) - hash) + payloadStr.charCodeAt(i);
+        hash = (hash << 5) - hash + payloadStr.charCodeAt(i);
         hash |= 0;
       }
       const payloadHash = Math.abs(hash).toString(16);
@@ -1324,7 +1398,13 @@ export class SqliteRepository {
 
   // --- SYNC CONFLICTS (P1-02) ---
 
-  public static recordSyncConflict(conflict: Omit<SyncConflictRecord, 'id' | 'detected_at' | 'status'> & { id?: string; detected_at?: number; status?: 'open' | 'resolved' | 'ignored' }): SyncConflictRecord {
+  public static recordSyncConflict(
+    conflict: Omit<SyncConflictRecord, 'id' | 'detected_at' | 'status'> & {
+      id?: string;
+      detected_at?: number;
+      status?: 'open' | 'resolved' | 'ignored';
+    }
+  ): SyncConflictRecord {
     const id = conflict.id || generatePrefixedId('cnf');
     const detected_at = conflict.detected_at || Date.now();
     const status = conflict.status || 'open';
@@ -1338,7 +1418,17 @@ export class SqliteRepository {
       this.run(
         `INSERT OR REPLACE INTO sync_conflicts (id, entity_type, entity_id, local_version_id, remote_version_id, local_payload, remote_payload, detected_at, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [rec.id, rec.entity_type, rec.entity_id, rec.local_version_id, rec.remote_version_id, rec.local_payload, rec.remote_payload, rec.detected_at, rec.status]
+        [
+          rec.id,
+          rec.entity_type,
+          rec.entity_id,
+          rec.local_version_id,
+          rec.remote_version_id,
+          rec.local_payload,
+          rec.remote_payload,
+          rec.detected_at,
+          rec.status,
+        ]
       );
     } catch (e) {
       AppLogger.warn('SqliteRepository', 'Failed to record sync conflict', e);
@@ -1359,10 +1449,7 @@ export class SqliteRepository {
 
   public static resolveSyncConflict(id: string): void {
     try {
-      this.run(
-        `UPDATE sync_conflicts SET status = 'resolved' WHERE id = ?;`,
-        [id]
-      );
+      this.run(`UPDATE sync_conflicts SET status = 'resolved' WHERE id = ?;`, [id]);
     } catch (e) {
       AppLogger.warn('SqliteRepository', 'Failed to resolve sync conflict', e);
     }
@@ -1375,7 +1462,14 @@ export class SqliteRepository {
       this.run(
         `INSERT INTO local_snapshots (id, snapshot_type, notes_count, events_count, payload_blob, created_at)
          VALUES (?, ?, ?, ?, ?, ?);`,
-        [snapshot.id, snapshot.snapshot_type, snapshot.notes_count, snapshot.events_count, snapshot.payload_blob, snapshot.created_at]
+        [
+          snapshot.id,
+          snapshot.snapshot_type,
+          snapshot.notes_count,
+          snapshot.events_count,
+          snapshot.payload_blob,
+          snapshot.created_at,
+        ]
       );
     } catch (e) {
       AppLogger.warn('SqliteRepository', 'Failed to save local snapshot', e);
