@@ -18,7 +18,8 @@ export interface AiProvenanceRecord {
 /** Raw rows from the `ai_provenance` table (see schema.ts). */
 interface AiProvenanceRow {
   id: string;
-  target_entity_type: string;
+  // constrained by the writer; the column itself is free text
+  target_entity_type: 'note' | 'checklist' | 'transcript' | 'summary';
   target_entity_id: number;
   source_entity_type?: string;
   source_entity_id?: number;
