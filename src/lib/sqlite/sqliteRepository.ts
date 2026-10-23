@@ -74,7 +74,7 @@ export interface NotesPageResult {
 }
 
 /** Raw rows from the `checklists` table, hydrated into ChecklistItem entries. */
-interface ChecklistRow {
+export interface ChecklistRow {
   id: string; // checklists.id is TEXT PRIMARY KEY (see schema.ts)
   note_id: number;
   text: string;
@@ -82,7 +82,7 @@ interface ChecklistRow {
 }
 
 /** Raw rows from the `note_tags` table. */
-interface TagRow {
+export interface TagRow {
   note_id: number;
   tag_name: string;
 }
