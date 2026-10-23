@@ -20,6 +20,9 @@ interface AiExtractionEntity {
   sourceSegments?: unknown;
 }
 
+const PRIORITY_LEVELS = ['low', 'medium', 'high', 'unknown'] as const;
+type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
+
 /** Top-level shape of an untrusted AI extraction payload. */
 interface AiExtractionPayload {
   summary?: unknown;
@@ -126,7 +129,9 @@ export class AiResultValidator {
             text: item.text.trim(),
             owner: typeof item.owner === 'string' && item.owner.trim() ? item.owner.trim() : null,
             dueDate: typeof item.dueDate === 'string' && item.dueDate.trim() ? item.dueDate.trim() : null,
-            priority: ['low', 'medium', 'high', 'unknown'].includes(item.priority ?? '') ? item.priority ?? 'unknown' : 'unknown',
+            priority: (PRIORITY_LEVELS as readonly string[]).includes(item.priority ?? '')
+              ? (item.priority as PriorityLevel)
+              : 'unknown',
             sourceSegments: inRange(item.sourceSegments, totalSegmentsCount),
           }))
       : [];
