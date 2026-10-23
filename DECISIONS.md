@@ -283,9 +283,11 @@ fits on one line.
 reformatting the vendored `cap sync` bundle (generated output, not source).
 
 ### D-408 · 2026-10-23 · Adopt the updated guide's CTO.new-style operating model
+
 **Decision.** The guide was updated to emulate cto.new on free models:
 `Chat (plan) -> Task (execute) -> Pull Request (review) -> merge`. Implemented
 in the repository:
+
 - **Chat mode** — `orchestrator` is the planner (primary, `edit: deny`,
   `shell: deny`). It clarifies, then writes a Task brief (requirement IDs, files
   likely touched, acceptance criteria, DoD) and delegates. It never edits code.
@@ -300,14 +302,15 @@ in the repository:
   removed from `coder` and `reviewer`, so no agent can verify locally.
 - Tracking now updates `REQUIREMENTS_TRACEABILITY.md` **and** `PROGRESS.md`
   after each Task (guide §5.2).
-**Rationale.** The guide is the process authority; the update makes the PR the
-review vehicle and removes any local verification, which is the exact failure
-mode this machine has hit before.
-**Rejected.** Keeping the local lint/format allowances (contradicts §4.2), and
-dropping the specialised `tester`/`fixer`/`docs-writer`/`ci-runner` roles (they
-remain as supporting roles with no local toolchain access).
+  **Rationale.** The guide is the process authority; the update makes the PR the
+  review vehicle and removes any local verification, which is the exact failure
+  mode this machine has hit before.
+  **Rejected.** Keeping the local lint/format allowances (contradicts §4.2), and
+  dropping the specialised `tester`/`fixer`/`docs-writer`/`ci-runner` roles (they
+  remain as supporting roles with no local toolchain access).
 
 ### D-409 · 2026-10-23 · CodeQL code-scanning alerts are owner-triaged, not agent-dismissed
+
 **Finding.** GitHub default-setup CodeQL reports **68 open alerts**, almost all
 in `server.ts` (`js/path-injection`, `js/request-forgery`, `js/polynomial-redos`,
 `js/reflected-xss`, `js/prototype-polluting-assignment`,
@@ -325,5 +328,5 @@ containment, SSRF allow-listing, ReDoS-safe regexes, and the DOM-XSS sink).
 Until that slice lands, `CodeQL` may be red for this PR — recorded here so it is
 never mistaken for a code regression.
 **Rejected.** Adding `CodeQL` to `.ci-required.txt` as non-authoritative
-(that would silently hide future *new* alerts), and blanket-dismissing the
+(that would silently hide future _new_ alerts), and blanket-dismissing the
 existing ones.

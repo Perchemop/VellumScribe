@@ -14,12 +14,12 @@ ubuntu/windows/macos: `format` (`prettier --check .`), `lint`
 (`eslint src --max-warnings=0`), `typecheck` (`tsc --noEmit`),
 `check:orphans`, and the test suite (`vitest run`, 86 tests).
 
-| Gate                              | State                                              |
-| --------------------------------- | -------------------------------------------------- |
-| `typecheck` / `lint` / `format`   | ✅ green (lint 656 → 0 in slices B-4…B-7)           |
-| `check:orphans`                   | ✅ green (119 files)                                |
-| Tests                             | ✅ 86 passing                                       |
-| CodeQL code scanning              | ⚠ 68 pre-existing alerts, owner-triaged (D-409)     |
+| Gate                            | State                                           |
+| ------------------------------- | ----------------------------------------------- |
+| `typecheck` / `lint` / `format` | ✅ green (lint 656 → 0 in slices B-4…B-7)       |
+| `check:orphans`                 | ✅ green (119 files)                            |
+| Tests                           | ✅ 86 passing                                   |
+| CodeQL code scanning            | ⚠ 68 pre-existing alerts, owner-triaged (D-409) |
 
 A requirement may only be marked Verified when the gate covering it is green on
 the PR that claims it (guide §9).

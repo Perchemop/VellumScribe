@@ -137,12 +137,12 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
 
 We emulate cto.new's paid workflow using free models and GitHub Actions.
 
-| Mode | Who | Does | Does not |
-| --- | --- | --- | --- |
-| **Chat (plan)** | `orchestrator` (primary) | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates | edit code, run builds |
-| **Task (execute)** | `coder` (+ `explorer` for context) | implements one bounded slice, writes tests, commits, pushes | run local builds/tests, merge |
-| **Verify** | GitHub Actions via `ci-runner` | format + lint + typecheck + orphans + tests on 3 OS runners | — |
-| **Review** | `reviewer` (read-only), then the human | reports issues, risks, missing tests; human merges | fix, merge |
+| Mode               | Who                                    | Does                                                                                                          | Does not                      |
+| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Chat (plan)**    | `orchestrator` (primary)               | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates | edit code, run builds         |
+| **Task (execute)** | `coder` (+ `explorer` for context)     | implements one bounded slice, writes tests, commits, pushes                                                   | run local builds/tests, merge |
+| **Verify**         | GitHub Actions via `ci-runner`         | format + lint + typecheck + orphans + tests on 3 OS runners                                                   | —                             |
+| **Review**         | `reviewer` (read-only), then the human | reports issues, risks, missing tests; human merges                                                            | fix, merge                    |
 
 Supporting roles: `tester` (extend tests), `fixer` (repair a red CI gate),
 `docs-writer` (tracking docs). None of them may run the toolchain locally
