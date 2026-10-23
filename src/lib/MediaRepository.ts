@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { asBlobPart } from './binary';
 
 const DB_NAME = 'vellumscribe_media';
 const STORE_NAME = 'blobs';
@@ -183,7 +184,7 @@ export class SecureMediaRepository {
       if (envelope.magic !== 'vellum_enc_v1') return null;
       const decrypted = await decryptBinaryPayloadWithKey(envelope.data, envelope.iv, cryptoKey);
       if (!decrypted) return null;
-      return new Blob([decrypted as any], { type: envelope.mimeType });
+      return new Blob([asBlobPart(decrypted)], { type: envelope.mimeType });
     } catch {
       return null;
     }

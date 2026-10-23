@@ -10,7 +10,7 @@ import { asErrorLike } from './errorLike';
  * survive app restarts, crashes, and reloads without index drift.
  */
 export class SearchIndexQueue {
-  private static debounceTimer: any = null;
+  private static debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly BATCH_DEBOUNCE_MS = 1000;
   private static isProcessing = false;
 

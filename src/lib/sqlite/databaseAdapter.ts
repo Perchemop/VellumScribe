@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import type { SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { AppLogger } from '../logger';
 import { SqliteEngine, base64ToUint8Array } from './sqliteEngine';
 import { MIGRATIONS, DB_SCHEMA_VERSION } from './schema';
@@ -45,7 +46,7 @@ export interface DatabaseAdapter {
  */
 export class NativeSqliteAdapter implements DatabaseAdapter {
   private static instance: NativeSqliteAdapter | null = null;
-  private db: any = null;
+  private db: SQLiteDBConnection | null = null;
   private isInitialized = false;
   private durabilityStatus: DurabilityStatus = 'saved';
   private migrationState: MigrationState = 'NOT_STARTED';
@@ -158,7 +159,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
       `);
 
       const appliedRes = await this.db.query('SELECT version FROM schema_migrations ORDER BY version ASC;');
-      const appliedSet = new Set<number>((appliedRes.values || []).map((r: any) => r.version));
+      const appliedSet = new Set<number>((appliedRes.values || []).map((r) => r.version));
 
       for (const mig of MIGRATIONS) {
         if (!appliedSet.has(mig.version)) {
@@ -487,7 +488,7 @@ export class NativeSqliteAdapter implements DatabaseAdapter {
     SqliteEngine.run(sql, params);
     const lastId = SqliteEngine.getLastInsertId();
     if (this.db) {
-      this.db.run(sql, params).catch((err: any) =>
+      this.db.run(sql, params).catch((err: unknown) =>
         AppLogger.warn('NativeSqliteAdapter', 'Async native sync run error', err)
       );
     }

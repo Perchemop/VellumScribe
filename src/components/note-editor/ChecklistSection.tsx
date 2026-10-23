@@ -11,7 +11,7 @@ interface ChecklistSectionProps {
 export const ChecklistSection: React.FC<ChecklistSectionProps> = ({ items, onChange }) => {
   const [isOpen, setIsOpen] = useState(true);
 
-  const completedCount = items.filter((i) => i.completed || (i as any).is_completed).length;
+  const completedCount = items.filter((i) => i.completed || i.is_completed).length;
   const totalCount = items.length;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 

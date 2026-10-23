@@ -199,12 +199,12 @@ ${tr.transcript}` : tr.transcript;
   };
 
   useEffect(() => {
-    (window as any).__vellumScribePickAudio = () => {
+    window.__vellumScribePickAudio = () => {
       audioFileInputRef.current?.click();
     };
     return () => {
       try {
-        delete (window as any).__vellumScribePickAudio;
+        delete window.__vellumScribePickAudio;
       } catch {
         /* ignore */
       }

@@ -36,6 +36,16 @@ export interface QueuedSyncItem {
   stagedStorageKey?: string;
 }
 
+export interface CloudSyncConfig {
+  providers?: Record<
+    string,
+    { name?: string; isConfigured?: boolean; hasOAuthEnv?: boolean; isSSO?: boolean; description?: string }
+  >;
+  accounts?: CloudAccount[];
+  configured?: boolean;
+  [key: string]: unknown;
+}
+
 export class CloudSyncEngine {
   private static telemetry: SyncTelemetry[] = [];
   private static isProcessingQueue = false;
@@ -375,7 +385,7 @@ export class CloudSyncEngine {
     accounts: [] as CloudAccount[],
   };
 
-  static async fetchConfig(retries = 1): Promise<any> {
+  static async fetchConfig(retries = 1): Promise<CloudSyncConfig> {
     if (PrivacyManager.isPrivateOfflineMode()) {
       return {
         ...this.DEFAULT_CLOUD_CONFIG,

@@ -232,7 +232,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                   onClick: () => {
                     setShowAttachSheet(false);
                     try {
-                      (window as any).__vellumScribePickAudio?.();
+                      window.__vellumScribePickAudio?.();
                     } catch {
                       /* ignore */
                     }

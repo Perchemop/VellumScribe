@@ -4,6 +4,7 @@ import { StorageManager } from '../../lib/storage';
 import { SqliteStats } from '../../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../../lib/logger';
 import { asErrorLike } from '../../lib/errorLike';
+import { asBlobPart } from '../lib/binary';
 
 interface StoragePanelProps {
   onRefreshNotes?: () => void;
@@ -148,7 +149,7 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes: _onR
           onClick={() => {
             try {
               const binary = StorageManager.exportSqliteBinary();
-              const blob = new Blob([binary as any], { type: 'application/x-sqlite3' });
+              const blob = new Blob([asBlobPart(binary)], { type: 'application/x-sqlite3' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;

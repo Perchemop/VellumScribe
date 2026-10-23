@@ -274,7 +274,7 @@ export class CloudGeminiEngine implements TranscriptionEngine {
       originalFileName: input.mediaKey || `recording_${input.recordingId}.webm`,
       recordingId: input.recordingId,
       signal: options.signal,
-      onProgress: (p: any) => {
+      onProgress: (p) => {
         options.onProgress?.({
           percent: p.percent,
           phase: p.phase,
