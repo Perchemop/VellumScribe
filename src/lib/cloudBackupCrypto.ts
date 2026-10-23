@@ -32,39 +32,14 @@ interface BackupEnvelope {
 export class CloudBackupCrypto {
   private static cachedVaultKey: string | null = null;
   /**
-   * Held in memory only. A backup passphrase never belongs in
-   * sessionStorage/localStorage: both are readable by any script on the origin
-   * and survive on disk. The user is asked again when the app restarts.
+   * Held in memory only, and nothing derived from it is persisted — not even
+   * its length. localStorage/sessionStorage are readable by any script on the
+   * origin and survive on disk, so the user is asked again on restart.
    */
   private static sessionPassphrase: string | null = null;
-  private static readonly BACKUP_PASSPHRASE_HINT = 'vs_cloud_backup_passphrase_hint';
-
-  /** Only the passphrase's length is ever persisted, never the passphrase. */
-  private static writePassphraseHint(passphrase: string): void {
-    try {
-      localStorage.setItem(this.BACKUP_PASSPHRASE_HINT, String(passphrase.length));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  private static clearPassphraseHint(): void {
-    try {
-      localStorage.removeItem(this.BACKUP_PASSPHRASE_HINT);
-    } catch {
-      /* ignore */
-    }
-  }
 
   public static setUserBackupPassphrase(passphrase: string | null): void {
-    const trimmed = passphrase?.trim() || '';
-    if (!trimmed) {
-      this.sessionPassphrase = null;
-      this.clearPassphraseHint();
-      return;
-    }
-    this.sessionPassphrase = trimmed;
-    this.writePassphraseHint(trimmed);
+    this.sessionPassphrase = passphrase?.trim() || null;
   }
 
   public static getUserBackupPassphrase(): string | undefined {
