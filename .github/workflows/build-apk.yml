@@ -191,6 +191,17 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+      - name: Upload ProGuard mapping files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VellumScribe-ProGuard-Mappings-${{ steps.whisper.outputs.mode }}
+          path: |
+            android/app/build/outputs/mapping/release/*.txt
+            android/app/build/outputs/mapping/release/mapping.txt
+          retention-days: 90
+          if-no-files-found: warn
+
       - name: Compute APK checksums
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
