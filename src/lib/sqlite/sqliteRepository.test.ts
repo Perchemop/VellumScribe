@@ -14,6 +14,18 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
     await SM.initialize();
   });
 
+  function createNote(title: string): { id: number } {
+    const event = StorageManager.addEvent({
+      title: 'Event',
+      event_date: '2026-08-27',
+    });
+    return StorageManager.addNote({
+      event_id: event.id,
+      title,
+      body: 'body',
+    });
+  }
+
   function insertMedia(mediaKey: string, noteId: number | null): void {
     const db = getDatabaseAdapter();
     db.run(
@@ -24,11 +36,7 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
   }
 
   it('finds media whose note no longer exists as orphans', async () => {
-    const note = StorageManager.addNote({
-      event_id: null,
-      title: 'Valid note',
-      body: 'body',
-    });
+    const note = createNote('Valid note');
 
     // media attached to an existing note -> not an orphan
     insertMedia('media-valid', note.id);
@@ -44,11 +52,7 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
   });
 
   it('removes an orphan media record', async () => {
-    const note = StorageManager.addNote({
-      event_id: null,
-      title: 'Valid note',
-      body: 'body',
-    });
+    const note = createNote('Valid note');
     insertMedia('media-valid', note.id);
     insertMedia('media-orphan', null);
 
@@ -61,11 +65,7 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
   });
 
   it('treats media as orphan after its note is deleted', async () => {
-    const note = StorageManager.addNote({
-      event_id: null,
-      title: 'To be deleted',
-      body: 'body',
-    });
+    const note = createNote('To be deleted');
     insertMedia('media-orphan-after-delete', note.id);
 
     StorageManager.deleteNote(note.id);
