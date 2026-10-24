@@ -445,6 +445,20 @@ lightweight affirmation the guide prefers (§19.5).
 **Rejected.** An Apache-style ICLA (unnecessary — no dual-licence or patent
 concern) and silently accepting contributions without a licence affirmation.
 
+### D-419 · 2026-10-24 · All decisions are put to the owner via the question tool
+
+**Decision.** Every project decision — scope, governance, risk acceptance,
+open-question resolution, anything that materially changes direction — must be
+put to the owner through the interactive question tool before implementation,
+not buried in a long message or asked in passing. The owner answers explicitly;
+the recorded answer is the decision. No decision may be made silently by the
+agent.
+**Rationale.** Keeps the owner in control and produces an explicit, quotable
+answer for each choice rather than an implicit default.
+**Consequences.** Questions are batched where independent, asked one at a time
+where dependent, and every answer is recorded in `DECISIONS.md`,
+`docs/assumptions-and-questions.md`, or the relevant tracking file.
+
 ### D-418 · 2026-10-24 · Licence changes to MIT OR Apache-2.0
 
 **Decision.** Change the project licence from MIT-only to **MIT OR Apache-2.0** per owner request. The `LICENSE` file now declares SPDX-License-Identifier: MIT OR Apache-2.0 and the `package.json` licence field is updated accordingly. The existing MIT text is retained and Apache-2.0 is offered as an alternative.
@@ -467,3 +481,33 @@ folding it into an already-large change.
 lands. Secret scanning, licence scanning, the SBOM, CodeQL and Dependabot are in
 place now.
 **Rejected.** Pinning blindly without a verification run.
+
+### D-420 · 2026-10-24 · SSRF request-forgery on user-configured endpoints (accepted, mitigated risk)
+
+**Decision.** The plain GitHub "CodeQL" check reports 7 `js/request-forgery` alerts
+on `server.ts` for `fetch()` calls whose URL derives from user-provided values
+(local-whisper verify/transcribe endpoints, WebDAV connect-credentials PROPFIND,
+cloud chunk-upload PUT targets). These are **intentional, validated functionality**:
+each URL passes through `validateSafeUrl()` which blocks cloud metadata services,
+loopback (unless explicitly allowed), RFC1918 private ranges, IPv6 link-local/ULA,
+and multicast before any `fetch()`. The validated URL is then used via
+`validation.parsed!.href`.
+
+CodeQL cannot recognize our custom `validateSafeUrl` as a sanitizer, so it flags
+the taint flow to the network sink. These endpoints are user-configured (the user
+enters their own local Whisper server or WebDAV server URL), so a fully static
+allow-list is not possible. The validation is the mitigation: no private or
+metadata address can reach `fetch()`.
+
+**Rationale.** Blocking all user-provided fetch targets would remove core
+functionality (local Whisper transcription proxy, WebDAV/Nextcloud sync,
+cloud chunked upload). The validation is robust and defense-in-depth applies
+(trust proxy, sanitized error messages, no credential echo to unvalidated origins).
+
+**Consequences.** The plain "CodeQL" check remains non-passing on these 7 alerts.
+It is **not** in `.ci-required.txt`, so it does not block merge. The required
+CI verdict (format, verify ×3 OS, secret scan, licence scan, sbom) is green.
+Alerts are triaged and documented here rather than silently ignored.
+
+**Rejected.** Auto-dismissing / suppressing the alerts without documentation
+(guide §4: CodeQL alerts are triaged, not auto-ignored).
