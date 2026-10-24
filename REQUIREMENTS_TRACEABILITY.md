@@ -76,7 +76,7 @@ the PR that claims it (guide §9).
 | R-5.1 | No cloud call happens without explicit consent  | `TranscriptionOrchestrator.resolveTranscriptionPolicy` | `TranscriptionOrchestrator.test.ts` ✅ |
 | R-5.2 | OAuth uses PKCE with a verifiable state check   | `src/lib/pkce.ts`                                      | `pkce.test.ts` ✅                      |
 | R-5.3 | Deep-link return resumes the interrupted flow   | `OAuthDeepLinkAndDictation.test.ts` subject            | `OAuthDeepLinkAndDictation.test.ts` ✅ |
-| R-5.4 | Backups are encrypted client-side before upload | `src/lib/cloudBackupCrypto.ts`                         | ⚠ → C-4                                |
+| R-5.4 | Backups are encrypted client-side before upload | `src/lib/cloudBackupCrypto.ts`                         | `cloudBackupCrypto.test.ts` ✅         |
 | R-5.5 | AI merge decisions are non-destructive          | `src/services/ai/MergeService.ts`                      | `MergeService.test.ts` ✅              |
 
 ## R-6 · Release & platform
@@ -100,8 +100,8 @@ the PR that claims it (guide §9).
 | R-2 Notes & capture       | 5            | 5                    |
 | R-3 Audio & transcription | 8            | 8                    |
 | R-4 Security              | 5            | 4                    |
-| R-5 Optional cloud        | 5            | 4                    |
+| R-5 Optional cloud        | 5            | 5                    |
 | R-6 Release & platform    | 6            | 3                    |
-| **Total**                 | **34**       | **29**               |
+| **Total**                 | **34**       | **30**               |
 
 The largest remaining coverage gaps are **R-6 Release & platform** (3/6) and **R-4.5** secret scanning (CI gate only). Native inference on hardware (R-3/C-5) remains hardware-blocked (Q-002 keystore / Android device).
