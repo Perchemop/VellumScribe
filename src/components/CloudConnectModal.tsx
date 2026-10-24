@@ -406,14 +406,14 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                   {meta.badge}
                 </span>
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 {existingAccount ? 'Connected & Active' : meta.description}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -440,7 +440,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                     <ShieldCheck className="w-4 h-4 text-emerald-500" />
                     <span>Active Connection</span>
                   </span>
-                  <span className="text-xs font-mono text-zinc-400">
+                  <span className="text-xs font-mono text-zinc-600 dark:text-zinc-400">
                     ID: {existingAccount.accountId.slice(0, 8)}
                   </span>
                 </div>
@@ -459,7 +459,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                       <strong>Host:</strong> {existingAccount.serverUrl}
                     </p>
                   )}
-                  <p className="text-zinc-400 text-[11px]">
+                  <p className="text-zinc-600 dark:text-zinc-400 text-[11px]">
                     Connected {new Date(existingAccount.connectedAt).toLocaleDateString()} at{' '}
                     {new Date(existingAccount.connectedAt).toLocaleTimeString()}
                   </p>
@@ -539,7 +539,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                       </>
                     ) : hasOAuthEnv === false ? (
                       <>
-                        <KeyRound className="w-4 h-4 text-zinc-400" />
+                        <KeyRound className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
                         <span>OAuth Unconfigured on Server</span>
                       </>
                     ) : (
@@ -601,7 +601,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
-                        <KeyRound className="w-3 h-3 text-zinc-400" />
+                        <KeyRound className="w-3 h-3 text-zinc-600 dark:text-zinc-400" />
                         <span>Password / Token</span>
                       </label>
                       <input

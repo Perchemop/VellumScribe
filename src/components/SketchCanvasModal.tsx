@@ -188,7 +188,7 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -273,7 +273,7 @@ export const SketchCanvasModal: React.FC<SketchCanvasModalProps> = ({
 
         {/* Footer actions */}
         <div className="px-5 py-3 bg-zinc-50/50 dark:bg-[#121215] border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-zinc-600 dark:text-zinc-400">
             Draw ideas, diagrams, handwritten annotations
           </span>
 

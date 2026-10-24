@@ -54,7 +54,7 @@ export const NoteTitleBar: React.FC<NoteTitleBarProps> = ({
             value={title}
             onChange={(e) => onTitleChange(e.target.value)}
             placeholder="Note title..."
-            className="w-full text-lg sm:text-xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+            className="w-full text-lg sm:text-xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             aria-label="Note title"
           />
 
@@ -62,7 +62,7 @@ export const NoteTitleBar: React.FC<NoteTitleBarProps> = ({
             <select
               value={eventId}
               onChange={(e) => onEventChange(parseInt(e.target.value, 10))}
-              className="text-xs bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-lg px-2 py-0.5 text-zinc-700 dark:text-zinc-300 focus:outline-none"
+              className="text-xs bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/80 rounded-lg px-2 py-0.5 text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               aria-label="Event category"
             >
               {events.map((evt) => (

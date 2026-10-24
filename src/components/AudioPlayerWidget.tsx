@@ -538,7 +538,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 space-y-0.5">
               <p className="font-semibold text-amber-300">Couldn't Transcribe Offline</p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-300 leading-relaxed">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                 {transcribeError.includes('Whisper') ||
                 transcribeError.includes('runtime') ||
                 transcribeError.includes('unavailable')
@@ -548,7 +548,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             </div>
             <button
               onClick={() => setTranscribeError(null)}
-              className="text-zinc-400 hover:text-zinc-200 p-0.5"
+              className="text-zinc-600 dark:text-zinc-400 hover:text-zinc-200 p-0.5"
               aria-label="Dismiss error"
             >
               ✕
@@ -570,7 +570,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             >
               Retry
             </button>
-            <span className="text-[11px] text-zinc-400">or try:</span>
+            <span className="text-[11px] text-zinc-600 dark:text-zinc-400">or try:</span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-800 text-stone-300 rounded-md text-[11px]">
               <Mic className="w-3 h-3 text-emerald-400" />
               Live Dictation (when recording)

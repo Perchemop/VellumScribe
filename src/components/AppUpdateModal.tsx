@@ -79,7 +79,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                   v{CURRENT_APP_VERSION}
                 </span>
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Installed Build #{CURRENT_BUILD_NUMBER} &bull; Local Storage Schema v3
               </p>
             </div>
@@ -87,7 +87,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
           <button
             onClick={onClose}
             aria-label="Close"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -156,7 +156,9 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-zinc-400 font-mono">{rel.releaseDate}</span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400 font-mono">
+                      {rel.releaseDate}
+                    </span>
                   </div>
 
                   {/* Highlights */}
@@ -177,7 +179,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                   {/* Fixes */}
                   {rel.fixes && rel.fixes.length > 0 && (
                     <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-1">
-                      <div className="text-xs font-medium text-zinc-400">
+                      <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                         Performance &amp; Bugfixes:
                       </div>
                       <div className="text-xs text-zinc-500">{rel.fixes.join(' • ')}</div>
@@ -198,7 +200,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                   <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                     APK Release Channel
                   </h3>
-                  <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-1">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-sm mx-auto mt-1">
                     When a newer APK build is installed over your existing installation,
                     VellumScribe's migration engine automatically preserves all existing notes,
                     voice memos, and offline databases.
@@ -247,25 +249,27 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
               {/* Version Specs */}
               <div className="p-3.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-zinc-800/60 grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <div className="text-zinc-400 text-xs">Package ID</div>
+                  <div className="text-zinc-600 dark:text-zinc-400 text-xs">Package ID</div>
                   <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">
                     com.vellumscribe.app
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-xs">Release Track</div>
+                  <div className="text-zinc-600 dark:text-zinc-400 text-xs">Release Track</div>
                   <div className="font-medium text-emerald-600 dark:text-emerald-400 text-xs">
                     Production (Stable)
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-xs">Database Architecture</div>
+                  <div className="text-zinc-600 dark:text-zinc-400 text-xs">
+                    Database Architecture
+                  </div>
                   <div className="font-mono text-zinc-800 dark:text-zinc-200 text-xs">
                     Local Storage / Schema v3
                   </div>
                 </div>
                 <div>
-                  <div className="text-zinc-400 text-xs">Storage Migration</div>
+                  <div className="text-zinc-600 dark:text-zinc-400 text-xs">Storage Migration</div>
                   <div className="font-medium text-zinc-800 dark:text-zinc-200 text-xs">
                     Automatic Safe Backfill
                   </div>
@@ -282,7 +286,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
               </div>
 
               {migrationLogs.length === 0 ? (
-                <div className="p-6 text-center text-xs text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60">
+                <div className="p-6 text-center text-xs text-zinc-600 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60">
                   <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2 opacity-80" />
                   <div className="font-medium text-zinc-700 dark:text-zinc-300">
                     Clean Database State
@@ -303,7 +307,7 @@ export const AppUpdateModal: React.FC<AppUpdateModalProps> = ({ onClose }) => {
                         <span className="text-xs text-emerald-500 uppercase">{log.status}</span>
                       </div>
                       <div className="text-xs text-zinc-500 font-sans">{log.details}</div>
-                      <div className="text-xs text-zinc-400">
+                      <div className="text-xs text-zinc-600 dark:text-zinc-400">
                         {new Date(log.timestamp).toLocaleString()}
                       </div>
                     </div>

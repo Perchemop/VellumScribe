@@ -89,7 +89,9 @@ export const MediaAttachments: React.FC<MediaAttachmentsProps> = ({
               <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                 Hand-Drawn Sketch
               </div>
-              <div className="text-[11px] text-zinc-400">Stored in encrypted media repository</div>
+              <div className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                Stored in encrypted media repository
+              </div>
             </div>
           </div>
 
@@ -105,7 +107,7 @@ export const MediaAttachments: React.FC<MediaAttachmentsProps> = ({
               <button
                 type="button"
                 onClick={onRemoveSketch}
-                className="p-1.5 text-zinc-400 hover:text-rose-500 transition"
+                className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-rose-500 transition"
                 title="Remove sketch"
               >
                 <Trash2 className="w-3.5 h-3.5" />

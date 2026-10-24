@@ -128,7 +128,7 @@ export const OfflineAiPanel: React.FC = () => {
           <button
             type="button"
             onClick={loadData}
-            className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -151,7 +151,10 @@ export const OfflineAiPanel: React.FC = () => {
 
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">
-          Models <span className="normal-case font-normal text-zinc-400">(Tiny recommended)</span>
+          Models{' '}
+          <span className="normal-case font-normal text-zinc-600 dark:text-zinc-400">
+            (Tiny recommended)
+          </span>
         </h4>
         {models.map((model) => {
           const isInstalled = !!model.installed;

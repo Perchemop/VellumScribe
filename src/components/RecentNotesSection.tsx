@@ -87,7 +87,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
           <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 font-serif-editorial">
             VellumScribe Studio
           </h2>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          <p className="text-xs text-zinc-600 dark:text-zinc-500 leading-relaxed">
             Distraction-free multimodal notes with markdown writing, interactive checklists, canvas
             sketching, and Gemini intelligence.
           </p>
@@ -110,7 +110,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
       {recentNotes.length > 0 && (
         <div id="recent-notes-section" className="w-full max-w-4xl mx-auto space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-medium">
+            <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 text-xs font-medium">
               <Clock className="w-3.5 h-3.5" />
               <span>Recent activity</span>
             </div>
@@ -121,7 +121,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                   id="scroll-recent-left-btn"
                   onClick={() => handleScroll('left')}
                   title="Scroll left"
-                  className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md transition-colors"
+                  className="p-1 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -129,7 +129,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                   id="scroll-recent-right-btn"
                   onClick={() => handleScroll('right')}
                   title="Scroll right"
-                  className="p-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md transition-colors"
+                  className="p-1 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-md transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -162,7 +162,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                   }}
                 >
                   {note.is_pinned && (
-                    <div className="absolute top-3 right-3 text-zinc-400">
+                    <div className="absolute top-3 right-3 text-zinc-600 dark:text-zinc-400">
                       <Pin className="w-3 h-3 fill-current" />
                     </div>
                   )}
@@ -172,7 +172,7 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                       className="w-2 h-2 rounded-full shrink-0"
                       style={{ backgroundColor: event?.color || '#a1a1aa' }}
                     />
-                    <span className="text-xs font-medium text-zinc-400 truncate">
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 truncate">
                       {event?.title || 'General'}
                     </span>
                   </div>
@@ -181,14 +181,14 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
                     <h3 className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-zinc-600 dark:group-hover:text-zinc-300 transition-colors">
                       {note.title || 'Untitled Note'}
                     </h3>
-                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                       {isLocked
                         ? 'Protected note with PIN security'
                         : note.body || 'No text added...'}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 text-xs text-zinc-400 font-mono">
+                  <div className="flex items-center justify-between pt-1 text-xs text-zinc-600 dark:text-zinc-400 font-mono">
                     <div className="flex items-center gap-1.5">
                       {isLocked && <Lock className="w-3 h-3 text-amber-500" />}
                       {note.reminder_at && (
@@ -234,11 +234,11 @@ export const RecentNotesSection: React.FC<RecentNotesSectionProps> = ({
 
       {/* Footer System Status */}
       <div className="max-w-md mx-auto w-full text-center space-y-1">
-        <div className="flex items-center justify-center gap-2 text-xs text-zinc-400">
+        <div className="flex items-center justify-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span>Local Browser Storage Active</span>
         </div>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">
           Offline-first architecture with cloud backup support.
         </p>
       </div>

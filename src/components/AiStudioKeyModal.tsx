@@ -248,7 +248,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -318,7 +318,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     handleSelectTab('google');
                   }
                 }}
-                className="ml-auto px-2 py-1 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-0.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
+                className="ml-auto px-2 py-1 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-0.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
                 title="Hide developer and self-hosted providers"
               >
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -497,7 +497,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowKey(!showKey)}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                    className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
                   >
                     {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
@@ -506,7 +506,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                       type="button"
                       onClick={handleClearKey}
                       title="Remove key"
-                      className="p-1.5 text-zinc-400 hover:text-red-500 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                      className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-red-500 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -537,7 +537,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
           )}
 
           {/* Privacy Footnote */}
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          <p className="text-xs text-zinc-600 dark:text-zinc-500 leading-relaxed">
             All API keys are strictly retained on your local device in encrypted browser storage.
             Zero keys are logged or stored on remote servers.
           </p>

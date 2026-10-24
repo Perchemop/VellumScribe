@@ -313,7 +313,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -330,7 +330,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
             className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === 'camera'
                 ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100'
-                : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
             }`}
           >
             <CameraIcon className="w-3.5 h-3.5" />
@@ -345,7 +345,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
             className={`pb-2.5 px-3 font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === 'upload'
                 ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100'
-                : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
             }`}
           >
             <Upload className="w-3.5 h-3.5" />
@@ -403,7 +403,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-semibold text-zinc-200">Camera Ready</p>
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
                         {cameraError ||
                           'Use your device camera to photograph notes, whiteboards, or documents.'}
                       </p>
@@ -444,14 +444,14 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
           ) : (
             /* Upload tab */
             <div className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-zinc-50/50 dark:bg-zinc-900/30 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-400">
                 <Upload className="w-6 h-6" />
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                   Select Document or Photo to Extract
                 </p>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
                   Supports JPEG, PNG, WEBP handwriting photos up to 15MB
                 </p>
               </div>
