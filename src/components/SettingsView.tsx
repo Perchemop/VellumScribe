@@ -55,6 +55,7 @@ import { SecurityPanel } from './settings/SecurityPanel';
 import { StoragePanel } from './settings/StoragePanel';
 import { AboutPanel } from './settings/AboutPanel';
 import { DiagnosticsTools } from './settings/DiagnosticsTools';
+import { CrashReportingPanel } from './settings/CrashReportingPanel';
 import { ConflictResolverPanel } from './settings/ConflictResolverPanel';
 import { AppLogger } from '../lib/logger';
 import { asErrorLike } from '../lib/errorLike';
@@ -1446,6 +1447,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             className="max-w-4xl mx-auto space-y-5"
           >
             <DiagnosticsTools />
+            <CrashReportingPanel />
             <ConflictResolverPanel />
             {/* Android Mobile Platform & Performance Guidance Card */}
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-4">
