@@ -50,7 +50,9 @@ describe('CrashReporter (3.3.0 consent-gated crash reporting)', () => {
     const report = CrashReporter.buildReport(new Error('X'));
     const url = CrashReporter.prefilledIssueUrl(report, 'Owner/Repo');
     expect(url.startsWith('https://github.com/Owner/Repo/issues/new?')).toBe(true);
-    expect(url).toContain(encodeURIComponent(report.title));
+    const params = new URL(url).searchParams;
+    expect(params.get('title')).toBe(report.title);
+    expect(params.get('body')).toBe(report.body);
   });
 
   it('stores and clears a user GitHub token', async () => {
