@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UnlockSessionManager } from './UnlockSessionManager';
 
 describe('UnlockSessionManager (R-4.2 PIN / passphrase lock)', () => {
@@ -18,13 +18,13 @@ describe('UnlockSessionManager (R-4.2 PIN / passphrase lock)', () => {
   });
 
   it('createSession returns false when crypto.subtle is unavailable', async () => {
-    const originalCrypto = (globalThis as { crypto?: unknown }).crypto;
-    (globalThis as { crypto?: unknown }).crypto = undefined;
+    const originalSubtle = crypto.subtle;
+    Object.defineProperty(crypto, 'subtle', { value: undefined, configurable: true });
     try {
       const ok = await UnlockSessionManager.createSession(1, 'pin', 'salt');
       expect(ok).toBe(false);
     } finally {
-      (globalThis as { crypto?: unknown }).crypto = originalCrypto;
+      Object.defineProperty(crypto, 'subtle', { value: originalSubtle, configurable: true });
     }
   });
 
@@ -33,22 +33,42 @@ describe('UnlockSessionManager (R-4.2 PIN / passphrase lock)', () => {
   });
 
   it('getSessionKey returns null after session expiry', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    vi.setSystemTime(now);
+
     await UnlockSessionManager.createSession(1, 'pin', 'salt');
-    // Force expiry by setting a 0-minute timeout
-    UnlockSessionManager.setSessionTimeoutMinutes(0);
+    // Default timeout is 5 minutes; key should be valid now
+    expect(UnlockSessionManager.getSessionKey(1)).not.toBeNull();
+
+    // Advance past the 5-minute timeout
+    vi.setSystemTime(now + 6 * 60 * 1000);
     const key = UnlockSessionManager.getSessionKey(1);
     expect(key).toBeNull();
+
+    vi.useRealTimers();
   });
 
   it('getSessionKey refreshes expiration on access', async () => {
+    vi.useFakeTimers();
+    const now = Date.now();
+    vi.setSystemTime(now);
+
     await UnlockSessionManager.createSession(1, 'pin', 'salt');
-    // Access the key within the timeout window
     const key1 = UnlockSessionManager.getSessionKey(1);
     expect(key1).not.toBeNull();
-    // Set a very short timeout, then access again — should still be valid
-    UnlockSessionManager.setSessionTimeoutMinutes(0);
+
+    // Access again before expiry (4 min later, within 5-min window) — refreshes expiration
+    vi.setSystemTime(now + 4 * 60 * 1000);
     const key2 = UnlockSessionManager.getSessionKey(1);
     expect(key2).not.toBeNull();
+
+    // Advance past the refreshed expiry (4 min + 5 min = 9 min from start)
+    vi.setSystemTime(now + 10 * 60 * 1000);
+    const key3 = UnlockSessionManager.getSessionKey(1);
+    expect(key3).toBeNull();
+
+    vi.useRealTimers();
   });
 
   it('setSessionTimeoutMinutes persists and is readable', () => {
