@@ -37,12 +37,12 @@ updates, so it is treated as **immutable**.
 
 ## Naming checks (guide §18, §25.1)
 
-| Check | Status |
-| ----- | ------ |
-| Memorable and descriptive | ✅ fuses the two capabilities (vellum/scribe) |
-| Handles reserved (repo, package ids) | ✅ repo + `com.vellumscribe.app`; no separate domain or org reserved yet |
-| Conflict-free in package registries | ⚠ npm/PyPI not searched — tracked as **Q-019** |
-| Trademark-cleared (WIPO / registries) | ⚠ **not checked** — tracked as **Q-019** (a human/legal task) |
+| Check                                 | Status                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| Memorable and descriptive             | ✅ fuses the two capabilities (vellum/scribe)                            |
+| Handles reserved (repo, package ids)  | ✅ repo + `com.vellumscribe.app`; no separate domain or org reserved yet |
+| Conflict-free in package registries   | ⚠ npm/PyPI not searched — tracked as **Q-019**                           |
+| Trademark-cleared (WIPO / registries) | ⚠ **not checked** — tracked as **Q-019** (a human/legal task)            |
 
 VellumScribe is an original name; no competitor's name, logo or trade dress is
 used or implied (§18, §27.5).
