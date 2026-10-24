@@ -34,6 +34,12 @@ concrete commands, files and rules that apply here.
 7. **Chat -> Task -> PR -> merge.** Plan in Chat mode (orchestrator, §5.1
    below), execute one bounded Task (coder), let GitHub Actions verify, open or
    update a Pull Request, and let the human review and merge (guide §5.2/§9).
+8. **All decisions go to the owner via the question tool.** Every material
+   choice — scope, governance, risk acceptance, open-question resolution — is
+   put to the owner through the interactive question tool and answered
+   explicitly before implementation. The owner's answer is the decision; it is
+   then recorded in `DECISIONS.md` or `docs/assumptions-and-questions.md`. No
+   decision is made silently by the agent (D-419).
 
 ---
 
