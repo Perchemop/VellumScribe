@@ -445,6 +445,12 @@ lightweight affirmation the guide prefers (§19.5).
 **Rejected.** An Apache-style ICLA (unnecessary — no dual-licence or patent
 concern) and silently accepting contributions without a licence affirmation.
 
+### D-418 · 2026-10-24 · Licence changes to MIT OR Apache-2.0
+
+**Decision.** Change the project licence from MIT-only to **MIT OR Apache-2.0** per owner request. The `LICENSE` file now declares SPDX-License-Identifier: MIT OR Apache-2.0 and the `package.json` licence field is updated accordingly. The existing MIT text is retained and Apache-2.0 is offered as an alternative.
+**Rationale.** Dual licensing increases permissive re-use options and aligns with common OSS practice; it does not weaken the existing MIT grant.
+**Consequences.** All downstream artefacts now report a dual licence; attribution and SBOM will show MIT OR Apache-2.0.
+
 ### D-417 · 2026-10-24 · Action pinning: major-version tags now, SHA pinning tracked as follow-up
 
 **Decision.** For now the CI workflows reference actions by major-version tag
