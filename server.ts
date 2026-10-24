@@ -286,6 +286,14 @@ function createRateLimiter(options: { windowMs: number; maxRequests: number; mes
   };
 }
 
+// Generous cap for static/SPA routes: never a bottleneck for one human
+// browsing the app, but bounds abuse of the catch-all file handler.
+const staticRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 300,
+  message: 'Rate limit exceeded.',
+});
+
 const geminiRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 30,
@@ -4090,7 +4098,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get('*all', staticRateLimiter, (req, res) => {
       // Fixed, developer-controlled filename inside a resolved dist directory.
       res.sendFile(resolveWithin(distPath, 'index.html'));
     });
