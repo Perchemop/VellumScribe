@@ -46,12 +46,6 @@ Last reviewed: 2026-10-21.
 
 ### Blocking
 
-**Q-003. `public/.well-known/assetlinks.json` still holds the placeholder
-fingerprint.**
-HTTPS App Links (`https://vellumscribe.app/...`) and OAuth return therefore
-show a disambiguation dialog. _Action:_ fill in the release keystore SHA-256
-fingerprint (now available — see Q-002 resolution below).
-
 ### Quality debt
 
 **Q-004. ✅ Resolved 2026-10-23 — format checking is enforced.**
@@ -158,6 +152,14 @@ A human/legal task — record the outcome in `docs/product-name.md`.
 ---
 
 ## Resolved
+
+**Q-003. ✅ Resolved 2026-10-25 — assetlinks fingerprint filled in.**
+_Was:_ `public/.well-known/assetlinks.json` held a placeholder fingerprint, so
+HTTPS App Links and OAuth return showed a disambiguation dialog.
+_Resolution:_ the real release keystore SHA-256 was written into
+`assetlinks.json`
+(`98:99:30:CF:…:97`, keystore from Q-002). Deployment still requires serving
+`/.well-known/assetlinks.json` over HTTPS at `vellumscribe.app`.
 
 **Q-002. ✅ Resolved 2026-10-24 — release keystore generated and CI signing
 verified.**

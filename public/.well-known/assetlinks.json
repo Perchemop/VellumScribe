@@ -4,7 +4,9 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.vellumscribe.app",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_YOUR_RELEASE_KEYSTORE_SHA256_FINGERPRINT"]
+      "sha256_cert_fingerprints": [
+        "98:99:30:CF:3B:2C:17:6C:8E:54:DE:C9:03:21:F9:80:D3:8D:58:8A:AB:E5:CC:9D:3A:1F:31:DD:9C:B3:7E:97"
+      ]
     }
   }
 ]
