@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OfflineAiManager } from './OfflineAiManager';
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { getDatabaseAdapter } from '../lib/sqlite/databaseAdapter';
-import { SqliteEngine } from '../lib/sqlite/sqliteEngine';
-import { StorageManager } from '../lib/storage';
 
 describe('OfflineAiManager crash recovery (R-3.6)', () => {
   beforeEach(async () => {
