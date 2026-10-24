@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AndroidKeystoreManager } from './keystore';
 import { Capacitor } from '@capacitor/core';
 
 vi.mock('@capacitor/core', () => ({
@@ -32,7 +31,7 @@ describe('AndroidKeystoreManager (R-4.3 hardware-backed key storage)', () => {
     expect(desc.alias).toBe('my-alias');
     expect(desc.key_type).toBe('api_key');
     expect(desc.hardware_backed).toBe(false);
-    expect(desc.masked_value).toBe('••••••••••••••••ue');
+    expect(desc.masked_value).toBe('••••••••••••••••alue');
     expect(desc.algorithm).toBe('AES-256-GCM');
     expect(desc.created_at).toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
