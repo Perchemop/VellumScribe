@@ -8,6 +8,44 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
+## [Unreleased]
+
+Release-readiness: signed installable APKs, F-Droid packaging, opt-in crash
+reporting and metrics, stronger accessibility, and dual licensing.
+
+### Added
+
+- **Signed release APKs:** a stable release keystore is wired to CI, so
+  `assembleRelease` produces an APK that can replace an installed copy
+  (`signed=true`; Q-002 resolved). See `docs/RELEASE_KEYSTORE.md`.
+- **F-Droid packaging:** `metadata/fdroid/metadata.yml` and a submission guide
+  (`docs/FDROID.md`); ProGuard mapping artefacts are kept in CI.
+- **Crash reporting (opt-in, bring-your-own-token):** a redacted, consent-gated
+  report from the error screen; add a personal GitHub token in Settings →
+  Advanced to file issues directly, or use the prefilled-issue fallback.
+- **Usage metrics (opt-in, local-only):** anonymous counters for release health,
+  disabled by default (Settings → Privacy). No note content, no PII.
+
+### Changed
+
+- **Licence:** now dual **MIT OR Apache-2.0** (was MIT-only).
+- **Accessibility:** light-mode small text now meets WCAG 2.2 AA contrast;
+  visible keyboard focus restored on primary inputs; `prefers-reduced-motion`
+  is honoured; the batch action bar uses correct light-mode colours.
+- **App logo and maskable PWA icon** are consistent across light/dark themes.
+
+### Fixed
+
+- Asset Links fingerprint filled in from the release keystore (Q-003 resolved).
+- `AndroidKeystoreManager.deleteSecret` now clears the in-memory secret and
+  reports whether an entry existed.
+
+### Security
+
+- CodeQL hardening on the server proxy: rate limiting, CORS credential
+  isolation, validated outbound URLs, prototype-pollution guard, and
+  XSS/ReDoS fixes.
+
 ## [3.1.0] - 2026-10-03
 
 Real native Whisper build path (upstream whisper.cpp + ggml), dual-mode JNI bridge, and version alignment across Web and Android.
