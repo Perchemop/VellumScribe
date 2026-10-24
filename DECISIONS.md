@@ -445,6 +445,20 @@ lightweight affirmation the guide prefers (§19.5).
 **Rejected.** An Apache-style ICLA (unnecessary — no dual-licence or patent
 concern) and silently accepting contributions without a licence affirmation.
 
+### D-419 · 2026-10-24 · All decisions are put to the owner via the question tool
+
+**Decision.** Every project decision — scope, governance, risk acceptance,
+open-question resolution, anything that materially changes direction — must be
+put to the owner through the interactive question tool before implementation,
+not buried in a long message or asked in passing. The owner answers explicitly;
+the recorded answer is the decision. No decision may be made silently by the
+agent.
+**Rationale.** Keeps the owner in control and produces an explicit, quotable
+answer for each choice rather than an implicit default.
+**Consequences.** Questions are batched where independent, asked one at a time
+where dependent, and every answer is recorded in `DECISIONS.md`,
+`docs/assumptions-and-questions.md`, or the relevant tracking file.
+
 ### D-418 · 2026-10-24 · Licence changes to MIT OR Apache-2.0
 
 **Decision.** Change the project licence from MIT-only to **MIT OR Apache-2.0** per owner request. The `LICENSE` file now declares SPDX-License-Identifier: MIT OR Apache-2.0 and the `package.json` licence field is updated accordingly. The existing MIT text is retained and Apache-2.0 is offered as an alternative.
