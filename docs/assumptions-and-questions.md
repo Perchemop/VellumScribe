@@ -156,6 +156,12 @@ expression.
 tracked. Confirm whether any should be, and whether a launch/announcement is
 intended at all — the guide says popularity is optional.
 
+**Q-019. Name conflict / trademark clearance (guide §18, §25.1).** "VellumScribe"
+has not been checked against package registries (npm/PyPI) or the WIPO Global
+Brand Database. The name is treated as immutable for technical reasons
+(in-place APK updates), so this is a clearance check, not a rename decision.
+A human/legal task — record the outcome in `docs/product-name.md`.
+
 ---
 
 ## Resolved
