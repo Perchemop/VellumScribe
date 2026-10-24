@@ -1615,9 +1615,9 @@ const handleMetricsToggle = (enabled: boolean) => {
                 <button
                   onClick={() => {
                     const snapshot = MetricsManager.getMetrics();
-                    console.log('Usage metrics snapshot', snapshot);
+                    AppLogger.info('MetricsManager', 'Snapshot exported to console', snapshot);
                     setSyncFeedback(
-                      `Logged ${snapshot.totalEvents} local metric event(s) to console.`
+                      `Logged ${snapshot.totalEvents} local metric event(s).`
                     );
                     setTimeout(() => setSyncFeedback(null), 3000);
                   }}
