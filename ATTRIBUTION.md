@@ -93,3 +93,29 @@ Declared in full, with the clean-room rules, in `docs/inspiration.md`:
 - **Obsidian** — proprietary; **behavioural inspiration only**. Not a
   dependency, and no Obsidian code, asset, icon, layout or string has been
   read or copied.
+
+---
+
+## Build-time models and APIs (guide §19.7)
+
+The terms of every model and API used to _build_ this project are recorded here
+so the provenance story stays clean. No model output is committed as
+copyrightable material; the code is original, written against public standards
+and documentation.
+
+| Provider / model                                          | Role in the build                        | Terms                                                                        |
+| --------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| OpenCode free models (tier 1)                             | primary coding/agent models              | provider terms; used as tooling, not as shipped material                     |
+| NVIDIA free models (tier 2)                               | failover coding/agent models             | provider terms; tooling only                                                 |
+| Groq / Google API keys (tier 3)                           | last-resort failover                     | provider terms; tooling only                                                 |
+| Google `@google/genai` (Gemini)                           | **runtime** AI provider, BYOK and opt-in | Apache-2.0 SDK; user supplies their own key and accepts the provider's terms |
+| Optional cloud providers (Google Drive, OneDrive, WebDAV) | **runtime** encrypted backup, opt-in     | each provider's own terms; user supplies their own account                   |
+
+The runtime AI/cloud entries are user-facing and off by default; the build-time
+entries never place vendor material into the repository.
+
+## Maintainers' IP check (guide §19.6)
+
+Whether an employer's IP agreement could claim rights over work related to the
+employer's business, or made with employer resources, has **not** been
+confirmed. Tracked as an open question in `docs/assumptions-and-questions.md`.

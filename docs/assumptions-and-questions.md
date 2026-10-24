@@ -114,6 +114,48 @@ inference runtime. See `docs/KNOWN_LIMITATIONS.md` §8.
 quantised model into APK assets. Confirm this is acceptable for sideload
 distribution, or whether `stub` should be the default.
 
+### Guide Part II §26 conflicts — decisions requested
+
+These are the open questions the guide's Part II §26 raises and explicitly
+**leaves to the human**. They are recorded here rather than resolved.
+
+**Q-012. Branch protection: review vs. agent merge (guide §26.3, D-410).**
+Branch protection on `main` is now enabled with the required status checks from
+`.ci-required.txt`, no force-push, no deletion. It does **not** require a human
+review approval, because D-410 delegated merge authority to the agent and the
+agent cannot approve its own PR — requiring approval would deadlock the
+workflow. If you want a human approval required as well, say so and the setting
+changes; the agent's merges would then need you.
+
+**Q-013. Local-test vs. no-heavy-work (guide §26.1).** `CONTRIBUTING.md`
+documents the exact local test commands for contributors, and states that the
+_maintainer's_ machine runs them only in CI because it is memory-constrained.
+Confirm that is the wording you want publicly.
+
+**Q-014. Repository visibility (guide §26.2).** The repository is public. That
+is required for free unlimited Actions minutes and the public Releases /
+update-check flow. Confirm keeping it public, with the secret-scan and
+branch-protection gates now in place, rather than a private bootstrap phase.
+
+**Q-015. Employer / IP check (guide §19.6).** Whether an employer's IP
+agreement could claim rights over work related to the employer's business, or
+made with employer resources, has **not** been checked. This is a human task;
+note the result here or in `ATTRIBUTION.md`.
+
+**Q-016. Two administrators / MFA (guide §20.1, §22.2).** A personal-account
+repository has one owner. Guide §20.1 asks for MFA on every privileged account
+and at least two administrators once the project is public (bus factor). Do you
+want to add a second admin, or record the single-maintainer risk explicitly?
+
+**Q-017. Licence expression (guide §26.6).** The project ships **MIT** (single,
+not "MIT OR Apache-2.0"). `ATTRIBUTION.md` and the SBOM report MIT. Confirm
+this is intentional (it is the safest default per §16), or adopt the dual
+expression.
+
+**Q-018. Metrics / launch (guide §23.5).** No usage or community metrics are
+tracked. Confirm whether any should be, and whether a launch/announcement is
+intended at all — the guide says popularity is optional.
+
 ---
 
 ## Resolved

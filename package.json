@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:orphans": "node scripts/check-orphaned-files.mjs",
+    "check:licenses": "node scripts/check-licenses.mjs",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
     "verify": "npm run typecheck && npm run lint && npm run check:orphans && npm run test",
     "setup:whisper": "bash scripts/setup-whisper-third-party.sh"

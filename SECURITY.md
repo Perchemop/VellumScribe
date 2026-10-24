@@ -1,63 +1,86 @@
-# Security
+# Security Policy
 
-This document describes VellumScribe's actual security model, including
-its real limitations. If something here reads as a caveat rather than a
-feature, that's intentional - see `AUDIT.md` for why we'd rather
-under-promise here than repeat the app's previous history of overstating
-what it protects against.
+## Supported versions
 
-## Reporting a vulnerability
+Only the latest tagged release (`v*.*.*` on the Releases page) receives
+security fixes. The `main` branch is development code.
 
-Please report security issues privately rather than opening a public
-GitHub issue - open a private security advisory on the repository
-(GitHub: **Security -> Advisories -> Report a vulnerability**), or, if
-that isn't available, contact the maintainers directly through a channel
-listed on the repository's main page. Include steps to reproduce and the
-version/commit you tested against. We'll do our best to acknowledge
-promptly and fix confirmed issues; this is a small project without a
-dedicated security team or a bounty program.
+## Reporting a vulnerability — privately, please
 
-## Data storage model
+**Do not open a public GitHub issue for anything you believe is a security
+problem.**
 
-- All relational note data lives in an embedded **SQLite database (`sql.js` WebAssembly)** on the device where it was created (see `src/lib/storage.ts` and `src/lib/sqliteEngine.ts`). There is no remote central database and no note data leaves the device unless you explicitly connect a cloud backup destination.
-- **Persistence layer**:
-  - On web builds, the SQLite database snapshot is persisted as a binary blob in **IndexedDB** (`idb-keyval`).
-  - On native Android builds, the SQLite database is written to private application storage (`vellumscribe.db`) via the Capacitor Filesystem.
-- **Dual-database crash recovery**: A shadow backup snapshot (`vellumscribe_backup.db`) is kept alongside the primary database. On boot, SQLite integrity is verified; if corruption is detected, auto-recovery restores the last valid snapshot.
-- **Out-of-band binary media store**: Heavy binary assets (voice audio memos, camera OCR scans, canvas drawings) are stored in discrete binary storage via `MediaRepository` and `SecureMediaRepository` (IndexedDB blobs on web, files on Android) rather than clogging SQLite relational rows.
-- The Express server (`server.ts`) is a thin local proxy for Gemini AI requests and does not persist any note or user data.
+1. **Preferred:** use GitHub's **private vulnerability reporting** on this
+   repository (Security tab → "Report a vulnerability"). This creates a
+   private fork and a draft advisory visible only to maintainers.
+2. Alternatively, contact the maintainer privately via GitHub
+   (`@Perchemop` → profile → "..." → Message).
 
-## Note protection: PIN, Passphrase & Private Lock
+Please include: what you found, how to reproduce it (a PoC is ideal but not
+required), which version/build it affects, and whether you intend to disclose
+publicly and when.
 
-- Locking a note encrypts its content using **AES-256-GCM**, with encryption keys derived via **PBKDF2-HMAC-SHA-256 (210,000 iterations)** using a cryptographically secure random 16-byte salt (see `src/lib/cryptoUtils.ts`).
-- **Two lock modes**:
-  - **Standard Lock**: Encrypts note body, checklist items, sketch payload, and voice attachments. The note title and tags remain visible in the note list for indexing and navigation.
-  - **Private Lock**: Encrypts the title, tags, and body into the AES-256-GCM envelope. The note title is masked as "🔒 Locked Note" and tags are stripped in the database record, completely concealing note topics and metadata from shoulder-surfers, list views, and search scrapers.
-- **PIN vs Passphrase threat model**:
-  - **A short numeric PIN is inherently low entropy.** A 4-digit PIN has only 10,000 possible values; PBKDF2's iteration count slows down each guess, but cannot turn a 4-6 digit numeric PIN into a strong secret against an attacker with physical access to raw storage who can perform offline brute-force attacks. Treat PIN-locking as defense against casual/opportunistic physical access (someone picking up an unlocked phone).
-  - For sensitive records, choose **Passphrase** security with high entropy (12+ characters, mixed case, symbols), which provides genuine cryptographic defense against offline brute-force attacks.
-- **Session key management**: Unlocked note keys are held exclusively in volatile memory (`UnlockSessionManager`) and are never written to disk. Closing or reloading the session clears the decrypted cache.
-- If the Web Crypto API is unavailable on your device/browser, locking or unlocking will fail with an explicit error rather than falling back to an unverified or weak cipher.
+## What to expect
 
-## Cloud backup & credential security
+| Stage                         | Target                                        |
+| ----------------------------- | --------------------------------------------- |
+| Acknowledgement of the report | within 72 hours                               |
+| Triage + severity decision    | within 7 days                                 |
+| Fix + coordinated disclosure  | depends on severity; critical targets 14 days |
 
-- **Secure keystore management**: Secrets and API keys are managed through `AndroidKeystoreManager` (`src/lib/keystore.ts`).
-  - On native Android builds, secrets are written directly to platform secure storage (**Android Keystore**) via `@aparajita/capacitor-secure-storage` with `hardware_backed: true`.
-  - On web builds, raw credentials reside in volatile in-memory session storage (`runtimeSessionSecrets`), while only masked metadata descriptors are retained for UI display.
-  - On startup, `migrateLegacyCredentials()` automatically migrates any unencrypted tokens from legacy localStorage into the Keystore and purges the plaintext records.
-- **End-to-end client-side encryption**: Backup snapshot archives (`vellumscribe_backup.json.gz`) are compressed and encrypted locally using AES-256-GCM before transport. Remote cloud storage providers (Google Drive, Microsoft OneDrive, Nextcloud, WebDAV, or Encrypted Vault) only ever store ciphertext blobs.
-- **Log sanitization**: All log messages passing through `AppLogger` (`src/lib/logger.ts`) are automatically scanned and redacted to prevent inadvertent leaking of API keys, bearer tokens, or sensitive payload fragments.
+We credit reporters in the release notes and the security advisory unless you
+ask not to be named.
 
-## Network security (Android)
+## Threat model (lightweight, so researchers know what counts)
 
-- The native Android build disables cleartext (plain HTTP) traffic and mixed content (`capacitor.config.json`). Connecting a self-hosted Nextcloud/WebDAV server from the Android app requires HTTPS.
+**What VellumScribe is:** an offline-first, local-storage note-taking app
+(TypeScript/React + Capacitor on Android; the same code serves the web build).
+Notes, audio, and transcripts are stored **on the device**. Cloud backup and
+BYOK AI providers exist but are **off by default** and consent-gated.
 
-## AI features
+**What we treat as in scope:**
 
-- OCR, transcription, meeting-summary, and conflict-merge features send the relevant content (an image, audio, or text) to Google's Gemini API, either via this app's own server proxy (if `GEMINI_API_KEY` is configured there) or directly using a custom key configured in Settings.
-- When no API key is configured, these features report that plainly rather than fabricating a plausible-looking result.
+- Anything that reads, exfiltrates, or destroys local note data without the
+  user's explicit consent — the local store is the crown jewel.
+- The optional server proxy (`server.ts`): SSRF, path traversal, command
+  injection, XSS, missing authorisation/rate limits. It runs on the public
+  internet, so it gets internet-grade scrutiny.
+- The Android APK update path: signature handling, update-check response
+  parsing, anything that could swap or spoof an update.
+- Secrets handling: API keys (user-supplied, BYOK), the cloud-backup
+  passphrase, keystore material.
+- The import path (`ImportSafetyPipeline`): a malicious "backup" file must not
+  be able to corrupt or escape the store.
 
-## Known open items
+**Out of scope:**
 
-- Web platform cannot provide hardware-backed keystore semantics (inherent limitation of standard browser sandboxes; secrets remain in volatile session memory).
-- Automated adversarial penetration test suites are not yet configured in CI.
+- The user's own device being compromised (physical access, rooted device) —
+  we use platform storage; we do not defend against the OS.
+- Attacks requiring the user to deliberately paste attacker-controlled data
+  into a _local-only_ feature with no sync, though we still fix crashes.
+- Social engineering of the maintainer.
+- Vulnerabilities in pinned third-party dependencies that are already fixed
+  upstream — report those upstream; we track them via the Dependency Audit CI
+  job and Dependabot.
+
+**What it trusts:** the local SQLite store and filesystem are trusted;
+everything crossing a boundary (import files, server responses, cloud
+accounts, AI outputs) is untrusted and must be validated.
+
+## Incident response
+
+1. **Triage** — the maintainer classifies severity and confirms reproduction
+   with the reporter.
+2. **Mitigate** — a fix is prepared on a private branch if disclosure risk is
+   high, otherwise on a normal PR with CI verification.
+3. **Release** — severity decides the timeline; a patch release is cut, and a
+   GitHub Security Advisory is published with the fix.
+4. **Notify** — the advisory plus the release notes carry a plain-language
+   description of the impact; users on auto-update receive the patch through
+   the normal update path (once signed releases exist — see `ROADMAP.md`).
+
+## Attribution
+
+Parts of this policy follow public community guidance
+(<https://opensource.guide/security-best-practices-for-your-project/>);
+the wording is original to this project.

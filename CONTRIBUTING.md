@@ -1,99 +1,177 @@
 # Contributing to VellumScribe
 
-Thanks for considering a contribution. This is a small project, so the
-process is lightweight, but a few conventions matter for keeping the
-codebase trustworthy.
+Thanks for considering a contribution. This is a small project, so the process
+is lightweight — but a few conventions matter for keeping the codebase
+trustworthy. This document covers what to expect and what is expected of you,
+and it links the rest: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md),
+[`GOVERNANCE.md`](GOVERNANCE.md), and [`SECURITY.md`](SECURITY.md).
 
 ## The one rule that matters most
 
-**Never make a feature look like it works when it doesn't.** This
-codebase previously had a systemic problem with exactly that: simulated
-network calls that reported fake success, a hardcoded placeholder
-identity used as a default, UI copy claiming hardware-backed security
-that didn't exist, and AI fallbacks that fabricated plausible-looking
-content instead of saying "unavailable." See [`AUDIT.md`](./AUDIT.md) for
-the full history and [`CHANGELOG.md`](./CHANGELOG.md) for how it was
-fixed. Please don't reintroduce this pattern:
+**Never make a feature look like it works when it doesn't.** This codebase
+previously had a systemic problem with exactly that: simulated network calls
+that reported fake success, a hardcoded placeholder identity used as a default,
+UI copy claiming hardware-backed security that didn't exist, and AI fallbacks
+that fabricated plausible-looking content instead of saying "unavailable." See
+[`AUDIT.md`](./AUDIT.md) for the full history and
+[`CHANGELOG.md`](./CHANGELOG.md) for how it was fixed. Please don't reintroduce
+this pattern:
 
-- If a feature isn't implemented yet, say so in the UI and/or throw a
-  clear error - don't return a plausible-looking fake result.
+- If a feature isn't implemented yet, say so in the UI and/or throw a clear
+  error — don't return a plausible-looking fake result.
 - If an operation didn't actually happen (a network call failed, wasn't
-  attempted, or isn't supported), the return value should say `success:
-false` with a real reason, not `true` with fabricated details.
-- Don't invent placeholder user data (emails, names, tokens) as a
-  "default" - leave the field empty and let the UI ask for it.
-- If you're not sure whether a code path can be exercised in production,
-  search for its callers before assuming it's fine to leave stubbed. A
-  few of the issues in `AUDIT.md` were "fixed" in a file that turned out
-  to be dead code never imported by the actual build - grep for the
-  export before trusting your fix is live.
+  attempted, or isn't supported), the return value should say
+  `success: false` with a real reason, not `true` with fabricated details.
+- Don't invent placeholder user data (emails, names, tokens) as a "default" —
+  leave the field empty and let the UI ask for it.
+- If you're not sure whether a code path can be exercised in production, search
+  for its callers before assuming it's fine to leave stubbed. A few of the
+  issues in `AUDIT.md` were "fixed" in a file that turned out to be dead code
+  never imported by the actual build — grep for the export before trusting your
+  fix is live.
 
-## Setup
+## Ways to contribute
+
+You do not have to write code to help. In rough order of how easy it is to
+start:
+
+- **Documentation** — fix a confusing instruction, add a missing screenshot,
+  improve the accessibility of a doc (headings, alt text, descriptive links).
+- **Tests** — coverage is thin; tests for `src/lib/cryptoUtils.ts` and
+  `src/lib/storage.ts` are a good starting point.
+- **Bug reports** — a precise reproduction is a real contribution.
+- **Translations and copy** — clearer wording for errors and UI labels.
+- **Code** — see the good-first issues labelled [`good first issue`](https://github.com/Perchemop/VellumScribe/labels/good%20first%20issue)
+  and [`help wanted`](https://github.com/Perchemop/VellumScribe/labels/help%20wanted).
+
+## Reporting a bug
+
+Open an issue and choose the **Bug report** template. It asks for the version,
+what you did, what you expected, and what happened. The most useful reports
+include exact error text or the in-app diagnostics (Settings → Diagnostics —
+they exclude secrets by design).
+
+Before filing, search the existing issues for a duplicate.
+
+## Proposing a feature
+
+Open an issue and choose the **Feature request** template. Describe **the
+problem first and the solution second** — VellumScribe holds a narrow scope on
+purpose (see [`VISION.md`](VISION.md) and [`docs/scope.md`](docs/scope.md)).
+For a larger feature, expect a discussion on the issue before any code is
+written; that is cheaper for everyone than a surprise PR that doesn't fit.
+
+## Reporting a security or accessibility problem
+
+- **Security:** do **not** open a public issue. Follow
+  [`SECURITY.md`](SECURITY.md) — the repository's private vulnerability
+  reporting is the preferred path.
+- **Accessibility:** use the **Accessibility issue** template. These are
+  treated as time-sensitive, because an accessibility problem can block the
+  whole app for someone.
+
+## Setting up the environment
+
+Requires **Node.js 22+**.
 
 ```bash
-npm install
-cp .env.example .env
+git clone https://github.com/Perchemop/VellumScribe.git
+cd VellumScribe
+npm install --legacy-peer-deps
+cp .env.example .env      # optional; only needed for cloud/AI features
 npm run dev
 ```
 
-Before opening a PR:
+The Android build additionally needs the Android SDK, NDK and CMake, and is not
+required for web or library work.
+
+## Running the checks locally
+
+> **Contributors: run these locally.** They are the same gates CI runs. (The
+> maintainer of _this_ repository runs them only in GitHub Actions because
+> their own machine is memory-constrained — that is a `guide.md` operating rule
+> for this build, not a rule for everyone. Your machine should run them.)
 
 ```bash
-# Edit locally, then verify on GitHub Actions via ci.sh (CI-first, guide §4):
-~/.config/opencode/scripts/ci.sh run "<short description>"
-# Never run `npm run verify`, `npm test`, or `npm run build` locally.
+npm run format        # write Prettier formatting
+npm run format:check  # verify formatting (CI gate)
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint src --max-warnings=0  (warnings fail)
+npm run check:orphans # fails on any unreferenced file
+npm run test          # vitest
+npm run build         # vite build + server bundle
 ```
 
-## Code style
+`npm run verify` chains typecheck + lint + orphan check + tests. Run it (or the
+individual gates) before opening a PR. Formatting must be clean; lint warnings
+are **errors** here.
 
-- TypeScript, strict-ish. Run `npm run typecheck` - don't introduce new
-  errors (some pre-existing `implicit any` warnings exist; fixing them in
-  unrelated files is welcome but not required).
-- `npm run format` (Prettier) before committing.
-- Components live in `src/components/`, one file per modal/view. Core
-  logic (storage, crypto, cloud sync, AI service) lives in `src/lib/` and
-  should stay UI-framework-agnostic where practical.
-- Before adding a new file, check whether something with a similar name
-  already exists elsewhere in the tree (see the dead-file problem above).
-  `grep -rl ComponentName src/` before assuming a component isn't
-  rendered anywhere.
+`check:orphans` exits 1 on **any** unreferenced file, so dead code breaks the
+build even when it compiles.
 
-## Testing
+## Code style and layout
 
-Vitest is configured (`npm run test`). Coverage is currently thin (see
-`AUDIT.md`) - tests for `src/lib/cryptoUtils.ts` and `src/lib/storage.ts`
-are a good starting point if you want to help. Please add or update a
-test when you fix a bug in `src/lib/`.
+- TypeScript, strict-leaning. Don't introduce new type errors.
+- `npm run format` (Prettier) before committing — the CI format gate is
+  enforced.
+- Components live in `src/components/`, one file per modal/view. Core logic
+  (storage, crypto, cloud sync, AI service) lives in `src/lib/` and should stay
+  UI-framework-agnostic where practical.
+- Before adding a new file, check whether something with a similar name already
+  exists elsewhere in the tree (see the dead-file problem above).
+  `grep -rl ComponentName src/` before assuming a component isn't rendered
+  anywhere.
+- User-visible changes should be accessible: see the accessibility checklist in
+  the pull request template and [`ACCESSIBILITY.md`](ACCESSIBILITY.md).
 
-## Good first contributions
+## What a contribution is reviewed against
 
-These are called out in `AUDIT.md` and `CLOUD_PROVIDER_SETUP.md` as
-concrete, bounded next steps:
+Every PR is reviewed against its stated acceptance criteria, correctness, test
+coverage, security, and — for anything a user can see — the accessibility and
+design checklists. A PR is **not** accepted until CI is green; the required
+gates are format, typecheck, lint (warnings denied), orphan check and tests on
+Linux, Windows and macOS, plus secret scan, licence scan and CodeQL.
 
-- **Wire up real 1-click OAuth login.** `src/lib/cloudProviders.ts`
-  already has a working PKCE implementation (`getAuthUrl`,
-  `exchangeCodeForToken`) that isn't connected to any UI button yet. See
-  `CLOUD_PROVIDER_SETUP.md` for what's needed.
-- **Replace `localStorage` with IndexedDB (or a real embedded database).**
-  Current storage (`src/lib/storage.ts`) is capped by the browser's
-  `localStorage` quota (typically 5-10MB), which heavy audio/sketch usage
-  can exhaust.
-- **Expand test coverage**, especially around `src/lib/storage.ts` and
-  the PIN-lock flow in `src/lib/cryptoUtils.ts`.
-- **Real conflict detection.** `ConflictResolutionModal.tsx` and the
-  conflict data model exist and work, but nothing currently produces a
-  real conflict, since sync doesn't yet diff local vs. remote state
-  before uploading.
+Please keep PRs focused: an unrelated refactor mixed with a bug fix is harder
+to review and to revert.
 
-## Reporting a security issue
+## Licence of your contribution (inbound = outbound)
 
-See [`SECURITY.md`](./SECURITY.md) - please don't open a public issue for
-a security vulnerability.
+VellumScribe is MIT-licensed. By opening a pull request you agree that your
+contribution is licensed under the same MIT terms (the repository's
+[`LICENSE`](LICENSE)). No CLA is required — like most GitHub projects, we rely
+on the "inbound = outbound" default in GitHub's Terms of Service.
 
-## Commit / PR conventions
+We also ask that you **sign off** your commits to certify you have the right to
+submit the work (the [Developer Certificate of Origin](https://developercertificate.org/)):
 
-- Keep PRs focused; a mix of an unrelated refactor and a bug fix is
-  harder to review and to revert if something's wrong.
-- Describe _what changed and why_ in the PR body - if you fixed a false
-  claim or fabricated behavior, say what it used to do and what it does
-  now, the same way `CHANGELOG.md` documents this release.
+```bash
+git commit -s -m "your message"
+```
+
+That adds a `Signed-off-by: Your Name <you@example.com>` line. It is a
+lightweight affirmation, not an assignment of copyright.
+
+## What you can expect from maintainers
+
+- **A first response within 7 days.** If a PR sits longer, a polite nudge on
+  the PR is welcome.
+- **A clear decision.** When something isn't accepted, we say why, link the
+  relevant documentation, and close it rather than leaving it open. One or two
+  sentences is enough.
+- **Credit.** Contributors are recognised in [`CONTRIBUTORS.md`](CONTRIBUTORS.md)
+  and in the release notes for the release that carried their work.
+
+## How much time this project gets
+
+This is a small project run in free hours — expect **a few hours a week** of
+maintainer attention. Response-time expectations are set accordingly.
+
+## Commits and pull requests
+
+- Commits are authored as `"VellumScribe Dev" <dev@example.com>` for the
+  project's automated work; human contributors commit under their own identity
+  and should add a `Signed-off-by` line (`git commit -s`).
+- Keep PRs focused; describe **what changed and why** in the PR body.
+- Fill in the pull request template — including the accessibility checklist for
+  any user-visible change.
