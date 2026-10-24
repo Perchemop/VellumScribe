@@ -18,28 +18,30 @@ vi.mock('@capacitor/core', () => ({
 
 const appListenerCalls: Array<{
   event: string;
-  handler: (payload: { isActive: boolean }) => void;
+  handler: (state: { isActive: boolean }) => void;
 }> = [];
 
-describe('NativeLifecycle durability hooks (R-1.3)', () => {
-  let mockFlush: ReturnType<typeof vi.fn>;
-  let mockScheduleSave: ReturnType<typeof vi.fn>;
+let mockFlush: ReturnType<typeof vi.fn> = vi.fn();
+let mockScheduleSave: ReturnType<typeof vi.fn> = vi.fn();
 
+describe('NativeLifecycle durability hooks (R-1.3)', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.resetModules();
     appListenerCalls.length = 0;
 
-    mockFlush = vi.fn();
-    mockScheduleSave = vi.fn();
+    mockFlush.mockClear();
+    mockScheduleSave.mockClear();
     vi.mocked(getDatabaseAdapter).mockReturnValue({
       flush: mockFlush,
       scheduleSave: mockScheduleSave,
     });
-    vi.mocked(CapApp.addListener).mockImplementation((event: string, handler: any) => {
-      appListenerCalls.push({ event, handler });
-      return { remove: vi.fn() };
-    });
+    vi.mocked(CapApp.addListener).mockImplementation(
+      (eventName: string, listenerFunc: (state: { isActive: boolean }) => void) => {
+        appListenerCalls.push({ event: eventName, handler: listenerFunc });
+        return Promise.resolve({ remove: vi.fn() });
+      }
+    );
   });
 
   it('registers an appStateChange listener when the App plugin is available', () => {
@@ -71,7 +73,7 @@ describe('NativeLifecycle durability hooks (R-1.3)', () => {
   it('falls back to scheduleSave when the adapter has no flush method', () => {
     vi.mocked(getDatabaseAdapter).mockReturnValue({
       scheduleSave: mockScheduleSave,
-    } as never);
+    } as { scheduleSave: typeof mockScheduleSave });
     registerDurabilityHooks();
     const handler = appListenerCalls.find((c) => c.event === 'appStateChange')?.handler;
     expect(handler).toBeDefined();
