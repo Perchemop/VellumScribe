@@ -23,6 +23,7 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
       event_id: event.id,
       title,
       body: 'body',
+      created_at: new Date().toISOString(),
     });
   }
 
