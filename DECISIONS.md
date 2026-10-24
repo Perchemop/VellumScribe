@@ -365,3 +365,99 @@ passphrase again instead of having it silently recovered. This is the intended
 trade for not persisting a secret.
 **Rejected.** Storing the passphrase hashed/encrypted in storage (it would still
 be offline-attackable), and keeping the length hint (a derived leak).
+
+### D-412 · 2026-10-24 · Adopt the guide's Part II (project-health) requirements
+
+**Decision.** VellumScribe adopts Part II of the local build guide (§15–§27) as
+project requirements, not polish: the community/legal/security/accessibility/
+governance files, the supply-chain CI gates, the accessibility workflow, and the
+dedicated designer role. Where Part II sharpens Part I, Part II wins; where the
+two conflict, the conflict is recorded in `docs/assumptions-and-questions.md`
+(Q-012…Q-018) and left for the owner.
+**Scope.** Part I remains in force unchanged: clean-room discipline, Chat →
+Task → PR, free-model policy, CI-first, v0.1.0 gate, `guide.md` stays local.
+**Consequences.** New root files: `VISION.md`, `GOVERNANCE.md`, `CONTRIBUTORS.md`,
+`CODE_OF_CONDUCT.md`, `SECURITY.md`, `ACCESSIBILITY.md`, `ROADMAP.md`;
+`.github/ISSUE_TEMPLATE/*`; `docs/design/brand.md`; `docs/research/`.
+`CONTRIBUTING.md` and `README.md` rewritten for a stranger.
+**Rejected.** Copying the Contributor Covenant verbatim — the conduct, security,
+accessibility and governance texts are original to this project (public
+community guidance is cited, no text copied).
+
+### D-413 · 2026-10-24 · A dedicated `designer` subagent is mandatory
+
+**Decision.** Every app-building instance ships a standing `designer` subagent
+(guide §27). It owns the visual identity (logo, icons, illustrations, brand),
+`docs/design/**` and `assets/**`, and continuously reviews the **rendered**
+result of every user-visible slice for a minimalistic, beautiful, professional,
+polished look and for perceived performance. A user-visible slice is not Done
+until the design review passes (§27.8).
+**Rationale.** Design reviewed in the same pass as logic is always what gets
+dropped when time is short; a separate owner with a standing mandate prevents
+that, and it is cheap on a free vision-capable model.
+**Consequences.** `.opencode/agents/designer.md` added; `orchestrator.md` now
+delegates every UI-affecting slice to it. The canonical brand mark is
+`assets/brand/vellumscribe-mark.svg`, described in `docs/design/brand.md`.
+**Rejected.** Folding design into the coder role, or treating it as a
+pre-release polish phase.
+
+### D-414 · 2026-10-24 · Supply-chain gates are required CI, not optional
+
+**Decision.** Add `secret scan` (gitleaks over full history), `licence scan`
+(`scripts/check-licenses.mjs`) and `sbom` (CycloneDX artefact) to
+`.github/workflows/security-scan.yml`, and make them **required** verdict checks
+in `.ci-required.txt` (guide §19.4, §20.1, §20.7).
+**Rationale.** The guide treats these as launch requirements: a public repo
+without secret scanning, licence enforcement or an SBOM is a supply-chain risk.
+The licence gate fails on strong-copyleft, source-available, non-commercial and
+unlicensed dependencies, and reports unknown licences for human review rather
+than guessing.
+**Consequences.** `.ci-required.txt` declares `format`, `verify` ×3 OS,
+`secret scan`, `licence scan`, `sbom` as authoritative. `CodeQL` and Dependency
+Audit remain reported-but-not-required (CodeQL's pre-existing alert backlog is
+triaged under D-409), so a red non-required check never blocks but is never
+silently dropped.
+**Rejected.** Allow-listing every permissive licence (brittle); failing on
+unknown licences (noisy false positives).
+
+### D-415 · 2026-10-24 · Branch protection: required checks, no required human review
+
+**Decision.** Protect `main` with the required status checks above, forbid force
+pushes and deletions, and do **not** require a human review approval.
+**Rationale.** D-410 delegated merge authority to the agent; an agent cannot
+approve its own PR, so requiring approval would deadlock every change. The
+guide's §20.2 goal — nothing lands without passing status checks — is met in
+full; the human-review half is a §26.3 open question recorded as Q-012.
+**Consequences.** Enforced on `Perchemop/VellumScribe` (`enforce_admins: false`,
+so the owner can still push). Human review still happens at the PR level and the
+owner can add the approval requirement at any time (Q-012).
+**Rejected.** Requiring an approval now (deadlock), or leaving `main`
+unprotected (guide §20.2).
+
+### D-416 · 2026-10-24 · Contribution inbound = outbound, with DCO sign-off
+
+**Decision.** Contributions are licensed MIT (inbound = outbound via GitHub's
+ToS); no CLA. Contributors are asked to sign off commits with
+`git commit -s` (Developer Certificate of Origin). Project/automated commits are
+authored `"VellumScribe Dev" <dev@example.com>` (guide §5.5).
+**Rationale.** Heavy CLAs measurably reduce contributions; the DCO is the
+lightweight affirmation the guide prefers (§19.5).
+**Rejected.** An Apache-style ICLA (unnecessary — no dual-licence or patent
+concern) and silently accepting contributions without a licence affirmation.
+
+### D-417 · 2026-10-24 · Action pinning: major-version tags now, SHA pinning tracked as follow-up
+
+**Decision.** For now the CI workflows reference actions by major-version tag
+(`@v4`, `@v3`, `@v2`), which is GitHub's own recommendation and what Dependabot's
+`github-actions` ecosystem updates monthly (`.github/dependabot.yml`). Moving to
+full commit-SHA pinning (guide §20.3, §25) is recorded as a follow-up on the
+launch milestone in `ROADMAP.md` rather than done in this change.
+**Rationale.** SHA pinning is strictly better against a compromised tag, but the
+repository verifies only in GitHub Actions (guide §4): a mistyped SHA breaks
+every run with no local way to catch it. Doing it as its own reviewed slice —
+resolving each ref to a commit and verifying a green run — is safer than
+folding it into an already-large change.
+**Consequences.** Supply-chain risk from a moved tag remains until the follow-up
+lands. Secret scanning, licence scanning, the SBOM, CodeQL and Dependabot are in
+place now.
+**Rejected.** Pinning blindly without a verification run.

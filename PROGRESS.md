@@ -504,3 +504,80 @@ Both verified on GitHub Actions: `verify` ×3, `format`, `Dependency Audit`,
 Process note: `ci.sh run` checks out `opencode/ci` _before_ committing, so a
 commit made on a different branch is silently stranded (PR #71 merged an empty
 branch that way). Commits are now landed on `opencode/ci` directly.
+
+## 2026-10-24 — Guide Part II + §27 adoption (project health, supply chain, design owner)
+
+Adopted the guide's extended practice (§15–§27) as project requirements
+(**D-412**). Single app (VellumScribe), MIT, public repo; Part I unchanged.
+
+**New repository files**
+
+- `VISION.md`, `GOVERNANCE.md`, `CONTRIBUTORS.md`, `CODE_OF_CONDUCT.md`,
+  `SECURITY.md`, `ACCESSIBILITY.md`, `ROADMAP.md` (all original wording).
+- `.github/ISSUE_TEMPLATE/` — `bug.yml`, `feature.yml`, `accessibility.yml`
+  (severity taxonomy), `config.yml` (private security link).
+- `.github/PULL_REQUEST_TEMPLATE.md` — extended with the accessibility
+  checklist and the licence note.
+- `docs/design/brand.md` + `assets/brand/vellumscribe-mark.svg` (canonical mark,
+  **D-413**); `docs/research/README.md` (human-gated summaries + URLs policy).
+
+**Rewritten for a stranger**
+
+- `README.md` — what/why/how/where, contribution pointers, quality gates,
+  licence.
+- `CONTRIBUTING.md` — bug/feature/setup/local-test instructions, expectations,
+  response time (7 days), DCO sign-off, inbound = outbound (**D-416**).
+
+**Supply chain (D-414)**
+
+- `.github/workflows/security-scan.yml` — added `secret scan` (gitleaks),
+  `licence scan` (`scripts/check-licenses.mjs`, denies strong-copyleft /
+  source-available / NC / unlicensed), `sbom` (CycloneDX artefact).
+- `scripts/check-licenses.mjs` + `npm run check:licenses`.
+- `.ci-required.txt` — authoritative checks: `format`, `verify` ×3 OS,
+  `secret scan`, `licence scan`, `sbom`.
+
+**Release path**
+
+- `.github/workflows/release.yml` — on `v*.*.*`, publishes the Release body from
+  the matching `CHANGELOG.md` section; `build-apk.yml` attaches signed APKs and
+  `APK-SHA256SUMS.txt` to the same Release (create-or-update, order-independent).
+
+**Repository settings (D-415)**
+
+- Private vulnerability reporting **enabled**.
+- Branch protection on `main`: required checks above, no force-push, no
+  deletion; no required human approval (rationale in D-415; Q-012).
+
+**Design owner (D-413)**
+
+- `.opencode/agents/designer.md` added; `orchestrator.md` delegates every
+  user-visible slice to it.
+
+**Docs**
+
+- `docs/development.md` — flow now Chat → Task → Design → Verify → Review →
+  Local test → Release; CI §7 updated to the enforced reality (lint 0, format
+  enforced, new security gates, branch protection); design/other roles added.
+- `docs/qc/manual-checklists.md` — added accessibility smoke test (§8), legal
+  checklist (§9) and release checklist (§10).
+- `docs/assumptions-and-questions.md` — Q-012…Q-018 (guide §26 conflicts and
+  the employer/IP check) recorded for the owner; **not** resolved by the agent.
+- `ATTRIBUTION.md` — build-time model/API terms and non-code assets documented.
+
+**Left open for the owner (not decided by the agent):** Q-012 branch-review
+requirement, Q-013 public local-test wording, Q-014 visibility, Q-015
+employer/IP, Q-016 second admin + MFA, Q-017 licence expression, Q-018 metrics.
+
+### Addendum — repository settings and gates completed same day
+
+- **Labels** created (§17.6): `good first issue`, `help wanted`,
+  `first-timers-only`, `documentation`, `accessibility`, `security`, `bug`,
+  `enhancement`, `question`, `design`.
+- **Secret scanning + push protection enabled** on the repository (§20.1);
+  `.gitleaks.toml` allowlists only AWS's documented example key and
+  `.env.example`.
+- **`dependency review` job** added (PRs only, `fail-on-severity: high`,
+  §20.3/§20.7); it is non-required, so it reports without blocking.
+- **Action pinning:** major-version tags kept, SHA pinning recorded as a
+  follow-up (**D-417**) on the launch milestone.

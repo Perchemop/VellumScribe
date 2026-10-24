@@ -1,0 +1,57 @@
+name: Bug report
+description: Something is broken, or a feature claims to work and doesn't
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. This project has a hard rule against fake
+        success states, so "it reports success but nothing happened" is exactly
+        the class of bug we want reported.
+  - type: input
+    id: build
+    attributes:
+      label: Version / build
+      description: Release tag (e.g. v3.2.0) or commit, plus APK artifact name if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Number them. If it needs specific data (an encrypted note, a cloud account), say so without including secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include exact error text or UI copy if you can.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Android (APK), Web, Server proxy]
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I checked the existing issues for a duplicate
+        - label: I did not include API keys, passphrases, or note contents in this report
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / remarks
+      description: In-app diagnostics (Settings → Diagnostics) contents are ideal — they exclude secrets by design.

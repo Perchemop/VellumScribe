@@ -1,0 +1,10 @@
+# Authoritative checks for `~/.config/opencode/scripts/ci.sh`.
+# One check name per line, exactly as GitHub reports it. Checks not listed are
+# still reported but do not decide the verdict (guide §4, DECISIONS.md D-410).
+format
+verify (ubuntu-latest)
+verify (windows-latest)
+verify (macos-latest)
+secret scan
+licence scan
+sbom

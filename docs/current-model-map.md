@@ -12,16 +12,17 @@ NVIDIA free only when OpenCode free is exhausted, and record the switch in
 
 Role → capability → current model (OpenCode free), reviewed 2026-10-22:
 
-| Role                | Capability needed                               | Current model                            | Selection guidance                                                                               |
-| ------------------- | ----------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Orchestrator / Lead | Strong reasoning + tool calling                 | `opencode/big-pickle`                    | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
-| Coder / Executor    | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high`       | Best available free coding model; writes code + tests, never runs the toolchain locally.         |
-| Explorer            | Speed + good search                             | `opencode/mimo-v2.6-flash-free`          | Fastest free model with decent quality; read-only, no builds.                                    |
-| Reviewer            | Competent analysis, read-only                   | `opencode/beam-free#high`                | Solid free model, prefer fast/cheap; read-only, no builds.                                       |
-| Tester / Bulk       | High volume, lower stakes                       | `opencode/deepseek-v4.1-flash-free#high` | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`.                       |
-| CI runner           | GitHub interaction, read results                | `opencode/beam-free#high`                | Any capable free model; runs `ci.sh`, never changes source.                                      |
-| Fixer               | Fix CI-reported failures                        | `opencode/glm-5.3-flash-free#high`       | Good coding model; reads CI logs, applies minimal fixes.                                         |
-| Docs writer         | Process docs up to date                         | `opencode/big-pickle`                    | Reasoning model; edits Markdown only.                                                            |
+| Role                | Capability needed                               | Current model                               | Selection guidance                                                                               |
+| ------------------- | ----------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Orchestrator / Lead | Strong reasoning + tool calling                 | `opencode/big-pickle`                       | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
+| Coder / Executor    | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high`          | Best available free coding model; writes code + tests, never runs the toolchain locally.         |
+| Explorer            | Speed + good search                             | `opencode/mimo-v2.6-flash-free`             | Fastest free model with decent quality; read-only, no builds.                                    |
+| Reviewer            | Competent analysis, read-only                   | `opencode/beam-free#high`                   | Solid free model, prefer fast/cheap; read-only, no builds.                                       |
+| Tester / Bulk       | High volume, lower stakes                       | `opencode/deepseek-v4.1-flash-free#high`    | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`.                       |
+| CI runner           | GitHub interaction, read results                | `opencode/beam-free#high`                   | Any capable free model; runs `ci.sh`, never changes source.                                      |
+| designer (UI/UX)    | `opencode/nemotron-3.5-super-vl-free#high`      | vision-capable; design + performance review |
+| Fixer               | Fix CI-reported failures                        | `opencode/glm-5.3-flash-free#high`          | Good coding model; reads CI logs, applies minimal fixes.                                         |
+| Docs writer         | Process docs up to date                         | `opencode/big-pickle`                       | Reasoning model; edits Markdown only.                                                            |
 
 ## How to re-select
 

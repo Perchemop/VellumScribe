@@ -1,0 +1,82 @@
+name: Accessibility issue
+description: Something is hard or impossible to use with an assistive technology or an adapted setup
+labels: [accessibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Accessibility reports are treated as time-sensitive — an accessibility
+        problem can block the whole app for someone — and they are read as
+        expertise, not complaints. Thank you for taking the time.
+        See `ACCESSIBILITY.md` for the project's target standard (WCAG 2.2 AA).
+  - type: input
+    id: build
+    attributes:
+      label: Version / build
+      description: Release tag (e.g. v3.2.0) or commit, and the platform (Android APK / Web).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: What should have been possible?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happens instead? Be as concrete as you can.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Number them. Note the exact screen or dialog.
+    validations:
+      required: true
+  - type: input
+    id: at
+    attributes:
+      label: Assistive technology / setup
+      description: e.g. TalkBack 14.1 on Android 14; NVDA 2024.1 on Windows 11 in Chrome; keyboard only; 200% zoom.
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Keyboard operability / focus
+        - Screen reader semantics / announcements
+        - Contrast / colour-only meaning
+        - Text scaling / reflow (zoom)
+        - Motion / animation
+        - Target size / touch
+        - Captions / transcripts
+        - Documentation accessibility
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How much does this block you?
+      options:
+        - Critical — the task cannot be completed at all
+        - High — a significant workaround is required
+        - Medium — possible, but slow or uncomfortable
+        - Low — minor friction or polish
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing accessibility issues for a duplicate
+        - label: I consent to being credited in the fix's release notes (optional)
+          required: false
