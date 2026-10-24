@@ -96,14 +96,12 @@ the PR that claims it (guide §9).
 
 | Area                      | Requirements | With automated tests |
 | ------------------------- | ------------ | -------------------- |
-| R-1 Persistence           | 5            | 2                    |
+| R-1 Persistence           | 5            | 5                    |
 | R-2 Notes & capture       | 5            | 5                    |
 | R-3 Audio & transcription | 8            | 8                    |
 | R-4 Security              | 5            | 3                    |
 | R-5 Optional cloud        | 5            | 4                    |
 | R-6 Release & platform    | 6            | 3                    |
-| **Total**                 | **34**       | **25**               |
+| **Total**                 | **34**       | **28**               |
 
-The largest remaining coverage gap is **R-1 Persistence** (2/5 tested) — WAL/queue
-and orphan-repair paths still need coverage. Native inference on hardware
-(R-3/C-5) remains hardware-blocked (Q-002 keystore / Android device).
+The largest remaining coverage gaps are **R-4 Security** (3/5) and **R-6 Release & platform** (3/6). Native inference on hardware (R-3/C-5) remains hardware-blocked (Q-002 keystore / Android device).
