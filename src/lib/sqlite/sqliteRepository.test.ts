@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 let SqliteRepository: typeof import('./sqliteRepository').SqliteRepository;
-let getDatabaseAdapter: typeof import('./sqlite/databaseAdapter').getDatabaseAdapter;
+let getDatabaseAdapter: typeof import('./databaseAdapter').getDatabaseAdapter;
 let StorageManager: typeof import('../storage').StorageManager;
 
 describe('Orphan media repair at cold start (R-1.5)', () => {
   beforeEach(async () => {
     localStorage.clear();
     vi.resetModules();
-    const { SqliteEngine: SE } = await import('./sqlite/sqliteEngine');
+    const { SqliteEngine: SE } = await import('./sqliteEngine');
     await SE.resetForTesting();
-    ({ SqliteRepository } = await import('./sqlite/sqliteRepository'));
-    ({ getDatabaseAdapter } = await import('./sqlite/databaseAdapter'));
+    ({ SqliteRepository } = await import('./sqliteRepository'));
+    ({ getDatabaseAdapter } = await import('./databaseAdapter'));
     ({ StorageManager } = await import('../storage'));
     await StorageManager.initialize();
   });
