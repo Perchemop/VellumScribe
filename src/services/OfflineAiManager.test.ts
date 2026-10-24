@@ -20,6 +20,7 @@ describe('OfflineAiManager crash recovery (R-3.6)', () => {
       id: number;
       recording_id: number;
       engine: string;
+      engine_version?: string;
       model_id: string;
       status: 'QUEUED' | 'PROCESSING';
       language?: string;
