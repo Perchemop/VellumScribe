@@ -38,7 +38,6 @@ describe('MetricsManager (privacy-preserving, opt-in)', () => {
   it('persists metrics across re-initialization', () => {
     MetricsManager.enable();
     MetricsManager.record('backup_created', { provider: 'google_drive' });
-    const before = MetricsManager.getMetrics();
 
     // Simulate a fresh manager instance (new module state via reset + reload).
     MetricsManager.reset();
