@@ -260,7 +260,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       {/* Android Contextual Action Bar (CAB) */}
       <div
         id="batch-action-bar"
-        className="sticky top-0 z-30 w-full bg-zinc-950 text-white dark:bg-zinc-100 dark:text-zinc-950 px-3 sm:px-4 py-2.5 shadow-lg flex items-center justify-between transition-all animate-fade-in"
+        className="sticky top-0 z-30 w-full bg-white text-zinc-900 dark:bg-zinc-950 dark:text-white px-3 sm:px-4 py-2.5 shadow-lg flex items-center justify-between transition-all animate-fade-in"
       >
         {/* Left Side: Close & Counter & Select All */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -491,7 +491,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     ? `Move ${count} Note${count > 1 ? 's' : ''} to Trash?`
                     : `Permanently Delete ${count} Note${count > 1 ? 's' : ''}?`}
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                   {confirmModal === 'trash'
                     ? 'Notes can be restored from the Archive & Trash tab anytime.'
                     : 'This action is irreversible and will delete all attachments.'}
@@ -534,7 +534,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 type="button"
                 onClick={() => setShowCategorySheet(false)}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -553,7 +553,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                     style={{ backgroundColor: ev.color || '#3b82f6' }}
                   />
                   <span className="truncate flex-1">{ev.title}</span>
-                  <span className="text-xs text-zinc-400 uppercase tracking-wider">
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                     {ev.category}
                   </span>
                 </button>
@@ -575,7 +575,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 type="button"
                 onClick={() => setShowColorSheet(false)}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -613,7 +613,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                 type="button"
                 onClick={() => setShowTagSheet(false)}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -664,7 +664,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                   setLockPinInput('');
                 }}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -726,7 +726,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
                   setUnlockError(null);
                 }}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>

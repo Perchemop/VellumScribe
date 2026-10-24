@@ -29,7 +29,7 @@ export const ModalErrorFallback: React.FC<ModalErrorFallbackProps> = ({
             <button
               onClick={onClose}
               aria-label="Dismiss error"
-              className="p-1 rounded-xl text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+              className="p-1 rounded-xl text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>

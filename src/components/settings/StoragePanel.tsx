@@ -65,7 +65,7 @@ export const StoragePanel: React.FC<StoragePanelProps> = ({ onRefreshNotes: _onR
           <button
             type="button"
             onClick={loadMetrics}
-            className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+            className="p-2 rounded-lg text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />

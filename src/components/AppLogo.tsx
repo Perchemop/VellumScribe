@@ -30,7 +30,7 @@ export const AppLogo: React.FC<AppLogoProps> = ({
     <div className={`flex items-center gap-2.5 ${className}`}>
       {/* Icon Badge */}
       <div
-        className={`${sizeMap[size]} rounded-xl bg-gradient-to-br from-zinc-900 via-zinc-950 to-black dark:from-zinc-100 dark:via-zinc-200 dark:to-zinc-300 text-white dark:text-zinc-950 flex items-center justify-center font-serif font-semibold tracking-tight shadow-md border border-zinc-800/50 dark:border-white/20 shrink-0 relative overflow-hidden group`}
+        className={`${sizeMap[size]} rounded-xl bg-gradient-to-br from-zinc-900 via-zinc-950 to-black text-white flex items-center justify-center font-serif font-semibold tracking-tight shadow-md border border-zinc-800/50 dark:border-white/20 shrink-0 relative overflow-hidden group`}
       >
         {/* Subtle decorative inner corner sheen */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-white/20 opacity-60 pointer-events-none" />

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%" role="img" aria-label="VellumScribe mark: a white V with a stem and dot">
+  <!--
+    VellumScribe brand mark — maskable foreground.
+    Original work, MIT (with the application).
+    Same geometry as assets/brand/vellumscribe-mark.svg but WITHOUT the near-black
+    tile, so it survives maskable clipping (circular/squircle safe zones) used by
+    adaptive launcher icons and PWA maskable icons. Pair with a solid near-black
+    (#09090B) background wherever the platform does not supply one.
+    Geometry: V arms (4.5,4.5)->(12,19.5)->(19.5,4.5) stroke 2.5; stem
+    (12,19.5)->(12,11) stroke 2; dot (12,8.5) r 1.75; translate(14,14) scale(3)
+    into a 100x100 viewBox.
+  -->
+  <g transform="translate(14, 14) scale(3)">
+    <path
+      d="M4.5 4.5L12 19.5L19.5 4.5"
+      stroke="#ffffff"
+      stroke-width="2.5"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      fill="none"
+    />
+    <path
+      d="M12 19.5V11"
+      stroke="#ffffff"
+      stroke-width="2"
+      stroke-linecap="round"
+      fill="none"
+    />
+    <circle
+      cx="12"
+      cy="8.5"
+      r="1.75"
+      fill="#ffffff"
+    />
+  </g>
+</svg>

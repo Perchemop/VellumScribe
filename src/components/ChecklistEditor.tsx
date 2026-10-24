@@ -57,7 +57,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
       {/* Progress Bar & Header */}
       {items.length > 0 && (
         <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-xs text-zinc-400">
+          <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400">
             <span>
               {completedCount} of {items.length} tasks completed ({progressPercent}%)
             </span>
@@ -90,12 +90,12 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
             <button
               type="button"
               onClick={() => handleToggle(item.id)}
-              className="p-0.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors shrink-0"
+              className="p-0.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors shrink-0"
             >
               {item.completed ? (
                 <CheckSquare className="w-4 h-4 text-zinc-900 dark:text-zinc-100" />
               ) : (
-                <Square className="w-4 h-4 text-zinc-400" />
+                <Square className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
               )}
             </button>
 
@@ -105,14 +105,14 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
               onChange={(e) => handleTextChange(item.id, e.target.value)}
               placeholder="Task description..."
               className={`flex-1 bg-transparent text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden ${
-                item.completed ? 'line-through text-zinc-400 dark:text-zinc-500' : ''
+                item.completed ? 'line-through text-zinc-600 dark:text-zinc-500' : ''
               }`}
             />
 
             <button
               type="button"
               onClick={() => handleDelete(item.id)}
-              className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

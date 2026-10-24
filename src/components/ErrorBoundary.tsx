@@ -74,14 +74,14 @@ export class ErrorBoundary extends Component<Props, State> {
               <h2 className="text-lg font-semibold text-zinc-100">
                 Something interrupted your session
               </h2>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                 An unexpected interface exception occurred. Your local notes and recordings remain
                 safely persisted in storage.
               </p>
             </div>
 
             {this.state.error && (
-              <div className="text-left bg-zinc-950/80 border border-zinc-800/60 rounded-xl p-3.5 text-xs font-mono text-zinc-400 overflow-x-auto max-h-32">
+              <div className="text-left bg-zinc-950/80 border border-zinc-800/60 rounded-xl p-3.5 text-xs font-mono text-zinc-600 dark:text-zinc-400 overflow-x-auto max-h-32">
                 {this.state.error.toString()}
               </div>
             )}

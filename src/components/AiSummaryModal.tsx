@@ -173,7 +173,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -244,7 +244,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <Icon
-                          className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-400'}`}
+                          className={`w-3.5 h-3.5 ${isSelected ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-600 dark:text-zinc-400'}`}
                         />
                         <span className="font-semibold text-xs">{fmt.label}</span>
                       </div>
@@ -264,7 +264,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
               </span>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="px-2.5 py-1 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 font-medium">
-                  <FileText className="w-3 h-3 text-zinc-400" />
+                  <FileText className="w-3 h-3 text-zinc-600 dark:text-zinc-400" />
                   <span>
                     Note Body ({note.body?.trim().split(/\s+/).filter(Boolean).length || 0} words)
                   </span>
@@ -277,7 +277,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-medium transition-colors ${
                       includeTranscripts
                         ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
                     }`}
                   >
                     <Mic className="w-3 h-3" />
@@ -295,7 +295,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-medium transition-colors ${
                       includeOcr
                         ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
                     }`}
                   >
                     <Image className="w-3 h-3" />
@@ -312,7 +312,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
                     className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-medium transition-colors ${
                       includeChecklists
                         ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
-                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
+                        : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 opacity-60'
                     }`}
                   >
                     <CheckSquare className="w-3 h-3" />
@@ -326,7 +326,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
                 <span>Custom Guidance (Optional)</span>
-                <span className="text-xs text-zinc-400 font-normal">
+                <span className="text-xs text-zinc-600 dark:text-zinc-400 font-normal">
                   e.g. &ldquo;Emphasize budget figures and next milestones&rdquo;
                 </span>
               </label>
@@ -439,7 +439,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
 
           {/* Footer */}
           <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-zinc-400 text-xs">
+            <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400 text-xs">
               <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
               <span>Google AI Studio Powered</span>
             </div>
