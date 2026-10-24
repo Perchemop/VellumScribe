@@ -9,6 +9,21 @@ import { spawn, execFileSync } from 'child_process';
  * numeric parameter can never be interpreted as a shell metacharacter.
  * `2>/dev/null` from the old commands is replaced by stdio ignore.
  */
+/**
+ * Resolves `segments` under `baseDir` and guarantees the result stays inside it.
+ * A character filter alone is not containment (`..`, encoded separators or an
+ * absolute path all survive a permissive one), so the boundary is enforced on
+ * the fully-resolved path.
+ */
+function resolveWithin(baseDir: string, ...segments: string[]): string {
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(base, ...segments);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) {
+    throw new Error(`Path escapes the allowed directory: ${base}`);
+  }
+  return resolved;
+}
+
 function runFfmpeg(args: string[], timeout: number): void {
   execFileSync('ffmpeg', args, { timeout, stdio: ['ignore', 'ignore', 'ignore'] });
 }
@@ -271,6 +286,14 @@ function createRateLimiter(options: { windowMs: number; maxRequests: number; mes
   };
 }
 
+// Generous cap for static/SPA routes: never a bottleneck for one human
+// browsing the app, but bounds abuse of the catch-all file handler.
+const staticRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 300,
+  message: 'Rate limit exceeded.',
+});
+
 const geminiRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
   maxRequests: 30,
@@ -283,6 +306,12 @@ const audioRateLimiter = createRateLimiter({
   maxRequests: 60,
   message:
     'Rate limit exceeded. Too many audio chunk upload or conversion requests. Please wait a moment before retrying.',
+});
+
+const notebooklmRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+  message: 'Rate limit exceeded for NotebookLM source uploads.',
 });
 
 const cloudRateLimiter = createRateLimiter({
@@ -299,6 +328,7 @@ app.use('/api/groq', geminiRateLimiter);
 app.use('/api/deepgram', geminiRateLimiter);
 app.use('/api/audio', audioRateLimiter);
 app.use('/api/cloud', cloudRateLimiter);
+app.use('/api/notebooklm', notebooklmRateLimiter);
 
 // Lazy initialize Gemini client
 function createGeminiInstance(apiKey: string): GoogleGenAI {
@@ -608,7 +638,7 @@ async function processAndTranscribeAudio(
 
     const tempDir = os.tmpdir();
     const sessionPrefix = `trans_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const optimizedMp3Path = path.join(tempDir, `${sessionPrefix}_opt.mp3`);
+    const optimizedMp3Path = resolveWithin(tempDir, `${sessionPrefix}_opt.mp3`);
     tempFilesToClean.push(optimizedMp3Path);
 
     // 1. Probe duration using ffprobe
@@ -669,7 +699,7 @@ async function processAndTranscribeAudio(
         const chunkLen = Math.min(chunkDuration, durationSec - chunkStart);
         if (chunkLen <= 0.5) continue;
 
-        const chunkFile = path.join(tempDir, `${sessionPrefix}_seg_${i}.mp3`);
+        const chunkFile = resolveWithin(tempDir, `${sessionPrefix}_seg_${i}.mp3`);
         tempFilesToClean.push(chunkFile);
 
         chunkPromises.push(
@@ -799,7 +829,7 @@ async function processAndTranscribeAudio(
 }
 
 // 2. Audio Transcription Endpoint
-app.post('/api/gemini/transcribe', async (req, res) => {
+app.post('/api/gemini/transcribe', geminiRateLimiter, async (req, res) => {
   let tempInFile: string | null = null;
   try {
     const { audioBase64, mimeType } = req.body;
@@ -836,7 +866,7 @@ app.post('/api/gemini/transcribe', async (req, res) => {
 });
 
 // 2b. Chunked Audio Upload & Transcription Endpoint (Bypasses Cloud Run 32MB payload limit for long/large recordings)
-app.post('/api/audio/chunk-upload', highCapacityJsonParser, async (req, res) => {
+app.post('/api/audio/chunk-upload', audioRateLimiter, highCapacityJsonParser, async (req, res) => {
   try {
     const { uploadId, chunkIndex, totalChunks, chunkBase64, originalFileName, mimeType } = req.body;
     if (!uploadId || chunkIndex === undefined || totalChunks === undefined || !chunkBase64) {
@@ -852,7 +882,7 @@ app.post('/api/audio/chunk-upload', highCapacityJsonParser, async (req, res) => 
       : mimeType && mimeType.includes('wav')
         ? 'wav'
         : 'mp3';
-    const targetFile = path.join(tempDir, `vellum_chunk_up_${safeUploadId}.${ext}`);
+    const targetFile = resolveWithin(tempDir, `vellum_chunk_up_${safeUploadId}.${ext}`);
 
     const chunkBuf = Buffer.from(chunkBase64, 'base64');
     if (chunkIndex === 0 && fs.existsSync(targetFile)) {
@@ -960,7 +990,7 @@ function calculateAudioSegments(durationSec: number): AudioTranscribeSession['se
 }
 
 // Session Init: Prepares audio and breaks down into trackable segments
-app.post('/api/audio/transcribe-session/init', async (req, res) => {
+app.post('/api/audio/transcribe-session/init', audioRateLimiter, async (req, res) => {
   try {
     const { uploadId, audioBase64, mimeType, originalFileName } = req.body;
     const tempDir = os.tmpdir();
@@ -974,7 +1004,10 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
       if (!match) {
         return res.status(404).json({ error: 'Uploaded audio file not found on server.' });
       }
-      sourcePath = path.join(tempDir, match);
+      sourcePath = resolveWithin(
+        tempDir,
+        `trans_init_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${inputExt}`
+      );
       const matchExt = match.match(/\.([a-zA-Z0-9]+)$/);
       if (matchExt) inputExt = matchExt[1].toLowerCase();
     } else if (audioBase64) {
@@ -989,7 +1022,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
             : validMime.includes('webm')
               ? 'webm'
               : 'mp3';
-      sourcePath = path.join(
+      sourcePath = resolveWithin(
         tempDir,
         `trans_init_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.${inputExt}`
       );
@@ -1009,7 +1042,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
 
     // Optimize to 24kHz mono MP3 for high-speed speech AI processing
     const sessionId = `ts_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const optimizedPath = path.join(tempDir, `${sessionId}_optimized.mp3`);
+    const optimizedPath = resolveWithin(tempDir, `${sessionId}_optimized.mp3`);
     let converted = false;
     try {
       runFfmpeg(
@@ -1023,7 +1056,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
       console.warn('FFmpeg session optimization notice:', ffErr);
     }
 
-    const workingAudioPath = converted ? optimizedPath : sourcePath;
+    const workingAudioPath = converted ? optimizedPath : (sourcePath ?? '');
     if (durationSec === 0) {
       try {
         const probeOut = runFfprobe(workingAudioPath, 10000);
@@ -1070,7 +1103,7 @@ app.post('/api/audio/transcribe-session/init', async (req, res) => {
 });
 
 // Segment Transcription: Transcribes a single segment with progress tracking and caching
-app.post('/api/audio/transcribe-session/segment', async (req, res) => {
+app.post('/api/audio/transcribe-session/segment', audioRateLimiter, async (req, res) => {
   const { sessionId, segmentIndex } = req.body;
   if (!sessionId || segmentIndex === undefined) {
     return res.status(400).json({ error: 'Missing sessionId or segmentIndex.' });
@@ -1117,7 +1150,7 @@ app.post('/api/audio/transcribe-session/segment', async (req, res) => {
 
   segment.status = 'processing';
   const tempDir = os.tmpdir();
-  const segmentFile = path.join(tempDir, `${sessionId}_seg_${segmentIndex}_${Date.now()}.mp3`);
+  const segmentFile = resolveWithin(tempDir, `${sessionId}_seg_${segmentIndex}_${Date.now()}.mp3`);
 
   try {
     const segLen = Math.max(0.5, segment.endSec - segment.startSec);
@@ -1262,7 +1295,7 @@ app.get('/api/audio/transcribe-session/status/:sessionId', (req, res) => {
 });
 
 // Finalize Session: Joins all completed parts and cleans up temp files
-app.post('/api/audio/transcribe-session/finalize', async (req, res) => {
+app.post('/api/audio/transcribe-session/finalize', audioRateLimiter, async (req, res) => {
   const { sessionId } = req.body;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId.' });
@@ -3818,7 +3851,7 @@ app.get('/api/cloud/:provider/restore/:backupId', async (req, res) => {
 });
 
 // 11. Audio Conversion Endpoint (FFmpeg-powered universal audio transcoder)
-app.post('/api/audio/convert', highCapacityJsonParser, async (req, res) => {
+app.post('/api/audio/convert', audioRateLimiter, highCapacityJsonParser, async (req, res) => {
   let inputPath: string | null = null;
   let outputPath: string | null = null;
 
@@ -3855,10 +3888,10 @@ app.post('/api/audio/convert', highCapacityJsonParser, async (req, res) => {
 
     const uniqueId = crypto.randomBytes(8).toString('hex');
     const tempDir = os.tmpdir();
-    inputPath = path.join(tempDir, `vellum_audio_in_${uniqueId}.${inputExt}`);
+    inputPath = resolveWithin(tempDir, `vellum_audio_in_${uniqueId}.${inputExt}`);
 
     const outputExt = targetFormat === 'wav' ? 'wav' : 'mp3';
-    outputPath = path.join(tempDir, `vellum_audio_out_${uniqueId}.${outputExt}`);
+    outputPath = resolveWithin(tempDir, `vellum_audio_out_${uniqueId}.${outputExt}`);
 
     await fs.promises.writeFile(inputPath, inputBuffer);
 
@@ -3983,7 +4016,7 @@ app.post('/api/notebooklm/validate-notebook', (req, res) => {
   }
 });
 
-app.post('/api/notebooklm/upload-source', (req, res) => {
+app.post('/api/notebooklm/upload-source', notebooklmRateLimiter, (req, res) => {
   try {
     const { notebookId, title, content, sourceType, metadata } = req.body || {};
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -4022,7 +4055,7 @@ app.post('/api/notebooklm/upload-source', (req, res) => {
   }
 });
 
-app.post('/api/notebooklm/delete-source', (req, res) => {
+app.post('/api/notebooklm/delete-source', notebooklmRateLimiter, (req, res) => {
   try {
     const { remoteSourceId } = req.body || {};
     if (!remoteSourceId || typeof remoteSourceId !== 'string') {
@@ -4030,8 +4063,8 @@ app.post('/api/notebooklm/delete-source', (req, res) => {
     }
 
     const safeId = remoteSourceId.replace(/[^a-zA-Z0-9_-]/g, '');
-    const sourcesDir = path.join(os.tmpdir(), 'vellumscribe_notebooklm_sources');
-    const targetFile = path.join(sourcesDir, `${safeId}.md`);
+    const sourcesDir = resolveWithin(os.tmpdir(), 'vellumscribe_notebooklm_sources');
+    const targetFile = resolveWithin(sourcesDir, `${safeId}.md`);
 
     if (fs.existsSync(targetFile)) {
       fs.unlinkSync(targetFile);
@@ -4065,8 +4098,9 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+    app.get('*all', staticRateLimiter, (req, res) => {
+      // Fixed, developer-controlled filename inside a resolved dist directory.
+      res.sendFile(resolveWithin(distPath, 'index.html'));
     });
   }
 
