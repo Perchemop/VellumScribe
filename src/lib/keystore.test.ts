@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AndroidKeystoreManager } from './keystore';
 import { Capacitor } from '@capacitor/core';
 
 vi.mock('@capacitor/core', () => ({
