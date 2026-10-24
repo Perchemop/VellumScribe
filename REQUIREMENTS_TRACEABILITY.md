@@ -61,12 +61,13 @@ the PR that claims it (guide §9).
 
 ## R-4 · Security
 
-| #     | Requirement                                               | Implements                                                 | Test                      |
-| ----- | --------------------------------------------------------- | ---------------------------------------------------------- | ------------------------- |
-| R-4.1 | AES-256-GCM with PBKDF2-HMAC-SHA-256 @ 600,000 iterations | `src/lib/cryptoUtils.ts`                                   | `cryptoUtils.test.ts` ✅  |
-| R-4.2 | PIN / passphrase lock with two lock modes                 | `src/lib/UnlockSessionManager.ts`, `pin_hash`, `lock_mode` | ⚠                         |
-| R-4.3 | Android Keystore binds keys to hardware where available   | `src/lib/keystore.ts`                                      | ⚠                         |
-| R-4.4 | Import of untrusted JSON cannot execute or inject         | `src/lib/importSafety.ts`                                  | `importSafety.test.ts` ✅ |
+| #     | Requirement                                                                | Implements                                                                                                                                | Test                                                     |
+| ----- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| R-4.1 | AES-256-GCM with PBKDF2-HMAC-SHA-256 @ 600,000 iterations                  | `src/lib/cryptoUtils.ts`                                                                                                                  | `cryptoUtils.test.ts` ✅                                 |
+| R-4.2 | PIN / passphrase lock with two lock modes                                  | `src/lib/UnlockSessionManager.ts`, `pin_hash`, `lock_mode`                                                                                | ⚠                                                        |
+| R-4.3 | Android Keystore binds keys to hardware where available                    | `src/lib/keystore.ts`                                                                                                                     | ⚠                                                        |
+| R-4.4 | Import of untrusted JSON cannot execute or inject                          | `src/lib/importSafety.ts`                                                                                                                 | `importSafety.test.ts` ✅                                |
+| R-4.5 | Secrets are never committed; dependency licences and composition are gated | `gitleaks` + `scripts/check-licenses.mjs` + CycloneDX SBOM in `.github/workflows/security-scan.yml`, `.gitleaks.toml`, `.ci-required.txt` | required CI checks `secret scan`, `licence scan`, `sbom` |
 
 ## R-5 · Optional cloud (off by default, consent-gated)
 
@@ -80,12 +81,14 @@ the PR that claims it (guide §9).
 
 ## R-6 · Release & platform
 
-| #     | Requirement                                                        | Implements                                 | Test                                                                                                                                                                                                                  |
-| ----- | ------------------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R-6.1 | A new APK updates an already-installed copy                        | `android/app/build.gradle` signing configs | 🚫 no keystore yet (Q-002)                                                                                                                                                                                            |
-| R-6.2 | `versionCode` is derived and monotonically increasing              | `android/app/build.gradle`                 | 🟢 CI run `39566612127` logged `versionName=3.1.0 versionCode=30100`                                                                                                                                                  |
-| R-6.3 | Launcher icons and splash match the web brand                      | `scripts/generate-brand-assets.mjs`        | ✅ asset validation in `npm run assets:brand`                                                                                                                                                                         |
-| R-6.4 | CI enforces lint (warnings denied), orphan, typecheck, test, build | `.github/workflows/ci.yml`                 | 🟢 CI run `39566612176` green on Linux + Windows + macOS (format gate staged, Q-004). ⚠ **Lint gate (`--max-warnings=0`) currently FAILING** on 656 pre-existing warnings until burn-down (Q-005, active blocker #1). |
+| #     | Requirement                                                                | Implements                                                         | Test                                                                                                                                          |
+| ----- | -------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-6.1 | A new APK updates an already-installed copy                                | `android/app/build.gradle` signing configs                         | 🚫 no keystore yet (Q-002)                                                                                                                    |
+| R-6.2 | `versionCode` is derived and monotonically increasing                      | `android/app/build.gradle`                                         | 🟢 CI run `39566612127` logged `versionName=3.1.0 versionCode=30100`                                                                          |
+| R-6.3 | Launcher icons and splash match the web brand                              | `scripts/generate-brand-assets.mjs`                                | ✅ asset validation in `npm run assets:brand`                                                                                                 |
+| R-6.4 | CI enforces format, lint (warnings denied), orphan, typecheck, test, build | `.github/workflows/ci.yml`                                         | 🟢 CI run `39566612176` green on Linux + Windows + macOS; format enforced (B-3, D-407) and lint burned down 656 → **0** (B-7, Q-005 resolved) |
+| R-6.5 | Releases are published from a semver tag with notes + checksums            | `.github/workflows/release.yml`, `.github/workflows/build-apk.yml` | `v*.*.*` → Release body from `CHANGELOG.md`, signed APKs + `APK-SHA256SUMS.txt`                                                               |
+| R-6.6 | `main` is protected; merges require the authoritative checks               | GitHub branch protection, `.ci-required.txt`                       | enforced on `Perchemop/VellumScribe` (D-415); private vulnerability reporting enabled                                                         |
 
 ---
 
@@ -96,10 +99,10 @@ the PR that claims it (guide §9).
 | R-1 Persistence           | 5            | 2                    |
 | R-2 Notes & capture       | 5            | 0                    |
 | R-3 Audio & transcription | 8            | 4                    |
-| R-4 Security              | 4            | 2                    |
+| R-4 Security              | 5            | 3                    |
 | R-5 Optional cloud        | 5            | 4                    |
-| R-6 Release & platform    | 4            | 1                    |
-| **Total**                 | **31**       | **13**               |
+| R-6 Release & platform    | 6            | 3                    |
+| **Total**                 | **34**       | **16**               |
 
 The largest coverage gap is **R-2 (notes & capture)**, which has no automated
 tests at all — slices C-1, C-2 and C-3 in `IMPLEMENTATION_PLAN.md` address it.

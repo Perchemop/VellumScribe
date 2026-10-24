@@ -1,5 +1,5 @@
 ---
-description: Fast read-only exploration of the VellumScribe codebase.
+description: Explorer / Researcher. Fast read-only exploration of the VellumScribe codebase, plus drafting human-gated public research notes (summaries + URLs only) in docs/research/.
 mode: subagent
 model: opencode/mimo-v2.6-flash-free
 permissions:

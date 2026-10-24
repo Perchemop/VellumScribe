@@ -1,0 +1,19 @@
+# gitleaks configuration (guide §20.1).
+#
+# Extends the default rule set. The only additions are allowlists for values
+# that are demonstrably NOT secrets, so the scan stays meaningful.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented example credentials and the placeholder env template"
+# `AKIAIOSFODNN7EXAMPLE` is the example access-key ID printed throughout AWS's
+# own documentation. It appears in this repository's history (commit bbe9aaa)
+# as a placeholder in an SSO migration and was never a usable credential.
+regexes = [
+  '''AKIAIOSFODNN7EXAMPLE''',
+]
+paths = [
+  '''(^|/)\.env\.example$''',
+]
