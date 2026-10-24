@@ -163,13 +163,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     CloudSyncEngine.getBackupFrequency()
   );
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-const [metricsEnabled, setMetricsEnabled] = useState<boolean>(PrivacyManager.isMetricsEnabled());
+  const [metricsEnabled, setMetricsEnabled] = useState<boolean>(PrivacyManager.isMetricsEnabled());
 
-const handleMetricsToggle = (enabled: boolean) => {
-  if (enabled) MetricsManager.enable();
-  else MetricsManager.disable();
-  setMetricsEnabled(PrivacyManager.isMetricsEnabled());
-};
+  const handleMetricsToggle = (enabled: boolean) => {
+    if (enabled) MetricsManager.enable();
+    else MetricsManager.disable();
+    setMetricsEnabled(PrivacyManager.isMetricsEnabled());
+  };
   const [selectedProviderForConnect, setSelectedProviderForConnect] =
     useState<CloudStorageProvider | null>(null);
   const [remoteBackups, setRemoteBackups] = useState<Record<string, RemoteBackupItem[]>>({});
@@ -1609,16 +1609,16 @@ const handleMetricsToggle = (enabled: boolean) => {
                 errors) and the app version. Opt-in only; off by default.
               </p>
               <div className="flex items-center gap-2 text-xs">
-                <span className={`px-2 py-0.5 rounded border ${metricsEnabled ? 'bg-emerald-50/50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
+                <span
+                  className={`px-2 py-0.5 rounded border ${metricsEnabled ? 'bg-emerald-50/50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}
+                >
                   {metricsEnabled ? 'Opted in' : 'Opted out'}
                 </span>
                 <button
                   onClick={() => {
                     const snapshot = MetricsManager.getMetrics();
-                    console.log('Usage metrics snapshot', snapshot);
-                    setSyncFeedback(
-                      `Logged ${snapshot.totalEvents} local metric event(s) to console.`
-                    );
+                    AppLogger.info('MetricsManager', 'Snapshot exported to console', snapshot);
+                    setSyncFeedback(`Logged ${snapshot.totalEvents} local metric event(s).`);
                     setTimeout(() => setSyncFeedback(null), 3000);
                   }}
                   className="text-xs underline underline-offset-4 hover:text-zinc-600 dark:hover:text-zinc-300"
