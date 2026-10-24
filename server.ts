@@ -179,14 +179,24 @@ app.use((req, res, next) => {
       /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
     const isAllowed = configuredOrigins.includes(origin);
 
-    if (isLocalhost || isAllowed) {
+    if (isAllowed) {
+      // origin is validated against configuredOrigins above before credentials
+      // are sent; never reflect an unvalidated Origin with credentials.
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Requested-With, X-Session-Token, X-Session-Id, X-CSRF-Token'
+      );
+    } else if (isLocalhost) {
+      // Dev mode: allow localhost origin without credentials.
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.setHeader(
         'Access-Control-Allow-Headers',
         'Content-Type, Authorization, X-Requested-With, X-Session-Token, X-Session-Id, X-CSRF-Token'
       );
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
   }
 
@@ -1108,6 +1118,9 @@ app.post('/api/audio/transcribe-session/segment', audioRateLimiter, async (req, 
   if (!sessionId || segmentIndex === undefined) {
     return res.status(400).json({ error: 'Missing sessionId or segmentIndex.' });
   }
+  if (!Number.isInteger(segmentIndex) || segmentIndex < 0) {
+    return res.status(400).json({ error: 'Invalid segment index.' });
+  }
 
   const session = audioTranscribeSessionsStore.get(sessionId);
   if (!session) {
@@ -1232,7 +1245,7 @@ app.post('/api/audio/transcribe-session/segment', audioRateLimiter, async (req, 
       modelUsed,
     });
   } catch (err: any) {
-    console.error(`Error transcribing segment ${segmentIndex}:`, err);
+    console.error('Error transcribing segment:', segmentIndex, err);
     segment.status = 'failed';
     segment.error = err?.message || 'Segment transcription failed.';
 
@@ -1781,20 +1794,23 @@ app.post('/api/deepgram/transcribe', async (req, res) => {
 // 6. Local Whisper Server Proxy
 app.post('/api/local-whisper/verify', async (req, res) => {
   try {
-    const rawEndpoint = (
-      req.body?.endpoint || 'http://localhost:8080/v1/audio/transcriptions'
-    ).replace(/\/+$/, '');
+    let rawEndpoint = req.body?.endpoint || 'http://localhost:8080/v1/audio/transcriptions';
+    while (rawEndpoint.endsWith('/')) {
+      rawEndpoint = rawEndpoint.slice(0, -1);
+    }
     const validation = validateSafeUrl(rawEndpoint, { allowLocalhost: true });
     if (!validation.valid) {
       return res.status(400).json({ success: false, error: validation.error });
     }
     const endpoint = rawEndpoint;
-    const testUrl = endpoint.replace(/\/transcriptions$/, '/models');
+    const testUrl = endpoint.endsWith('/transcriptions')
+      ? endpoint.slice(0, endpoint.length - '/transcriptions'.length) + '/models'
+      : endpoint;
     const probeValidation = validateSafeUrl(testUrl, { allowLocalhost: true });
     if (!probeValidation.valid) {
       return res.status(400).json({ success: false, error: probeValidation.error });
     }
-    const response = await fetch(testUrl, {
+    const response = await fetch(probeValidation.parsed!.href, {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
     }).catch(() => null);
@@ -1804,7 +1820,7 @@ app.post('/api/local-whisper/verify', async (req, res) => {
     }
 
     // Try a HEAD or OPTIONS request to endpoint
-    const optRes = await fetch(endpoint, {
+    const optRes = await fetch(validation.parsed!.href, {
       method: 'OPTIONS',
       signal: AbortSignal.timeout(3000),
     }).catch(() => null);
@@ -1855,7 +1871,7 @@ app.post('/api/local-whisper/transcribe', async (req, res) => {
     formData.append('file', fileBlob, `speech.${ext}`);
     formData.append('model', 'whisper-1');
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(validation.parsed!.href, {
       method: 'POST',
       body: formData,
       signal: AbortSignal.timeout(120000),
@@ -2781,7 +2797,7 @@ app.post('/api/cloud/:provider/connect-credentials', async (req, res) => {
       'Basic ' + Buffer.from(`${username.trim()}:${password.trim()}`).toString('base64');
 
     // Perform PROPFIND to verify credentials against the remote server
-    const testRes = await fetch(fullUrl, {
+    const testRes = await fetch(derivedValidation.parsed!.href, {
       method: 'PROPFIND',
       headers: {
         Authorization: authHeader,
@@ -2789,7 +2805,7 @@ app.post('/api/cloud/:provider/connect-credentials', async (req, res) => {
       },
       redirect: 'error',
     }).catch(async () => {
-      return fetch(cleanUrl, {
+      return fetch(validation.parsed!.href, {
         method: 'PROPFIND',
         headers: {
           Authorization: authHeader,
@@ -2915,6 +2931,14 @@ app.get('/api/cloud/:provider/callback', async (req, res) => {
   const { provider } = req.params;
   const { code, error, error_description, state } = req.query;
 
+  const escapeHtml = (s: string) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
   const renderError = (errStr: string) => {
     return res.send(`
       <!DOCTYPE html>
@@ -2922,7 +2946,7 @@ app.get('/api/cloud/:provider/callback', async (req, res) => {
         <head><meta charset="utf-8" /><title>SSO Authentication Notice</title></head>
         <body style="font-family:system-ui,sans-serif;padding:30px;background:#0c0c0e;color:#fff;text-align:center;">
           <h2 style="color:#ef4444;">SSO Authentication Notice</h2>
-          <p style="color:#a1a1aa;">${errStr}</p>
+          <p style="color:#a1a1aa;">${escapeHtml(errStr)}</p>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: '${provider}', error: ${JSON.stringify(errStr)} }, window.location.origin);
@@ -3427,7 +3451,7 @@ app.post(
           return res.status(400).json({ error: urlValidation.error });
         }
 
-        const putRes = await fetch(uploadUrl, {
+        const putRes = await fetch(urlValidation.parsed!.href, {
           method: 'PUT',
           headers: {
             Authorization: decryptedAuth,
@@ -3715,7 +3739,7 @@ app.post('/api/cloud/:provider/chunk/commit', async (req, res) => {
         return res.status(400).json({ error: urlValidation.error });
       }
 
-      const putRes = await fetch(uploadUrl, {
+      const putRes = await fetch(urlValidation.parsed!.href, {
         method: 'PUT',
         headers: {
           Authorization: decryptedAuth,
@@ -3994,7 +4018,7 @@ app.post('/api/notebooklm/validate-notebook', (req, res) => {
       if (!safe.valid) {
         return res.status(400).json({ error: safe.error || 'Forbidden URL' });
       }
-      if (!notebookUrl.includes('notebooklm.google.com') && !notebookUrl.includes('localhost')) {
+      if (!safe.parsed || safe.parsed.hostname !== 'notebooklm.google.com') {
         return res
           .status(400)
           .json({ error: 'URL must be a valid Google NotebookLM link (notebooklm.google.com)' });
