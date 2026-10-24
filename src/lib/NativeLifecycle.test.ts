@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerDurabilityHooks } from './NativeLifecycle';
-import { getDatabaseAdapter } from './sqlite/databaseAdapter';
+import { getDatabaseAdapter, type DatabaseAdapter } from './sqlite/databaseAdapter';
 import { App as CapApp } from '@capacitor/app';
 
 vi.mock('./sqlite/databaseAdapter');
@@ -35,13 +35,14 @@ describe('NativeLifecycle durability hooks (R-1.3)', () => {
     vi.mocked(getDatabaseAdapter).mockReturnValue({
       flush: mockFlush,
       scheduleSave: mockScheduleSave,
+    } as unknown as DatabaseAdapter);
+    vi.mocked(CapApp.addListener).mockImplementation((eventName: string, listenerFunc: unknown) => {
+      appListenerCalls.push({
+        event: eventName,
+        handler: listenerFunc as (state: { isActive: boolean }) => void,
+      });
+      return Promise.resolve({ remove: vi.fn() });
     });
-    vi.mocked(CapApp.addListener).mockImplementation(
-      (eventName: string, listenerFunc: (state: { isActive: boolean }) => void) => {
-        appListenerCalls.push({ event: eventName, handler: listenerFunc });
-        return Promise.resolve({ remove: vi.fn() });
-      }
-    );
   });
 
   it('registers an appStateChange listener when the App plugin is available', () => {
@@ -54,7 +55,7 @@ describe('NativeLifecycle durability hooks (R-1.3)', () => {
     const handler = appListenerCalls.find((c) => c.event === 'appStateChange')?.handler;
     expect(handler).toBeDefined();
 
-    handler({ isActive: false });
+    handler!({ isActive: false });
 
     expect(mockFlush).toHaveBeenCalledTimes(1);
     expect(mockScheduleSave).not.toHaveBeenCalled();
@@ -65,7 +66,7 @@ describe('NativeLifecycle durability hooks (R-1.3)', () => {
     const handler = appListenerCalls.find((c) => c.event === 'appStateChange')?.handler;
     expect(handler).toBeDefined();
 
-    handler({ isActive: true });
+    handler!({ isActive: true });
 
     expect(mockFlush).not.toHaveBeenCalled();
   });
@@ -73,12 +74,12 @@ describe('NativeLifecycle durability hooks (R-1.3)', () => {
   it('falls back to scheduleSave when the adapter has no flush method', () => {
     vi.mocked(getDatabaseAdapter).mockReturnValue({
       scheduleSave: mockScheduleSave,
-    } as { scheduleSave: typeof mockScheduleSave });
+    } as unknown as DatabaseAdapter);
     registerDurabilityHooks();
     const handler = appListenerCalls.find((c) => c.event === 'appStateChange')?.handler;
     expect(handler).toBeDefined();
 
-    handler({ isActive: false });
+    handler!({ isActive: false });
 
     expect(mockScheduleSave).toHaveBeenCalledTimes(1);
     expect(mockFlush).not.toHaveBeenCalled();
