@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SqliteRepository } from './sqliteRepository';
-import { getDatabaseAdapter } from './databaseAdapter';
-import { StorageManager } from '../storage';
+
+let SqliteRepository: typeof import('./sqliteRepository').SqliteRepository;
+let getDatabaseAdapter: typeof import('./sqlite/databaseAdapter').getDatabaseAdapter;
+let StorageManager: typeof import('../storage').StorageManager;
 
 describe('Orphan media repair at cold start (R-1.5)', () => {
   beforeEach(async () => {
     localStorage.clear();
     vi.resetModules();
-    const { SqliteEngine: SE } = await import('./sqliteEngine');
+    const { SqliteEngine: SE } = await import('./sqlite/sqliteEngine');
     await SE.resetForTesting();
-    const { StorageManager: SM } = await import('../storage');
-    await SM.initialize();
+    ({ SqliteRepository } = await import('./sqlite/sqliteRepository'));
+    ({ getDatabaseAdapter } = await import('./sqlite/databaseAdapter'));
+    ({ StorageManager } = await import('../storage'));
+    await StorageManager.initialize();
   });
 
   function createNote(title: string): { id: number } {
@@ -38,11 +41,8 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
   it('finds media whose note no longer exists as orphans', async () => {
     const note = createNote('Valid note');
 
-    // media attached to an existing note -> not an orphan
     insertMedia('media-valid', note.id);
-    // media referencing a deleted/non-existent note -> orphan
     insertMedia('media-orphan-deleted', 99999);
-    // media with no note reference at all -> orphan
     insertMedia('media-orphan-null', null);
 
     const orphans = SqliteRepository.findOrphanMediaKeys();
