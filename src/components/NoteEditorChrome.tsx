@@ -149,7 +149,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 ? 'text-amber-600 dark:text-amber-400'
                 : saveStatus === 'saved'
                   ? 'text-emerald-600 dark:text-emerald-400'
-                  : 'text-zinc-400 dark:text-zinc-500'
+                  : 'text-zinc-600 dark:text-zinc-500'
             }`}
             aria-live="polite"
           >
@@ -300,7 +300,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               <div className="w-10 h-1 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             </div>
             <div className="py-1 pb-8 sm:pb-2 text-sm">
-              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <p className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 Note
               </p>
               {onToggleFocus && (
@@ -412,7 +412,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               </button>
 
               <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-2 mx-4" />
-              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              <p className="px-4 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 App
               </p>
               <button

@@ -20,8 +20,9 @@ the events they belong to.
   white `#ffffff`. Accents inside the app reuse the note-colour set
   (`emerald`, `amber`, `rose`, `sky`, `violet`) — colour belongs to the user's
   content, not to the brand.
-- **Shape language:** rounded `2xl` corners on surfaces, 1px hairline borders,
-  restrained elevation. Information density is preferred over decoration.
+- **Shape language:** rounded `xl` corners on surfaces, `2xl`–`3xl` on cards
+  and modals, 1px hairline borders, restrained elevation. Information density
+  is preferred over decoration.
 - **Type:** Plus Jakarta Sans for UI, Newsreader for reading, JetBrains Mono
   for data (code, transcripts). One idea per screen.
 

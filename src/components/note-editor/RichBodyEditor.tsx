@@ -51,7 +51,7 @@ export const RichBodyEditor: React.FC<RichBodyEditorProps> = ({
           </button>
         </div>
 
-        <div className="text-[11px] text-zinc-400 font-mono">
+        <div className="text-[11px] text-zinc-600 dark:text-zinc-400 font-mono">
           {wordCount} words • {charCount} chars
         </div>
       </div>
@@ -62,7 +62,7 @@ export const RichBodyEditor: React.FC<RichBodyEditorProps> = ({
           {body ? (
             <ReactMarkdown>{body}</ReactMarkdown>
           ) : (
-            <p className="text-zinc-400 italic">No note content to preview.</p>
+            <p className="text-zinc-600 dark:text-zinc-400 italic">No note content to preview.</p>
           )}
         </div>
       ) : (

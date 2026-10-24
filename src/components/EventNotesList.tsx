@@ -399,7 +399,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             {isSelectedInBatch ? (
               <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 fill-zinc-900 dark:fill-zinc-100 text-white" />
             ) : (
-              <Circle className="w-5 h-5 text-zinc-400 hover:text-zinc-700" />
+              <Circle className="w-5 h-5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-700" />
             )}
           </div>
         )}
@@ -459,7 +459,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
         )}
 
         {/* Subdued Metadata & Badges */}
-        <div className="flex items-center justify-between text-xs text-zinc-400 pt-1.5 border-t border-zinc-100/80 dark:border-zinc-850">
+        <div className="flex items-center justify-between text-xs text-zinc-600 dark:text-zinc-400 pt-1.5 border-t border-zinc-100/80 dark:border-zinc-850">
           <div className="flex flex-wrap items-center gap-2">
             {!isPrivateLocked && note.reminder_at && (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
@@ -558,7 +558,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   className={`min-h-[32px] min-w-[32px] flex items-center justify-center p-1 rounded-lg transition-colors ${
                     note.is_pinned
                       ? 'text-zinc-900 dark:text-zinc-100'
-                      : 'text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 opacity-0 group-hover:opacity-100'
                   }`}
                 >
                   <Pin className={`w-3.5 h-3.5 ${note.is_pinned ? 'fill-current' : ''}`} />
@@ -575,7 +575,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   }}
                   title="Duplicate Note"
                   aria-label="Duplicate Note"
-                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Copy className="w-3.5 h-3.5" />
                 </button>
@@ -587,7 +587,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   }}
                   title="Share & Export Note"
                   aria-label="Share & Export Note"
-                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Share2 className="w-3.5 h-3.5" />
                 </button>
@@ -602,14 +602,14 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   }}
                   title="Archive Note (Hide from active notes)"
                   aria-label="Archive Note (Hide from active notes)"
-                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 p-1 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                 >
                   <Archive className="w-3.5 h-3.5" />
                 </button>
               </>
             )}
 
-            <span className="text-zinc-400 dark:text-zinc-500 pl-1">
+            <span className="text-zinc-600 dark:text-zinc-500 pl-1">
               {new Date(note.updated_at || note.created_at).toLocaleDateString([], {
                 month: 'short',
                 day: 'numeric',
@@ -651,7 +651,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
 
           <div className="relative flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-zinc-600 dark:text-zinc-400 absolute left-3 top-2.5" />
               <input
                 id="note-search-input"
                 type="text"
@@ -666,7 +666,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search"
                   title="Clear search"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -721,7 +721,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                   if (v) setActiveTab(v as NoteTabFilter);
                   else setActiveTab('all');
                 }}
-                className="flex-1 bg-transparent text-xs font-medium focus:outline-none min-w-0"
+                className="flex-1 bg-transparent text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 min-w-0"
                 aria-label="Filter notes"
               >
                 <option value="">Type</option>
@@ -838,7 +838,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
       )}
 
       {/* List Header & Sorting / Quick Actions */}
-      <div className="px-3.5 py-2 flex items-center justify-between text-zinc-400 text-xs font-medium border-t border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
+      <div className="px-3.5 py-2 flex items-center justify-between text-zinc-600 dark:text-zinc-400 text-xs font-medium border-t border-zinc-200/60 dark:border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-2">
           <span>
             {filteredNotes.length} {filteredNotes.length === 1 ? 'note' : 'notes'}
@@ -908,8 +908,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
             />
           )
         ) : (
-          <div className="p-8 text-center text-zinc-400 space-y-3 max-w-xs mx-auto animate-in fade-in">
-            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 flex items-center justify-center mx-auto text-zinc-400">
+          <div className="p-8 text-center text-zinc-600 dark:text-zinc-400 space-y-3 max-w-xs mx-auto animate-in fade-in">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800/60 flex items-center justify-center mx-auto text-zinc-600 dark:text-zinc-400">
               <FileText className="w-6 h-6 stroke-[1.4]" />
             </div>
             <div className="space-y-1">
@@ -977,7 +977,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 type="button"
                 onClick={() => setShowNewEventModal(false)}
                 aria-label="Close"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1059,7 +1059,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Empty Trash?
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                   Permanently delete all notes in Trash? This action cannot be undone.
                 </p>
               </div>
@@ -1105,7 +1105,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Permanently Delete Note?
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                   This note and its recordings, transcripts, and OCR scans will be removed
                   permanently.
                 </p>

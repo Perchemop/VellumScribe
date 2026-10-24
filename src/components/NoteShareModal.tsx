@@ -168,7 +168,7 @@ ${formattedText}
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Share &amp; Export Note
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 {note.title || 'Untitled Note'} &bull;{' '}
                 {note.note_type === 'checklist' ? 'To-Do List' : 'Document'}
               </p>
@@ -178,7 +178,7 @@ ${formattedText}
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -312,7 +312,7 @@ ${formattedText}
                     <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                       {copied ? 'Copied!' : 'Copy Note'}
                     </div>
-                    <div className="text-xs text-zinc-400">To clipboard</div>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400">To clipboard</div>
                   </div>
                 </button>
 
@@ -327,14 +327,18 @@ ${formattedText}
                     <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                       Print / PDF
                     </div>
-                    <div className="text-xs text-zinc-400">System print view</div>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                      System print view
+                    </div>
                   </div>
                 </button>
               </div>
 
               {/* Text Preview */}
               <div className="space-y-1.5">
-                <div className="text-xs font-medium text-zinc-400">Document Excerpt</div>
+                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Document Excerpt
+                </div>
                 <div className="p-3 bg-zinc-50 dark:bg-zinc-900 rounded-2xl border border-zinc-200/60 dark:border-zinc-800/60 text-xs text-zinc-700 dark:text-zinc-300 max-h-36 overflow-y-auto whitespace-pre-wrap font-mono">
                   {formattedText}
                 </div>
@@ -351,7 +355,7 @@ ${formattedText}
                 <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
                   Instant Air-Gapped Device Scanning
                 </div>
-                <p className="text-xs text-zinc-400 max-w-xs leading-relaxed">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-xs leading-relaxed">
                   Scan this code directly with another smartphone camera to transfer the note
                   offline without internet, cloud, or pairing.
                 </p>
@@ -431,7 +435,9 @@ ${formattedText}
               </div>
 
               <div className="space-y-1.5">
-                <div className="text-xs font-medium text-zinc-400">Ingestion Payload Preview</div>
+                <div className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                  Ingestion Payload Preview
+                </div>
                 <pre className="p-3 bg-zinc-900 text-blue-200 dark:bg-black dark:text-blue-200 rounded-2xl text-xs font-mono overflow-x-auto max-h-56 leading-relaxed">
                   {notebooklmText}
                 </pre>

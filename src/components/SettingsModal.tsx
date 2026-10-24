@@ -136,7 +136,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 font-serif-editorial">
                 Settings &amp; Configuration
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">
                 Manage Google AI Studio API key, local database, and storage
               </p>
             </div>
@@ -144,7 +144,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             onClick={onClose}
             aria-label="Close"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -248,7 +248,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowKey(!showKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                     >
                       {showKey ? (
                         <EyeOff className="w-3.5 h-3.5" />
@@ -315,7 +315,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
                     Load from File
                   </p>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">
                     Import key from .env, .json, or key.txt file
                   </p>
                 </div>
@@ -356,25 +356,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center pt-1">
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-xs">Total Notes</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 block text-xs">
+                      Total Notes
+                    </span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
                       {stats.totalNotes}
                     </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-xs">Audio Memos</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 block text-xs">
+                      Audio Memos
+                    </span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
                       {stats.totalRecordings}
                     </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-xs">Active Notes</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 block text-xs">
+                      Active Notes
+                    </span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
                       {stats.activeNotes}
                     </span>
                   </div>
                   <div className="p-2 bg-white dark:bg-zinc-800 rounded-xl border border-zinc-200/60 dark:border-zinc-700/60">
-                    <span className="text-zinc-400 block text-xs">Archived</span>
+                    <span className="text-zinc-600 dark:text-zinc-400 block text-xs">Archived</span>
                     <span className="font-bold text-sm text-zinc-800 dark:text-zinc-200">
                       {stats.archivedNotes}
                     </span>
@@ -399,7 +405,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Data Export Card */}
               <div className="space-y-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                   Data Backup &amp; Export
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -419,7 +425,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <p className="font-semibold text-zinc-900 dark:text-zinc-100">
                       Export JSON Backup
                     </p>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
                       Full structured backup of notes, sketches, and checklists
                     </p>
                   </button>
@@ -446,7 +452,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <p className="font-semibold text-zinc-900 dark:text-zinc-100">
                       Export Markdown Archive
                     </p>
-                    <p className="text-xs text-zinc-400">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
                       Clean Markdown text files readable in any editor
                     </p>
                   </button>
@@ -470,14 +476,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     AES-256-GCM
                   </span>
                 </div>
-                <p className="text-xs text-zinc-400 leading-relaxed">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
                   Cryptographic keys, token aliases, and locked note master credentials are
                   protected inside your device hardware security container.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-600 dark:text-zinc-400">
                   Enrolled Security Keys ({secrets.length})
                 </h4>
                 <div className="space-y-2">
@@ -492,7 +498,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <p className="font-semibold text-zinc-900 dark:text-zinc-100">
                             {s.alias}
                           </p>
-                          <p className="font-mono text-xs text-zinc-400">{s.masked_value}</p>
+                          <p className="font-mono text-xs text-zinc-600 dark:text-zinc-400">
+                            {s.masked_value}
+                          </p>
                         </div>
                       </div>
                       <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">

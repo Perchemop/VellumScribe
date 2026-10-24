@@ -131,3 +131,29 @@
   margin-top: 1rem;
   margin-bottom: 1rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Reduced motion (WCAG 2.2 AA 2.2.2)
+   Respect the OS "reduce motion" preference: keep functional state changes but
+   remove decorative spin/pulse and scale animations.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin,
+  .animate-pulse {
+    animation: none !important;
+  }
+  .animate-pulse {
+    opacity: 1 !important;
+  }
+  [class*='hover:scale']:hover {
+    transform: none !important;
+  }
+}

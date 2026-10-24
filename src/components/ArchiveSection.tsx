@@ -160,7 +160,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                   className={`p-1.5 rounded-lg transition-colors ${
                     viewMode === 'grid'
                       ? 'bg-white dark:bg-zinc-750 text-zinc-900 dark:text-zinc-100 shadow-2xs'
-                      : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
                   }`}
                 >
                   <LayoutGrid className="w-4 h-4" />
@@ -173,7 +173,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                   className={`p-1.5 rounded-lg transition-colors ${
                     viewMode === 'list'
                       ? 'bg-white dark:bg-zinc-750 text-zinc-900 dark:text-zinc-100 shadow-2xs'
-                      : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
                   }`}
                 >
                   <ListIcon className="w-4 h-4" />
@@ -198,7 +198,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
         {archivedNotes.length > 0 && (
           <div className="space-y-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600 dark:text-zinc-400" />
               <input
                 id="archive-search-input"
                 type="text"
@@ -212,7 +212,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                   type="button"
                   onClick={() => setSearchQuery('')}
                   aria-label="Clear search"
-                  className="min-h-[44px] min-w-[44px] flex items-center justify-center absolute right-0 top-1/2 -translate-y-1/2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center absolute right-0 top-1/2 -translate-y-1/2 text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
                 >
                   Clear
                 </button>
@@ -252,21 +252,21 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
         {/* Empty State */}
         {archivedNotes.length === 0 ? (
           <div className="py-20 text-center space-y-4 max-w-sm mx-auto">
-            <div className="w-14 h-14 mx-auto rounded-2xl bg-zinc-100 dark:bg-zinc-850 text-zinc-400 dark:text-zinc-500 flex items-center justify-center">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-zinc-100 dark:bg-zinc-850 text-zinc-600 dark:text-zinc-500 flex items-center justify-center">
               <FolderArchive className="w-7 h-7 stroke-[1.5]" />
             </div>
             <div className="space-y-1">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 No archived notes
               </h3>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-relaxed">
+              <p className="text-xs text-zinc-600 dark:text-zinc-500 leading-relaxed">
                 When you archive notes, they will appear here. Archive completed projects or old
                 drafts to keep your primary notes organized and focused.
               </p>
             </div>
           </div>
         ) : filteredNotes.length === 0 ? (
-          <div className="py-12 text-center text-xs text-zinc-400">
+          <div className="py-12 text-center text-xs text-zinc-600 dark:text-zinc-400">
             No archived notes match your search.
           </div>
         ) : viewMode === 'list' || filteredNotes.length > 30 ? (
@@ -307,7 +307,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                           ) : note.note_type === 'sketch' ? (
                             <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                           ) : (
-                            <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                            <FileText className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400 shrink-0" />
                           )}
                           <h4 className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 truncate">
                             {note.title || 'Untitled Note'}
@@ -327,7 +327,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                     </div>
 
                     <div className="pt-2 border-t border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-zinc-400">
+                      <span className="text-[11px] text-zinc-600 dark:text-zinc-400">
                         {formatArchivedDate(note.archived_at || note.updated_at)}
                       </span>
 
@@ -348,7 +348,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                           onClick={(e) => handlePermanentDelete(note.id, note.title, e)}
                           aria-label="Delete note permanently"
                           title="Delete permanently"
-                          className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
+                          className="min-h-[32px] min-w-[32px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -395,7 +395,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                         ) : note.note_type === 'sketch' ? (
                           <PenTool className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                         ) : (
-                          <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                          <FileText className="w-3.5 h-3.5 text-zinc-600 dark:text-zinc-400 shrink-0" />
                         )}
                         <h4 className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 truncate">
                           {note.title || 'Untitled Note'}
@@ -416,7 +416,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                   </div>
 
                   <div className="pt-2 border-t border-zinc-100 dark:border-zinc-850 flex items-center justify-between gap-2">
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
                       {formatArchivedDate(note.archived_at || note.updated_at)}
                     </span>
 
@@ -438,7 +438,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                         onClick={(e) => handlePermanentDelete(note.id, note.title, e)}
                         aria-label="Delete note permanently"
                         title="Delete permanently"
-                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -463,7 +463,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Permanently Delete Note?
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5 truncate">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 truncate">
                   &ldquo;{confirmDeleteNote.title}&rdquo; will be deleted permanently.
                 </p>
               </div>
@@ -501,7 +501,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Restore All Notes?
                 </h3>
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                   Move all {archivedNotes.length} archived notes back to your active notes list.
                 </p>
               </div>

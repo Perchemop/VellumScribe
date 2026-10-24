@@ -600,7 +600,7 @@ export default function App() {
                   setActiveView('notes');
                   setSelectedNoteId(null);
                 }}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'notes' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'notes' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <FileText className="w-5 h-5" />
                 <span className="text-[10px]">Notes</span>
@@ -610,7 +610,7 @@ export default function App() {
                   setActiveView('recents');
                   setSelectedNoteId(null);
                 }}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'recents' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'recents' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Clock className="w-5 h-5" />
                 <span className="text-[10px]">Recent</span>
@@ -620,7 +620,7 @@ export default function App() {
                   setActiveView('archive');
                   setSelectedNoteId(null);
                 }}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'archive' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'archive' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Archive className="w-5 h-5" />
                 <span className="text-[10px]">Archive</span>
@@ -630,7 +630,7 @@ export default function App() {
                   setActiveView('settings');
                   setSelectedNoteId(null);
                 }}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'settings' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'settings' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Settings className="w-5 h-5" />
                 <span className="text-[10px]">Settings</span>
@@ -675,7 +675,7 @@ export default function App() {
                 <button
                   onClick={dismissToast}
                   aria-label="Close notification"
-                  className="p-1 text-zinc-400 hover:text-zinc-200 dark:hover:text-zinc-700 rounded-md transition-colors"
+                  className="p-1 text-zinc-600 dark:text-zinc-400 hover:text-zinc-200 dark:hover:text-zinc-700 rounded-md transition-colors"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

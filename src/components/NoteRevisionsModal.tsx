@@ -118,7 +118,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
               id="revisions-modal-close-btn"
               onClick={onClose}
               aria-label="Close revision history"
-              className="p-1.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="p-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -138,10 +138,10 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
           {/* Revisions List (Left) */}
           <div className="md:col-span-5 overflow-y-auto p-3 space-y-2 max-h-[35vh] md:max-h-[55vh]">
             {revisions.length === 0 ? (
-              <div className="text-center py-8 px-4 text-zinc-400 dark:text-zinc-500">
+              <div className="text-center py-8 px-4 text-zinc-600 dark:text-zinc-500">
                 <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
                 <p className="text-xs font-medium">No revisions recorded yet</p>
-                <p className="text-[11px] mt-1 text-zinc-400 dark:text-zinc-500">
+                <p className="text-[11px] mt-1 text-zinc-600 dark:text-zinc-500">
                   Revisions are recorded automatically when editing or via AI synthesis.
                 </p>
               </div>
@@ -169,14 +169,14 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
                         v{rev.version_number}
                       </span>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                      <span className="text-[10px] text-zinc-600 dark:text-zinc-500">
                         {formattedDate}
                       </span>
                     </div>
                     <div className="text-xs font-medium truncate mb-0.5">
                       {rev.title || 'Untitled'}
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-600 dark:text-zinc-500">
                       <span className="truncate max-w-[130px]">{rev.reason || 'Snapshot'}</span>
                       <span>{rev.source || 'Local'}</span>
                     </div>
@@ -216,7 +216,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <div className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                  <div className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-500 uppercase tracking-wider">
                     Title
                   </div>
                   <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
@@ -225,7 +225,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                 </div>
 
                 <div className="flex-1 space-y-1">
-                  <div className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                  <div className="text-[11px] font-semibold text-zinc-600 dark:text-zinc-500 uppercase tracking-wider">
                     Content
                   </div>
                   <div className="text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-wrap font-mono p-3 bg-zinc-50 dark:bg-zinc-900/60 rounded-xl border border-zinc-100 dark:border-zinc-850/80 max-h-[220px] overflow-y-auto leading-relaxed">
@@ -234,7 +234,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                 </div>
 
                 {selectedRevision.content_hash && (
-                  <div className="text-[10px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1 pt-1">
+                  <div className="text-[10px] text-zinc-600 dark:text-zinc-500 flex items-center gap-1 pt-1">
                     <span>Checksum:</span>
                     <code className="font-mono bg-zinc-100 dark:bg-zinc-850 px-1 py-0.5 rounded text-[10px]">
                       {selectedRevision.content_hash}
@@ -243,7 +243,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-xs text-zinc-400 p-6 text-center">
+              <div className="flex-1 flex items-center justify-center text-xs text-zinc-600 dark:text-zinc-400 p-6 text-center">
                 Select a revision from the list to preview and restore its contents.
               </div>
             )}

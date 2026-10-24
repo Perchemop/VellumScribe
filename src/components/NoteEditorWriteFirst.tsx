@@ -522,7 +522,7 @@ ${tr.transcript}`
           >
             ← Back
           </button>
-          <span className="text-[11px] text-zinc-400" aria-live="polite">
+          <span className="text-[11px] text-zinc-600 dark:text-zinc-400" aria-live="polite">
             {saveStatus === 'saving' ? 'Saving…' : saveStatus === 'saved' ? 'Saved' : 'Focus mode'}
           </span>
           <button
@@ -658,7 +658,7 @@ ${tr.transcript}`
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="Note title"
                 aria-label="Note title"
-                className="flex-1 min-w-[12rem] text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+                className="flex-1 min-w-[12rem] text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <AiProvenanceBadge entityType="note" entityId={note.id} className="shrink-0" />
             </div>
@@ -667,7 +667,7 @@ ${tr.transcript}`
               onChange={(e) => handleBodyChange(e.target.value)}
               placeholder="Start writing…"
               aria-label="Note body"
-              className="w-full min-h-[40vh] resize-y bg-transparent text-base text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none leading-relaxed"
+              className="w-full min-h-[40vh] resize-y bg-transparent text-base text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
             />
             {showChecklistSection && (
               <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
@@ -681,7 +681,7 @@ ${tr.transcript}`
             )}
             {recordings.length > 0 && (
               <div className="space-y-2" aria-label="Voice memos">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                   Voice memos
                 </p>
                 {recordings.map((rec) => (
@@ -698,7 +698,7 @@ ${tr.transcript}`
             )}
             {ocrScans.length > 0 && (
               <div className="space-y-2" aria-label="Document scans">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                   Document scans
                 </p>
                 <ul className="space-y-1.5">
@@ -717,7 +717,9 @@ ${tr.transcript}`
                             {scan.ocr_text}
                           </p>
                         ) : (
-                          <p className="text-zinc-400 mt-0.5">No extracted text</p>
+                          <p className="text-zinc-600 dark:text-zinc-400 mt-0.5">
+                            No extracted text
+                          </p>
                         )}
                       </div>
                     </li>
