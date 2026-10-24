@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { UnlockSessionManager } from './UnlockSessionManager';
 
 describe('UnlockSessionManager (R-4.2 PIN / passphrase lock)', () => {
@@ -18,13 +18,13 @@ describe('UnlockSessionManager (R-4.2 PIN / passphrase lock)', () => {
   });
 
   it('createSession returns false when crypto.subtle is unavailable', async () => {
-    const originalCrypto = (globalThis as any).crypto;
-    (globalThis as any).crypto = undefined;
+    const originalCrypto = (globalThis as { crypto?: unknown }).crypto;
+    (globalThis as { crypto?: unknown }).crypto = undefined;
     try {
       const ok = await UnlockSessionManager.createSession(1, 'pin', 'salt');
       expect(ok).toBe(false);
     } finally {
-      (globalThis as any).crypto = originalCrypto;
+      (globalThis as { crypto?: unknown }).crypto = originalCrypto;
     }
   });
 
