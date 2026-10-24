@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Database } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Database, Bug } from 'lucide-react';
 import { AppLogger } from '../lib/logger';
+import { CrashReporter } from '../lib/crashReporter';
 
 interface Props {
   children: ReactNode;
@@ -53,6 +54,27 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   };
 
+  /**
+   * Consent-gated crash reporting: build a redacted report, copy it to the
+   * clipboard, and open a prefilled GitHub issue. Nothing is sent until the
+   * user submits the prefilled issue themselves.
+   */
+  private handleReportCrash = async () => {
+    try {
+      const report = CrashReporter.buildReport(this.state.error, {
+        componentStack: this.state.errorInfo?.componentStack || undefined,
+      });
+      try {
+        await navigator.clipboard.writeText(report.body);
+      } catch {
+        // Clipboard may be unavailable; the prefilled issue still carries the body.
+      }
+      window.open(CrashReporter.prefilledIssueUrl(report), '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      AppLogger.warn('ErrorBoundary', 'Failed to build crash report', e);
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       if (this.props.fallbackRender && this.state.error) {
@@ -100,6 +122,13 @@ export class ErrorBoundary extends Component<Props, State> {
               >
                 <Database className="w-3.5 h-3.5" />
                 Reset Session Cache
+              </button>
+              <button
+                onClick={this.handleReportCrash}
+                className="w-full sm:w-auto px-4 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-xs font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Bug className="w-3.5 h-3.5" />
+                Report this crash
               </button>
             </div>
           </div>
