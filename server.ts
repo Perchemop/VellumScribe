@@ -179,18 +179,24 @@ app.use((req, res, next) => {
       /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
     const isAllowed = configuredOrigins.includes(origin);
 
-    if (isLocalhost || isAllowed) {
+    if (isAllowed) {
+      // origin is validated against configuredOrigins above before credentials
+      // are sent; never reflect an unvalidated Origin with credentials.
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Requested-With, X-Session-Token, X-Session-Id, X-CSRF-Token'
+      );
+    } else if (isLocalhost) {
+      // Dev mode: allow localhost origin without credentials.
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
       res.setHeader(
         'Access-Control-Allow-Headers',
         'Content-Type, Authorization, X-Requested-With, X-Session-Token, X-Session-Id, X-CSRF-Token'
       );
-      // Credentials only for explicitly configured origins; never for reflected
-      // or localhost origins, which an attacker can influence via the Origin header.
-      if (isAllowed) {
-        res.setHeader('Access-Control-Allow-Credentials', 'true');
-      }
     }
   }
 
