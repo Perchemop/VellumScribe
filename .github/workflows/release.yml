@@ -1,0 +1,60 @@
+name: Release (tag)
+
+# Publishes a GitHub Release for a semver tag with notes extracted from
+# CHANGELOG.md. The APK workflow (build-apk.yml) attaches the binaries to the
+# same release; whichever finishes first creates it and the other updates it,
+# so ordering is never a race we have to win.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish release notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract notes for this version from CHANGELOG.md
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "Publishing notes for ${TAG}"
+          python3 - "$TAG" <<'PY'
+          import re, sys
+          tag = sys.argv[1]
+          text = open('CHANGELOG.md', encoding='utf-8').read()
+          m = re.search(rf'^## \[{re.escape(tag)}\][^\n]*\n(.*?)(?=^## \[|\Z)', text, re.S | re.M)
+          body = m.group(1).strip() if m else ''
+          if not body:
+              body = f"Release {tag}. See CHANGELOG.md for details."
+          summary = f"Release {tag}. Extracted from CHANGELOG.md."
+          with open('/tmp/release_body.md', 'w', encoding='utf-8') as f:
+              f.write(f"{summary}\n\n{body}\n")
+          PY
+          {
+            echo "tag<<EOF"
+            echo "v${TAG}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.notes.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release for $TAG already exists (APK workflow won the race) - updating the body."
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file /tmp/release_body.md
+          else
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+              --title "VellumScribe $TAG" \
+              --notes-file /tmp/release_body.md
+          fi

@@ -191,6 +191,14 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
 
+      - name: Compute APK checksums
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          cd android/app/build/outputs/apk
+          sha256sum debug/*.apk release/*.apk > "${GITHUB_WORKSPACE}/APK-SHA256SUMS.txt"
+          cat "${GITHUB_WORKSPACE}/APK-SHA256SUMS.txt"
+
       - name: Release APK (on tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -198,5 +206,6 @@ jobs:
           files: |
             android/app/build/outputs/apk/debug/*.apk
             android/app/build/outputs/apk/release/*.apk
+            APK-SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
