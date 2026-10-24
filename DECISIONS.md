@@ -511,3 +511,21 @@ Alerts are triaged and documented here rather than silently ignored.
 
 **Rejected.** Auto-dismissing / suppressing the alerts without documentation
 (guide §4: CodeQL alerts are triaged, not auto-ignored).
+
+### D-421 · 2026-10-24 · Release keystore generated; Q-002 resolved
+
+**Decision.** Generate the release keystore and wire it to CI so `assembleRelease`
+produces a **signed** APK that can replace an installed copy.
+**What was done.** A `PKCS12` keystore was generated (alias `vellumscribe`,
+RSA-2048, valid 10 000 days to 2054), stored outside the repository at
+`~/.vellumscribe-keystore/vellumscribe-release.jks`, and the four repository
+secrets were set (`ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`,
+`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`). Build run `40129841250` logged
+`VELLUM: assembleRelease -> versionName=3.1.0 versionCode=30100 signed=true`.
+**Consequences.** Q-002 is resolved (moved to "Resolved" in
+`docs/assumptions-and-questions.md`). A-3 (update-in-place proof) and Q-003
+(assetlinks fingerprint) are unblocked. The keystore must be backed up by the
+owner — losing it means no future in-place update. Guide for regeneration:
+`docs/RELEASE_KEYSTORE.md`.
+**Rejected.** Shipping unsigned release APKs indefinitely (cannot replace an
+installed copy); committing the keystore or its password (never).
