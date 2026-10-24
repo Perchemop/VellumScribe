@@ -97,13 +97,12 @@ the PR that claims it (guide §9).
 | Area                      | Requirements | With automated tests |
 | ------------------------- | ------------ | -------------------- |
 | R-1 Persistence           | 5            | 2                    |
-| R-2 Notes & capture       | 5            | 4                    |
+| R-2 Notes & capture       | 5            | 5                    |
 | R-3 Audio & transcription | 8            | 4                    |
 | R-4 Security              | 5            | 3                    |
 | R-5 Optional cloud        | 5            | 4                    |
 | R-6 Release & platform    | 6            | 3                    |
-| **Total**                 | **34**       | **20**               |
+| **Total**                 | **34**       | **21**               |
 
-The largest remaining coverage gap is **R-2.3 document scanning/OCR** (`OcrService`) and
-R-3/C-5 native inference on hardware — slices C-1…C-5 in `IMPLEMENTATION_PLAN.md` address
-them.
+The largest remaining coverage gap is **R-3/C-5 native inference on hardware** — slices C-1…C-5 in
+`IMPLEMENTATION_PLAN.md` address it.
