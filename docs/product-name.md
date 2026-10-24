@@ -37,12 +37,12 @@ updates, so it is treated as **immutable**.
 
 ## Naming checks (guide §18, §25.1)
 
-| Check                                 | Status                                                                   |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| Memorable and descriptive             | ✅ fuses the two capabilities (vellum/scribe)                            |
-| Handles reserved (repo, package ids)  | ✅ repo + `com.vellumscribe.app`; no separate domain or org reserved yet |
-| Conflict-free in package registries   | ⚠ npm/PyPI not searched — tracked as **Q-019**                           |
-| Trademark-cleared (WIPO / registries) | ⚠ **not checked** — tracked as **Q-019** (a human/legal task)            |
+| Check                                 | Status                                                                                                                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Memorable and descriptive             | ✅ fuses the two capabilities (vellum/scribe)                                                                                                                            |
+| Handles reserved (repo, package ids)  | ✅ repo + `com.vellumscribe.app`; no separate domain or org reserved yet                                                                                                 |
+| Conflict-free in package registries   | ⚠ npm `vellum` exists; PyPI `vellum`, `vellum-ai` exist; no exact `vellumscribe` package found in a quick search. Formal registry check still required — **Q-019**       |
+| Trademark-cleared (WIPO / registries) | ⚠ Quick web search finds Vellum-related brands (`vellum-dev`, `vellum-ai`, `vellum.pub`) but no exact `VellumScribe` hits. Formal WIPO/USPTO search required — **Q-019** |
 
 VellumScribe is an original name; no competitor's name, logo or trade dress is
-used or implied (§18, §27.5).
+used or implied (§18, §27.5). Name clearance remains an open human/legal task.
