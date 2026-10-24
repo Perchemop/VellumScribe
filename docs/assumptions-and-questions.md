@@ -46,18 +46,11 @@ Last reviewed: 2026-10-21.
 
 ### Blocking
 
-**Q-002. No release keystore exists yet.**
-Signing is fully wired (`android/keystore.properties` or `VELLUM_*` env vars,
-CI secrets), but no key has been generated. Until one is, `assembleRelease`
-produces an unsigned APK that cannot be installed, and no installed copy can
-ever be updated in place. _Action:_ generate and back up the keystore per
-`docs/BUILD_RELEASE.md` §1, then set the four CI secrets.
-
 **Q-003. `public/.well-known/assetlinks.json` still holds the placeholder
 fingerprint.**
 HTTPS App Links (`https://vellumscribe.app/...`) and OAuth return therefore
 show a disambiguation dialog. _Action:_ fill in the release keystore SHA-256
-from Q-002.
+fingerprint (now available — see Q-002 resolution below).
 
 ### Quality debt
 
@@ -165,6 +158,21 @@ A human/legal task — record the outcome in `docs/product-name.md`.
 ---
 
 ## Resolved
+
+**Q-002. ✅ Resolved 2026-10-24 — release keystore generated and CI signing
+verified.**
+_Was:_ no release keystore existed, so `assembleRelease` produced an unsigned
+APK that could not replace an installed copy.
+_Resolution:_ a release keystore was generated (`PKCS12`, alias `vellumscribe`,
+valid to 2054) and the four CI secrets (`ANDROID_KEYSTORE_BASE64`,
+`ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) were
+set. The Build Android APK run `40129841250` logged
+`VELLUM: assembleRelease -> versionName=3.1.0 versionCode=30100 signed=true`.
+Keystore certificate SHA-256:
+`98:99:30:CF:3B:2C:17:6C:8E:54:DE:C9:03:21:F9:80:D3:8D:58:8A:AB:E5:CC:9D:3A:1F:31:DD:9C:B3:7E:97`.
+The keystore lives outside the repository and is backed up by the owner; see
+`docs/RELEASE_KEYSTORE.md`. This also unblocks A-3 (update-in-place proof) and
+Q-003 (assetlinks fingerprint).
 
 **Q-001. ✅ Resolved 2026-10-21 — every GitHub Actions run failed before any
 step started.**
