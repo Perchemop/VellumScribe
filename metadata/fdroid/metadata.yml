@@ -1,0 +1,74 @@
+id: com.vellumscribe.app
+name: VellumScribe
+packageName: com.vellumscribe.app
+license: MIT OR Apache-2.0
+sourceCode: https://github.com/Perchemop/VellumScribe
+issueTracker: https://github.com/Perchemop/VellumScribe/issues
+repoType: git
+repo: https://github.com/Perchemop/VellumScribe.git
+binaries: https://github.com/Perchemop/VellumScribe/releases
+webSite: https://github.com/Perchemop/VellumScribe
+authorName: VellumScribe
+authorEmail: dev@example.com
+description: |
+  Private, offline-first notes for Android and the web. Write, record, scan and
+  sketch — organised under the events of your life, stored on your own device.
+
+  VellumScribe is a notebook for meetings, lectures, interviews and ideas at
+  2am. Everything is saved locally in SQLite; nothing is uploaded unless you
+  explicitly turn on a cloud provider or an AI service.
+
+  Capture:
+  - Text, checklists, voice recordings, sketches and document/handwriting scans
+  - On-device Whisper transcription (native, optional) with live-dictation fallback
+  - Versioned notes with revision history and trash
+
+  Optional (off by default, consent-gated):
+  - Encrypted cloud backup to Google Drive, OneDrive or WebDAV
+  - Cloud AI providers (Google Gemini, Groq, Deepgram) — bring your own API key
+  - Optional PIN lock to mask sensitive content in the UI
+
+  Nothing is synced behind your back. No ads. No tracking. The design and code
+  are original works; nothing is copied from a commercial product.
+
+summary: |
+  Private, offline-first notes for Android and the web. Organised under events,
+  with on-device transcription and optional encrypted cloud backup.
+categories:
+  - Productivity
+  - Office
+autoUpdateMode: Version
+updateCheckMode: {}
+currentVersion: 3.1.0
+currentVersionCode: 30100
+
+# Anti-features: none required. All network/cloud/AI features are opt-in and
+# disabled by default. The app works fully offline without any of them.
+# If F-Droid reviewers consider the optional Google AI SDK a non-free network
+# dependency, add the following line:
+# antiFeatures: NonFreeNet
+
+builds:
+  - versionName: 3.1.0
+    versionCode: 30100
+    commit: a918078
+    subdir: android
+    gradle:
+      - assembleRelease
+    ndk: 26.1.10909125
+    sdk: 36
+    disableCMake: false
+    disableNdk: false
+    scanignore:
+      - android/app/build/
+      - android/app/src/main/assets/models/
+      - node_modules/
+      - dist/
+    note: |
+      Release APKs are signed with a stable keystore (ANDROID_KEYSTORE_BASE64
+      CI secret). Without a signing key the release APK is unsigned and cannot
+      replace an already-installed copy on a device.
+
+updateCheckMode: {}
+currentVersion: 3.1.0
+currentVersionCode: 30100
