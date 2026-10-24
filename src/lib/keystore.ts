@@ -150,6 +150,7 @@ export class AndroidKeystoreManager {
   }
 
   public static async deleteSecret(alias: string): Promise<boolean> {
+    const existed = this.getStored().some((s) => s.alias === alias);
     if (Capacitor.isNativePlatform()) {
       try {
         const { SecureStorage } = await import('@aparajita/capacitor-secure-storage');
@@ -161,9 +162,11 @@ export class AndroidKeystoreManager {
           e
         );
       }
+    } else {
+      this.runtimeSessionSecrets.delete(alias);
     }
     this.save(this.getStored().filter((s) => s.alias !== alias));
-    return true;
+    return existed;
   }
 
   /**
