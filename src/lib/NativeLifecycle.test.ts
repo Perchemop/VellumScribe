@@ -21,8 +21,8 @@ const appListenerCalls: Array<{
   handler: (state: { isActive: boolean }) => void;
 }> = [];
 
-let mockFlush: ReturnType<typeof vi.fn> = vi.fn();
-let mockScheduleSave: ReturnType<typeof vi.fn> = vi.fn();
+const mockFlush: ReturnType<typeof vi.fn> = vi.fn();
+const mockScheduleSave: ReturnType<typeof vi.fn> = vi.fn();
 
 describe('NativeLifecycle durability hooks (R-1.3)', () => {
   beforeEach(() => {

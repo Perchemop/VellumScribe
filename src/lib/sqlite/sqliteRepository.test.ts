@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SqliteRepository } from './sqliteRepository';
 import { getDatabaseAdapter } from './databaseAdapter';
-import { SqliteEngine } from './sqliteEngine';
 import { StorageManager } from '../storage';
 
 describe('Orphan media repair at cold start (R-1.5)', () => {
