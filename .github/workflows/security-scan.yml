@@ -142,7 +142,10 @@ jobs:
 
       # CycloneDX SBOM: every component, version and licence (guide §19.4).
       - name: Generate CycloneDX SBOM
-        run: npx --yes @cyclonedx/cyclonedx-npm@^6 --output-format JSON --output-file sbom.cdx.json
+        # --ignore-npm-errors: the tree is installed with --legacy-peer-deps,
+        # so `npm ls` reports peer-range conflicts (e.g. via typescript-eslint's
+        # eslint peer). That is expected here and must not fail SBOM generation.
+        run: npx --yes @cyclonedx/cyclonedx-npm@^6 --ignore-npm-errors --output-format JSON --output-file sbom.cdx.json
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4

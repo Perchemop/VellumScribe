@@ -60,5 +60,23 @@ is recorded here.
 ## Legal & funding
 
 MIT-licensed (`LICENSE`). No legal entity, no funding channel at present.
-If funding is added, GitHub Sponsors first; nothing changes about licence or
-governance without a recorded decision.
+GitHub Sponsors is the lightest on-ramp if funding is ever added; nothing
+changes about licence or governance without a recorded decision.
+
+## Maintainer sustainability (guide §24)
+
+The human owns the outcome, so the project is set up so the human is not the
+bottleneck and does not burn out:
+
+- **The human does judgement work** — decisions, scope, releases and review —
+  while agents do the repetitive implementation and GitHub Actions does the
+  heavy verification.
+- **Response expectations are public** (`CONTRIBUTING.md`: first response within
+  **7 days**; the project gets **a few hours a week**), so boundaries can be
+  pointed at rather than re-argued.
+- **The vision is written down** (`VISION.md`) so work can continue without the
+  maintainer, and "no" stays impersonal.
+- **It is fine to pause.** Hand over, or point at an active fork, if stepping
+  away permanently.
+- **AWS-style "never say no" is avoided:** declining a contribution is normal
+  and documented (`CONTRIBUTING.md`, guide §17.7).
