@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OcrService } from './OcrService';
-import type { OcrResult } from '../lib/geminiService';
+import type { OcrResult } from '../../lib/geminiService';
 
 const mockScanHandwrittenNote = vi.fn();
 
-vi.mock('../lib/geminiService', () => ({
+vi.mock('../../lib/geminiService', () => ({
   GeminiApiService: {
     scanHandwrittenNote: (...args: unknown[]) => mockScanHandwrittenNote(...args),
   },
