@@ -20,10 +20,12 @@ describe('NoteRepository lifecycle (R-2: Notes & capture)', () => {
       'INSERT INTO events (title, event_date, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
       [title, '2026-01-01', 'seed event', Date.now().toString(), Date.now().toString()]
     );
-    return Number(res.lastInsertRowId ?? db.getLastInsertId ? db.getLastInsertId() : 0);
+    return Number(res.lastInsertRowId ?? db.getLastInsertId?.() ?? 0);
   }
 
-  async function createNote(overrides: Partial<Parameters<typeof NoteRepository.create>[0]> = {}): Promise<NoteRecord> {
+  async function createNote(
+    overrides: Partial<Parameters<typeof NoteRepository.create>[0]> = {}
+  ): Promise<NoteRecord> {
     return NoteRepository.create({
       title: 'Test Note',
       body: 'Body content',
@@ -69,8 +71,8 @@ describe('NoteRepository lifecycle (R-2: Notes & capture)', () => {
       const note = await createNote({
         note_type: 'checklist',
         checklist_items: [
-          { text: 'Buy milk', completed: false },
-          { text: 'Walk dog', completed: true },
+          { id: 'chk_1', text: 'Buy milk', completed: false },
+          { id: 'chk_2', text: 'Walk dog', completed: true },
         ],
       });
       expect(note.note_type).toBe('checklist');
