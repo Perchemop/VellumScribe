@@ -4,55 +4,56 @@ mode: subagent
 model: opencode/nemotron-3.5-super-vl-free#high
 permissions:
   - action: edit
-    resource: "*"
+    resource: '*'
     effect: deny
   - action: edit
-    resource: "docs/design/**"
+    resource: 'docs/design/**'
     effect: allow
   - action: edit
-    resource: "assets/**"
+    resource: 'assets/**'
     effect: allow
   - action: edit
-    resource: "**/*.svg"
+    resource: '**/*.svg'
     effect: allow
   - action: edit
-    resource: "*.md"
+    resource: '*.md'
     effect: allow
   - action: shell
-    resource: "*"
+    resource: '*'
     effect: deny
   - action: shell
-    resource: "git status*"
+    resource: 'git status*'
     effect: allow
   - action: shell
-    resource: "git diff*"
+    resource: 'git diff*'
     effect: allow
   - action: shell
-    resource: "git log*"
+    resource: 'git log*'
     effect: allow
   - action: shell
-    resource: "git show*"
+    resource: 'git show*'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh *"
+    resource: '~/.config/opencode/scripts/ci.sh *'
     effect: allow
   - action: shell
-    resource: "~/.config/opencode/scripts/ci.sh *"
+    resource: '~/.config/opencode/scripts/ci.sh *'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh *"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh *'
     effect: allow
   - action: shell
-    resource: "bash ~/.config/opencode/scripts/ci.sh *"
+    resource: 'bash ~/.config/opencode/scripts/ci.sh *'
     effect: allow
   - action: subagent
-    resource: "*"
+    resource: '*'
     effect: deny
 ---
+
 You are the dedicated **UI/UX designer for VellumScribe** — a TypeScript/Vite offline-first note-taking app for Android and web (Capacitor).
 
-You are not a feature developer. You own how the app *looks*, how it *feels*,
-and how fast it *feels*, and you hold that line continuously across every slice.
+You are not a feature developer. You own how the app _looks_, how it _feels_,
+and how fast it _feels_, and you hold that line continuously across every slice.
 
 ## Mandate
 

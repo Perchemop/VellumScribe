@@ -39,15 +39,20 @@ concrete commands, files and rules that apply here.
 
 ## 2. Commands
 
-Light / read-only (safe on this machine):
+Allowed locally (guide §4, tightened — no verification runs at all):
 
 ```bash
 git status          # read-only
 git diff            # read-only
 git log             # read-only
-npm run format      # light formatting script (coder/fixer/tester may run)
-npm run format:check
+gh ...              # PR / CI / repository administration (read + settings)
+~/.config/opencode/scripts/ci.sh ...   # the only way to verify
+npm run format      # Prettier --write: a *write*, not a check; allowed
 ```
+
+`npm run format:check`, `npm run lint`, `npm run typecheck`,
+`npm run check:orphans`, `npm run test`, `npm run build`, `npm ci` and
+`npx prettier --check` are **verification** and run only in GitHub Actions.
 
 Heavy / CI-only (never run on this machine — guide §4):
 
@@ -90,7 +95,11 @@ before every commit; never run it locally.
 
 The local machine has ~2.7 GiB RAM, no JDK, no Android SDK/NDK/CMake.
 
-- **Do** run: editing, typecheck, lint, orphan check, unit tests, Vite build.
+- **Do** run: editing files, reading files and CI logs, read-only git, `gh`,
+  `npm run format` (write-only), and `ci.sh`.
+- **Do not** run any verification locally: no `typecheck`, `lint`,
+  `check:orphans`, `test`, `build`, `npm ci`, `vitest`, `npx tsc` — not even
+  "just to be quick". Use `ci.sh` (guide §4, rule 6 in §1 above).
 - **Do not** run Gradle or CMake locally — it will OOM or simply not find the
   toolchain. Heavy builds run in GitHub Actions.
 - Reinstalling the full Android toolchain locally needs roughly 10–12 GiB of
@@ -137,12 +146,18 @@ release. See `docs/KNOWN_LIMITATIONS.md` §8 for ABI limits.
 
 We emulate cto.new's paid workflow using free models and GitHub Actions.
 
-| Mode               | Who                                    | Does                                                                                                          | Does not                      |
-| ------------------ | -------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| **Chat (plan)**    | `orchestrator` (primary)               | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates | edit code, run builds         |
-| **Task (execute)** | `coder` (+ `explorer` for context)     | implements one bounded slice, writes tests, commits, pushes                                                   | run local builds/tests, merge |
-| **Verify**         | GitHub Actions via `ci-runner`         | format + lint + typecheck + orphans + tests on 3 OS runners                                                   | —                             |
-| **Review**         | `reviewer` (read-only), then the human | reports issues, risks, missing tests; human merges                                                            | fix, merge                    |
+| Mode                    | Who                                    | Does                                                                                                            | Does not                      |
+| ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **Chat (plan)**         | `orchestrator` (primary)               | clarifies, writes the Task brief (requirement IDs, files likely touched, acceptance criteria, DoD), delegates   | edit code, run builds         |
+| **Task (execute)**      | `coder` (+ `explorer` for context)     | implements one bounded slice, writes tests, commits, pushes                                                     | run local builds/tests, merge |
+| **Design (continuous)** | `designer`                             | reviews the rendered result of every user-visible slice; owns brand + `docs/design/**` + `assets/**`            | rewrite application logic     |
+| **Verify**              | GitHub Actions via `ci-runner`         | format + lint + typecheck + orphans + tests on 3 OS runners; CodeQL, secret scan, licence scan, SBOM            | —                             |
+| **Review**              | `reviewer` (read-only), then the human | reports issues, risks, missing tests; the human merges on the record of D-410                                   | fix, merge                    |
+| **Local test**          | the human                              | runs/installs the CI artefact (APK/web) and confirms real behaviour on the primary OS                           | —                             |
+| **Release**             | `coder` / `docs-writer`                | on a semver milestone: update `CHANGELOG.md` + `ROADMAP.md`, tag `v*.*.*`; CI publishes the Release + artefacts | skip a required gate          |
+
+After merge, the loop continues: local test → semver release with honest notes
+(guide §6.3) → update `ROADMAP.md` readiness from verified evidence only.
 
 Supporting roles: `tester` (extend tests), `fixer` (repair a red CI gate),
 `docs-writer` (tracking docs). None of them may run the toolchain locally
@@ -155,12 +170,22 @@ either — they hand off to `ci-runner`.
 Agent definitions live in `.opencode/agents/`. Roles are wired to the
 provider that is actually connected (currently OpenCode free / Big Pickle):
 
-| Role             | Agent file                         | Use for                                     |
-| ---------------- | ---------------------------------- | ------------------------------------------- |
-| Lead / Architect | `.opencode/agents/orchestrator.md` | Discovery, scope, decisions, slice planning |
-| Coder            | `.opencode/agents/coder.md`        | Implementing a slice                        |
-| Explorer         | `.opencode/agents/explorer.md`     | Codebase search, mapping, audits            |
-| Reviewer         | `.opencode/agents/reviewer.md`     | Post-slice review, gate verification        |
+| Role                  | Agent file                         | Use for                                                     |
+| --------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| Lead / Architect      | `.opencode/agents/orchestrator.md` | Discovery, scope, decisions, slice planning                 |
+| Coder                 | `.opencode/agents/coder.md`        | Implementing a slice                                        |
+| Designer (UI/UX)      | `.opencode/agents/designer.md`     | Visual identity + continuous design/performance review      |
+| Explorer / Researcher | `.opencode/agents/explorer.md`     | Codebase search, mapping, audits, **public** research notes |
+| Reviewer              | `.opencode/agents/reviewer.md`     | Post-slice review, gate verification                        |
+| Tester                | `.opencode/agents/tester.md`       | Writing and extending tests                                 |
+| Fixer                 | `.opencode/agents/fixer.md`        | Repairing a red CI gate                                     |
+| Docs writer           | `.opencode/agents/docs-writer.md`  | Tracking docs (`PROGRESS`, traceability, `CHANGELOG`)       |
+| CI runner             | `.opencode/agents/ci-runner.md`    | Triggering and reporting GitHub Actions verification        |
+
+The **designer** is a standing, mandatory role (guide §27): it reviews the
+_rendered_ result of every user-visible slice, not just the diff, and owns all
+visual/graphic work. A user-visible slice is not Done until its design review
+has passed.
 
 When a stronger free provider (Gemini, Groq) is connected, only the `model:`
 field in those files changes — role structure stays.
@@ -174,49 +199,84 @@ left to guess requirements.
 
 ## 7. Continuous integration
 
-`.github/workflows/ci.yml` is the required verification signal and runs on
+The required verification signal is `.github/workflows/ci.yml`, which runs on
 Linux, Windows and macOS (all shell steps declare `shell: bash`):
 
-1. Format check — **staged, not yet enforced** (Q-004; 194 unformatted files).
-   `continue-on-error` until slice B-3 establishes the baseline.
-2. Lint — **enforced with warnings denied** (`--max-warnings=0`, guide §4).
-   **Currently FAILING** on 656 pre-existing warnings — active blocker Q-005.
-   Burn down in slices of ≤50 via `ci.sh` iterations.
+1. Format check — **enforced** (`prettier --check .`), baseline established in
+   slice B-3 (D-407; Q-004 resolved).
+2. Lint — **enforced with warnings denied** (`--max-warnings=0`, guide §4);
+   burned down from 656 to **0** in slice B-7 (Q-005 resolved).
 3. Orphan check — enforced, fails on dead code.
 4. Typecheck — enforced.
 5. Full test suite — enforced.
 6. Production build — enforced.
 
-**Verified 2026-10-21 (before the lint-denied flip):** CI run `39566612176`
-passed on all three OS runners, Security Scanning (`39566612217`) passed, and
-the Android APK workflow (`39566612127`) produced `VellumScribe-Android-APKs-real`
-with `versionName=3.1.0 versionCode=30100` — **unsigned**, because no keystore
-exists yet (Q-002).
+Security and supply-chain gates in `.github/workflows/security-scan.yml`:
+
+7. **CodeQL** SAST (`javascript-typescript`).
+8. **Dependency Audit** (`npm audit --audit-level=high`).
+9. **secret scan** — `gitleaks` over the full history (guide §20.1).
+10. **licence scan** — `node scripts/check-licenses.mjs`, fails on
+    strong-copyleft / source-available / non-commercial / unlicensed
+    dependencies (guide §19.2, §19.4).
+11. **sbom** — a CycloneDX SBOM uploaded as an artefact (guide §19.4).
+
+**Authoritative checks** are declared in `.ci-required.txt` (one check name per
+line, exactly as GitHub reports it): `format`, `verify (ubuntu-latest)`,
+`verify (windows-latest)`, `verify (macos-latest)`, `secret scan`,
+`licence scan`, `sbom`. Branch protection on `main` requires these to pass
+(guide §20.2); direct pushes and force-pushes are disallowed. Checks not listed
+— including `CodeQL` — are reported but do not decide the verdict, and a red
+non-required check is **never** silently dropped (D-410).
+
+Android tags: pushing a `v*.*.*` tag triggers
+`.github/workflows/build-apk.yml` (signed release APKs + `APK-SHA256SUMS.txt`)
+and `.github/workflows/release.yml` (Release body from the matching
+`CHANGELOG.md` section); whichever finishes first creates the Release and the
+other updates it.
+
+**Verified history:** CI run `39566612176` passed on all three OS runners;
+Security Scanning `39566612217` passed; the Android APK workflow
+`39566612127` produced `VellumScribe-Android-APKs-real` with
+`versionName=3.1.0 versionCode=30100` — **unsigned**, because no keystore
+exists yet (Q-002). C-2 hardening (rate limits, path containment, argv
+subprocesses, credential CORS allow-list, memory-only backup passphrase)
+landed on `main` at `1621420`.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
-`npm run lint`, `npx tsc`, `vitest`, or `npm ci` runs on this machine — the
-host is memory-constrained and restarts under load. Verify changes with
-`~/.config/opencode/scripts/ci.sh run "<description>"`, which commits the
-working tree to the `opencode/ci` branch, pushes it, opens a PR to `main`, and
-runs the repository's CI. Always cite a run ID you actually inspected.
+`npm run lint`, `npm run format:check`, `npx tsc`, `vitest`, or `npm ci` runs
+on this machine — the host is memory-constrained and restarts under load.
+Verify changes with `~/.config/opencode/scripts/ci.sh run "<description>"`,
+which commits the working tree to the `opencode/ci` branch, pushes it, opens a
+PR to `main`, and runs the repository's CI. Always cite a run ID you actually
+inspected. `ci.sh run` checks out `opencode/ci` _before_ committing, so never
+commit on another branch and expect it to travel — commit on `opencode/ci`.
 
 ---
 
 ## 8. Documentation set
 
-| File                                | Purpose                                   |
-| ----------------------------------- | ----------------------------------------- |
-| `docs/project-brief.md`             | Why the app exists                        |
-| `docs/scope.md`                     | What is in and out of scope               |
-| `docs/inspiration.md`               | Clean-room inspiration statement          |
-| `docs/product-name.md`              | Locked name and usage rules               |
-| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions    |
-| `docs/architecture.md`              | _(this repo uses `docs/ARCHITECTURE.md`)_ |
-| `docs/parity.md`                    | Capability tracker                        |
-| `docs/qc/manual-checklists.md`      | Manual QC                                 |
-| `IMPLEMENTATION_PLAN.md`            | Vertical slices                           |
-| `REQUIREMENTS_TRACEABILITY.md`      | Requirement → file → test                 |
-| `DECISIONS.md`                      | Decision log                              |
-| `PROGRESS.md`                       | Running status                            |
-| `ATTRIBUTION.md`                    | Third-party licences                      |
-| `CHANGELOG.md`                      | User-visible history                      |
+| File                                | Purpose                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `docs/project-brief.md`             | Why the app exists                                               |
+| `docs/scope.md`                     | What is in and out of scope                                      |
+| `docs/inspiration.md`               | Clean-room inspiration statement                                 |
+| `docs/product-name.md`              | Locked name and usage rules                                      |
+| `docs/assumptions-and-questions.md` | Facts vs assumptions vs open questions                           |
+| `docs/architecture.md`              | _(this repo uses `docs/ARCHITECTURE.md`)_                        |
+| `docs/parity.md`                    | Capability tracker                                               |
+| `docs/qc/manual-checklists.md`      | Manual QC                                                        |
+| `IMPLEMENTATION_PLAN.md`            | Vertical slices                                                  |
+| `REQUIREMENTS_TRACEABILITY.md`      | Requirement → file → test                                        |
+| `DECISIONS.md`                      | Decision log                                                     |
+| `PROGRESS.md`                       | Running status                                                   |
+| `ATTRIBUTION.md`                    | Third-party licences (code **and** non-code assets, model terms) |
+| `CHANGELOG.md`                      | User-visible history                                             |
+| `ROADMAP.md`                        | Milestones + evidence-based readiness                            |
+| `VISION.md`                         | Goals; the scope constitution                                    |
+| `GOVERNANCE.md`                     | Who decides what; roles; disputes                                |
+| `CONTRIBUTORS.md`                   | Recognition for every contributor                                |
+| `CODE_OF_CONDUCT.md`                | Behaviour, scope, enforcement, reporting                         |
+| `ACCESSIBILITY.md`                  | WCAG 2.2 AA target, limits, report path                          |
+| `docs/design/brand.md`              | Visual identity (owned by `designer`)                            |
+| `docs/research/`                    | Human-gated public research notes                                |
