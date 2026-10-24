@@ -17,18 +17,18 @@ F-Droid builds apps from source on its own build servers. To publish:
 
 ## What is already in place
 
-| Requirement | Status | File |
-|-------------|--------|------|
-| FOSS dependencies | ✅ | `ATTRIBUTION.md`, all deps MIT/ISC/Apache-2.0/BSD |
-| No Firebase / Play Services | ✅ | No `google-services.json`, no Firebase deps |
-| ProGuard / R8 minification | ✅ | `android/app/build.gradle` (`minifyEnabled true`) |
-| shrinkResources | ✅ | `android/app/build.gradle` (`shrinkResources true`) |
-| Pinned NDK / build-tools | ✅ | `build-apk.yml` (NDK 26.1.10909125, build-tools 36.0.0) |
-| ABI filter (arm64-v8a) | ✅ | `android/app/build.gradle` |
-| Version monotonicity | ✅ | `versionCode` derived from `package.json` |
-| Signed release pipeline | ⚠ | `build-apk.yml` supports signing from CI secrets |
-| F-Droid metadata | ✅ | `metadata/fdroid/metadata.yml` |
-| F-Droid submission guide | ✅ | This file |
+| Requirement                 | Status | File                                                    |
+| --------------------------- | ------ | ------------------------------------------------------- |
+| FOSS dependencies           | ✅     | `ATTRIBUTION.md`, all deps MIT/ISC/Apache-2.0/BSD       |
+| No Firebase / Play Services | ✅     | No `google-services.json`, no Firebase deps             |
+| ProGuard / R8 minification  | ✅     | `android/app/build.gradle` (`minifyEnabled true`)       |
+| shrinkResources             | ✅     | `android/app/build.gradle` (`shrinkResources true`)     |
+| Pinned NDK / build-tools    | ✅     | `build-apk.yml` (NDK 26.1.10909125, build-tools 36.0.0) |
+| ABI filter (arm64-v8a)      | ✅     | `android/app/build.gradle`                              |
+| Version monotonicity        | ✅     | `versionCode` derived from `package.json`               |
+| Signed release pipeline     | ⚠      | `build-apk.yml` supports signing from CI secrets        |
+| F-Droid metadata            | ✅     | `metadata/fdroid/metadata.yml`                          |
+| F-Droid submission guide    | ✅     | This file                                               |
 
 ## What remains blocked
 
