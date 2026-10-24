@@ -148,7 +148,7 @@ jobs:
         run: npx --yes @cyclonedx/cyclonedx-npm@^6 --ignore-npm-errors --output-format JSON --output-file sbom.cdx.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.cdx.json
