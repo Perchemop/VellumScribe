@@ -25,6 +25,7 @@ import {
   FileCheck,
   ArrowDownToLine,
   Server,
+  BarChart3,
 } from 'lucide-react';
 import { CloudAccount, CloudStorageProvider, SyncTelemetry, NoteRecord } from '../types';
 import { Capacitor } from '@capacitor/core';
@@ -38,6 +39,8 @@ import {
 } from '../lib/cloudSync';
 import { StorageManager } from '../lib/storage';
 import { AndroidKeystoreManager } from '../lib/keystore';
+import { PrivacyManager } from '../lib/privacyManager';
+import { MetricsManager } from '../lib/metricsManager';
 import { CURRENT_APP_VERSION } from '../lib/appUpdateManager';
 import { AndroidPwaManager } from '../lib/androidPwaManager';
 import { AppLogo } from './AppLogo';
@@ -160,6 +163,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     CloudSyncEngine.getBackupFrequency()
   );
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+const [metricsEnabled, setMetricsEnabled] = useState<boolean>(PrivacyManager.isMetricsEnabled());
+
+const handleMetricsToggle = (enabled: boolean) => {
+  if (enabled) MetricsManager.enable();
+  else MetricsManager.disable();
+  setMetricsEnabled(PrivacyManager.isMetricsEnabled());
+};
   const [selectedProviderForConnect, setSelectedProviderForConnect] =
     useState<CloudStorageProvider | null>(null);
   const [remoteBackups, setRemoteBackups] = useState<Record<string, RemoteBackupItem[]>>({});
@@ -1561,6 +1571,61 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 local browser storage. When cloud providers are connected, cloud sync exports notes
                 flagged for cloud save into a verified backup snapshot.
               </p>
+            </div>
+
+            {/* Usage Metrics (opt-in, privacy-preserving) */}
+            <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Usage Metrics (opt-in)
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Anonymous, local-only usage signals for release health. No note content, no
+                      personal data, no device identifiers. Nothing leaves your device unless you
+                      choose to export it.
+                    </p>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={metricsEnabled}
+                    onChange={(e) => handleMetricsToggle(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:transition-all after:peer-checked:bg-blue-600"></div>
+                  <span className="ml-3 text-xs font-medium text-zinc-600 dark:text-zinc-300 peer-checked:text-blue-600 dark:peer-checked:text-blue-400">
+                    {metricsEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </label>
+              </div>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Metrics record only anonymous counters (notes created, audio transcribed, backups,
+                errors) and the app version. Opt-in only; off by default.
+              </p>
+              <div className="flex items-center gap-2 text-xs">
+                <span className={`px-2 py-0.5 rounded border ${metricsEnabled ? 'bg-emerald-50/50 text-emerald-700 border-emerald-200' : 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
+                  {metricsEnabled ? 'Opted in' : 'Opted out'}
+                </span>
+                <button
+                  onClick={() => {
+                    const snapshot = MetricsManager.getMetrics();
+                    console.log('Usage metrics snapshot', snapshot);
+                    setSyncFeedback(
+                      `Logged ${snapshot.totalEvents} local metric event(s) to console.`
+                    );
+                    setTimeout(() => setSyncFeedback(null), 3000);
+                  }}
+                  className="text-xs underline underline-offset-4 hover:text-zinc-600 dark:hover:text-zinc-300"
+                >
+                  View in console
+                </button>
+              </div>
             </div>
 
             <div className="p-5 bg-white dark:bg-[#121216] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl space-y-3">

@@ -6,6 +6,7 @@ export interface PrivacySettings {
   warnBeforeExternalCalls: boolean;
   wipeSessionKeysOnClose: boolean;
   hasConsentedToCloudAi: boolean;
+  metricsEnabled: boolean; // Opt-in, privacy-preserving usage signals (off by default)
 }
 
 const PRIVACY_SETTINGS_KEY = 'vellumscribe_privacy_settings_v1';
@@ -16,6 +17,7 @@ const DEFAULT_PRIVACY: PrivacySettings = {
   warnBeforeExternalCalls: true,
   wipeSessionKeysOnClose: false,
   hasConsentedToCloudAi: false,
+  metricsEnabled: false,
 };
 
 export class PrivacyManager {
@@ -66,6 +68,18 @@ export class PrivacyManager {
 
   public static revokeCloudAiConsent(): void {
     this.updateSettings({ hasConsentedToCloudAi: false });
+  }
+
+  public static isMetricsEnabled(): boolean {
+    return this.settings.metricsEnabled && !this.settings.telemetryDisabled;
+  }
+
+  public static enableMetrics(): void {
+    this.updateSettings({ metricsEnabled: true, telemetryDisabled: false });
+  }
+
+  public static disableMetrics(): void {
+    this.updateSettings({ metricsEnabled: false });
   }
 
   /**
