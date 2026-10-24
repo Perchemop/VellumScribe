@@ -55,7 +55,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-markdown": "^10.1.0",
-    "react-window": "^2.3.2",
+    "react-window": "^2.4.1",
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
