@@ -581,3 +581,30 @@ employer/IP, Q-016 second admin + MFA, Q-017 licence expression, Q-018 metrics.
   §20.3/§20.7); it is non-required, so it reports without blocking.
 - **Action pinning:** major-version tags kept, SHA pinning recorded as a
   follow-up (**D-417**) on the launch milestone.
+
+## 2026-10-24 — Signed release, F-Droid readiness, designer review, test coverage
+
+**Signed APK (Q-002 resolved).** Generated a release keystore (PKCS12, alias
+`vellumscribe`, valid to 2054), stored outside the repo, and set the four CI
+secrets. Build run `40129841250` logged
+`VELLUM: assembleRelease -> versionName=3.1.0 versionCode=30100 signed=true`.
+See `docs/RELEASE_KEYSTORE.md`, D-421.
+
+**F-Droid readiness.** Added `metadata/fdroid/metadata.yml` (+ README),
+`docs/FDROID.md`, and ProGuard mapping upload in `build-apk.yml`. Confirmed FOSS
+deps only, no Firebase/Play Services, all cloud/AI opt-in.
+
+**Designer review (docs/design/review-2026-10-25.md).** Four High release
+blockers fixed: H-1 light-mode contrast (`text-zinc-400` →
+`text-zinc-600 dark:text-zinc-400`, 193 sites), H-2 `BatchActionBar` light-mode
+colours, H-3 visible focus rings, H-4 `prefers-reduced-motion`. Medium: M-1
+`AppLogo` dark-mode tile, M-2 maskable PNG/SVG wired into `public/manifest.json`.
+
+**Test coverage.** R-1 Persistence 5/5, R-2 Notes & capture 5/5, R-3 Audio &
+transcription 8/8, R-4 Security 4/5. Total **29/34** with automated tests (was
+16/34). New suites: `NativeLifecycle.test.ts`, `sqliteRepository.test.ts`,
+`OcrService.test.ts`, `UnlockSessionManager.test.ts`, `keystore.test.ts`,
+`metricsManager.test.ts`, `OfflineAiManager.test.ts`.
+
+**Lightweight metrics.** Opt-in, local-only usage counters (`MetricsManager`,
+`metricsEnabled` privacy flag), settings toggle, wired into `NoteRepository`.
