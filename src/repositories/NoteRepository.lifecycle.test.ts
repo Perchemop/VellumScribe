@@ -133,20 +133,20 @@ describe('NoteRepository lifecycle (R-2: Notes & capture)', () => {
 
       // version_number starts at note.version + 1 (== 2 for a fresh note).
       const v1 = await VersionControlManager.saveVersionSnapshot(note, 'Local User', 'initial');
-      expect(v1.version_number).toBeGreaterThanOrEqual(1);
+      expect(v1.version_number!).toBeGreaterThanOrEqual(1);
       expect(v1.title).toBe('Original');
       expect(v1.body).toBe('First body');
 
       const updated = await NoteRepository.update(note.id, { body: 'Second body' });
       const v2 = await VersionControlManager.saveVersionSnapshot(updated, 'Local User', 'edit');
-      expect(v2.version_number).toBeGreaterThan(v1.version_number);
+      expect(v2.version_number).toBeGreaterThan(v1.version_number!);
       expect(v2.body).toBe('Second body');
 
       const versions = VersionControlManager.getVersionsForNote(note.id);
       expect(versions.length).toBeGreaterThanOrEqual(2);
       expect(versions.map((v) => v.version_number).sort()).toEqual([
-        v1.version_number,
-        v2.version_number,
+        v1.version_number!,
+        v2.version_number!,
       ]);
     });
 
@@ -156,7 +156,7 @@ describe('NoteRepository lifecycle (R-2: Notes & capture)', () => {
       for (let i = 0; i < 7; i++) {
         await NoteRepository.update(note.id, { body: `body v${i + 1}` });
         await VersionControlManager.saveVersionSnapshot(
-          await NoteRepository.getById(note.id),
+          (await NoteRepository.getById(note.id))!,
           'Local User',
           `v${i + 1}`
         );
