@@ -2,6 +2,7 @@ import { NoteRecord, ChecklistItem } from '../types';
 import { getDatabaseAdapter, DatabaseAdapter } from '../lib/sqlite/databaseAdapter';
 import { ChecklistRow, SearchOptions, SearchResult, TagRow } from '../lib/sqlite/sqliteRepository';
 import { AppLogger } from '../lib/logger';
+import { MetricsManager } from '../lib/metricsManager';
 import { generatePrefixedId } from '../lib/uuid';
 
 export interface CreateNoteInput {
@@ -370,6 +371,7 @@ export class NoteRepository implements INoteRepository {
 
       const createdNote = await NoteRepository.getById(noteId);
       if (!createdNote) throw new Error(`Failed to retrieve newly created note ${noteId}`);
+      MetricsManager.record('note_created');
       return createdNote;
     });
   }
@@ -544,6 +546,7 @@ export class NoteRepository implements INoteRepository {
       await db.run('UPDATE media_files SET note_id = NULL WHERE note_id = ?;', [id]);
       // Record item change for sync
       await recordItemChange(db, 'note', id, 'delete', 0, { id });
+      MetricsManager.record('note_deleted');
     });
   }
 
