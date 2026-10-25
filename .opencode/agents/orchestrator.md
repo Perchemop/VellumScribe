@@ -54,7 +54,7 @@ still hold, and vertical-slice discipline still applies.
   clean-room analysis of the inspiration product (public sources only — never
   decompile, never copy assets, never clone a UI), **(B)** the
   `docs/capability-inventory.md` record of **every feature and ability** that
-  product has, **(C)** the design vision *and its implementation* (interaction
+  product has, **(C)** the design vision _and its implementation_ (interaction
   model, visual system, logo, icons, illustrations, brand), and **(D)** the
   **parity review** proving the app meets every documented ability.
   Delegate every user-visible slice to it, route parity questions to it, and do
