@@ -1,0 +1,79 @@
+name: Visual evidence
+
+# Renders the built app and uploads PNGs for the designer agent to review
+# (guide section 27.12). Artefacts only: no pixel baselines are committed, so a
+# font-metric change does not fail the build.
+on:
+  pull_request:
+    branches: ['main']
+  workflow_dispatch:
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      # Playwright is deliberately NOT in package.json: adding it would change
+      # package-lock.json, which cannot be regenerated on the maintainer's
+      # machine (npm is banned there). --no-save installs it for this job only.
+      - name: Install Playwright
+        run: |
+          npm install --no-save --no-fund --no-audit @playwright/test@1.49.0
+          npx playwright install --with-deps chromium
+
+      # Build the SPA *and* the bundled server, then boot the real server. A
+      # static server would 404 every /api call, which is not the screen an
+      # operator sees, and those failures would masquerade as rendering bugs.
+      - name: Build
+        run: npm run build
+
+      - name: Serve the build
+        run: |
+          PORT=4173 nohup npm start > serve.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:4173/api/health > /dev/null && exit 0
+            sleep 1
+          done
+          echo 'server did not start' >&2
+          cat serve.log >&2
+          exit 1
+
+      - name: Capture screenshots
+        env:
+          VISUAL_BASE_URL: http://localhost:4173
+        run: npx playwright test tests/visual.spec.ts
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visual-evidence
+          path: snapshots/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: visual-report
+          path: |
+            playwright-report/
+            serve.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: kill $(cat server.pid) || true
