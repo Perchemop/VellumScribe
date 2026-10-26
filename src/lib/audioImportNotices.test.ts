@@ -17,6 +17,15 @@ describe('describeAudioImport', () => {
     expect(message).toContain('downsampling');
   });
 
+  it('gives a distinct reason when audio is too long to convert safely', () => {
+    const message = describeAudioImport({
+      wasConversionSkipped: true,
+      conversionSkipReason: 'too_long',
+    });
+    expect(message).toContain('longer than 10 minutes');
+    expect(message).toContain('out of memory');
+  });
+
   it('prefers the truncation notice when both limits apply', () => {
     const message = describeAudioImport({ wasTruncated: true, wasConversionSkipped: true });
     expect(message).toContain('30 minutes');
