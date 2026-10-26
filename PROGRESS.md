@@ -608,3 +608,22 @@ transcription 8/8, R-4 Security 4/5. Total **29/34** with automated tests (was
 
 **Lightweight metrics.** Opt-in, local-only usage counters (`MetricsManager`,
 `metricsEnabled` privacy flag), settings toggle, wired into `NoteRepository`.
+
+## 2026-10-26 — Addendum adoption (client mode, MCP, deterministic-test policy)
+
+Adopted the local addendum (client-mode operating model) into repo process.
+The addendum's Rust sections (§K/§M.2) do not bind this TypeScript/React repo;
+their intent was already satisfied and is now documented as the binding
+equivalent in `docs/development.md` §9.
+
+- `docs/process-feedback.md` created (addendum §N append-only log); two entries:
+  GitHub MCP needs a client PAT (agent cannot mint it), and the Rust gates need
+  a stated non-Rust equivalent.
+- MCP: `~/.config/opencode/opencode.json` created — **Context7 connected and
+  verified**; GitHub MCP scaffolded but disabled pending a client PAT (all
+  GitHub operations already work via the authenticated `gh` CLI).
+- `docs/development.md` §9: client role model, phase status, MCP state,
+  deterministic-test policy, task-brief and release-notes templates.
+- PR template: tests must **name the workflow test** that proves the Task.
+- Deterministic-test audit (§M.5): no real network, no sleeps; `Date.now()` used
+  only for record stamps — no timing assertions. Clean.
