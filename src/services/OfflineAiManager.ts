@@ -224,7 +224,7 @@ export class OfflineAiManager {
 ${content}`
         );
       }
-    } catch (_err) {
+    } catch {
       // Older APK builds have no trail API — diagnostics only, never a failure.
     }
   }
