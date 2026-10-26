@@ -529,3 +529,66 @@ owner — losing it means no future in-place update. Guide for regeneration:
 `docs/RELEASE_KEYSTORE.md`.
 **Rejected.** Shipping unsigned release APKs indefinitely (cannot replace an
 installed copy); committing the keystore or its password (never).
+
+### D-422 · 2026-10-26 · Full CodeQL alert triage: fix what is real, dismiss what is proven benign
+
+**Context.** The GitHub security page carried 30 open CodeQL alerts: 7
+`js/request-forgery` (already accepted in D-420) plus 23 that had not been
+triaged. Each was investigated at the flagged line before any action.
+
+**Fixed in code (real findings).**
+
+- `js/reflected-xss` (`server.ts` OAuth callback error page): the error text was
+  embedded with `JSON.stringify()` inside an inline `<script>`, which does not
+  escape `</script>` — an attacker-supplied `error_description` could terminate
+  the script element. `provider` (from the URL path) was interpolated into a raw
+  JS string literal, allowing a quote breakout. Both are now JSON-escaped with
+  `<` rewritten to `\u003C`.
+- `js/type-confusion-through-parameter-tampering` (cloud backup upload): the
+  request `filename` is now accepted only when `typeof === 'string'`, so a
+  tampered payload cannot drive later URL construction with an array. The six
+  residual alerts point at `buffer.length`, where `buffer` is only ever a
+  `Buffer` (`Buffer.isBuffer` guard or `Buffer.from`); that ambiguity is
+  unreachable and each was dismissed with that proof.
+- `js/xss-through-dom` (`SettingsView.tsx`): the restore link now
+  `encodeURIComponent`s the backup id. Dismissed after the change: the href is
+  a fixed relative path and React writes attributes as DOM properties, so DOM
+  text is never re-parsed as HTML (`download` is not a script sink).
+- `js/clear-text-storage-of-sensitive-data` (cloud OAuth tokens): the client
+  stored raw provider access tokens in plain `localStorage` while the app never
+  reads them back (all authenticated requests go through the server session).
+  `CloudSyncEngine.persistAccounts()` now routes raw credentials into the
+  Keystore (`@aparajita/capacitor-secure-storage` on device) and stores only the
+  credential-free account record; `removeAccount()` clears the keystore alias.
+  Covered by `src/lib/cloudAccounts.test.ts`.
+
+**Dismissed with a written reason on each alert (proven benign).**
+
+- 8 × `js/missing-rate-limiting`: every flagged endpoint already applies a
+  limiter (`geminiRateLimiter`, `audioRateLimiter`, `notebooklmRateLimiter`,
+  `staticRateLimiter` — the `createRateLimiter` wrappers). CodeQL only
+  recognises the `express-rate-limit` library call pattern.
+- 6 × `js/prototype-polluting-assignment`: the writes target elements of the
+  typed `AudioTranscribeSession['segments']` array; `segmentIndex` is validated
+  (`Number.isInteger`, `>= 0`) and a missing index 404s before any write. Array
+  element assignment cannot pollute `Object.prototype`.
+- Remaining `js/clear-text-storage-of-sensitive-data` sites (note drafts,
+  metrics, migration backup/log, generic `StorageManager.setItem`, the keystore
+  metadata registry, and the post-migration sanitised rewrite): these persist
+  the app's own note content or masked descriptors, not credentials.
+
+**Secret-scanning alert #1** (`google_api_key`): a synthetic fixture used by the
+redaction tests — an obvious alphabet sequence, never a live credential
+(validity was reported as "unknown"). The fixture is now built at runtime so no
+key-shaped literal remains in source, and the alert is resolved as **used in
+tests**. (The literal is deliberately not repeated here: quoting it would trip
+the same scanner.)
+
+**Rationale.** The repository rule is that CodeQL alerts are triaged and
+documented, never silently ignored. Dismissal here always carries a written,
+alert-specific justification, and anything reachable by an attacker with a real
+fix was fixed rather than dismissed.
+
+**Consequences.** The plain "CodeQL" check (not a required gate; see D-415)
+still lists the accepted D-420 SSRF set. Every other alert carries a recorded
+fix or dismissal reason.
