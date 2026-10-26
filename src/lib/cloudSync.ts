@@ -5,6 +5,7 @@ import { SyncRepository } from '../repositories/SyncRepository';
 import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
+import { AndroidKeystoreManager } from './keystore';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -429,7 +430,7 @@ export class CloudSyncEngine {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.accounts)) {
-          localStorage.setItem('vs_cloud_accounts', JSON.stringify(data.accounts));
+          void this.persistAccounts(data.accounts as CloudAccount[]);
         }
         return data;
       }
@@ -455,24 +456,69 @@ export class CloudSyncEngine {
   static getAccounts(): CloudAccount[] {
     try {
       const stored = localStorage.getItem('vs_cloud_accounts');
-      return stored ? JSON.parse(stored) : [];
+      return stored ? (JSON.parse(stored) as CloudAccount[]) : [];
     } catch {
       return [];
     }
   }
 
+  /**
+   * Persists cloud accounts WITHOUT plaintext credentials.
+   *
+   * Raw OAuth tokens / passwords are moved into the Keystore (native secure
+   * storage on Android; the metadata registry elsewhere), and only the
+   * credential-free account record (provider, display name, expiry) is kept
+   * in localStorage. The client never *reads* these tokens back — every
+   * authenticated request goes through the server session — so storing them
+   * in plain localStorage added risk with no benefit. CodeQL:
+   * js/clear-text-storage-of-sensitive-data.
+   */
+  static async persistAccounts(accounts: CloudAccount[]): Promise<CloudAccount[]> {
+    const sanitized: CloudAccount[] = [];
+    for (const acc of accounts) {
+      const rawSecret = acc.accessToken ?? acc.refreshToken ?? acc.token ?? acc.password;
+      if (rawSecret) {
+        try {
+          await AndroidKeystoreManager.saveSecret(
+            `cloud_${acc.provider}_token`,
+            rawSecret,
+            'cloud_credential'
+          );
+        } catch (e) {
+          // Local/persistence problems must not block the connect flow; the
+          // server session remains the single source of truth for requests.
+          AppLogger.warn('CloudSync', 'Keystore save for cloud token failed (continuing)', e);
+        }
+      }
+      sanitized.push({
+        ...acc,
+        accessToken: undefined,
+        refreshToken: undefined,
+        token: undefined,
+        password: undefined,
+      });
+    }
+    try {
+      localStorage.setItem('vs_cloud_accounts', JSON.stringify(sanitized));
+    } catch (e) {
+      AppLogger.warn('CloudSync', 'Failed to persist sanitized cloud accounts', e);
+    }
+    return sanitized;
+  }
+
   static removeAccount(provider: CloudStorageProvider) {
     const accs = this.getAccounts().filter((a) => a.provider !== provider);
     localStorage.setItem('vs_cloud_accounts', JSON.stringify(accs));
+    // The credential in the keystore is now orphaned — remove it too.
+    void AndroidKeystoreManager.deleteSecret(`cloud_${provider}_token`).catch(() => undefined);
   }
 
   /**
    * Saves or updates a genuine authenticated cloud account
    */
-  static saveConnectedAccount(account: CloudAccount): CloudAccount {
+  static async saveConnectedAccount(account: CloudAccount): Promise<CloudAccount> {
     const current = this.getAccounts().filter((a) => a.provider !== account.provider);
-    current.push(account);
-    localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
+    await this.persistAccounts([...current, account]);
     return account;
   }
 
@@ -536,8 +582,7 @@ export class CloudSyncEngine {
     const account: CloudAccount = data.account;
 
     const current = this.getAccounts().filter((a) => a.provider !== provider);
-    current.push(account);
-    localStorage.setItem('vs_cloud_accounts', JSON.stringify(current));
+    await this.persistAccounts([...current, account]);
 
     return account;
   }

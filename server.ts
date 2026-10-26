@@ -2940,6 +2940,16 @@ app.get('/api/cloud/:provider/callback', async (req, res) => {
       .replace(/'/g, '&#039;');
 
   const renderError = (errStr: string) => {
+    // Both payloads are embedded inside an inline <script> block: JSON.stringify
+    // alone does NOT escape "</script>", which would terminate the script
+    // element and let the OAuth redirect query inject HTML. Rewriting "<" as
+    // the unicode escape keeps the JSON valid for JS while breaking the
+    // breakout. provider comes from the URL path and is likewise embedded as
+    // a JSON string (previously it sat in a raw string literal and allowed a
+    // quote-breakout).
+    const escapeScriptJson = (value: string) => JSON.stringify(value).replace(/</g, '\\u003C');
+    const errStrJson = escapeScriptJson(errStr);
+    const providerJson = escapeScriptJson(provider);
     return res.send(`
       <!DOCTYPE html>
       <html>
@@ -2949,10 +2959,10 @@ app.get('/api/cloud/:provider/callback', async (req, res) => {
           <p style="color:#a1a1aa;">${escapeHtml(errStr)}</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: '${provider}', error: ${JSON.stringify(errStr)} }, window.location.origin);
+              window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: ${providerJson}, error: ${errStrJson} }, window.location.origin);
               setTimeout(() => window.close(), 1500);
             } else {
-              window.location.href = '/?cloud_error=' + encodeURIComponent(${JSON.stringify(errStr)});
+              window.location.href = '/?cloud_error=' + encodeURIComponent(${errStrJson});
             }
           </script>
         </body>
@@ -3328,9 +3338,16 @@ app.post(
       buffer = req.body;
     } else if (req.body && typeof req.body.dataBase64 === 'string') {
       buffer = Buffer.from(req.body.dataBase64, 'base64');
-      if (req.body.filename) filename = req.body.filename;
+      // Accept only actual strings: a tampered payload could send
+      // filename as an array (filename[]=…) and CodeQL treats later uses of
+      // it (new URL(filename, …)) as potential type confusion.
+      if (typeof req.body.filename === 'string' && req.body.filename) {
+        filename = req.body.filename;
+      }
     } else if (typeof req.body === 'string' && req.body.length > 0) {
       buffer = Buffer.from(req.body, 'utf-8');
+    } else if (req.body && typeof req.body.filename === 'string' && req.body.filename) {
+      filename = req.body.filename;
     }
 
     if (!buffer || buffer.length === 0) {
