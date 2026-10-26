@@ -193,7 +193,7 @@ export class OfflineAiManager {
     // clears it: if the last transcription killed the process, this puts the
     // exact last stage (model load, engine init, chunk N) into AppLogger —
     // visible in Settings → Diagnostics → Export logs after any hard crash.
-    await OffAi.readNativeCrashTrail();
+    await this.readNativeCrashTrail();
 
     // Native plugin reads recordingId via getString — always pass a string.
     return await OfflineAi.startTranscription({
@@ -224,7 +224,7 @@ export class OfflineAiManager {
 ${content}`
         );
       }
-    } catch (_err) {
+    } catch {
       // Older APK builds have no trail API — diagnostics only, never a failure.
     }
   }
