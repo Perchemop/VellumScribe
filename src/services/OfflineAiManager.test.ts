@@ -113,4 +113,11 @@ describe('OfflineAiManager crash recovery (R-3.6)', () => {
     const recovered = await OfflineAiManager.getInstance().recoverInterruptedJobs();
     expect(recovered).toBe(0);
   });
+
+  // Off-device (web) there is no native trail API; recovery must work as before.
+  it('recovery still succeeds when the native breadcrumb API is absent', async () => {
+    const recovered = await OfflineAiManager.getInstance().recoverInterruptedJobs();
+    expect(recovered).toBe(0);
+    void OfflineAiManager.getInstance().readNativeCrashTrail();
+  });
 });

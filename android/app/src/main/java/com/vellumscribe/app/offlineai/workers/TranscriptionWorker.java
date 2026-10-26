@@ -23,6 +23,7 @@ import androidx.work.WorkerParameters;
 
 import com.vellumscribe.app.offlineai.audio.AudioProcessor;
 import com.vellumscribe.app.offlineai.models.ModelManager;
+import com.vellumscribe.app.offlineai.utils.CrashBreadcrumbs;
 import com.vellumscribe.app.offlineai.whisper.WhisperEngine;
 
 import java.io.BufferedInputStream;
@@ -156,6 +157,9 @@ public class TranscriptionWorker extends Worker {
         int inputStartChunk = getInputData().getInt(KEY_START_CHUNK, 1);
 
         Log.i(TAG, "Starting transcription worker. Job: " + jobId + ", Lang: " + language + ", Model: " + modelId);
+        CrashBreadcrumbs.clear(context);
+        CrashBreadcrumbs.write(context, "JOB_START",
+            "job=" + jobId + " model=" + modelId + " lang=" + language + " startChunk=" + inputStartChunk);
 
         try {
             setForegroundAsync(createForegroundInfo("Preparing offline speech recognition..."));
@@ -199,34 +203,46 @@ public class TranscriptionWorker extends Worker {
         }
 
         if (audioFile == null || !audioFile.exists() || audioFile.length() == 0) {
+            CrashBreadcrumbs.write(context, "FAIL_AUDIO_MISSING",
+                "path=" + (audioPath != null ? audioPath : "unresolved"));
             return Result.failure(new Data.Builder()
                 .putString("error_code", "OFFLINE_AI_AUDIO_MISSING")
                 .putString("error_message", "Audio recording file does not exist on disk: " + (audioPath != null ? audioPath : "unresolved"))
                 .build());
         }
 
+        CrashBreadcrumbs.write(context, "AUDIO_FILE_OK",
+            "path=" + audioPath + " size=" + audioFile.length() + " durMs=" + durationMs);
+
         ModelManager modelManager = new ModelManager(context);
         File modelFile = modelManager.getModelFile(modelId);
         if (!modelFile.exists() || !modelManager.isModelInstalled(modelId)) {
+            CrashBreadcrumbs.write(context, "FAIL_MODEL_MISSING", "model=" + modelId);
             return Result.failure(new Data.Builder()
                 .putString("error_code", "OFFLINE_AI_MODEL_MISSING")
                 .putString("error_message", "Whisper model '" + modelId + "' is not installed on device.")
                 .build());
         }
 
+        CrashBreadcrumbs.write(context, "MODEL_OK",
+            "model=" + modelId + " size=" + modelFile.length());
         WhisperEngine engine = new WhisperEngine();
         if (!WhisperEngine.isNativeLibraryAvailable() || !engine.initialize(modelFile)) {
+            CrashBreadcrumbs.write(context, "FAIL_ENGINE_INIT",
+                "libLoaded=" + WhisperEngine.isNativeLibraryAvailable() + " model=" + modelId);
             return Result.failure(new Data.Builder()
                 .putString("error_code", "OFFLINE_AI_ENGINE_FAILURE")
                 .putString("error_message", "Failed to initialize whisper.cpp native engine.")
                 .build());
         }
+        CrashBreadcrumbs.write(context, "ENGINE_INIT_OK", "model=" + modelId);
 
         File chunksDir = new File(context.getCacheDir(), "chunks_" + jobId);
         SQLiteDatabase db = openDatabaseSafely();
 
         try {
             List<AudioProcessor.AudioChunk> chunks = AudioProcessor.segmentAudio(audioFile, chunksDir, durationMs, 20);
+            CrashBreadcrumbs.write(context, "SEGMENTED", "chunks=" + chunks.size());
             int totalChunks = chunks.size();
 
             // Resume-after-process-death: check durable SQLite checkpoints
@@ -310,7 +326,11 @@ public class TranscriptionWorker extends Worker {
                         }
 
                         // Execute native whisper with selected language!
+                        CrashBreadcrumbs.write(context, "INFER_BEGIN",
+                            "chunk=" + currentChunk + "/" + totalChunks + " samples=" + numSamples + " threads=" + nThreads);
                         chunkText = engine.transcribe(pcmFloats, language, nThreads);
+                        CrashBreadcrumbs.write(context, "INFER_END",
+                            "chunk=" + currentChunk + " chars=" + (chunkText != null ? chunkText.length() : 0));
                         if (chunkText != null && !chunkText.trim().isEmpty()) {
                             if (fullTranscript.length() > 0) fullTranscript.append(" ");
                             fullTranscript.append(chunkText.trim());
@@ -377,6 +397,8 @@ public class TranscriptionWorker extends Worker {
 
             String finalStatus = hadSpeechActivity ? (fullTranscript.length() > 0 ? "COMPLETED" : "NO_SPEECH") : "NO_SPEECH";
             String finalText = fullTranscript.toString();
+            CrashBreadcrumbs.write(context, finalStatus.equals("COMPLETED") ? "JOB_COMPLETED" : "JOB_COMPLETED_NO_SPEECH",
+                "chars=" + finalText.length());
 
             // Persist final completion directly to SQLite
             if (db != null && db.isOpen()) {
@@ -411,6 +433,7 @@ public class TranscriptionWorker extends Worker {
 
         } catch (Exception e) {
             Log.e(TAG, "TranscriptionWorker execution failed", e);
+            CrashBreadcrumbs.write(context, "FAIL_RUNTIME_ERROR", e.getMessage());
             engine.release();
             if (db != null && db.isOpen()) db.close();
             return Result.failure(new Data.Builder()

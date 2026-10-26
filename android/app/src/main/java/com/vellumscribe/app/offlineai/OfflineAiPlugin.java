@@ -25,6 +25,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.vellumscribe.app.offlineai.models.ModelManager;
+import com.vellumscribe.app.offlineai.utils.CrashBreadcrumbs;
 import com.vellumscribe.app.offlineai.whisper.WhisperEngine;
 import com.vellumscribe.app.offlineai.workers.TranscriptionWorker;
 
@@ -382,6 +383,14 @@ public class OfflineAiPlugin extends Plugin {
             perModel.put(id, modelManager.getModelStorageSize(id));
         }
         ret.put("models", perModel);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getTranscriptionBreadcrumbs(PluginCall call) {
+        String content = CrashBreadcrumbs.read(getContext());
+        JSObject ret = new JSObject();
+        ret.put("content", content != null ? content : "");
         call.resolve(ret);
     }
 

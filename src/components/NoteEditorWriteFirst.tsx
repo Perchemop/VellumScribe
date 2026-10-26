@@ -142,6 +142,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
 
   const handleUploadAudioFile = async (file: File) => {
     if (!file) return;
+    AppLogger.info('NoteEditor', `Audio import start: ${file.name} (${file.size} bytes)`);
     setIsImportingAudio(true);
     setImportStatus('Importing audio…');
     let importWarning: string | null = null;
@@ -192,6 +193,7 @@ ${tr.transcript}`
       const refreshed = StorageManager.getNoteById(note.id);
       if (refreshed) onNoteUpdated(refreshed);
       refreshRecordings();
+      AppLogger.info('NoteEditor', `Audio import done: ${result.recording?.id ?? 'no-rec'}`);
     } catch (_e) {
       const e = asErrorLike(_e);
       setImportStatus(e?.message || 'Could not import audio file');

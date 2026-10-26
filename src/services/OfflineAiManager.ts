@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { OfflineAi } from '../plugins/offline-ai';
 import {
   AiCapabilities,
@@ -188,6 +189,12 @@ export class OfflineAiManager {
     const selectedLanguage =
       options?.language && options.language.trim().length > 0 ? options.language.trim() : 'auto';
 
+    // Capture the previous job's native breadcrumb trail BEFORE the worker
+    // clears it: if the last transcription killed the process, this puts the
+    // exact last stage (model load, engine init, chunk N) into AppLogger —
+    // visible in Settings → Diagnostics → Export logs after any hard crash.
+    await OffAi.readNativeCrashTrail();
+
     // Native plugin reads recordingId via getString — always pass a string.
     return await OfflineAi.startTranscription({
       recordingId: String(recordingId),
@@ -197,6 +204,29 @@ export class OfflineAiManager {
       audioPath: recording.file_path,
       durationMs: (recording.duration_seconds || 0) * 1000,
     });
+  }
+
+  /**
+   * Reads and logs the native crash breadcrumb trail (Android only). The
+   * native worker writes a line before every run stage; a hard process death
+   * leaves the trail on disk, and this surfaces it through AppLogger so the
+   * exported diagnostics show exactly how far the previous job got.
+   */
+  public async readNativeCrashTrail(): Promise<void> {
+    try {
+      if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+      const res = await OfflineAi.getTranscriptionBreadcrumbs();
+      const content = res?.content?.trim();
+      if (content) {
+        AppLogger.warn(
+          'OfflineAiManager',
+          `Native transcription trail from the previous run:
+${content}`
+        );
+      }
+    } catch (_err) {
+      // Older APK builds have no trail API — diagnostics only, never a failure.
+    }
   }
 
   /**
@@ -218,6 +248,9 @@ export class OfflineAiManager {
    * Leverages durable chunk checkpoints to restore partial transcripts.
    */
   public async recoverInterruptedJobs(): Promise<number> {
+    // Surface the previous run's native trail first: a hard process death
+    // cannot be caught, so this is the only way it reaches AppLogger.
+    await this.readNativeCrashTrail();
     try {
       const incomplete = TranscriptionRepository.getIncompleteJobs();
       let recoveredCount = 0;
