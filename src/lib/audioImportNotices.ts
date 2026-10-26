@@ -8,6 +8,8 @@ export interface AudioImportOutcome {
   wasTruncated?: boolean;
   /** True when the file exceeded the downsample limit and the source was kept. */
   wasConversionSkipped?: boolean;
+  /** Why conversion was skipped: size limit, or too long to decode safely. */
+  conversionSkipReason?: 'too_large' | 'too_long' | 'unprobeable';
 }
 
 /**
@@ -20,6 +22,9 @@ export function describeAudioImport(result: AudioImportOutcome): string | null {
     return 'Audio was longer than 30 minutes — only the first 30 minutes were used for transcription.';
   }
   if (result.wasConversionSkipped) {
+    if (result.conversionSkipReason === 'too_long') {
+      return 'Recording is longer than 10 minutes, so it was kept in its original format instead of being converted on-device (converting very long audio can run out of memory). Offline Whisper may need the shorter, converted form — use cloud AI or the resumable session for long recordings.';
+    }
     return 'Large file: downsampling to 16 kHz was skipped, so offline Whisper may not work. Cloud AI or live dictation can still be used.';
   }
   return null;

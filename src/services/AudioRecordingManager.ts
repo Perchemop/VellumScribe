@@ -22,6 +22,8 @@ export interface RecordedAudioResult {
   wasTruncated?: boolean;
   /** True when the file was too large to downsample and the source format was kept. */
   wasConversionSkipped?: boolean;
+  /** Why conversion was skipped (size, or too long to decode safely on-device). */
+  conversionSkipReason?: ConversionSkipReason;
 }
 
 /**
@@ -39,6 +41,48 @@ export const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
  * source format (see wasConversionSkipped) to bound memory on mobile.
  */
 export const MAX_CONVERSION_BYTES = 40 * 1024 * 1024;
+
+/**
+ * Longest input (in seconds) we will hand to `decodeAudioData` on-device.
+ *
+ * A decoded buffer is float32 PCM: seconds x sample-rate x channels x 4 bytes
+ * — at 44.1 kHz stereo that is ~353 KB per second, INDEPENDENT of the file's
+ * compressed size. A long, low-bitrate voice recording therefore crashes the
+ * WebView long before the 30-minute resample cap is reached (a 40 MB file at
+ * 32 kbps is ~2.8 hours and would need ~3.5 GB to decode). Conversion is only
+ * attempted for inputs that fit this window; longer audio is kept as-is and
+ * the resumable session API (server-side ffmpeg) handles transcription.
+ */
+export const MAX_CONVERT_INPUT_SECONDS = 10 * 60;
+
+/**
+ * When the duration cannot be probed (metadata unavailable), fall back to a
+ * conservative size bound before attempting a decode.
+ */
+export const MAX_UNPROBED_CONVERT_BYTES = 8 * 1024 * 1024;
+
+export type ConversionSkipReason = 'too_large' | 'too_long' | 'unprobeable';
+
+/**
+ * Pure decision for whether an in-memory decode+downsample is safe to attempt.
+ * Unit-testable headlessly: the OOM it guards against is a hard WebView crash,
+ * not a catchable exception, so the guard must run BEFORE any decode.
+ */
+export function shouldAttemptConversion(
+  sizeBytes: number,
+  probedDurationSeconds: number | null
+): { attempt: boolean; reason?: ConversionSkipReason } {
+  if (sizeBytes > MAX_CONVERSION_BYTES) {
+    return { attempt: false, reason: 'too_large' };
+  }
+  if (probedDurationSeconds != null && probedDurationSeconds > MAX_CONVERT_INPUT_SECONDS) {
+    return { attempt: false, reason: 'too_long' };
+  }
+  if (probedDurationSeconds == null && sizeBytes > MAX_UNPROBED_CONVERT_BYTES) {
+    return { attempt: false, reason: 'unprobeable' };
+  }
+  return { attempt: true };
+}
 
 /**
  * Decide how many 16 kHz samples to render for a decoded buffer.
@@ -304,6 +348,7 @@ export class AudioRecordingManager {
           let wasConverted = false;
           let wasTruncated = false;
           let wasConversionSkipped = false;
+          let conversionSkipReason: ConversionSkipReason | undefined;
           try {
             onProgress?.(30, 'Resampling to 16kHz speech standard...');
             pcmWavBlob = await this.convertTo16kHzMonoWavAsync(
@@ -315,8 +360,9 @@ export class AudioRecordingManager {
                 onConverted: () => {
                   wasConverted = true;
                 },
-                onSkipped: () => {
+                onSkipped: (info) => {
                   wasConversionSkipped = true;
+                  conversionSkipReason = info.reason;
                 },
                 onTruncated: (info) => {
                   wasTruncated = true;
@@ -374,6 +420,7 @@ export class AudioRecordingManager {
             wasConverted,
             wasTruncated,
             wasConversionSkipped,
+            conversionSkipReason,
           });
         } catch (err) {
           AppLogger.error('AudioRecordingManager', 'Failed to finalize recording', err);
@@ -425,6 +472,7 @@ export class AudioRecordingManager {
     let wasConverted = false;
     let wasTruncated = false;
     let wasConversionSkipped = false;
+    let conversionSkipReason: ConversionSkipReason | undefined;
     let pcmWavBlob: Blob | undefined;
 
     try {
@@ -438,8 +486,9 @@ export class AudioRecordingManager {
           onConverted: () => {
             wasConverted = true;
           },
-          onSkipped: () => {
+          onSkipped: (info) => {
             wasConversionSkipped = true;
+            conversionSkipReason = info.reason;
           },
           onTruncated: (info) => {
             wasTruncated = true;
@@ -464,29 +513,18 @@ export class AudioRecordingManager {
     let durationSeconds = 1;
     let durationMs = 1000;
     try {
-      // Rough estimate from PCM size if converted; otherwise try decode
+      // Rough estimate from PCM size if converted; otherwise probe metadata
       if (wasConverted) {
         durationSeconds = Math.max(1, Math.round(finalBlob.size / 32000));
         durationMs = durationSeconds * 1000;
-      } else if (typeof window !== 'undefined') {
-        const AudioCtx =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          // Always release the context, even when decoding rejects, so the
-          // limited Android WebView AudioContext pool is never exhausted.
-          try {
-            const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
-            durationSeconds = Math.max(1, Math.round(decoded.duration));
-            durationMs = Math.round(decoded.duration * 1000);
-          } finally {
-            try {
-              await ctx.close();
-            } catch {
-              /* ignore */
-            }
-          }
+      } else if (typeof document !== 'undefined') {
+        // Probe duration from container metadata — never decodeAudioData here:
+        // decoding a long recording materialises float32 PCM (~353 KB per
+        // second) and crashed the WebView on large imports.
+        const probed = await this.probeAudioDuration(finalBlob);
+        if (probed != null) {
+          durationSeconds = Math.max(1, Math.round(probed));
+          durationMs = durationSeconds * 1000;
         }
       }
     } catch {
@@ -531,7 +569,48 @@ export class AudioRecordingManager {
       wasConverted,
       wasTruncated,
       wasConversionSkipped,
+      conversionSkipReason,
     };
+  }
+
+  /**
+   * Read an audio file's duration from its container metadata WITHOUT decoding
+   * PCM. Decoding a long recording materialises float32 samples (~353 KB per
+   * second at 44.1 kHz stereo) and is what crashed the WebView on import; the
+   * browser reads duration from the demuxer instead, using almost no memory.
+   *
+   * Resolves `null` when duration cannot be determined (unsupported
+   * environment, unsupported container, or timeout).
+   */
+  public async probeAudioDuration(blob: Blob): Promise<number | null> {
+    if (typeof document === 'undefined' || typeof URL === 'undefined' || !blob.size) {
+      return null;
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      let objectUrl: string | null = null;
+      const done = (value: number | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        resolve(value);
+      };
+      const timer = setTimeout(() => done(null), 4000);
+      try {
+        objectUrl = URL.createObjectURL(blob);
+        const audio = document.createElement('audio');
+        audio.preload = 'metadata';
+        audio.onloadedmetadata = () => {
+          const d = audio.duration;
+          done(Number.isFinite(d) && d > 0 ? d : null);
+        };
+        audio.onerror = () => done(null);
+        audio.src = objectUrl;
+      } catch {
+        done(null);
+      }
+    });
   }
 
   public async safeReadAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
@@ -598,17 +677,24 @@ export class AudioRecordingManager {
       onTruncated?: (info: { originalSeconds: number; keptSeconds: number }) => void;
       /** Fired only when the audio was genuinely resampled to 16 kHz mono 16-bit WAV. */
       onConverted?: () => void;
-      /** Fired when the input exceeds MAX_CONVERSION_BYTES and is kept as-is. */
-      onSkipped?: (info: { reason: 'too_large'; sizeBytes: number }) => void;
+      /** Fired when the input is kept as-is instead of resampled. */
+      onSkipped?: (info: { reason: ConversionSkipReason; sizeBytes: number }) => void;
     }
   ): Promise<Blob> {
     if (!audioBlob || audioBlob.size === 0) return audioBlob;
-    if (audioBlob.size > MAX_CONVERSION_BYTES) {
+    const decision = shouldAttemptConversion(
+      audioBlob.size,
+      await this.probeAudioDuration(audioBlob)
+    );
+    if (!decision.attempt) {
       AppLogger.warn(
         'AudioRecordingManager',
-        `AudioRecordingManager: skipping conversion for ${Math.round(audioBlob.size / (1024 * 1024))} MB blob (> ${MAX_CONVERSION_BYTES / (1024 * 1024)} MB)`
+        `AudioRecordingManager: skipping conversion (${decision.reason}) for ${Math.round(audioBlob.size / (1024 * 1024))} MB blob`
       );
-      options?.onSkipped?.({ reason: 'too_large', sizeBytes: audioBlob.size });
+      options?.onSkipped?.({
+        reason: decision.reason as ConversionSkipReason,
+        sizeBytes: audioBlob.size,
+      });
       return audioBlob;
     }
     let rawBuffer: ArrayBuffer;
@@ -641,10 +727,10 @@ export class AudioRecordingManager {
     if (!AudioCtx) return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
     let audioCtx: AudioContext | null = null;
     try {
-      const safeBlob = new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });
+      // Single copy: rawBuffer is already materialised; decodeAudioData does not
+      // detach it in Chromium (the WebView engine), so no extra slice is needed.
       audioCtx = new AudioCtx();
-      const buffer = await this.safeReadAsArrayBuffer(safeBlob);
-      const decoded = await audioCtx.decodeAudioData(buffer.slice(0));
+      const decoded = await audioCtx.decodeAudioData(rawBuffer.slice(0));
       const targetSampleRate = 16000;
       const { targetLength, truncated } = computeResampleLength(decoded.duration, targetSampleRate);
       if (targetLength <= 0) return new Blob([rawBuffer], { type: audioBlob.type || 'audio/wav' });

@@ -25,6 +25,9 @@ import {
   MAX_RESAMPLE_SECONDS,
   MAX_IMPORT_BYTES,
   MAX_CONVERSION_BYTES,
+  MAX_CONVERT_INPUT_SECONDS,
+  MAX_UNPROBED_CONVERT_BYTES,
+  shouldAttemptConversion,
   computeResampleLength,
   extensionForAudioMime,
 } from './AudioRecordingManager';
@@ -283,5 +286,39 @@ describe('AudioRecordingManager.stopRecording metadata', () => {
     expect(result.recording?.mime_type).toBe('audio/mp4');
     expect(result.recording?.sample_rate).toBeUndefined();
     expect(result.recording?.channels).toBeUndefined();
+  });
+});
+
+describe('shouldAttemptConversion — OOM guard for long audio', () => {
+  it('still skips files above the conversion size cap', () => {
+    const d = shouldAttemptConversion(MAX_CONVERSION_BYTES + 1, 30);
+    expect(d).toEqual({ attempt: false, reason: 'too_large' });
+  });
+
+  it('skips LONG recordings that fit the size cap — the WebView OOM crash', () => {
+    // A 12 MB voice memo at 32 kbps is ~50 minutes. Decoding it would need
+    // ~3.5 GB of float32 PCM and killed the renderer (client BROKEN report).
+    const twelveMB = 12 * 1024 * 1024;
+    const d = shouldAttemptConversion(twelveMB, 50 * 60);
+    expect(d.attempt).toBe(false);
+    expect(d.reason).toBe('too_long');
+  });
+
+  it('treats an unknown duration on a large file as unsafe', () => {
+    const d = shouldAttemptConversion(MAX_UNPROBED_CONVERT_BYTES + 1, null);
+    expect(d).toEqual({ attempt: false, reason: 'unprobeable' });
+  });
+
+  it('attempts conversion for a known, short recording', () => {
+    expect(shouldAttemptConversion(1024 * 1024, 120)).toEqual({ attempt: true });
+  });
+
+  it('attempts conversion for a small file with unknown duration', () => {
+    expect(shouldAttemptConversion(1024, null)).toEqual({ attempt: true });
+  });
+
+  it('attempts conversion at the exact duration boundary', () => {
+    expect(shouldAttemptConversion(1024, MAX_CONVERT_INPUT_SECONDS)).toEqual({ attempt: true });
+    expect(shouldAttemptConversion(1024, MAX_CONVERT_INPUT_SECONDS + 0.1).attempt).toBe(false);
   });
 });
