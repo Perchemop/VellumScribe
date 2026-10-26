@@ -11,7 +11,10 @@ describe('CrashReporter (3.3.0 consent-gated crash reporting)', () => {
 
   it('redacts bearer tokens, API keys, and PATs', () => {
     expect(redactSecrets('Authorization: Bearer abc.def.ghi')).toContain('[REDACTED]');
-    expect(redactSecrets('key AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ0123456')).toContain('[REDACTED]');
+    // Build the Google-key fixture at runtime (same trick as the gsk_/ghp_
+    // entries below): a literal in-source string matching the real key format
+    // triggers GitHub secret scanning even when it is obviously fake.
+    expect(redactSecrets('key ' + 'AIzaSy' + 'a'.repeat(33))).toContain('[REDACTED]');
     expect(redactSecrets('ghp_' + 'a'.repeat(36))).toContain('[REDACTED]');
     expect(redactSecrets('no secrets here')).toBe('no secrets here');
   });
