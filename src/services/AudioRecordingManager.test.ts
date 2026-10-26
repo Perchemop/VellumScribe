@@ -183,7 +183,7 @@ describe('AudioRecordingManager.importAudioFile happy path', () => {
 });
 
 describe('AudioRecordingManager AudioContext lifecycle', () => {
-  it('closes every AudioContext even when decoding fails (Android pool safety)', async () => {
+  it('creates only the conversion AudioContext and always closes it (Android pool safety)', async () => {
     const instances = installAudioContext('reject');
     const mgr = new AudioRecordingManager();
     // 8 kHz mono forces the decode/resample path instead of the canonical fast path.
@@ -191,11 +191,16 @@ describe('AudioRecordingManager AudioContext lifecycle', () => {
 
     const result = await mgr.importAudioFile(3, wav, 'legacy.wav');
 
-    expect(instances.length).toBeGreaterThanOrEqual(2);
+    // Exactly ONE AudioContext: duration now comes from the metadata probe
+    // (no AudioContext), so the limited Android WebView pool is only touched
+    // by the conversion path. Regression guard for the OOM/crash fix.
+    expect(instances.length).toBe(1);
     expect(instances.every((ctx) => ctx.closed)).toBe(true);
     // Conversion failed, so the raw blob is kept and no false truncation is reported.
     expect(result.wasConverted).toBe(false);
     expect(result.wasTruncated).toBe(false);
+    // Duration probe is unavailable in the headless test env, so the default stands.
+    expect(result.durationSeconds).toBe(1);
   });
 });
 
