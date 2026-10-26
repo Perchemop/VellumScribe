@@ -286,3 +286,83 @@ commit on another branch and expect it to travel — commit on `opencode/ci`.
 | `ACCESSIBILITY.md`                  | WCAG 2.2 AA target, limits, report path                          |
 | `docs/design/brand.md`              | Visual identity (owned by `designer`)                            |
 | `docs/research/`                    | Human-gated public research notes                                |
+| `docs/repo-radar.md`                | Build-vs-adopt radar passes (guide §4A)                          |
+| `docs/process-feedback.md`          | Agent-reported process friction (addendum §N, append-only)       |
+
+---
+
+## 9. Addendum adoption (client mode, MCP, QA policy)
+
+The local addendum extends the guide with a **client-mode operating model**. The
+human is a **client, not a developer**: they state goals and priorities, approve
+or reject, and try builds. They never write or debug application code. Agents
+act as tech lead + designer + implementers and translate client language into
+Tasks, PRs, and releases.
+
+### 9.1 How agents talk to the client
+
+- Prefer concrete, numbered **try-steps**: "Download `VellumScribe-Android-APKs-real`
+  from the Actions run page, install it, then open the app and create a note."
+- Never ask the client to run a build command, read a stack trace, or edit source.
+- When blocked, explain the blocker in one line of plain language and offer 1–3
+  choices (simplify and ship / park and do the next item / client tries the build).
+- A `BROKEN` report from the client ("what I did / expected / happened") becomes
+  a regression test first, then a fix.
+
+### 9.2 Process phases (where this repo is)
+
+| Addendum phase                                  | Status here                                                |
+| ----------------------------------------------- | ---------------------------------------------------------- |
+| 0 Bootstrap / 1 Discovery / 2 Foundation        | Done (docs + CI + app all exist)                           |
+| 3 v0.1.0 hard gate                              | Passed (first functional build + releases shipped)         |
+| 4 Roadmap + research                            | Done (`ROADMAP.md`, `docs/research/` human-gated)          |
+| 5 Shared crash-report / update-check capability | Done as app features (`CrashReporter`, `appUpdateManager`) |
+| 6 Feature loop                                  | Current                                                    |
+| 7 Polish & multi-platform                       | In progress (a11y, visual evidence, empty states)          |
+| 8 Finished product                              | Awaits client sign-off of the v1 scope                     |
+
+The addendum's **Rust** sections (§K, §M.2) apply to Cargo workspaces and do not
+bind this TypeScript/React repo. Their _intent_ is already satisfied and is the
+binding equivalent here:
+
+| Rust gate (addendum §K/§M)       | VellumScribe equivalent                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------- |
+| Logic in `crates/*-core`, not UI | Logic in `src/lib`, `src/repositories`, `src/services` — no component imports |
+| Headless `cargo test`            | Vitest in CI on 3 OS runners, no display, no real network                     |
+| `rust-toolchain.toml` pin        | `package.json` `engines` (Node ≥ 20, npm ≥ 10) + CI `node-version: 22`        |
+| `clippy -D warnings`             | `eslint --max-warnings=0`                                                     |
+| README "try without toolchain"   | Download the signed APK / release artefact; no Node or Android SDK needed     |
+| `cargo tree` licence audit       | `licence scan` + CycloneDX SBOM (both required CI checks)                     |
+
+### 9.3 MCP setup (addendum §D)
+
+- **Context7** — configured and connected (`~/.config/opencode/opencode.json`).
+- **GitHub MCP** — scaffolded in the same config but **disabled**: it needs a
+  fine-scoped personal access token, and per the addendum pasting tokens into
+  secure config is a client action. All GitHub operations (PRs, issues, Actions,
+  Releases, secrets) already work through the authenticated `gh` CLI, so nothing
+  is blocked. To enable it, the client creates a PAT (repo + workflow scope) and
+  replaces `REPLACE_WITH_FINE_SCOPED_GITHUB_PAT` in the config, then sets
+  `"enabled": true`.
+- Smallest-set rule (§J.6): no further MCP servers are enabled — tool sprawl
+  hurts free models.
+
+### 9.4 Deterministic-test policy (addendum §M.5)
+
+CI tests must be deterministic: **no real network**, no wall-clock sleeps used
+as synchronisation, no dependence on machine-specific paths.
+
+- HTTP is always mocked (`vi.stubGlobal('fetch', …)`).
+- Time-based logic uses `vi.useFakeTimers()` / `vi.setSystemTime()`
+  (see `UnlockSessionManager.test.ts`).
+- Persistence tests use the in-memory SQLite engine (`SqliteEngine.resetForTesting()`).
+- If a test is flaky twice, quarantine it with an issue link — never leave red
+  or flaky `main`.
+
+### 9.5 Task brief and release notes
+
+Before coding a slice, write the addendum §E task brief (goal in client
+language, acceptance criteria, out of scope, primary-OS try-steps, risks,
+ROADMAP link). Release notes follow §F: Summary, Added, Changed, Fixed, **Known
+limitations**, and a "Try it" pointer to the artefact — `CHANGELOG.md` sections
+feed the GitHub Release body via `release.yml`.

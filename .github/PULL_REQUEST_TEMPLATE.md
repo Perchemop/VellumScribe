@@ -15,7 +15,8 @@ Closes #<!-- issue number, if any -->
 ## Checklist
 
 - [ ] Acceptance criteria for the Task are met with **real** behaviour (no fake UI)
-- [ ] Tests added or updated
+- [ ] Tests added or updated — **name the workflow test** that proves this Task:
+      `src/…/___.test.ts › …` (smoke-only tests are rejected)
 - [ ] CI is green (or will be after merge of required base)
 - [ ] No unbounded local full builds used to "verify" on a constrained machine
 - [ ] No proprietary source, assets, or RE material introduced
