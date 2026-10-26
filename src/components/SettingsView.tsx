@@ -1091,7 +1091,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
                                   <div className="flex items-center gap-1.5">
                                     <a
-                                      href={`/api/cloud/${acc.provider}/restore/${b.id}`}
+                                      href={`/api/cloud/${acc.provider}/restore/${encodeURIComponent(b.id)}`}
                                       download={b.filename}
                                       aria-label={`Download encrypted archive file ${b.filename}`}
                                       className="p-1.5 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
