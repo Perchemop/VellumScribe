@@ -78,6 +78,16 @@ export interface CloudAccount {
   displayName: string;
   connectedAt: string; // ISO timestamp
   serverUrl?: string; // WebDAV / Nextcloud instance URL
+  /**
+   * The server may send raw credentials in these fields; the client keeps
+   * them only transiently and moves them into the Keystore via
+   * CloudSync.persistAccounts. They are never re-read from localStorage and
+   * never persisted there in plaintext.
+   */
+  accessToken?: string;
+  refreshToken?: string;
+  token?: string;
+  password?: string;
 }
 
 export interface SyncTelemetry {
