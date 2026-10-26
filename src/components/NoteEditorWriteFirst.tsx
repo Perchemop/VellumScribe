@@ -31,6 +31,7 @@ import { ModalLoadingFallback } from './ModalLoadingFallback';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ModalErrorFallback } from './ModalErrorFallback';
 import { asErrorLike } from '../lib/errorLike';
+import { AppLogger } from '../lib/logger';
 
 const SketchCanvasModal = lazy(() =>
   import('./SketchCanvasModal').then((m) => ({ default: m.SketchCanvasModal }))
