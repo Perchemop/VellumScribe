@@ -330,6 +330,11 @@ class OfflineAiWeb extends WebPlugin implements OfflineAiPlugin {
     return { jobId };
   }
 
+  public async getTranscriptionBreadcrumbs(): Promise<{ content: string }> {
+    // Web/browser builds have no native crash trail.
+    return { content: '' };
+  }
+
   public async getTranscriptionStatus(options: { jobId: string }): Promise<TranscriptionJobStatus> {
     const job = this.activeJobs.get(options.jobId);
     if (!job) {

@@ -38,6 +38,13 @@ export interface OfflineAiPlugin {
     preferBatteryOverSpeed?: boolean;
   }): Promise<{ jobId: string }>;
 
+  /**
+   * Returns the native crash breadcrumb trail (written before each
+   * transcription stage) so a hard process death can be located from the
+   * exported diagnostics. Empty string when no trail exists.
+   */
+  getTranscriptionBreadcrumbs(): Promise<{ content: string }>;
+
   getTranscriptionStatus(options: { jobId: string }): Promise<TranscriptionJobStatus>;
 
   cancelTranscription(options: { jobId: string }): Promise<void>;
