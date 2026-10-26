@@ -17,13 +17,13 @@ basis of every number below).
 | ----- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | ✅    | Foundation                               | CI (3-OS), SQLite persistence, orphan/dead-code gate, format gate                                                                                                             | 100%                                                              |
 | ✅    | v0.1.0+ functional build                 | Notes, events, audio transcription, APK pipeline                                                                                                                              | 100%                                                              |
-| 🚧    | **3.1.1 — Quality gate hardening**       | Lint 656→0, format baseline, CodeQL hardening (C-2), path containment, rate limits                                                                                            | ~85%                                                              |
-| 🚧    | **3.2.0 — Test coverage (C-1…C-5)**      | R-2 notes & capture now tested; R-1/R-3/R-4 covered; R-5/R-6 remaining; native inference on hardware                                                                          | ~70%                                                              |
-| 🚧    | **3.2.x — Signed update path (A-2/A-3)** | A-2 done (signed release verified); A-3 update-in-place proof on a physical device; `assetlinks.json` fingerprint                                                             | ~60% (A-3 blocked on hardware)                                    |
-| 🚧    | **Launch & community readiness**         | `VISION`/`GOVERNANCE`/`CONTRIBUTORS`/`CODE_OF_CONDUCT`/`SECURITY`/`ACCESSIBILITY`, issue + PR templates, secret-licence-SBOM gates, branch protection, private vuln reporting | ~95% (open: Q-012…Q-019 maintainer decisions)                     |
-| ⬜    | **Lightweight metrics**                  | Opt-in, privacy-preserving usage signals for release health; no user content, no tracking without consent                                                                     | ~5% — owner requested                                             |
+| ✅    | **3.1.1 — Quality gate hardening**       | Lint 656→0, format baseline, CodeQL hardening (C-2), path containment, rate limits; residual SSRF alerts triaged (D-420)                                                      | ~95%                                                              |
+| 🚧    | **3.2.0 — Test coverage (C-1…C-5)**      | R-1 5/5, R-2 5/5, R-3 8/8, R-4 4/5, R-5 5/5 — 30/34 requirements tested; R-6 gates are CI/config-verified; native inference on hardware                                       | ~85%                                                              |
+| 🚧    | **3.2.x — Signed update path (A-2/A-3)** | A-2 done (signed release verified, `signed=true`); A-3 update-in-place proof on a physical device; `assetlinks.json` fingerprint filled                                       | ~70% (A-3 blocked on hardware)                                    |
+| 🚧    | **Launch & community readiness**         | `VISION`/`GOVERNANCE`/`CONTRIBUTORS`/`CODE_OF_CONDUCT`/`SECURITY`/`ACCESSIBILITY`, issue + PR templates, secret-licence-SBOM gates, branch protection, private vuln reporting | ~98% (Q-002/Q-003 resolved; open: Q-015, Q-019)                   |
+| ✅    | **Lightweight metrics**                  | Opt-in, privacy-preserving usage signals for release health; no user content, no tracking without consent                                                                     | 100% (`MetricsManager` + privacy flag + settings toggle + tests)  |
 | ✅    | 3.3.0 — Crash reporting                  | In-app report with user consent → GitHub Issues (user token only)                                                                                                             | 100% (CrashReporter + consent button + settings token UI + tests) |
-| ⬜    | 4.0.0 — Polish & finish                  | A11y, empty/error states, performance, full §9 quality gates                                                                                                                  | TBD                                                               |
+| 🚧    | 4.0.0 — Polish & finish                  | A11y High/Medium fixed + rendered-output verified; store feature graphic; first-paint brand mark; remaining designer Low items                                                | ~60%                                                              |
 
 ## Feature readiness (evidence-based)
 
@@ -43,14 +43,16 @@ Readiness = verified implementation share of each capability area, from
 
 - Release APKs are now **signed** (Q-002 resolved) — verify update-in-place on hardware (A-3).
 - `signed=true` update-in-place is unproven on hardware (A-3).
-- R-2 (notes & capture) has no automated tests.
-- Code-scanning alerts on the server proxy are being burned down (C-2; ~59 open
-  after parts 1–6 — rate limits, path containment, argv subprocesses, CORS
-  allow-list, memory-only passphrase).
-- Maintainer decisions still open for launch: Q-012…Q-018 in
-  `docs/assumptions-and-questions.md`.
-- CI actions are pinned by major-version tag, not commit SHA (D-417) — a
-  tracked follow-up on the launch milestone.
+- Code-scanning alerts on the server proxy: residual SSRF alerts on validated
+  user-configured endpoints are triaged as accepted risk (D-420); the rest of
+  C-2 (rate limits, path containment, argv subprocesses, CORS allow-list,
+  memory-only passphrase) is fixed.
+- Maintainer decisions still open for launch: **Q-015** (employer IP check) and
+  **Q-019** (formal trademark clearance) — see `docs/assumptions-and-questions.md`.
+- CI actions are pinned by major-version tag, not commit SHA (D-417), except
+  `upload-artifact` in `visual.yml` which is SHA-pinned.
+- Native Whisper inference is verified only as far as CI + the fail-closed stub
+  contract; on-device proof needs hardware (R-3/C-5).
 
 ## Release history
 
