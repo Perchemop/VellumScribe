@@ -627,3 +627,44 @@ equivalent in `docs/development.md` §9.
 - PR template: tests must **name the workflow test** that proves the Task.
 - Deterministic-test audit (§M.5): no real network, no sleeps; `Date.now()` used
   only for record stamps — no timing assertions. Clean.
+
+## 2026-10-27 — Personal-data scan gate (guide §II.29) + dependency alerts cleared
+
+Implemented the owner directive of 2026-10-27 (guide §II.29): personal data and
+secrets are a mandatory scan gate, not a style issue.
+
+- `scripts/check-personal-data.mjs`: structural patterns (absolute home paths
+  other than the CI runner, Windows user paths, consumer mailbox domains,
+  literal credential assignments) over the tracked tree **and the whole
+  history**; an optional literal denylist arrives only through the
+  `PII_DENYLIST` Actions secret, so a known personal value is never committed —
+  including into the scanner itself. Every hit is reported **redacted**.
+- `Security Scanning` workflow: new **personal-data scan** job; added to
+  `.ci-required.txt` as a required check.
+- `build-apk.yml`: tagged releases now unpack the release APK and run the same
+  scan over the **built artefact** before assets are attached (§II.29.6).
+- Self-tested: catches a synthetic home path, personal mailbox and credential
+  (exit 1); the clean tree passes (exit 0) with 182 upstream hits correctly
+  allowlisted (vendored whisper.cpp AUTHORS, sql.js Emscripten paths).
+- Scan results: tree, published surface (issues/PRs: none), and metadata
+  (authors are noreply/bot identities; description generic) are clean. History
+  retains the maintainer OS account name in 4 commits — already removed at HEAD
+  by #114/8b51224; history purge is an owner decision (see Q-020).
+- Gate evidence: Security Scanning run `40581323966` (personal-data scan:
+  success) on the merge commit `98420a4`; re-verified on every PR since.
+
+Dependency alerts (owner request: "fix security and quality alerts"):
+
+- Dependabot **10 → 1**: Dependabot's grouped security PR #117 merged (green on
+  all required checks incl. the new scan): body-parser 2.4.0 (high, CVE),
+  undici 8.12.3 (4×high + 1×medium), qs 6.17.0 (medium), @vitest/mocker 5.0.5
+  (2×medium). Remaining `uuid` alert dismissed as `not_used` with the reason
+  recorded on the alert (xcode build tooling, `uuid.v4()` only, never shipped).
+- CodeQL: 7 accepted SSRF alerts (D-420) dismissed with the D-420 rationale on
+  each alert — the security page now shows **0 open code-scanning alerts**.
+- Secret-scanning: **0 open** (the synthetic test-fixture alert was resolved as
+  `used in tests` earlier; the fixture is runtime-built).
+- A one-shot "Lockfile refresh" workflow proved unnecessary after Dependabot's
+  grouped PR did the resolution properly; the workflow was removed again, and
+  its two failed runs were an artifact of GHA being unable to open PRs on this
+  repo setting.
