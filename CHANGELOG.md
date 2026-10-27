@@ -49,10 +49,16 @@ reporting and metrics, stronger accessibility, and dual licensing.
   fixed as above, and the provably benign set (rate-limit false positives,
   typed-array writes, non-credential storage) dismissed with written reasons.
   See D-422.
+- CodeQL hardening on the server proxy: rate limiting, CORS credential
+  isolation, validated outbound URLs, prototype-pollution guard, and
+  XSS/ReDoS fixes.
 
 ### Changed
 
-- **Licence:** now dual **MIT OR Apache-2.0** (was MIT-only).
+- **Licence:** **plain MIT** (single). The dual **MIT OR Apache-2.0**
+  expression introduced on 2026-10-24 is reverted by owner decision (D-424);
+  `LICENSE`, `package.json` and the F-Droid metadata now all state MIT,
+  matching the README and CONTRIBUTING wording.
 - **Accessibility:** light-mode small text now meets WCAG 2.2 AA contrast;
   visible keyboard focus restored on primary inputs; `prefers-reduced-motion`
   is honoured; the batch action bar uses correct light-mode colours.
@@ -63,12 +69,6 @@ reporting and metrics, stronger accessibility, and dual licensing.
 - Asset Links fingerprint filled in from the release keystore (Q-003 resolved).
 - `AndroidKeystoreManager.deleteSecret` now clears the in-memory secret and
   reports whether an entry existed.
-
-### Security
-
-- CodeQL hardening on the server proxy: rate limiting, CORS credential
-  isolation, validated outbound URLs, prototype-pollution guard, and
-  XSS/ReDoS fixes.
 
 ## [3.1.0] - 2026-10-03
 
