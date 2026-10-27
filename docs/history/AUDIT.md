@@ -57,7 +57,7 @@ account," with no verification.**
 
 Worse: the default email pre-filled into that form, used whenever the
 user left it blank, was a hardcoded, real-looking personal name and
-address - `redacted@example.com` - appearing 7 times across
+address (redacted here) appearing 7 times across
 `CloudConnectModal.tsx` and `cloudProviders.ts`.
 
 **Risk:** the fake-login pattern is actively deceptive UX (it shows
