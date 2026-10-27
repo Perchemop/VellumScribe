@@ -103,6 +103,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  personal-data-scan:
+    name: personal-data scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          # Full history: guide §II.29.2 requires the whole history, not just
+          # HEAD — a value deleted in a later commit is still readable.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+
+      # Personal-data half of §II.29: absolute home paths, consumer mailbox
+      # domains, literal credentials, plus an optional literal denylist. The
+      # denylist is an encrypted Actions secret — a known personal value must
+      # never be written into the repository, including into this workflow.
+      # If the secret is unset the structural scan still runs and says so.
+      - name: Scan tree and history (guide §II.29)
+        env:
+          PII_DENYLIST: ${{ secrets.PII_DENYLIST }}
+        run: node scripts/check-personal-data.mjs
+
   license-scan:
     name: licence scan
     runs-on: ubuntu-latest

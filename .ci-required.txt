@@ -6,5 +6,6 @@ verify (ubuntu-latest)
 verify (windows-latest)
 verify (macos-latest)
 secret scan
+personal-data scan
 licence scan
 sbom
