@@ -10,19 +10,19 @@ Provider order: **OpenCode free first → NVIDIA free second** (§5.1). Switch t
 NVIDIA free only when OpenCode free is exhausted, and record the switch in
 `PROGRESS.md`.
 
-Role → capability → current model (OpenCode free), reviewed 2026-10-22:
+Role → capability → current model (OpenCode free), reviewed 2026-10-27:
 
-| Role                | Capability needed                               | Current model                               | Selection guidance                                                                               |
-| ------------------- | ----------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Orchestrator / Lead | Strong reasoning + tool calling                 | `opencode/big-pickle`                       | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
-| Coder / Executor    | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high`          | Best available free coding model; writes code + tests, never runs the toolchain locally.         |
-| Explorer            | Speed + good search                             | `opencode/mimo-v2.6-flash-free`             | Fastest free model with decent quality; read-only, no builds.                                    |
-| Reviewer            | Competent analysis, read-only                   | `opencode/beam-free#high`                   | Solid free model, prefer fast/cheap; read-only, no builds.                                       |
-| Tester / Bulk       | High volume, lower stakes                       | `opencode/deepseek-v4.1-flash-free#high`    | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`.                       |
-| CI runner           | GitHub interaction, read results                | `opencode/beam-free#high`                   | Any capable free model; runs `ci.sh`, never changes source.                                      |
-| designer (UI/UX)    | `opencode/nemotron-3.5-super-vl-free#high`      | vision-capable; design + performance review |
-| Fixer               | Fix CI-reported failures                        | `opencode/glm-5.3-flash-free#high`          | Good coding model; reads CI logs, applies minimal fixes.                                         |
-| Docs writer         | Process docs up to date                         | `opencode/big-pickle`                       | Reasoning model; edits Markdown only.                                                            |
+| Role                | Capability needed                               | Current model                              | Selection guidance                                                                               |
+| ------------------- | ----------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Orchestrator / Lead | Strong reasoning + tool calling                 | `opencode/big-pickle`                      | Best available free reasoning model; plans and delegates only, never edits or runs heavy builds. |
+| Coder / Executor    | High-quality code generation & multi-file edits | `opencode/glm-5.3-flash-free#high`         | Best available free coding model; writes code + tests, never runs the toolchain locally.         |
+| Explorer            | Speed + good search                             | `opencode/mimo-v2.6-flash-free`            | Fastest free model with decent quality; read-only, no builds.                                    |
+| Reviewer            | Competent analysis, read-only                   | `opencode/beam-free#high`                  | Solid free model, prefer fast/cheap; read-only, no builds.                                       |
+| Tester / Bulk       | High volume, lower stakes                       | `opencode/deepseek-v4.1-flash-free#high`   | Fastest / highest-quota free model; writes tests, triggers CI via `ci.sh`.                       |
+| CI runner           | GitHub interaction, read results                | `opencode/beam-free#high`                  | Any capable free model; runs `ci.sh`, never changes source.                                      |
+| designer (UI/UX)    | Visual review + design critique                 | `opencode/nemotron-3.5-super-vl-free#high` | Vision-capable; design + performance review of rendered CI screenshots.                          |
+| Fixer               | Fix CI-reported failures                        | `opencode/glm-5.3-flash-free#high`         | Good coding model; reads CI logs, applies minimal fixes.                                         |
+| Docs writer         | Process docs up to date                         | `opencode/big-pickle`                      | Reasoning model; edits Markdown only.                                                            |
 
 ## How to re-select
 
@@ -42,7 +42,17 @@ Record any change here and in `PROGRESS.md`.
 - Do not hard-code model IDs as permanent — they change over time (§5.2).
 - Do not run heavy toolchains locally regardless of model (§4).
 
-## Verified availability (re-checked 2026-10-22)
+## Verified availability (re-checked 2026-10-27)
+
+Live discovery of the OpenCode free tier (tier 1) on 2026-10-27 returned six
+active, zero-cost models: `opencode/flint-40b-free`,
+`opencode/nemotron-3.5-super-vl-free` (vision), `opencode/beam-free`,
+`opencode/mimo-v2.6-flash-free`, `opencode/deepseek-v4.1-flash-free` and
+`opencode/glm-5.3-flash-free`. `opencode/big-pickle` remains the tier-1
+reasoning entry in the router even though it does not appear in a "free" name
+search.
+
+### NVIDIA free tier (re-checked 2026-10-22)
 
 Live probes of the NVIDIA free tier, which is tier 2 in the provider order:
 
