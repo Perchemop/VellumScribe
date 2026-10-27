@@ -2,7 +2,7 @@
   "name": "vellumscribe",
   "private": true,
   "description": "Offline-first multimodal note-taking studio with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync.",
-  "license": "MIT OR Apache-2.0",
+  "license": "MIT",
   "version": "3.1.0",
   "type": "module",
   "engines": {

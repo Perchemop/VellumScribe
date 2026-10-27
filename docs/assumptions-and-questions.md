@@ -134,11 +134,6 @@ repository has one owner. Guide §20.1 asks for MFA on every privileged account
 and at least two administrators once the project is public (bus factor). Do you
 want to add a second admin, or record the single-maintainer risk explicitly?
 
-**Q-017. Licence expression (guide §26.6).** The project ships **MIT** (single,
-not "MIT OR Apache-2.0"). `ATTRIBUTION.md` and the SBOM report MIT. Confirm
-this is intentional (it is the safest default per §16), or adopt the dual
-expression.
-
 **Q-018. Metrics / launch (guide §23.5).** No usage or community metrics are
 tracked. Confirm whether any should be, and whether a launch/announcement is
 intended at all — the guide says popularity is optional.
@@ -171,6 +166,16 @@ sufficient. No further action required from the agent.
 ---
 
 ## Resolved
+
+**Q-017. ✅ Resolved 2026-10-27 — plain MIT confirmed by the owner.**
+_Was:_ the repository was inconsistent: `LICENSE` declared
+`MIT OR Apache-2.0` (per D-418) with only MIT text included, `package.json` and
+the F-Droid metadata repeated the dual expression, while README, CONTRIBUTING
+and the recorded note all said single MIT.
+_Resolution:_ the owner ruled **plain MIT**. All declarations now read MIT
+(`LICENSE`, `package.json`, `metadata/fdroid/metadata.yml`). Recorded as D-424,
+which supersedes D-418. Note this is a deliberate deviation from guide §2.2
+item 9, which _prefers_ the dual expression.
 
 **Q-021. ✅ Resolved 2026-10-27 — git identity rule narrowed to commits (guide
 §II.26.7, option a).**
