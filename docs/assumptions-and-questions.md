@@ -149,9 +149,38 @@ Brand Database. The name is treated as immutable for technical reasons
 (in-place APK updates), so this is a clearance check, not a rename decision.
 A human/legal task — record the outcome in `docs/product-name.md`.
 
+**Q-020. Corrections to the local `guide.md` (raised by the 2026-10-27 review,
+owner-deferred).** Three spots in the local-only guide are inaccurate; agents
+must not edit it, so they are recorded here for the owner:
+
+1. The Part II provenance note (guide lines ~557–565) lists II.19–II.25 and
+   II.27.1–II.27.11 as "missing", but those sections **are present**; only
+   **II.26.2–II.26.5** are actually absent. The "reproduced word-for-word"
+   claim therefore no longer matches the file.
+2. The `II.26.1` status note says "VellumScribe does neither" — stale.
+   `CONTRIBUTING.md` already documents the exact local commands (§"Running the
+   checks locally") and names CI as authoritative for the maintainer's machine.
+3. `II.20` ("Security-audit skill") is written for **Engram** specifically
+   (`.engram.json`, "Engram desktop application", cargo-deny) inside a
+   document presented as the generic multi-project edition; it should be
+   generalised or clearly marked as the worked example.
+
+Owner decision 2026-10-27: leave `guide.md` untouched; this record is
+sufficient. No further action required from the agent.
+
 ---
 
 ## Resolved
+
+**Q-021. ✅ Resolved 2026-10-27 — git identity rule narrowed to commits (guide
+§II.26.7, option a).**
+_Was:_ §5.5 required _every commit, pull request, merge and tag_ to be authored
+as `VellumScribe Dev <dev@example.com>`, which GitHub cannot enforce for PRs or
+merges — both follow the pushing account.
+_Resolution:_ the enforceable half stands: every **commit** carries that
+identity and `ci.sh` asserts it before pushing. Pull-request authorship and the
+"merged by" line are stated plainly as following the pushing account
+(`Perchemop`); no machine account is introduced. Recorded as D-423.
 
 **Q-003. ✅ Resolved 2026-10-25 — assetlinks fingerprint filled in.**
 _Was:_ `public/.well-known/assetlinks.json` held a placeholder fingerprint, so

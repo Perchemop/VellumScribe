@@ -592,3 +592,50 @@ fix was fixed rather than dismissed.
 **Consequences.** The plain "CodeQL" check (not a required gate; see D-415)
 still lists the accepted D-420 SSRF set. Every other alert carries a recorded
 fix or dismissal reason.
+
+### D-423 · 2026-10-27 · Operating-rule review outcome (non-Rust QA, git identity, meta-doc findings)
+
+**Context.** The owner asked for a review of the two local-only operating
+documents (`guide.md`, `addendum.md`). The review found four things: a stale
+provenance note in the guide, a stale per-project status note, an
+Engram-specific section inside the generic edition, and one real defect in a
+repository file. The owner then ruled on the three decisions the review raised.
+
+**Decision (owner-ruled).**
+
+1. **Non-Rust QA is now explicit, not inferred.** `addendum.md` gains **§K.14**
+   (Sections K/M translated for a non-Rust toolchain) and **§M.8** (the
+   structural v0.1.0 gate for a TypeScript/web app), and §L/§J.8 point at them.
+   For VellumScribe the binding gates are: logic in the service/domain layer
+   rather than components; headless `vitest` workflow tests on Linux, Windows
+   and macOS; blocking `prettier --check`, `eslint --max-warnings=0`, `tsc`,
+   orphan check, tests, release build and artefact upload; a pinned Node
+   version; a tmp/isolated-store test helper; and no heavy build on the
+   maintainer's machine. This promotes process-feedback entry 2 from advice to
+   binding text.
+2. **Git identity rule narrowed to commits (§II.26.7, option a).** Every
+   _commit_ is authored as `VellumScribe Dev <dev@example.com>` and `ci.sh`
+   asserts that before pushing. Pull-request authorship and the "merged by"
+   line follow the pushing account (`Perchemop`) and are stated as such rather
+   than pretended otherwise. No machine account is introduced.
+3. **Guide corrections are owner-deferred.** The stale Part II provenance note
+   (claims II.19–II.25 and II.27.1–II.27.11 are missing; only II.26.2–II.26.5
+   actually are), the stale `II.26.1` status for VellumScribe (its
+   `CONTRIBUTING.md` already documents local commands and CI authority), and
+   the Engram-specific `II.20` text are recorded as an open owner item
+   (Q-020) instead of being edited by an agent.
+
+**Fixed in the repository by this review.** `docs/current-model-map.md` had a
+malformed `designer (UI/UX)` row (three cells instead of four), which had
+swallowed the model column; corrected, and the file refreshed with the
+2026-10-27 live free-model discovery (six active zero-cost OpenCode models).
+
+**Rationale.** The addendum is the binding document for how work is proven;
+leaving the non-Rust case to inference meant the actual gates lived only in a
+project file. Recording the git-identity reality keeps the rule honest instead
+of unenforceable. Meta-doc edits stay with the owner, as the guide requires.
+
+**Consequences.** Future non-Rust slices are judged against §K.14/§M.8. A
+client `BROKEN` report must become a regression test before the fix. Agent
+merges continue under the `Perchemop` account, now as a stated rule rather than
+an unstated exception.
