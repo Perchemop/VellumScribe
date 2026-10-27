@@ -37,8 +37,14 @@ jobs:
         run: |
           set -euo pipefail
           cp package-lock.json /tmp/package-lock.before.json
-          # Same flags CI uses for the real install, so the lockfile matches.
-          npm install --package-lock-only --legacy-peer-deps --no-fund --no-audit
+          # `npm install` alone keeps a satisfied range pinned to whatever the
+          # lock already resolved, so it never lifts a transitive dependency to
+          # its patched version. `npm audit fix` is the targeted tool: it moves
+          # exactly the packages with advisories, within the declared ranges,
+          # and --package-lock-only keeps it from installing anything.
+          npm audit fix --package-lock-only --legacy-peer-deps --no-fund
+          echo '--- advisories remaining after the fix ---'
+          npm audit --audit-level=low 2>&1 | tail -20 || true
 
       - name: Show what changed
         id: diff

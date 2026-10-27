@@ -66,7 +66,8 @@ const PATTERNS = [
   {
     id: 'generic-credential',
     re: /\b(api[_-]?key|secret|token|password|passwd|bearer)\b\s*[:=]\s*['"][^'"\s]{8,}['"]/gi,
-    allow: (m) => /\$\{|\{\{|process\.env|placeholder|your[_-]|example|dummy|redacted|<[a-z]/i.test(m),
+    allow: (m) =>
+      /\$\{|\{\{|process\.env|placeholder|your[_-]|example|dummy|redacted|<[a-z]/i.test(m),
     why: 'a literal credential assignment',
   },
 ];
@@ -77,13 +78,28 @@ const PATTERNS = [
  * reason is recorded so the allowlist can be audited rather than trusted.
  */
 const UPSTREAM_ALLOWLIST = [
-  { prefix: 'android/app/src/main/cpp/third_party/', why: 'vendored whisper.cpp: its own AUTHORS/LICENSE' },
-  { prefix: 'android/app/src/main/assets/public/', why: 'built web bundle: contains sql.js (Emscripten /home/web_user)' },
+  {
+    prefix: 'android/app/src/main/cpp/third_party/',
+    why: 'vendored whisper.cpp: its own AUTHORS/LICENSE',
+  },
+  {
+    prefix: 'android/app/src/main/assets/public/',
+    why: 'built web bundle: contains sql.js (Emscripten /home/web_user)',
+  },
   { prefix: 'public/sql-wasm.js', why: 'vendored sql.js build (Emscripten virtual filesystem)' },
-  { prefix: 'public/sql-wasm-browser', why: 'vendored sql.js build (Emscripten virtual filesystem)' },
+  {
+    prefix: 'public/sql-wasm-browser',
+    why: 'vendored sql.js build (Emscripten virtual filesystem)',
+  },
   { prefix: 'node_modules/', why: 'installed dependencies' },
-  { prefix: 'package-lock.json', why: 'dependency metadata (registry URLs and integrity hashes, no personal data)' },
-  { prefix: 'ATTRIBUTION.md', why: 'third-party licence/authorship inventory, required by §II.19.3' },
+  {
+    prefix: 'package-lock.json',
+    why: 'dependency metadata (registry URLs and integrity hashes, no personal data)',
+  },
+  {
+    prefix: 'ATTRIBUTION.md',
+    why: 'third-party licence/authorship inventory, required by §II.19.3',
+  },
 ];
 
 function isAllowlisted(file) {
