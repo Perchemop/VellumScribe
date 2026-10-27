@@ -25,6 +25,30 @@ reporting and metrics, stronger accessibility, and dual licensing.
   Advanced to file issues directly, or use the prefilled-issue fallback.
 - **Usage metrics (opt-in, local-only):** anonymous counters for release health,
   disabled by default (Settings → Privacy). No note content, no PII.
+- **Native transcription crash trail:** the Android whisper worker records a
+  breadcrumb before every processing stage (job start, model load, engine init,
+  segmentation, each inference chunk) in app storage. After an unexpected
+  process death, the next launch surfaces that trail through AppLogger, so
+  Settings → Diagnostics → **Export logs (JSON)** shows exactly how far the
+  previous run got. Diagnostics only — no behavioural change.
+
+### Security
+
+- **Cloud OAuth tokens no longer touch plain local storage:** provider access
+  tokens are moved into the Keystore (native secure storage on Android) and only
+  the credential-free account record is persisted. The client never read these
+  tokens back — authenticated requests go through the server session — so the
+  plaintext copy was pure risk. Disconnecting an account also clears its stored
+  credential.
+- **OAuth callback error page escaping:** the error text and provider value are
+  JSON-escaped for the inline script context, closing a `</script>` breakout and
+  a quote-breakout in the provider string literal.
+- **Cloud backup upload validation:** the `filename` parameter is accepted only
+  as a string, so a tampered payload cannot influence URL building.
+- **CodeQL triage 2026-10-26:** 30 alerts investigated in full — real findings
+  fixed as above, and the provably benign set (rate-limit false positives,
+  typed-array writes, non-credential storage) dismissed with written reasons.
+  See D-422.
 
 ### Changed
 
