@@ -593,6 +593,36 @@ fix was fixed rather than dismissed.
 still lists the accepted D-420 SSRF set. Every other alert carries a recorded
 fix or dismissal reason.
 
+### D-424 · 2026-10-27 · Licence reverted to plain MIT (supersedes D-418)
+
+**Decision.** The project licence is **plain MIT (single)**, confirmed by the
+owner on 2026-10-27. `LICENSE` (`SPDX-License-Identifier: MIT`),
+`package.json` (`"license": "MIT"`) and `metadata/fdroid/metadata.yml`
+(`license: MIT`) all state MIT, matching what `README.md` ("MIT — see
+`LICENSE`") and `CONTRIBUTING.md` ("VellumScribe is MIT-licensed … inbound =
+outbound") already said.
+
+**Context — this reverses D-418.** On 2026-10-24 the licence was changed _to_
+dual `MIT OR Apache-2.0` "per owner request" (D-418). The review on 2026-10-27
+found the repository in a three-way inconsistent state: `LICENSE` and
+`package.json` declared the dual expression, while the README, CONTRIBUTING and
+the recorded Q-017 all described a single MIT licence, and the `LICENSE` file
+contained only the MIT text with Apache-2.0 merely referenced. The owner's
+ruling resolves the inconsistency downwards to the simpler expression.
+
+**Rationale.** A licence does not accrue value by offering an option nobody
+declares elsewhere: the README, the contribution terms and the F-Droid metadata
+are all the single-MIT statement. Guide §2.2 item 9 _prefers_ the dual
+expression, so this is a deliberate, recorded deviation rather than an
+oversight — the owner chose the narrower, more consistent statement.
+
+**Consequences.** Q-017 is resolved. Any future relicensing must move
+`LICENSE`, `package.json`, `metadata/fdroid/metadata.yml`, the README licence
+section, `CONTRIBUTING.md`'s inbound=outbound paragraph and the SBOM together,
+and must be recorded as a new decision. Third-party components remain unaffected
+— several dependencies are themselves Apache-2.0, and those stay listed with
+their own licences in `ATTRIBUTION.md`.
+
 ### D-423 · 2026-10-27 · Operating-rule review outcome (non-Rust QA, git identity, meta-doc findings)
 
 **Context.** The owner asked for a review of the two local-only operating

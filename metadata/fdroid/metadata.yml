@@ -1,7 +1,7 @@
 id: com.vellumscribe.app
 name: VellumScribe
 packageName: com.vellumscribe.app
-license: MIT OR Apache-2.0
+license: MIT
 sourceCode: https://github.com/Perchemop/VellumScribe
 issueTracker: https://github.com/Perchemop/VellumScribe/issues
 repoType: git
