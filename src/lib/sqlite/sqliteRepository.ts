@@ -559,6 +559,11 @@ export class SqliteRepository {
     });
   }
 
+  /** Delete a single OCR scan row (audit finding S-F1: deletes must persist). */
+  public static deleteOcrScan(id: number): void {
+    this.run('DELETE FROM ocr_scans WHERE id = ?', [id]);
+  }
+
   public static deleteNote(id: number): void {
     this.transaction(() => {
       this.recordItemChange('note', id, 'delete', 1, { id });
