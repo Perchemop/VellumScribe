@@ -212,9 +212,9 @@ export class OfflineAiManager {
    * leaves the trail on disk, and this surfaces it through AppLogger so the
    * exported diagnostics show exactly how far the previous job got.
    */
-  public async readNativeCrashTrail(): Promise<void> {
+  public async readNativeCrashTrail(): Promise<string | null> {
     try {
-      if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+      if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
       const res = await OfflineAi.getTranscriptionBreadcrumbs();
       const content = res?.content?.trim();
       if (content) {
@@ -223,9 +223,12 @@ export class OfflineAiManager {
           `Native transcription trail from the previous run:
 ${content}`
         );
+        return content;
       }
+      return null;
     } catch {
       // Older APK builds have no trail API — diagnostics only, never a failure.
+      return null;
     }
   }
 

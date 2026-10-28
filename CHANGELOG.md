@@ -31,6 +31,14 @@ reporting and metrics, stronger accessibility, and dual licensing.
   process death, the next launch surfaces that trail through AppLogger, so
   Settings → Diagnostics → **Export logs (JSON)** shows exactly how far the
   previous run got. Diagnostics only — no behavioural change.
+- **Self-reporting interruption banner:** if the previous session stopped during
+  offline transcription, the app now says so on launch in plain language, names
+  the exact stage, and offers the raw trail with a **Copy diagnostics** button —
+  no log hunting, and no developer skills needed to report it. Dismissible and
+  non-blocking.
+- **Version 3.1.1** (web, Android `versionName`, and the runtime update manager
+  in step), so an installed build can be identified unambiguously from Android's
+  app info.
 
 ### Security
 

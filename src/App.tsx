@@ -36,6 +36,7 @@ import { ReminderService } from './services/ReminderService';
 import { ListDensityProvider } from './context/ListDensityContext';
 import { AppLogger } from './lib/logger';
 import { asErrorLike } from './lib/errorLike';
+import { PreviousRunNotice } from './components/PreviousRunNotice';
 
 export default function App() {
   const {
@@ -342,6 +343,10 @@ export default function App() {
           id="app-root-container"
           className="h-screen w-screen flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] text-zinc-900 dark:text-zinc-100 antialiased overflow-hidden font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800"
         >
+          {/* Self-reporting diagnostics: if the previous session died during
+              offline transcription, say so here instead of leaving the user
+              to hunt for a log export. */}
+          <PreviousRunNotice />
           {!focusMode && (
             <header className="min-h-14 safe-area-pt border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md px-3.5 sm:px-6 flex items-center justify-between shrink-0 z-20">
               <div className="flex items-center gap-2.5">
