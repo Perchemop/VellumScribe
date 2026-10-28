@@ -6,6 +6,7 @@ import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 import { AndroidKeystoreManager } from './keystore';
+import { CloudBackupCrypto } from './cloudBackupCrypto';
 
 export type BackupFrequency = 'manual' | 'daily' | 'off';
 
@@ -767,7 +768,7 @@ export class CloudSyncEngine {
       const checksum = await this.computeChecksum(arrayBuffer);
       const filename =
         options?.customFilename ||
-        `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.json.gz`;
+        `vellumscribe_backup_${new Date().toISOString().replace(/[:.]/g, '-')}.vsbackup.json`;
 
       options?.onProgress?.({
         percent: 25,
@@ -881,8 +882,9 @@ export class CloudSyncEngine {
       }
 
       const blob = await res.blob();
-      const importResult = await StorageManager.importCloudBackupArchive(blob, {
-        mode: options?.mode || 'exact',
+      // Decrypts the envelope (or accepts a legacy plaintext dump), then imports.
+      const importResult = await StorageManager.importCloudBackupArchiveAsync(blob, {
+        userPassphrase: CloudBackupCrypto.getUserBackupPassphrase(),
       });
 
       if (!importResult.success) {

@@ -120,7 +120,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
               if (updated) onNoteUpdated(updated);
             }}
             aria-label="Event"
-            className="bg-transparent text-zinc-600 dark:text-zinc-300 text-xs font-medium focus:outline-hidden cursor-pointer max-w-[36vw] sm:max-w-[200px] truncate min-h-[44px]"
+            className="bg-transparent text-zinc-600 dark:text-zinc-300 text-xs font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg cursor-pointer max-w-[36vw] sm:max-w-[200px] truncate min-h-[44px]"
           >
             {safeEvents.length === 0 ? (
               <option value={eventId} className="bg-white dark:bg-zinc-900">

@@ -86,24 +86,24 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6 select-none font-sans">
-          <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+        <div className="min-h-screen bg-[#fafaf9] dark:bg-[#0c0c0e] text-zinc-900 dark:text-zinc-100 flex items-center justify-center p-6 select-none font-sans">
+          <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
             <div className="w-14 h-14 bg-rose-950/60 border border-rose-800/40 text-rose-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
               <AlertTriangle className="w-7 h-7" />
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold text-zinc-100">
+              <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 Something interrupted your session
               </h2>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed">
                 An unexpected interface exception occurred. Your local notes and recordings remain
                 safely persisted in storage.
               </p>
             </div>
 
             {this.state.error && (
-              <div className="text-left bg-zinc-950/80 border border-zinc-800/60 rounded-xl p-3.5 text-xs font-mono text-zinc-600 dark:text-zinc-400 overflow-x-auto max-h-32">
+              <div className="text-left rounded-xl p-3.5 text-xs font-mono text-zinc-800 dark:text-zinc-200 bg-white/60 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800/60 overflow-x-auto max-h-32">
                 {this.state.error.toString()}
               </div>
             )}

@@ -19,6 +19,7 @@ import { MigrationManager } from './sqlite/migrationManager';
 import { NoteRepository, NotesPageOptions, NotesPageResult } from '../repositories/NoteRepository';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
+import { CloudBackupCrypto } from './cloudBackupCrypto';
 import {
   hashPin,
   verifyPin,
@@ -1043,7 +1044,20 @@ export class StorageManager {
     return this.importFullDump(json);
   }
 
-  public static exportCloudBackupArchive(): Blob {
+  /**
+   * Cloud backups are ENCRYPTED (AES-256-GCM via CloudBackupCrypto): with the
+   * user's session passphrase when set, otherwise the device vault key held in
+   * the Keystore. The previous implementation returned the raw JSON dump while
+   * the UI and the capability inventory both called it "encrypted" — a false
+   * security claim, since the archive is uploaded to a third-party cloud.
+   */
+  public static async exportCloudBackupArchive(): Promise<Blob> {
+    const json = this.exportFullDump();
+    return CloudBackupCrypto.encryptArchive(json);
+  }
+
+  /** Synchronous plaintext export retained for local, in-app previews only. */
+  public static exportCloudBackupPlaintext(): Blob {
     return new Blob([this.exportFullDump()], { type: 'application/json' });
   }
 
@@ -1053,6 +1067,29 @@ export class StorageManager {
   ): { success: boolean; error?: string } {
     if (typeof payload === 'string') return this.importFullDump(payload);
     return { success: false, error: 'Async blob import not supported in sync path' };
+  }
+
+  /**
+   * Restore path for a downloaded archive. Accepts an encrypted envelope (the
+   * normal case) or a legacy plaintext dump, decrypts when needed, then imports.
+   * Written because the synchronous variant above rejects every Blob, so restore
+   * could never succeed from a real download.
+   */
+  public static async importCloudBackupArchiveAsync(
+    payload: string | Blob,
+    opts?: { userPassphrase?: string; allowLegacyUnencrypted?: boolean }
+  ): Promise<{ success: boolean; error?: string }> {
+    let plaintext: string;
+    try {
+      plaintext = await CloudBackupCrypto.decryptArchive(payload as Blob | string, {
+        userPassphrase: opts?.userPassphrase,
+        allowLegacyUnencrypted: opts?.allowLegacyUnencrypted ?? true,
+      });
+    } catch (e) {
+      const err = e as Error;
+      return { success: false, error: err?.message || 'Could not decrypt backup archive.' };
+    }
+    return this.importFullDump(plaintext);
   }
 
   public static exportCloudBackup(): string {

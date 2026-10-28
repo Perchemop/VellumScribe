@@ -355,7 +355,7 @@ export default function App() {
                     setActiveView('notes');
                     setSelectedNoteId(null);
                   }}
-                  className="group flex items-center gap-2.5 text-left focus:outline-hidden"
+                  className="group flex items-center gap-2.5 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-xl"
                 >
                   <AppLogo size="sm" showText={true} />
                 </button>
