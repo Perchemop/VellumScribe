@@ -17,6 +17,9 @@ import {
 } from './sqlite/sqliteRepository';
 import { MigrationManager } from './sqlite/migrationManager';
 import { NoteRepository, NotesPageOptions, NotesPageResult } from '../repositories/NoteRepository';
+import { RecordingRepository } from '../repositories/RecordingRepository';
+import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
+import { MediaRepository } from './MediaRepository';
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 import { CloudBackupCrypto } from './cloudBackupCrypto';
@@ -748,9 +751,32 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteRecording(_id: string | number): void {
-    // SQLite has no recording-delete path yet (see Q-011); only the in-memory
-    // cache is invalidated here.
+  /**
+   * Deletes a recording for real: the row, its transcriptions (segments,
+   * speakers, jobs) and the stored media blob. Previously this only nulled the
+   * in-memory cache, so "deleted" audio reappeared on the next load — an
+   * audit blocker (S-F1, `docs/qc/e2e-audit-2026-10-29.md`).
+   */
+  public static async deleteRecording(id: string | number): Promise<void> {
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+    try {
+      const existing =
+        this.getRecordings().find((r) => r.id === numericId) ??
+        RecordingRepository.getById(numericId);
+      const mediaKey = existing?.media_key;
+
+      // Transcript rows first, then the recording itself, then the media blob.
+      const transcription = await TranscriptionRepository.getLatestForRecordingAsync(numericId);
+      if (transcription?.id) {
+        TranscriptionRepository.delete(transcription.id);
+      }
+      RecordingRepository.delete(numericId);
+      if (mediaKey) {
+        await MediaRepository.deleteBinary(mediaKey);
+      }
+    } catch (e) {
+      AppLogger.warn('StorageManager', `deleteRecording(${id}) failed`, e);
+    }
     this.recordingsCache = null;
   }
 
@@ -816,9 +842,17 @@ export class StorageManager {
     return row;
   }
 
-  public static deleteOcrScan(_id: string | number): void {
-    // SQLite has no OCR-scan delete path yet (see Q-011); only the in-memory
-    // cache is invalidated here.
+  /**
+   * Deletes an OCR scan row for real (audit finding S-F1). Previously the row
+   * survived and the scan reappeared after a reload.
+   */
+  public static deleteOcrScan(id: string | number): void {
+    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+    try {
+      SqliteRepository.deleteOcrScan(numericId);
+    } catch (e) {
+      AppLogger.warn('StorageManager', `deleteOcrScan(${id}) failed`, e);
+    }
     this.ocrScansCache = null;
   }
 
@@ -930,10 +964,28 @@ export class StorageManager {
     }
   }
 
+  /**
+   * Real orphan sweep (audit finding S-F2): removes media records whose note no
+   * longer exists, and the stored blob for each. Previously a no-op stub that
+   * always reported zero cleaned.
+   */
   public static async cleanOrphanedMedia(): Promise<{ cleanedCount: number }> {
-    // Media pruning lives on SqliteRepository (findOrphanMediaKeys /
-    // removeOrphanMediaRecord); this helper has no separate sweep to run.
-    return { cleanedCount: 0 };
+    let cleanedCount = 0;
+    try {
+      const orphans = SqliteRepository.findOrphanMediaKeys();
+      for (const key of orphans) {
+        try {
+          await MediaRepository.deleteBinary(key);
+        } catch {
+          /* blob may already be gone; the row is the source of truth */
+        }
+        SqliteRepository.removeOrphanMediaRecord(key);
+        cleanedCount++;
+      }
+    } catch (e) {
+      AppLogger.warn('StorageManager', 'Orphan media sweep failed', e);
+    }
+    return { cleanedCount };
   }
 
   public static getLastDurableSaveTime(): number | null {

@@ -692,7 +692,7 @@ ${tr.transcript}`
                     key={rec.id}
                     recording={rec}
                     onDelete={(id) => {
-                      StorageManager.deleteRecording(id);
+                      void StorageManager.deleteRecording(id);
                       refreshRecordings();
                     }}
                   />
