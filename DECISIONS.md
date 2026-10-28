@@ -593,6 +593,73 @@ fix was fixed rather than dismissed.
 still lists the accepted D-420 SSRF set. Every other alert carries a recorded
 fix or dismissal reason.
 
+### D-425 · 2026-10-28 · History purge executed under §II.29.4 (owner-approved)
+
+**Decision.** The owner approved a one-time history rewrite to remove the
+maintainer OS account name that remained readable in historical commits
+(removed at HEAD by #114). Method: `git filter-repo --replace-text` in a
+mirror clone, replacing the absolute home path with `~`, then force-push with
+branch protection temporarily relaxed, then the encrypted `PII_DENYLIST`
+Actions secret set so the required `personal-data scan` enforces the removal
+permanently (§II.29.2 part 2, §II.29.3).
+
+**Executed.** All branch heads **and `main`** were rewritten and force-pushed
+(`main`: `0238827` → `a596306`, after the owner flipped **Allow force pushes**
+in the UI — the agent's token cannot modify branch protection). Verified from
+a fresh clone: **0 history hits** for the value across every branch; `main`'s
+tree hash identical before/after; author identities untouched. The
+`PII_DENYLIST` secret is set; the scan's output remains redacted by design.
+Replace-rules lived only in `/tmp` and were never committed.
+
+**Incident during execution.** The first `main` force-push reused a mirror
+cloned before PRs #119/#120 merged, briefly removing those PRs' changes
+(research layer, provenance slice, tests) from `main`. Both PRs' content was
+recovered intact from the immutable `refs/pull/119|120` refs and re-landed in
+this same slice. Lesson logged in `docs/process-feedback.md`.
+
+**Residual risk (§II.29.4.4).** GitHub's internal immutable `refs/pull/*`
+refs still reach the old commits for PRs created between 2026-10-22 and the
+purge. They are GitHub-managed and can only be cleared by GitHub Support
+(Private Information Removal request — owner action). Exposure is low: old
+objects resolve only at exact SHA URLs, linked nowhere.
+
+**Consequences.** All commit SHAs from the first rewritten commit onward
+changed; CI run references in tracking files are historical records. Open PR
+branches may need rebases. Clones must re-fetch. The owner should untick
+**Allow force pushes** (temporary purge window). The required scan now fails
+loudly if the value ever reappears.
+
+**Consequences.** All commit SHAs from the first rewritten commit onward
+change; prior CI run references in tracking files remain historical records.
+Open PR branches may need rebases. Forks/clones must re-fetch. GitHub may
+serve cached views of old SHAs for a time (§II.29.4.4 — platform purge is an
+owner option, not an agent one).
+
+### D-426 · 2026-10-28 · Research gate exercised: two proposals approved, one parked
+
+**Decision.** The owner reviewed the three PROPOSED research notes
+(`docs/research/`) — the first ever exercise of the §2.3/§8.4 human gate:
+
+- **Approved:** `voice-to-structured-note.md` (post-transcription clean-up
+  pass; raw transcript preserved; provenance-labelled; offline-first with
+  consent-gated cloud) and `transcript-audio-linking.md` (persist segment
+  timestamps when the engine provides them; tap a transcript segment to seek
+  the recording; honest degradation without timestamps).
+- **Not approved (parked):** `one-tap-daily-capture.md` — stays a proposal,
+  must not be implemented without a new gate.
+
+Both notes carry their own acceptance criteria and "what we would NOT take"
+boundaries, which bind the implementation.
+
+**Rationale.** The gate is the mechanism that keeps clean-room research from
+becoming silent scope growth; exercising it on the first three notes sets the
+pattern for every future capability.
+
+**Consequences.** Implementation slices must name these notes and their
+acceptance criteria, and prove them with headless workflow tests (§K.14/M.8).
+The capability inventory rows for the two approved candidates move from
+`proposed` to `not started → implemented` only with evidence.
+
 ### D-424 · 2026-10-27 · Licence reverted to plain MIT (supersedes D-418)
 
 **Decision.** The project licence is **plain MIT (single)**, confirmed by the
