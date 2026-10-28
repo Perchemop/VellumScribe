@@ -160,8 +160,38 @@ must not edit it, so they are recorded here for the owner:
    document presented as the generic multi-project edition; it should be
    generalised or clearly marked as the worked example.
 
-Owner decision 2026-10-27: leave `guide.md` untouched; this record is
-sufficient. No further action required from the agent.
+**Owner update 2026-10-28: all three were corrected in the guide itself** (the
+provenance note now lists exactly the unrestored subsections; the II.26.1
+status is generalised per-repository; Part II now uses `<app>` placeholders
+throughout). The guide also gained **§II.29 — the mandatory personal-data and
+secrets scan gate** (owner directive), which this repository implements.
+
+**§II.29.4 history purge — executed 2026-10-28 (owner-approved, D-425).**
+
+- `git filter-repo --replace-text` (absolute home path → `~`) in a mirror
+  clone; force-pushed all branch heads **and `main`** after the owner
+  temporarily enabled force pushes.
+- Verified from a fresh clone: **0 history hits for the denylisted value
+  across every branch**; `main`'s tree hash identical before/after (no content
+  change); author identities untouched (noreply/bot/project identities only).
+- The encrypted `PII_DENYLIST` Actions secret is set, so the required
+  `personal-data scan` now enforces the removal on every PR and release (its
+  output stays redacted by design).
+- **Residual (documented, §II.29.4.4):** GitHub's internal immutable
+  `refs/pull/*` refs for PRs created between 2026-10-22 and the purge still
+  reach the old commits. Those refs are GitHub-managed (not pushable) and can
+  only be cleared by GitHub Support — the owner may file a **Private
+  Information Removal** request
+  (https://support.github.com/contact/private-information). Exposure is low:
+  the old objects are reachable only at exact SHA URLs, which are linked
+  nowhere.
+- Owner follow-up: untick **Allow force pushes** in the branch protection UI
+  (the temporary purge window).
+- **Process note:** the first force-push used a mirror cloned before PRs
+  #119/#120 merged, which briefly removed those PRs' changes from `main`;
+  they were recovered from the immutable PR refs and re-landed. Lesson logged
+  in `docs/process-feedback.md` (always re-clone the mirror immediately
+  before the force-push).
 
 ---
 

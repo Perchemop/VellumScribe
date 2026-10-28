@@ -73,3 +73,25 @@ imports and is tested headless in CI (30/34 requirements); `package.json`
 the signed APK artefact). Recorded in `docs/development.md`.
 Confirm: did NOT violate clean-room / v0.1.0 gate / no-secrets / CI-before-client-try / no meta-guide push
 ```
+
+## Entry 3 — 2026-10-28 — History rewrite must re-clone its mirror at push time
+
+PROCESS FEEDBACK
+Date / session: 2026-10-28 (VellumScribe, §II.29.4 history purge)
+What I was trying to do: execute the owner-approved history purge
+(filter-repo + force-push) while other merged work continued landing.
+Block or friction: the mirror clone used for the rewrite had been created
+before PRs #119/#120 merged; force-pushing its `main` silently reverted those
+two PRs from the default branch. Detected only because the post-purge
+verification step re-checked recent history.
+Why the current guide/addendum caused it (or did not cover it): guide §II.29.4
+prescribes the rewrite steps but says nothing about the mirror's freshness
+relative to concurrent merges — and agent sessions are frequently interrupted
+and resumed, so "clone then act later" spans turns.
+Suggested change (one concrete edit): add one sentence to §II.29.4 step 3 —
+"clone the mirror immediately before the force-push, and re-verify the remote
+tip equals the rewritten tip (`git ls-remote`) in the same command sequence."
+Severity: slows-work (recovery cost one extra slice; no data lost)
+Workaround I used (if any): recovered both PRs' content from the immutable
+refs/pull refs and re-landed it.
+Confirm: did NOT violate clean-room / v0.1.0 gate / no-secrets / CI-before-client-try / no meta-guide push

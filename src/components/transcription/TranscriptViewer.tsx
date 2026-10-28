@@ -19,6 +19,8 @@ import {
 } from '../../types';
 import { TranscriptService } from '../../services/TranscriptService';
 import { OfflineAiManager } from '../../services/OfflineAiManager';
+import { AiProvenanceService } from '../../services/AiProvenanceService';
+import { AppLogger } from '../../lib/logger';
 import { NotebookLMAdapter } from '../../lib/notebooklm/adapter';
 
 interface TranscriptViewerProps {
@@ -118,6 +120,27 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
       );
       setStructuredExtraction(extraction);
       setActiveTab('ai_insights');
+      // Research note "voice-to-structured-note", acceptance criterion 4:
+      // the structured draft records which engine produced it — same
+      // provenance discipline as transcription. Never fail the UI if the
+      // provenance write cannot complete.
+      try {
+        AiProvenanceService.recordProvenance({
+          target_entity_type: 'transcript',
+          target_entity_id: transcription.id,
+          model_id: 'offline_rules',
+          provider: 'offline_rule_engine',
+          source_entity_type: 'recording',
+          source_entity_id: transcription.recording_id,
+          metadata: {
+            operation: 'structured_extraction',
+            segments: segments.length,
+            transcript_chars: (transcription.text || '').length,
+          },
+        });
+      } catch (provErr) {
+        AppLogger.warn('TranscriptViewer', 'Provenance record failed (non-fatal)', provErr);
+      }
     } finally {
       setIsGeneratingAi(false);
     }
