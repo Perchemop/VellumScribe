@@ -56,12 +56,19 @@ been read or copied.
 
 - **Local-first ownership** — the user's data lives on their own device; there
   is no mandatory account and no forced sync.
+  Source: https://help.obsidian.md/Files+and+folders/How+Obsidian+stores+data
+  ("your notes are stored in Markdown files on your device" — user-owned
+  plain files, no required account).
 - **Markdown as the durable body format** — note bodies are plain Markdown so
   they stay readable and portable outside the app.
+  Source: https://help.obsidian.md/Editing+and+formatting/Markdown
 - **Linking between notes** — notes can reference each other rather than
   existing in isolation.
+  Source: https://help.obsidian.md/Linking+notes+and+files/Internal+links
 - **Fast capture over filing** — writing a note must never require setting up
   structure first.
+  Source: https://help.obsidian.md/Plugins/Daily+notes (a one-action dated
+  note, no preparatory structure)
 
 ### What is _not_ taken
 
