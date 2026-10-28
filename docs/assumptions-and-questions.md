@@ -160,8 +160,24 @@ must not edit it, so they are recorded here for the owner:
    document presented as the generic multi-project edition; it should be
    generalised or clearly marked as the worked example.
 
-Owner decision 2026-10-27: leave `guide.md` untouched; this record is
-sufficient. No further action required from the agent.
+**Owner update 2026-10-28: all three were corrected in the guide itself** (the
+provenance note now lists exactly the unrestored subsections; the II.26.1
+status is generalised per-repository; Part II now uses `<app>` placeholders
+throughout). The guide also gained **§II.29 — the mandatory personal-data and
+secrets scan gate** (owner directive), which this repository implements.
+
+**Also owner-approved 2026-10-28: the §II.29.4 history purge.** The maintainer
+OS account name remains readable in 4 historical commits (removed at HEAD by
+#114/8b51224). Approved plan, in progress:
+
+- All non-`main` branches were rewritten (`git filter-repo --replace-text`,
+  `/home/<account>` → `~`) and force-pushed; verification: 0 history hits,
+  `main`'s tree hash identical before/after.
+- `main` itself still requires the owner to temporarily enable **Allow force
+  pushes** in the branch-protection UI (the agent's token cannot modify
+  protection — 404); after the force-push the setting is restored and the
+  encrypted `PII_DENYLIST` secret is set so the required scan enforces
+  permanently.
 
 ---
 

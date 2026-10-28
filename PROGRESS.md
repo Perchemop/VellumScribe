@@ -668,3 +668,23 @@ Dependency alerts (owner request: "fix security and quality alerts"):
   grouped PR did the resolution properly; the workflow was removed again, and
   its two failed runs were an artifact of GHA being unable to open PRs on this
   repo setting.
+
+## 2026-10-28 — Clean-room research layer (capability inventory + gated proposals)
+
+The owner asked whether the guide's research process (§2.3, §8.4, §II.27) had
+been exercised. Honest audit: discovery and the inspiration statement existed;
+**no research notes, no capability inventory, no source URLs on the Obsidian
+claims**. Closed as follows:
+
+- `docs/capability-inventory.md` created (§II.27.3): 26 capabilities, each with
+  observable behaviour, acceptance criteria, and a source classified as
+  `original` / `inspiration` (URL) / `standard`. The three out-of-scope
+  rejections and the deferred plugin marketplace are recorded as rows.
+- `docs/inspiration.md`: the four Obsidian behavioural claims now carry
+  verified public URLs (all fetched, HTTP 200): How Obsidian stores data,
+  Markdown editing, Internal links, Daily notes.
+- Three research notes drafted as **PROPOSED** (human gate pending, per §2.3/§8.4):
+  voice-ramble → structured note (audiopen.ai, otter.ai),
+  transcript ↔ audio deep linking (otter.ai),
+  one-tap daily voice capture (Obsidian Daily notes, voicenotes.com).
+  None may be implemented until the owner approves the note.
