@@ -57,11 +57,12 @@ describe('storage lifecycle — deletions must persist (audit S-F1/S-F2)', () =>
     const noteId = makeNote('Recording note');
     const recordingId = insertRecording(noteId, 'media-del-1');
     expect(recordingId).toBeGreaterThan(0);
-    expect(RecordingRepository.getById(recordingId)).toBeDefined();
+    expect(RecordingRepository.getById(recordingId)).toBeTruthy();
 
     await StorageManager.deleteRecording(recordingId);
 
-    expect(RecordingRepository.getById(recordingId)).toBeUndefined();
+    // The row must be gone (getById yields null/undefined depending on adapter).
+    expect(RecordingRepository.getById(recordingId)).toBeFalsy();
   });
 
   it('deletes the OCR scan row for real', () => {
