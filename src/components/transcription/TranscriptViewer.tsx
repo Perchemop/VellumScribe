@@ -276,7 +276,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
       {activeTab === 'segments' && (
         <div id="transcript-segments-list" className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
           {segments.length === 0 ? (
-            <p className="text-xs text-stone-500 italic p-4 text-center">
+            <p className="text-xs text-stone-600 dark:text-stone-300 italic p-4 text-center">
               No timestamped segments available for this transcript.
             </p>
           ) : (

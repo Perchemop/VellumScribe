@@ -104,7 +104,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
               value={item.text}
               onChange={(e) => handleTextChange(item.id, e.target.value)}
               placeholder="Task description..."
-              className={`flex-1 bg-transparent text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden ${
+              className={`flex-1 bg-transparent text-xs text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-md ${
                 item.completed ? 'line-through text-zinc-600 dark:text-zinc-500' : ''
               }`}
             />
@@ -127,7 +127,7 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
           placeholder="Add a checklist item (press Enter)..."
           value={newItemText}
           onChange={(e) => setNewItemText(e.target.value)}
-          className="flex-1 px-3 py-2 bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-hidden focus:border-zinc-400"
+          className="flex-1 px-3 py-2 bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus:border-zinc-400"
         />
         <button
           type="submit"

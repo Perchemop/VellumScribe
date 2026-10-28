@@ -20,6 +20,7 @@ import { TranscriptService, FullTranscriptView } from '../services/TranscriptSer
 import { TranscriptViewer } from './transcription/TranscriptViewer';
 import { LiveRegion } from './common/LiveRegion';
 import { AppLogger } from '../lib/logger';
+import { MediaRepository } from '../lib/MediaRepository';
 import { asErrorLike } from '../lib/errorLike';
 
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
@@ -59,11 +60,42 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [showRecoverySheet, setShowRecoverySheet] = useState(false);
+  const [playbackUnavailable, setPlaybackUnavailable] = useState(false);
+  const [mediaLoading, setMediaLoading] = useState<boolean>(!!recording.media_key);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const synthTimerRef = useRef<number | null>(null);
-  const hasRealUrl = !!(recording.audio_url && recording.audio_url.startsWith('blob:'));
+  // Playable media is resolved from local storage: `recording.audio_url` was
+  // never assigned anywhere (it stayed undefined), which silently forced every
+  // playback through the synthetic demo tone. The real blob URL is created here
+  // and revoked on unmount/recording change.
+  const [mediaUrl, setMediaUrl] = useState<string | null>(null);
+  const hasRealUrl = !!mediaUrl;
+
+  useEffect(() => {
+    let cancelled = false;
+    let created: string | null = null;
+    void (async () => {
+      setMediaUrl(null);
+      if (!recording.media_key) {
+        setMediaLoading(false);
+        return;
+      }
+      try {
+        const blob = await MediaRepository.getBinary(recording.media_key);
+        if (!blob || cancelled) return;
+        created = URL.createObjectURL(blob);
+        setMediaUrl(created);
+      } catch (e) {
+        AppLogger.warn('AudioPlayerWidget', 'Could not load recording media for playback', e);
+      } finally {
+        if (!cancelled) setMediaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [recording.media_key, recording.id]);
 
   const refreshTranscriptData = useCallback(() => {
     const updated = TranscriptService.getFullTranscriptForRecording(recording.id);
@@ -73,15 +105,6 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   useEffect(() => {
     refreshTranscriptData();
   }, [refreshTranscriptData]);
-
-  useEffect(() => {
-    return () => {
-      if (synthTimerRef.current) window.clearInterval(synthTimerRef.current);
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(() => {});
-      }
-    };
-  }, []);
 
   /**
    * Run 100% Offline On-Device Speech Recognition (whisper.cpp)
@@ -154,71 +177,23 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
     }
   };
 
-  // Web Audio Synthesizer fallback for demo / synthetic recordings
-  const playSyntheticAudioDemo = () => {
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
-
-      const now = ctx.currentTime;
-      const notesList = [261.63, 329.63, 392.0, 523.25, 440.0, 349.23, 392.0];
-      notesList.forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + i * 0.4);
-        gain.gain.setValueAtTime(0.001, now + i * 0.4);
-        gain.gain.exponentialRampToValueAtTime(0.12, now + i * 0.4 + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.4 + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + i * 0.4);
-        osc.stop(now + i * 0.4 + 0.4);
-      });
-
-      let currentProgress = currentTime;
-      synthTimerRef.current = window.setInterval(() => {
-        currentProgress += 0.25 * playbackRate;
-        if (currentProgress >= duration) {
-          setIsPlaying(false);
-          setCurrentTime(0);
-          if (synthTimerRef.current) clearInterval(synthTimerRef.current);
-        } else {
-          setCurrentTime(currentProgress);
-        }
-      }, 250);
-    } catch (err) {
-      AppLogger.warn(
-        'AudioPlayerWidget',
-        'Web Audio synthesis not allowed yet without user gesture:',
-        err
-      );
-    }
-  };
-
   const handleTogglePlay = () => {
+    if (mediaLoading) return;
+    if (!hasRealUrl || !audioRef.current) {
+      // Honest state, never a synthetic tone pretending to be the recording.
+      setPlaybackUnavailable(true);
+      return;
+    }
     if (isPlaying) {
-      if (hasRealUrl && audioRef.current) {
-        audioRef.current.pause();
-      } else {
-        if (synthTimerRef.current) clearInterval(synthTimerRef.current);
-        if (audioContextRef.current) audioContextRef.current.suspend().catch(() => {});
-      }
+      audioRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (hasRealUrl && audioRef.current) {
-        audioRef.current.playbackRate = playbackRate;
-        audioRef.current.muted = isMuted;
-        audioRef.current.play().catch(() => {
-          playSyntheticAudioDemo();
-        });
-      } else {
-        playSyntheticAudioDemo();
-      }
+      audioRef.current.playbackRate = playbackRate;
+      audioRef.current.muted = isMuted;
+      audioRef.current.play().catch((e) => {
+        AppLogger.warn('AudioPlayerWidget', 'Playback failed', e);
+        setPlaybackUnavailable(true);
+      });
       setIsPlaying(true);
     }
   };
@@ -267,7 +242,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         {hasRealUrl && (
           <audio
             ref={audioRef}
-            src={recording.audio_url}
+            src={mediaUrl ?? undefined}
             onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
             onLoadedMetadata={() =>
               audioRef.current &&
@@ -281,12 +256,24 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         )}
         <button
           onClick={handleTogglePlay}
-          className="w-6 h-6 rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center justify-center shadow-2xs hover:scale-105 transition-transform"
+          disabled={playbackUnavailable || mediaLoading}
+          title={
+            mediaLoading
+              ? 'Loading recording audio…'
+              : playbackUnavailable
+                ? 'Recording audio not found on this device'
+                : 'Play recording'
+          }
+          className="w-6 h-6 rounded-lg bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 flex items-center justify-center shadow-2xs hover:scale-105 transition-transform disabled:opacity-40 disabled:hover:scale-100"
         >
           {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
         </button>
         <span className="font-mono text-xs text-stone-700 dark:text-stone-300">
-          {formatTime(currentTime)} / {formatTime(duration)}
+          {mediaLoading
+            ? 'Loading…'
+            : playbackUnavailable
+              ? 'Audio not found'
+              : `${formatTime(currentTime)} / ${formatTime(duration)}`}
         </span>
         {onDelete && (
           <button
@@ -309,7 +296,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       {hasRealUrl && (
         <audio
           ref={audioRef}
-          src={recording.audio_url}
+          src={mediaUrl ?? undefined}
           onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
           onLoadedMetadata={() =>
             audioRef.current && setDuration(audioRef.current.duration || recording.duration_seconds)
@@ -481,7 +468,8 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleTogglePlay}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-semibold shadow-xs transition-colors"
+            disabled={playbackUnavailable || mediaLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-lg text-xs font-semibold shadow-xs transition-colors disabled:opacity-40"
           >
             {isPlaying ? (
               <Pause className="w-3.5 h-3.5" />
@@ -490,6 +478,12 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             )}
             <span>{isPlaying ? 'Pause' : 'Play'}</span>
           </button>
+
+          {playbackUnavailable && (
+            <span role="status" className="text-xs text-amber-700 dark:text-amber-400">
+              Recording audio not found on this device.
+            </span>
+          )}
 
           <button
             onClick={handleReset}

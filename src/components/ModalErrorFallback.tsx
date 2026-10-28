@@ -20,7 +20,7 @@ export const ModalErrorFallback: React.FC<ModalErrorFallbackProps> = ({
       aria-live="assertive"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-2xs p-4 animate-fade-in"
     >
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-250 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4">
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-200/50 dark:border-amber-900/40">
             <AlertCircle className="w-5 h-5" aria-hidden="true" />
