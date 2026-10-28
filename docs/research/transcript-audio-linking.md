@@ -1,7 +1,8 @@
 # Research note — Transcript ↔ audio deep linking (tap a line, seek the recording)
 
-**Status: PROPOSED — awaiting the human gate (guide §2.3, §8.4). Nothing here
-may be implemented until the owner approves this note.**
+**Status: APPROVED by the owner 2026-10-28 (human gate, guide §2.3/§8.4;
+recorded in DECISIONS.md D-426). Implementation may proceed within the
+acceptance criteria below.**
 
 Date drafted: 2026-10-28
 

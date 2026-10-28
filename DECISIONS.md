@@ -593,6 +593,54 @@ fix was fixed rather than dismissed.
 still lists the accepted D-420 SSRF set. Every other alert carries a recorded
 fix or dismissal reason.
 
+### D-425 · 2026-10-28 · History purge approved under §II.29.4 (in progress)
+
+**Decision.** The owner approved a one-time history rewrite to remove the
+maintainer OS account name that remains readable in 4 historical commits
+(removed at HEAD by #114). Method: `git filter-repo --replace-text` in a
+mirror clone, replacing the absolute home path with `~`, then force-push with
+branch protection temporarily relaxed, then the encrypted `PII_DENYLIST`
+Actions secret is set so the required `personal-data scan` enforces the
+removal permanently (§II.29.2 part 2, §II.29.3).
+
+**Status.** All non-`main` branches rewritten and force-pushed (0 history
+hits; `main`'s tree hash verified identical before/after, so no content
+changed). `main` itself is pending: the agent's token cannot modify branch
+protection (404 on every protection endpoint), so the owner must temporarily
+tick **Allow force pushes** in the UI; the force-push and protection restore
+follow immediately. Replace-rules live only in `/tmp` and are never committed.
+
+**Consequences.** All commit SHAs from the first rewritten commit onward
+change; prior CI run references in tracking files remain historical records.
+Open PR branches may need rebases. Forks/clones must re-fetch. GitHub may
+serve cached views of old SHAs for a time (§II.29.4.4 — platform purge is an
+owner option, not an agent one).
+
+### D-426 · 2026-10-28 · Research gate exercised: two proposals approved, one parked
+
+**Decision.** The owner reviewed the three PROPOSED research notes
+(`docs/research/`) — the first ever exercise of the §2.3/§8.4 human gate:
+
+- **Approved:** `voice-to-structured-note.md` (post-transcription clean-up
+  pass; raw transcript preserved; provenance-labelled; offline-first with
+  consent-gated cloud) and `transcript-audio-linking.md` (persist segment
+  timestamps when the engine provides them; tap a transcript segment to seek
+  the recording; honest degradation without timestamps).
+- **Not approved (parked):** `one-tap-daily-capture.md` — stays a proposal,
+  must not be implemented without a new gate.
+
+Both notes carry their own acceptance criteria and "what we would NOT take"
+boundaries, which bind the implementation.
+
+**Rationale.** The gate is the mechanism that keeps clean-room research from
+becoming silent scope growth; exercising it on the first three notes sets the
+pattern for every future capability.
+
+**Consequences.** Implementation slices must name these notes and their
+acceptance criteria, and prove them with headless workflow tests (§K.14/M.8).
+The capability inventory rows for the two approved candidates move from
+`proposed` to `not started → implemented` only with evidence.
+
 ### D-424 · 2026-10-27 · Licence reverted to plain MIT (supersedes D-418)
 
 **Decision.** The project licence is **plain MIT (single)**, confirmed by the
