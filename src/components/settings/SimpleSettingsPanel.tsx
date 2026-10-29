@@ -9,17 +9,20 @@ import {
   RefreshCw,
   Download,
   Lock,
+  FileText,
 } from 'lucide-react';
 import { CloudSyncEngine } from '../lib/cloudSync';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { PrivacyManager } from '../lib/privacyManager';
 import { AppLogger } from '../lib/logger';
+import { describeAudioImport } from '../lib/audioImportNotices';
 
 export const SimpleSettingsPanel: React.FC = () => {
   const [accounts, setAccounts] = useState(() => CloudSyncEngine.getAccounts());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
   const [googleKey, setGoogleKey] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
+  const [showKeyInput, setShowKeyInput] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [showCloudModal, setShowCloudModal] = useState(false);
