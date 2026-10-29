@@ -707,3 +707,34 @@ Re-landed content (recovered from `refs/pull/119|120`):
 `docs/capability-inventory.md`, inspiration source URLs, the three research
 notes (two APPROVED per D-426), the structured-extraction provenance record in
 `TranscriptViewer`, and `src/services/StructuredExtraction.test.ts` (7 tests).
+
+## 2026-10-30 — v3.1.1 released (both APK variants), plus the audit cycle
+
+**Release `v3.1.1`** — https://github.com/Perchemop/VellumScribe/releases/tag/v3.1.1
+(created by `release.yml`; APKs attached by the `Build Android APK` tag run
+`40960758092`, both legs success, `signed=true`, artefact PII scan clean):
+
+| Asset                                            | Size      |
+| ------------------------------------------------ | --------- |
+| `VellumScribe-v3.1.1-real-release.apk`           | 38.7 MB   |
+| `VellumScribe-v3.1.1-real-debug.apk`             | 46.0 MB   |
+| `VellumScribe-v3.1.1-stub-release.apk`           | 7.3 MB    |
+| `VellumScribe-v3.1.1-stub-debug.apk`             | 14.0 MB   |
+| `…-real-SHA256SUMS.txt`, `…-stub-SHA256SUMS.txt` | checksums |
+
+**Why the release exists at all:** the client reported "there is still no stub
+in GitHub Actions". Root cause: every Actions run was titled `Build Android
+APK`, the variant was visible only inside an artifact name, push builds were
+real-only, and `v3.1.1`'s first tag run failed at the release step with
+`Resource not accessible by integration` (the default token is read-only).
+Fixes: `run-name` states the variant; the build job is a **matrix** and tagged
+releases build **both** real and stub with per-mode named, checksummed assets;
+`permissions: contents: write` lets the tag run attach them. A GitHub Release
+is now the permanent, obvious download home.
+
+**Audit cycle closed in this release** (E2E `docs/qc/e2e-audit-2026-10-29.md`,
+GUI `docs/design/audit-2026-10-28-gui.md`): audio playback, encrypted backups +
+working restore, persistent deletions and a real orphan sweep, theme toggle,
+dialog focus containment, palette/contrast/focus fixes, and capability tests
+for CAP-007/020/023. On-hardware proofs remain open
+(`docs/qc/on-device-proof-3.1.1.md`).
