@@ -69,7 +69,6 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const [showTranscribePrompt, setShowTranscribePrompt] = useState(false);
   const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
-  const [showTranscribePrompt, setShowTranscribePrompt] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Playable media is resolved from local storage: `recording.audio_url` was
