@@ -171,5 +171,14 @@ test('note editor in dark mode', async ({ page }) => {
   await settle(page);
   await page.screenshot({ path: `${OUT}/note-editor-dark.png`, fullPage: false });
 
+  // The toggle must actually flip the palette (audit S-4): the app root is
+  // dark-themed `#0c0c0e` = rgb(12, 12, 14). A light render here means the
+  // class-based dark variant regressed.
+  const bg = await page.evaluate(
+    () => getComputedStyle(document.getElementById('app-root-container') as Element).backgroundColor
+  );
+  const channels = bg.match(/\d+/g)?.map(Number) ?? [255, 255, 255];
+  expect(channels[0], `dark theme must apply (got ${bg})`).toBeLessThan(40);
+
   expect(errors, `dark editor must load without errors:\n${errors.join('\n')}`).toEqual([]);
 });

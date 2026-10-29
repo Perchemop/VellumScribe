@@ -1,6 +1,15 @@
 @import './styles/safe-area.css';
 @import 'tailwindcss';
 
+/*
+ * Class-based dark mode (GUI audit finding S-4, 2026-10-29).
+ * Tailwind v4 defaults `dark:` to the OS `prefers-color-scheme` media query,
+ * which silently ignored the app's `.dark` class — the theme toggle was a
+ * dead control (verified by a rendered capture: toggled dark, page stayed
+ * light). This variant binds `dark:` to the class the app actually toggles.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   body {
     font-family:
