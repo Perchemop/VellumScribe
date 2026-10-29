@@ -1,5 +1,13 @@
 name: Build Android APK
 
+# The run title always states which variant it produces, so nobody has to open
+# a run to discover whether it contains the native-engine or stub APK.
+run-name: >-
+  Android APK — ${{
+    github.event_name == 'workflow_dispatch' && inputs.whisper_mode
+    || (startsWith(github.ref, 'refs/tags/') && 'real + stub (release)' || 'real (native engine)')
+  }}
+
 on:
   push:
     branches:
@@ -23,9 +31,17 @@ env:
 
 jobs:
   build:
-    name: Build & Package Android APK
+    # Tagged releases build BOTH variants so the GitHub Release always carries
+    # a native-engine APK and a stub APK side by side (client request: "there
+    # is still no stub in github actions" — the variant was only visible
+    # inside the artifact name, and push builds produced real only).
+    name: Build & Package Android APK (${{ matrix.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.whisper_mode)) || (startsWith(github.ref, 'refs/tags/') && fromJSON('["real", "stub"]') || fromJSON('["real"]')) }}
 
     steps:
       - name: Checkout Code
@@ -95,7 +111,7 @@ jobs:
         run: npx cap sync android
 
       - name: Bundle Whisper Tiny model into APK assets
-        if: ${{ (github.event.inputs.whisper_mode || 'real') == 'real' }}
+        if: ${{ matrix.mode == 'real' }}
         run: |
           set -euo pipefail
           DEST="android/app/src/main/assets/models/whisper"
@@ -122,11 +138,11 @@ jobs:
       - name: Configure Whisper STUB vs REAL
         id: whisper
         run: |
-          MODE="${{ github.event.inputs.whisper_mode || 'real' }}"
+          MODE="${{ matrix.mode }}"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
 
       - name: Apply STUB CMake flag when requested
-        if: ${{ (github.event.inputs.whisper_mode || 'real') == 'stub' }}
+        if: ${{ matrix.mode == 'stub' }}
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -218,21 +234,28 @@ jobs:
           done
           node scripts/check-personal-data.mjs "$RUNNER_TEMP/asset-scan"
 
-      - name: Compute APK checksums
+      - name: Stage named release files (per mode + checksums)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
+          MODE="${{ matrix.mode }}"
+          VER="${GITHUB_REF_NAME#v}"
+          STAGE="${RUNNER_TEMP}/release-stage"
+          mkdir -p "$STAGE"
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            cp "$apk" "${STAGE}/VellumScribe-v${VER}-${MODE}-release.apk"
+          done
+          for apk in android/app/build/outputs/apk/debug/*.apk; do
+            cp "$apk" "${STAGE}/VellumScribe-v${VER}-${MODE}-debug.apk"
+          done
           cd android/app/build/outputs/apk
-          sha256sum debug/*.apk release/*.apk > "${GITHUB_WORKSPACE}/APK-SHA256SUMS.txt"
-          cat "${GITHUB_WORKSPACE}/APK-SHA256SUMS.txt"
+          sha256sum release/*.apk > "${STAGE}/VellumScribe-v${VER}-${MODE}-SHA256SUMS.txt"
+          ls -lh "$STAGE"
 
       - name: Release APK (on tag push)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
-            APK-SHA256SUMS.txt
+          files: ${{ runner.temp }}/release-stage/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
