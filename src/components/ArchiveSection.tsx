@@ -205,7 +205,7 @@ export const ArchiveSection: React.FC<ArchiveSectionProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search archived notes..."
-                className="w-full pl-9 pr-10 py-2 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-1 focus:ring-zinc-400 transition-all"
+                className="w-full pl-9 pr-10 py-2 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 dark:placeholder:text-zinc-400 focus:outline-hidden focus:ring-1 focus:ring-zinc-400 transition-all"
               />
               {searchQuery && (
                 <button

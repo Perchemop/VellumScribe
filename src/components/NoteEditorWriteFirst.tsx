@@ -661,7 +661,7 @@ ${tr.transcript}`
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="Note title"
                 aria-label="Note title"
-                className="flex-1 min-w-[12rem] text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="flex-1 min-w-[12rem] text-xl sm:text-2xl font-bold bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-600 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <AiProvenanceBadge entityType="note" entityId={note.id} className="shrink-0" />
             </div>
@@ -670,7 +670,7 @@ ${tr.transcript}`
               onChange={(e) => handleBodyChange(e.target.value)}
               placeholder="Start writing…"
               aria-label="Note body"
-              className="w-full min-h-[40vh] resize-y bg-transparent text-base text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
+              className="w-full min-h-[40vh] resize-y bg-transparent text-base text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-600 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed"
             />
             {showChecklistSection && (
               <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-3">
