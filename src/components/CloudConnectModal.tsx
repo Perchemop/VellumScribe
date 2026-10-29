@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 import {
   X,
   Trash2,
@@ -67,6 +68,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
   onDisconnected,
 }) => {
   useModalBackHandler(true, onClose, 'cloud-connect-modal');
+  const dialogCardRef = useDialogFocusTrap<HTMLDivElement>(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
@@ -386,7 +388,10 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <div className="bg-white dark:bg-[#141418] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-zinc-200/70 dark:border-zinc-800/80">
+      <div
+        ref={dialogCardRef}
+        className="bg-white dark:bg-[#141418] rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-zinc-200/70 dark:border-zinc-800/80"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800/80">
           <div className="flex items-center gap-2.5">

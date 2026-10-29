@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 import { History, X, RotateCcw, Clock, Check, PlusCircle } from 'lucide-react';
 import { NoteRecord, NoteRevisionRecord } from '../types';
 import { StorageManager } from '../lib/storage';
@@ -18,6 +19,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
 }) => {
   useModalBackHandler(true, onClose, 'note-revisions-modal');
 
+  const dialogCardRef = useDialogFocusTrap<HTMLDivElement>(true);
   const [revisions, setRevisions] = useState<NoteRevisionRecord[]>([]);
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
@@ -83,6 +85,7 @@ export const NoteRevisionsModal: React.FC<NoteRevisionsModalProps> = ({
       }}
     >
       <div
+        ref={dialogCardRef}
         id="note-revisions-modal-card"
         className="bg-white dark:bg-[#121215] border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden text-zinc-900 dark:text-zinc-100"
       >

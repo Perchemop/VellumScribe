@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 import {
   X,
   Share2,
@@ -29,6 +30,7 @@ type ShareFormat = 'share_sheet' | 'notebooklm' | 'markdown' | 'text' | 'qr' | '
 
 export const NoteShareModal: React.FC<NoteShareModalProps> = ({ note, event, onClose }) => {
   useModalBackHandler(true, onClose, 'note-share-modal');
+  const dialogCardRef = useDialogFocusTrap<HTMLDivElement>(true);
   const [activeFormat, setActiveFormat] = useState<ShareFormat>('share_sheet');
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -155,6 +157,7 @@ ${formattedText}
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in">
       <div
+        ref={dialogCardRef}
         id="note-share-modal"
         className="w-full max-w-lg bg-white dark:bg-[#141418] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
