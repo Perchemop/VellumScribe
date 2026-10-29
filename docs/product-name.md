@@ -69,6 +69,26 @@ candidates, and VellumScribe's existing uses are in **unrelated product
 categories**. Keeping the name is defensible, but a formal trademark search in
 software classes (Nice 9/42) is still required. Tracked as **Q-019**.
 
+### Automated clearance pass (2026-10-29, owner-approved)
+
+The registry/public-web half of the check was executed by the agent (the
+formal legal search remains the owner's):
+
+| Surface                    | Result                                                                                                                                                                                     | Evidence                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| npm registry               | **Free** — `registry.npmjs.org/vellumscribe` returns 404                                                                                                                                   | URL above (checked 2026-10-29)                               |
+| PyPI                       | **Free** — `pypi.org/pypi/vellumscribe/json` returns 404                                                                                                                                   | URL above (checked 2026-10-29)                               |
+| GitHub                     | Only this repository matches a repo search                                                                                                                                                 | `gh search repos vellumscribe`                               |
+| Public web                 | Same prior uses as the 2026-10-25 table; nothing new in software. The heraldry artist's `vellumscribe.co.uk` / `@vellumscribe` remains the one established prior user (different category) | https://www.vellumscribe.co.uk/ ; https://x.com/vellumscribe |
+| WIPO Global Brand Database | JS portal — **cannot be queried programmatically**; run manually at https://branddb.wipo.int/ (Similar mode, Nice classes 9 + 42, designated countries = your markets)                     | portal URL (checked 2026-10-29, page loads)                  |
+
+**Residual risk (honest).** A clear WIPO result is not an all-clear: the
+database omits purely national marks, and common-law/prior-use rights are not
+reflected. The UK heraldry artist has used the name publicly since before this
+project in a different class — coexistence is plausible but is a legal
+judgement, not an agent's. **Q-019 stays open** for the formal search; the
+automated pass removes the "never checked" part of that risk.
+
 VellumScribe is an original name; no competitor's name, logo or trade dress is
 used or implied (§18, §27.5). Renaming has a real cost: it changes the Android
 `applicationId`, making every future APK a "new app" (users must uninstall and

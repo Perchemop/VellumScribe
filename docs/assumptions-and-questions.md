@@ -138,11 +138,17 @@ want to add a second admin, or record the single-maintainer risk explicitly?
 tracked. Confirm whether any should be, and whether a launch/announcement is
 intended at all — the guide says popularity is optional.
 
-**Q-019. Name conflict / trademark clearance (guide §18, §25.1).** "VellumScribe"
-has not been checked against package registries (npm/PyPI) or the WIPO Global
-Brand Database. The name is treated as immutable for technical reasons
-(in-place APK updates), so this is a clearance check, not a rename decision.
-A human/legal task — record the outcome in `docs/product-name.md`.
+**Q-019. Name conflict / trademark clearance (guide §18, §25.1).** The name is
+treated as immutable for technical reasons (in-place APK updates), so this is a
+clearance check, not a rename decision.
+_Automated pass done 2026-10-29 (owner-approved):_ npm and PyPI are free
+(404), GitHub has only this repository, and the public web shows the same
+pre-2025 unrelated uses (UK heraldry artist `vellumscribe.co.uk` /
+`@vellumscribe` — different class). The WIPO Global Brand Database is a JS
+portal and must be checked manually (Similar mode, Nice 9 + 42). Full table
+with URLs: `docs/product-name.md`.
+_Remaining (human/legal):_ the formal trademark search in software classes;
+the heraldry-artist coexistence is a legal judgement, not an agent's.
 
 **Q-020. Corrections to the local `guide.md` (raised by the 2026-10-27 review,
 owner-deferred).** Three spots in the local-only guide are inaccurate; agents
