@@ -10,6 +10,10 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [3.1.1] - 2026-10-30
+
 Release-readiness: signed installable APKs, F-Droid packaging, opt-in crash
 reporting and metrics, stronger accessibility, and dual licensing.
 
