@@ -337,13 +337,12 @@ binding equivalent here:
 ### 9.3 MCP setup (addendum §D)
 
 - **Context7** — configured and connected (`~/.config/opencode/opencode.json`).
-- **GitHub MCP** — scaffolded in the same config but **disabled**: it needs a
-  fine-scoped personal access token, and per the addendum pasting tokens into
-  secure config is a client action. All GitHub operations (PRs, issues, Actions,
-  Releases, secrets) already work through the authenticated `gh` CLI, so nothing
-  is blocked. To enable it, the client creates a PAT (repo + workflow scope) and
-  replaces `REPLACE_WITH_FINE_SCOPED_GITHUB_PAT` in the config, then sets
-  `"enabled": true`.
+- **GitHub MCP** — **disabled by owner decision (2026-10-29): the repository
+  operates gh-only.** All GitHub operations (PRs, issues, Actions, Releases,
+  secrets) work through the authenticated `gh` CLI, so nothing is blocked and
+  no PAT is wanted for now. Should that change, the client creates a PAT (repo
+  - workflow scope) and replaces `REPLACE_WITH_FINE_SCOPED_GITHUB_PAT` in the
+    config, then sets `"enabled": true`.
 - Smallest-set rule (§J.6): no further MCP servers are enabled — tool sprawl
   hurts free models.
 
