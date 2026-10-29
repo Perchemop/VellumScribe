@@ -17,7 +17,9 @@ const FOCUSABLE_SELECTOR =
 /** Pure: which focusable index should receive focus next. Wraps at the edges. */
 export function nextCyclicIndex(count: number, currentIndex: number, backwards: boolean): number {
   if (count <= 0) return -1;
-  const base = currentIndex < 0 ? (backwards ? count : 0) : currentIndex;
+  // Nothing focused: forward starts at the first item (base -1 → 0), backward
+  // starts at the last item (base count → count-1).
+  const base = currentIndex < 0 ? (backwards ? count : -1) : currentIndex;
   return (base + (backwards ? -1 : 1) + count) % count;
 }
 
