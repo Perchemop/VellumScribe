@@ -82,6 +82,19 @@ test('empty state with no stored data', async ({ page, context }) => {
   console.log(`captured ${OUT}/empty-state.png`);
 });
 
+async function skipFirstRun(page: import('@playwright/test').Page) {
+  // The first-run guide modal covers the shell and swallows clicks; mark the
+  // onboarding complete before the app boots so tests reach real screens.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+      localStorage.setItem('vellumscribe_splash_seen_v1', 'true');
+    } catch {
+      // storage may be blocked; the overlay then has to be dismissed manually
+    }
+  });
+}
+
 test('note editor (write-first) with a fresh note', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -90,6 +103,7 @@ test('note editor (write-first) with a fresh note', async ({ page }) => {
   });
 
   await page.setViewportSize({ width: 1280, height: 800 });
+  await skipFirstRun(page);
   await page.goto(BASE);
   await settle(page);
 
@@ -117,6 +131,7 @@ test('settings — diagnostics tab (export logs / crash reporting)', async ({ pa
   });
 
   await page.setViewportSize({ width: 1280, height: 800 });
+  await skipFirstRun(page);
   await page.goto(BASE);
   await settle(page);
 
