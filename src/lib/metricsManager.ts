@@ -46,7 +46,7 @@ export interface MetricsSnapshot {
 }
 
 // Kept in sync with package.json version.
-const APP_VERSION = '3.1.0';
+const APP_VERSION = '3.1.1';
 
 const METRICS_STORAGE_KEY = 'vellumscribe_metrics_v1';
 const MAX_STORED_EVENTS = 200;

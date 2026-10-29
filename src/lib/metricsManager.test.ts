@@ -65,7 +65,7 @@ describe('MetricsManager (privacy-preserving, opt-in)', () => {
     expect(entry.event).toBe('note_created');
     expect(entry.context?.note_title).toBe('redacted');
     expect(entry.context?.body_length).toBe(123);
-    expect(entry.version).toBe('3.1.0');
+    expect(entry.version).toBe('3.1.1');
     expect(typeof entry.timestamp).toBe('string');
   });
 
