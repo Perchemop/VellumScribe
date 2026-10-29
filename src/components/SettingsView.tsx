@@ -3,7 +3,7 @@ import { Cloud, Sparkles, Shield, AlertCircle, CheckCircle2 } from 'lucide-react
 import { CloudSyncEngine } from '../../lib/cloudSync';
 import { PrivacyManager } from '../../lib/privacyManager';
 import { AppLogger } from '../../lib/logger';
-import { SimpleSettingsPanel } from './SimpleSettingsPanel';
+import { SimpleSettingsPanel } from './settings/SimpleSettingsPanel';
 
 export const SettingsView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cloud' | 'ai' | 'security'>('cloud');
