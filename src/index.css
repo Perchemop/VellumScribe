@@ -157,3 +157,41 @@
     transform: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Entrance motion (design intent for M-6 of the 2026-10-28 GUI audit)
+   The codebase references animate-fade-in / animate-in / animate-slide-up in
+   ~37 places; without these definitions they were silent no-ops. Keyframes are
+   global, so the prefers-reduced-motion layer above neutralises them.
+--------------------------------------------------------------------------- */
+@keyframes vs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vs-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: vs-fade-in 0.2s ease-out both;
+  }
+  .animate-in {
+    animation: vs-fade-in 0.2s ease-out both;
+  }
+  .animate-slide-up {
+    animation: vs-slide-up 0.24s ease-out both;
+  }
+}

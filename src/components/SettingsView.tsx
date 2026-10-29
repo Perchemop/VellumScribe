@@ -1606,7 +1606,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     onChange={(e) => handleMetricsToggle(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:transition-all after:peer-checked:bg-blue-600"></div>
+                  <div className="w-9 h-5 bg-zinc-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:transition-all after:peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white dark:peer-focus-visible:ring-offset-zinc-900"></div>
                   <span className="ml-3 text-xs font-medium text-zinc-600 dark:text-zinc-300 peer-checked:text-blue-600 dark:peer-checked:text-blue-400">
                     {metricsEnabled ? 'Enabled' : 'Disabled'}
                   </span>

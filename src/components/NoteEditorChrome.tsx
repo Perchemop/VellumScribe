@@ -202,7 +202,11 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           />
           <div
             role="dialog"
+            aria-modal="true"
             aria-label="Add"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowAttachSheet(false);
+            }}
             className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:inset-x-auto sm:right-3 sm:bottom-auto sm:top-[3.25rem] sm:w-72 rounded-t-2xl sm:rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl max-h-[70vh] overflow-y-auto safe-area-pb"
           >
             <div className="sm:hidden flex justify-center pt-2 pb-1">
@@ -293,7 +297,11 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
           />
           <div
             role="dialog"
+            aria-modal="true"
             aria-label="More"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setShowMoreActionsSheet(false);
+            }}
             className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:inset-x-auto sm:right-3 sm:bottom-auto sm:top-[3.25rem] sm:w-80 rounded-t-2xl sm:rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl max-h-[75vh] overflow-y-auto safe-area-pb"
           >
             <div className="sm:hidden flex justify-center pt-2 pb-1">

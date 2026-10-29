@@ -147,17 +147,17 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
   };
 
   return (
-    <div id="transcript-viewer-container" className="space-y-4 text-stone-800 dark:text-stone-200">
+    <div id="transcript-viewer-container" className="space-y-4 text-zinc-800 dark:text-zinc-200">
       {/* Header controls & tabs */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-200 dark:border-stone-800">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs">
           <button
             id="tab-segments"
             onClick={() => setActiveTab('segments')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
               activeTab === 'segments'
-                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
             }`}
           >
             Timestamped Segments ({segments.length})
@@ -167,8 +167,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             onClick={() => setActiveTab('raw')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
               activeTab === 'raw'
-                ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
             }`}
           >
             Raw Transcript
@@ -181,8 +181,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             }}
             className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
               activeTab === 'ai_insights'
-                ? 'bg-white dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-700 dark:text-emerald-400 shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -195,7 +195,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
             id="btn-export-notebooklm"
             onClick={handleExportNotebookLM}
             title="Export structured markdown source formatted for Google NotebookLM"
-            className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 transition-colors"
           >
             {notebookLmExported ? (
               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -207,7 +207,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
           <button
             id="btn-copy-transcript"
             onClick={handleCopyTranscript}
-            className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 flex items-center gap-1.5 transition-colors"
+            className="px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 transition-colors"
           >
             {copied ? (
               <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -220,7 +220,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
       </div>
 
       {/* Engine & provenance metadata badge (T-P1.3 / Review Archive 45) */}
-      <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
+      <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-400 px-1">
         {transcription.engine.includes('whisper') && !transcription.engine.includes('groq') ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -261,7 +261,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
           </span>
         )}
 
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-mono text-[10px]">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono text-[10px]">
           Model: {transcription.model_id}
         </span>
 
@@ -276,7 +276,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
       {activeTab === 'segments' && (
         <div id="transcript-segments-list" className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
           {segments.length === 0 ? (
-            <p className="text-xs text-stone-600 dark:text-stone-300 italic p-4 text-center">
+            <p className="text-xs text-zinc-600 dark:text-zinc-300 italic p-4 text-center">
               No timestamped segments available for this transcript.
             </p>
           ) : (
@@ -294,7 +294,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                   className={`p-3 rounded-xl border transition-all cursor-pointer ${
                     isActive
                       ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 shadow-xs'
-                      : 'bg-stone-50/70 dark:bg-stone-900/50 border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
+                      : 'bg-zinc-50/70 dark:bg-zinc-900/50 border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                   }`}
                   role="button"
                   tabIndex={0}
@@ -309,7 +309,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-stone-200/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-emerald-600 hover:text-white transition-colors"
+                        className="flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-emerald-600 hover:text-white transition-colors"
                         title="Seek audio to timestamp"
                       >
                         <Play className="w-2.5 h-2.5 fill-current" />
@@ -317,8 +317,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                       </button>
 
                       {seg.speaker_id && (
-                        <div className="flex items-center gap-1 text-xs font-medium text-stone-600 dark:text-stone-300">
-                          <User className="w-3 h-3 text-stone-400" />
+                        <div className="flex items-center gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                          <User className="w-3 h-3 text-zinc-400" />
                           <span>{getSpeakerDisplayName(seg.speaker_id)}</span>
                           <button
                             type="button"
@@ -327,7 +327,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                               setEditingSpeakerId(seg.speaker_id!);
                               setSpeakerNameInput(getSpeakerDisplayName(seg.speaker_id));
                             }}
-                            className="p-1 hover:text-stone-900 dark:hover:text-stone-100 text-stone-400"
+                            className="p-1 hover:text-zinc-900 dark:hover:text-zinc-100 text-zinc-400"
                             title="Rename speaker"
                           >
                             <Edit2 className="w-2.5 h-2.5" />
@@ -336,10 +336,10 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                       )}
                     </div>
 
-                    <span className="text-[10px] text-stone-400">Segment {seg.sequence}</span>
+                    <span className="text-[10px] text-zinc-400">Segment {seg.sequence}</span>
                   </div>
 
-                  <p className="text-xs leading-relaxed text-stone-800 dark:text-stone-200 font-normal">
+                  <p className="text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 font-normal">
                     {seg.text}
                   </p>
                 </div>
@@ -351,7 +351,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
 
       {/* Content Tab 2: Raw */}
       {activeTab === 'raw' && (
-        <div className="p-4 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 font-sans text-xs leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
+        <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 font-sans text-xs leading-relaxed whitespace-pre-wrap max-h-96 overflow-y-auto">
           {transcription.text || 'No raw transcript recorded.'}
         </div>
       )}
@@ -367,20 +367,20 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                   <FileText className="w-3.5 h-3.5" />
                   Local AI Summary
                 </h5>
-                <p className="text-xs text-stone-800 dark:text-stone-200 leading-relaxed">
+                <p className="text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed">
                   {structuredExtraction.summary}
                 </p>
               </div>
 
               {/* Action Items */}
               <div className="space-y-2">
-                <h5 className="text-xs font-semibold text-stone-700 dark:text-stone-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <h5 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 uppercase tracking-wider">
                   <ListTodo className="w-3.5 h-3.5 text-blue-600" />
                   Extracted Action Items ({structuredExtraction.actionItems.length})
                 </h5>
 
                 {structuredExtraction.actionItems.length === 0 ? (
-                  <p className="text-xs text-stone-500 italic">
+                  <p className="text-xs text-zinc-500 italic">
                     No action items detected in transcript.
                   </p>
                 ) : (
@@ -388,13 +388,13 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                     {structuredExtraction.actionItems.map((item, idx) => (
                       <div
                         key={idx}
-                        className="p-3 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs flex items-start justify-between gap-3"
+                        className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs flex items-start justify-between gap-3"
                       >
                         <div className="space-y-1">
-                          <p className="font-medium text-stone-900 dark:text-stone-100">
+                          <p className="font-medium text-zinc-900 dark:text-zinc-100">
                             {item.text}
                           </p>
-                          <div className="flex items-center gap-2 text-[10px] text-stone-500">
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-500">
                             <span>
                               Priority: <span className="capitalize">{item.priority}</span>
                             </span>
@@ -416,7 +416,7 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
                               );
                               if (targetSeg) onSeekAudio(targetSeg.start_ms / 1000);
                             }}
-                            className="px-2 py-1 rounded-md bg-stone-200 dark:bg-stone-800 hover:bg-emerald-600 hover:text-white text-[10px] font-mono shrink-0 transition-colors"
+                            className="px-2 py-1 rounded-md bg-zinc-200 dark:bg-zinc-800 hover:bg-emerald-600 hover:text-white text-[10px] font-mono shrink-0 transition-colors"
                           >
                             Jump to audio
                           </button>
@@ -448,8 +448,8 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
       {/* Speaker Rename Modal */}
       {editingSpeakerId && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl max-w-sm w-full border border-stone-200 dark:border-stone-800 space-y-4 shadow-xl">
-            <h4 className="font-semibold text-sm text-stone-900 dark:text-stone-100">
+          <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl max-w-sm w-full border border-zinc-200 dark:border-zinc-800 space-y-4 shadow-xl">
+            <h4 className="font-semibold text-sm text-zinc-900 dark:text-zinc-100">
               Rename Speaker
             </h4>
             <input
@@ -457,14 +457,14 @@ export const TranscriptViewer: React.FC<TranscriptViewerProps> = ({
               value={speakerNameInput}
               onChange={(e) => setSpeakerNameInput(e.target.value)}
               placeholder="e.g. Alice, Dr. Smith"
-              className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-xs text-stone-900 dark:text-stone-100"
+              className="w-full px-3 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs text-zinc-900 dark:text-zinc-100"
               autoFocus
             />
             <div className="flex justify-end gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => setEditingSpeakerId(null)}
-                className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300"
+                className="px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
               >
                 Cancel
               </button>

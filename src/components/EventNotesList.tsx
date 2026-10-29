@@ -658,7 +658,7 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
                 placeholder="Search notes, checklists, locations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-hidden focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-2xs"
+                className="w-full pl-9 pr-8 py-2 bg-white dark:bg-[#16161a] border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl text-xs text-zinc-800 dark:text-zinc-200 placeholder-zinc-600 dark:placeholder-zinc-400 focus:outline-hidden focus:border-zinc-400 dark:focus:border-zinc-600 transition-colors shadow-2xs"
               />
               {searchQuery && (
                 <button

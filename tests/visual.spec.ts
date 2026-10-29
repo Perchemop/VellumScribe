@@ -81,3 +81,75 @@ test('empty state with no stored data', async ({ page, context }) => {
   await page.screenshot({ path: `${OUT}/empty-state.png`, fullPage: true });
   console.log(`captured ${OUT}/empty-state.png`);
 });
+
+async function skipFirstRun(page: import('@playwright/test').Page) {
+  // The first-run guide modal covers the shell and swallows clicks; mark the
+  // onboarding complete before the app boots so tests reach real screens.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+      localStorage.setItem('vellumscribe_splash_seen_v1', 'true');
+    } catch {
+      // storage may be blocked; the overlay then has to be dismissed manually
+    }
+  });
+}
+
+test('note editor (write-first) with a fresh note', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await skipFirstRun(page);
+  await page.goto(BASE);
+  await settle(page);
+
+  // Create a note through the real header control, then capture the editor.
+  await page.locator('#header-new-note-dropdown-btn').click();
+  await settle(page);
+  const editor = page.locator('#note-editor-container');
+  await editor.waitFor({ state: 'visible', timeout: 15000 });
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/note-editor-desktop.png`, fullPage: false });
+
+  // Narrow layout for the editor shell.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/note-editor-phone.png`, fullPage: false });
+
+  expect(errors, `editor must load without errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
+test('settings — diagnostics tab (export logs / crash reporting)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await skipFirstRun(page);
+  await page.goto(BASE);
+  await settle(page);
+
+  // The settings surface is reachable through the centre navigation on desktop.
+  await page.locator('#nav-settings-view-btn').click();
+  await settle(page);
+
+  // Switch to the Diagnostics tab where Export logs and crash reporting live.
+  const diagTab = page.locator('#subtab-diagnostics-btn');
+  await diagTab.click({ timeout: 10000 }).catch(() => {
+    console.log('diagnostics tab not reachable in this build; capturing settings as-is');
+  });
+  await page
+    .locator('#panel-diagnostics')
+    .waitFor({ state: 'visible', timeout: 10000 })
+    .catch(() => undefined);
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/settings-diagnostics.png`, fullPage: true });
+
+  expect(errors, `settings must load without errors:\n${errors.join('\n')}`).toEqual([]);
+});

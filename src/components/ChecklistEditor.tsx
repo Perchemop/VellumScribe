@@ -112,7 +112,8 @@ export const ChecklistEditor: React.FC<ChecklistEditorProps> = ({ items, onChang
             <button
               type="button"
               onClick={() => handleDelete(item.id)}
-              className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md transition-all"
+              aria-label={`Delete checklist item: ${item.text || 'empty item'}`}
+              className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 rounded-md transition-all focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-rose-500"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
