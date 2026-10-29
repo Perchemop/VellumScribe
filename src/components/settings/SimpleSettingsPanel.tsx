@@ -160,9 +160,10 @@ export const SimpleSettingsPanel: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40">
-          {!hasCloudConsent ? (
-            <>
+
+        {!hasCloudConsent ? (
+          <>
+            <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40">
               <div className="flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
                 <div className="min-w-0">
