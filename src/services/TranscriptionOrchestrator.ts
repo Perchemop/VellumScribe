@@ -32,7 +32,12 @@ export function resolveTranscriptionPolicy(opts: {
   networkAllowed: boolean;
   hasCloudAiConsent: boolean;
 }): TranscriptionPolicy {
-  return opts.networkAllowed && opts.hasCloudAiConsent ? 'local_first' : 'offline_only';
+  // Always try on-device Whisper first when available.
+  // Cloud AI is available as a fallback when the user has consented.
+  if (opts.hasCloudAiConsent) {
+    return 'local_first';
+  }
+  return 'offline_only';
 }
 
 export interface TranscriptionInput {

@@ -139,6 +139,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [, setIsImportingAudio] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recordingToTranscribe, setRecordingToTranscribe] = useState<number | null>(null);
   const pendingTranscriptionErrorRef = useRef<string | null>(null);
 
   const handleUploadAudioFile = async (file: File) => {
@@ -155,41 +156,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       importWarning = describeAudioImport(result);
       refreshRecordings();
       if (result.recording) {
-        setImportStatus('Transcribing…');
-        const policy = resolveTranscriptionPolicy({
-          networkAllowed: PrivacyManager.isNetworkAllowed(),
-          hasCloudAiConsent: PrivacyManager.hasCloudAiConsent(),
-        });
-        try {
-          const tr = await TranscriptionOrchestrator.getInstance().orchestrate(
-            {
-              recordingId: result.recording.id,
-              noteId: note.id,
-              audioBlob: result.blob,
-              mediaKey: result.recording.media_key,
-              mimeType: result.mimeType,
-              durationSeconds: result.durationSeconds,
-            },
-            {
-              policy,
-              onProgress: (p) => setImportStatus(p.status || `Transcribing… ${p.percent}%`),
-            }
-          );
-          if (tr?.transcript) {
-            const newBody = body
-              ? `${body}
-
-${tr.transcript}`
-              : tr.transcript;
-            setBody(newBody);
-            persistText(title, newBody);
-          }
-        } catch (_txErr) {
-          const txErr = asErrorLike(_txErr);
-          setImportStatus(txErr?.message || 'Transcription failed — recording was saved.');
-          setRecoveryError(txErr?.message || 'Transcription failed');
-          setShowRecoverySheet(true);
-        }
+        setImportStatus('Imported — tap Transcribe below to convert to text.');
+        setSelectedRecordingForTranscription(result.recording.id);
       }
       const refreshed = StorageManager.getNoteById(note.id);
       if (refreshed) onNoteUpdated(refreshed);

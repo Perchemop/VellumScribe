@@ -13,6 +13,7 @@ import {
   Loader2,
   AlertCircle,
   Mic,
+  Key,
 } from 'lucide-react';
 import { RecordingRecord, TranscriptionJobStatus } from '../types';
 import { OfflineAiManager } from '../services/OfflineAiManager';
@@ -22,6 +23,9 @@ import { LiveRegion } from './common/LiveRegion';
 import { AppLogger } from '../lib/logger';
 import { MediaRepository } from '../lib/MediaRepository';
 import { asErrorLike } from '../lib/errorLike';
+import { PrivacyManager } from '../lib/privacyManager';
+import { CloudAiConsentModal } from './CloudAiConsentModal';
+import { AiStudioKeyModal } from './AiStudioKeyModal';
 
 // Lazily loaded so the recovery sheet is only fetched when actually opened —
 // keeps it out of the main bundle (see the INEFFECTIVE_DYNAMIC_IMPORT note).
@@ -62,6 +66,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
   const [showRecoverySheet, setShowRecoverySheet] = useState(false);
   const [playbackUnavailable, setPlaybackUnavailable] = useState(false);
   const [mediaLoading, setMediaLoading] = useState<boolean>(!!recording.media_key);
+  const [showTranscribePrompt, setShowTranscribePrompt] = useState(false);
+  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
+  const [showCloudAiConsentModal, setShowCloudAiConsentModal] = useState(false);
+  const [showTranscribePrompt, setShowTranscribePrompt] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Playable media is resolved from local storage: `recording.audio_url` was
@@ -152,6 +160,13 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
     } catch (_err) {
       const err = asErrorLike(_err);
       setIsTranscribing(false);
+
+      // If on-device Whisper isn't available, offer cloud AI instead
+      if (err?.message?.includes('OFFLINE_AI_ENGINE_UNAVAILABLE') || err?.message?.includes('OFFLINE_AI_MODEL_MISSING')) {
+        setShowTranscribePrompt(true);
+        return;
+      }
+
       const errorMsg = OfflineAiManager.mapErrorCodeToUserMessage(err?.message);
       setTranscribeError(errorMsg);
       setShowRecoverySheet(true);
@@ -531,14 +546,14 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 space-y-0.5">
-              <p className="font-semibold text-amber-300">Couldn't Transcribe Offline</p>
+              <p className="font-semibold text-amber-300">Couldn't Transcribe</p>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-300 leading-relaxed">
                 {transcribeError.includes('Whisper') ||
                 transcribeError.includes('runtime') ||
                 transcribeError.includes('unavailable')
-                  ? 'On-device Whisper tensor inference is not compiled into this binary yet. You can use live dictation while recording or optional Cloud Gemini AI.'
+                  ? 'On-device Whisper isn’t available on this device. Enable Cloud AI transcription in Settings.'
                   : transcribeError}
-              </p>
+                </p>
             </div>
             <button
               onClick={() => setTranscribeError(null)}
@@ -552,10 +567,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
           <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-500/15">
             <button
               type="button"
-              onClick={() => setShowRecoverySheet(true)}
+              onClick={() => setShowTranscribePrompt(true)}
               className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-medium rounded-lg text-xs transition-colors shadow-sm"
             >
-              View Solutions & Alternatives
+              Enable Cloud AI Transcription
             </button>
             <button
               type="button"
@@ -604,6 +619,102 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
             onSpeakerRenamed={refreshTranscriptData}
           />
         </div>
+      )}
+      {/* Cloud AI consent prompt */}
+      {showTranscribePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0c0e] w-full max-w-md">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Enable Cloud AI Transcription
+                </div>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  On-device Whisper isn’t available on this device. Cloud AI can transcribe your
+                  recording using Google AI Studio (Gemini). Your voice data is sent to Google for
+                  processing.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {!hasCloudKey && (
+                <>
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      id="cloud-ai-key-checkbox"
+                      onChange={() => setShowAiKeyModal(true)}
+                      className="w-4 h-4 rounded border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-zinc-900 dark:text-zinc-100">
+                      I have a Google AI Studio API key
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTranscribePrompt(false);
+                      setShowAiKeyModal(true);
+                    }}
+                    className="px-3 py-1.5 border border-zinc-200 dark:border-zinc-800 rounded-xl text-xs font-medium text-zinc-700 dark:text-zinc-200 flex items-center gap-1.5"
+                  >
+                    <span className="w-5 h-5 text-zinc-500 flex items-center justify-center">
+                      <Key className="w-3 h-3" />
+                    </span>
+                    <span>Get a Google AI Studio Key</span>
+                  </button>
+                </>
+              )}
+              {hasCloudKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTranscribePrompt(false);
+                    setShowCloudAiConsentModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs"
+                >
+                  Start Transcription
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTranscribePrompt(false)}
+              className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-xs underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Studio Key Modal */}
+      {showAiKeyModal && (
+        <AiStudioKeyModal
+          isOpen={showAiKeyModal}
+          onClose={() => setShowAiKeyModal(false)}
+          onKeySaved={(key: string) => {
+            AiSettingsManager.setGoogleApiKey(key);
+            setGoogleKey(key);
+            setShowAiKeyModal(false);
+            setShowCloudAiConsentModal(true);
+          }}
+        />
+      )}
+
+      {/* Cloud AI Consent Modal */}
+      {showCloudAiConsentModal && (
+        <CloudAiConsentModal
+          isOpen={showCloudAiConsentModal}
+          onClose={() => setShowCloudAiConsentModal(false)}
+          onConfirm={() => {
+            PrivacyManager.grantCloudAiConsent();
+            setShowCloudAiConsentModal(false);
+            handleTranscribeWithOfflineAi();
+          }}
+        />
       )}
     </div>
   );
