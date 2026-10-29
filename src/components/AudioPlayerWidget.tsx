@@ -162,7 +162,10 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
       setIsTranscribing(false);
 
       // If on-device Whisper isn't available, offer cloud AI instead
-      if (err?.message?.includes('OFFLINE_AI_ENGINE_UNAVAILABLE') || err?.message?.includes('OFFLINE_AI_MODEL_MISSING')) {
+      if (
+        err?.message?.includes('OFFLINE_AI_ENGINE_UNAVAILABLE') ||
+        err?.message?.includes('OFFLINE_AI_MODEL_MISSING')
+      ) {
         setShowTranscribePrompt(true);
         return;
       }
@@ -553,7 +556,7 @@ export const AudioPlayerWidget: React.FC<AudioPlayerWidgetProps> = ({
                 transcribeError.includes('unavailable')
                   ? 'On-device Whisper isn’t available on this device. Enable Cloud AI transcription in Settings.'
                   : transcribeError}
-                </p>
+              </p>
             </div>
             <button
               onClick={() => setTranscribeError(null)}

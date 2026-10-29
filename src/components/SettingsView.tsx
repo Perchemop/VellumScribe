@@ -1,11 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Cloud,
-  Sparkles,
-  Shield,
-  AlertCircle,
-  CheckCircle2,
-} from 'lucide-react';
+import { Cloud, Sparkles, Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { CloudSyncEngine } from '../../lib/cloudSync';
 import { PrivacyManager } from '../../lib/privacyManager';
 import { AppLogger } from '../../lib/logger';
@@ -20,9 +14,7 @@ export const SettingsView: React.FC = () => {
       className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden"
     >
       {/* Simple subtab navigation */}
-      <div
-        className="px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap"
-      >
+      <div className="px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap">
         {[
           { id: 'cloud', label: 'Cloud', icon: <Cloud className="w-4 h-4" /> },
           { id: 'ai', label: 'AI', icon: <Sparkles className="w-4 h-4" /> },
@@ -51,7 +43,12 @@ export const SettingsView: React.FC = () => {
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
         {activeTab === 'cloud' && <SimpleSettingsPanel />}
         {activeTab === 'ai' && (
-          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-5xl mx-auto space-y-6">
+          <div
+            id="panel-ai-studio"
+            role="tabpanel"
+            aria-labelledby="subtab-ai-key-btn"
+            className="max-w-5xl mx-auto space-y-6"
+          >
             <div className="p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
               <div className="flex items-center justify-between">
                 <div>
@@ -108,7 +105,12 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
         {activeTab === 'security' && (
-          <div id="panel-security" role="tabpanel" aria-labelledby="subtab-security-btn" className="max-w-5xl mx-auto space-y-6">
+          <div
+            id="panel-security"
+            role="tabpanel"
+            aria-labelledby="subtab-security-btn"
+            className="max-w-5xl mx-auto space-y-6"
+          >
             <SecurityPanel onRefreshNotes={() => {}} />
           </div>
         )}
