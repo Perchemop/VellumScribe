@@ -3,32 +3,29 @@ import {
   Cloud,
   Sparkles,
   Shield,
-  CheckCircle2,
+  Mic,
   AlertCircle,
+  CheckCircle2,
   RefreshCw,
+  Download,
   Lock,
   FileText,
 } from 'lucide-react';
-import { CloudSyncEngine } from '../../lib/cloudSync';
-import { AiSettingsManager } from '../../lib/aiSettings';
-import { PrivacyManager } from '../../lib/privacyManager';
-import { AppLogger } from '../../lib/logger';
-import { AndroidKeystoreManager } from '../../lib/keystore';
-import { UnlockSessionManager } from '../../lib/UnlockSessionManager';
-import { CloudConnectModal } from '../../components/CloudConnectModal';
-import { CloudAiConsentModal } from '../../components/CloudAiConsentModal';
-import { AiStudioKeyModal } from '../../components/AiStudioKeyModal';
+import { CloudSyncEngine } from '../lib/cloudSync';
+import { AiSettingsManager } from '../lib/aiSettings';
+import { PrivacyManager } from '../lib/privacyManager';
+import { AppLogger } from '../lib/logger';
+import { describeAudioImport } from '../lib/audioImportNotices';
 
 export const SimpleSettingsPanel: React.FC = () => {
   const [accounts, setAccounts] = useState(() => CloudSyncEngine.getAccounts());
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-  const [showCloudModal, setShowCloudModal] = useState(false);
-  const [showConsentModal, setShowConsentModal] = useState(false);
-  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
-  const [googleKey, setGoogleKey] = useState(() => AiSettingsManager.getGoogleApiKey());
+  const [googleKey, setGoogleKey] = useState<string>(() => AiSettingsManager.getGoogleApiKey());
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showAiKeyModal, setShowAiKeyModal] = useState(false);
+  const [showCloudModal, setShowCloudModal] = useState(false);
 
   const hasCloudConsent = PrivacyManager.hasCloudAiConsent();
   const hasCloudKey = Boolean(AiSettingsManager.getGoogleApiKey());
@@ -40,7 +37,7 @@ export const SimpleSettingsPanel: React.FC = () => {
     loadAccounts();
   }, []);
 
-  const handleConnectCloud = async () => {
+  const handleConnectCloud = () => {
     setShowCloudModal(true);
   };
 
@@ -52,10 +49,11 @@ export const SimpleSettingsPanel: React.FC = () => {
       }
       setAccounts([]);
       setSyncFeedback('Cloud disconnected.');
-    } catch (_err) {
+    } catch (_e) {
       setSyncFeedback('Could not disconnect.');
     } finally {
       setIsSyncing(false);
+      setTimeout(() => setSyncFeedback(null), 3000);
     }
   };
 
@@ -79,7 +77,7 @@ export const SimpleSettingsPanel: React.FC = () => {
   };
 
   const handleGrantConsent = () => {
-    setShowConsentModal(true);
+    setShowCloudModal(true);
   };
 
   const handleSaveGoogleKey = async () => {
@@ -163,106 +161,103 @@ export const SimpleSettingsPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Cloud AI Consent Gate */}
-        {!hasCloudConsent && (
-          <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Cloud AI transcription is off
-                </div>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Enable cloud AI to transcribe using Google AI Studio (Gemini). Your voice data is
-                  sent to Google for processing.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleGrantConsent}
-              className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs"
-            >
-              Enable cloud AI
-            </button>
-          </div>
-        )}
-
-        {!hasCloudConsent ? null : (
+        {!hasCloudConsent ? (
           <>
-            {/* API Key Input */}
-            {!hasCloudKey ? (
-              <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
-                    Google AI Studio API key
-                  </label>
-                  <input
-                    type="password"
-                    value={googleKey}
-                    onChange={(e) => setGoogleKey(e.target.value)}
-                    placeholder="AIzaSy…"
-                    className="w-full px-3 py-2 bg-zinc-900 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
+            <div className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800/40">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Cloud AI transcription is off
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Enable cloud AI to transcribe using Google AI Studio (Gemini). Your voice data is
+                    sent to Google for processing.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleGrantConsent}
+                className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs"
+              >
+                Enable cloud AI
+              </button>
+            </>
+          ) : (
+            <>
+              {!hasCloudKey ? (
+                <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-semibold text-zinc-600 dark:text-zinc-400">
+                      Google AI Studio API key
+                    </label>
+                    <input
+                      type="password"
+                      value={googleKey}
+                      onChange={(e) => setGoogleKey(e.target.value)}
+                      placeholder="AIzaSy…"
+                      className="w-full px-3 py-2 bg-zinc-900 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveGoogleKey}
+                      disabled={isVerifying}
+                      className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {isVerifying ? (
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <span>Save key</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-emerald-50 dark:bg-emerald-950/20">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-sm text-zinc-900 dark:text-zinc-100">
+                      Google AI Studio key configured
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleSaveGoogleKey}
-                    disabled={isVerifying}
-                    className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs disabled:opacity-50 flex items-center gap-1.5"
+                    onClick={() => {
+                      setGoogleKey('');
+                      AiSettingsManager.setGoogleApiKey('');
+                    }}
+                    className="text-xs text-zinc-600 hover:text-red-600 dark:hover:text-rose-400 underline"
                   >
-                    {isVerifying ? (
-                      <RefreshCw className="w-3 h-3 animate-spin" />
-                    ) : (
-                      <span>Save key</span>
-                    )}
+                    Remove key
+                  </button>
+                </div>
+              )}
+              {/* Local transcription toggle */}
+              <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                      <Mic className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        On-device transcription
+                      </div>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                        Transcribe recordings without sending them anywhere. Works offline.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="p-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+                  >
+                    <Mic className="w-4 h-4" />
                   </button>
                 </div>
               </div>
-            ) : (
-              <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-emerald-50 dark:bg-emerald-950/20">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-sm text-zinc-900 dark:text-zinc-100">
-                    Google AI Studio key configured
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGoogleKey('');
-                    AiSettingsManager.setGoogleApiKey('');
-                  }}
-                  className="text-xs text-zinc-600 hover:text-red-600 dark:hover:text-rose-400 underline"
-                >
-                  Remove key
-                </button>
-              </div>
             )}
-
-            {/* Local transcription toggle */}
-            <div className="mt-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
-                    <Mic className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      On-device transcription
-                    </div>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                      Transcribe recordings without sending them anywhere. Works offline.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="p-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  <Mic className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
           </>
         )}
       </div>
