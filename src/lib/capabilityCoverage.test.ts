@@ -43,7 +43,8 @@ describe('CAP-023 — metrics are local-only and exportable (no server dispatch)
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const json = JSON.stringify(MetricsManager.getMetrics());
 
-    expect(json).toContain('"enabled": true');
+    expect(json).toContain('"enabled":true');
+    expect(json).toContain('"note_created"');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
