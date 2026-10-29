@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-import { Cloud, Sparkles, Shield, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { CloudSyncEngine } from '../lib/cloudSync';
-import { PrivacyManager } from '../lib/privacyManager';
-import { AppLogger } from '../lib/logger';
+import { Cloud, Sparkles, Shield } from 'lucide-react';
 import { SimpleSettingsPanel } from './settings/SimpleSettingsPanel';
 
 export const SettingsView: React.FC = () => {
@@ -14,7 +11,9 @@ export const SettingsView: React.FC = () => {
       className="h-full flex flex-col bg-[#fafaf9] dark:bg-[#0c0c0e] overflow-hidden"
     >
       {/* Simple subtab navigation */}
-      <div className="px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap">
+      <div
+        className="px-6 py-4 border-b border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#0c0c0e] flex items-center gap-2 flex-wrap"
+      >
         {[
           { id: 'cloud', label: 'Cloud', icon: <Cloud className="w-4 h-4" /> },
           { id: 'ai', label: 'AI', icon: <Sparkles className="w-4 h-4" /> },
@@ -43,12 +42,7 @@ export const SettingsView: React.FC = () => {
       <div className="flex-1 overflow-y-auto custom-minimal-scrollbar p-6 space-y-6">
         {activeTab === 'cloud' && <SimpleSettingsPanel />}
         {activeTab === 'ai' && (
-          <div
-            id="panel-ai-studio"
-            role="tabpanel"
-            aria-labelledby="subtab-ai-key-btn"
-            className="max-w-5xl mx-auto space-y-6"
-          >
+          <div id="panel-ai-studio" role="tabpanel" aria-labelledby="subtab-ai-key-btn" className="max-w-5xl mx-auto space-y-6">
             <div className="p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
               <div className="flex items-center justify-between">
                 <div>
@@ -77,9 +71,6 @@ export const SettingsView: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        // Handled by parent via callback
-                      }}
                       className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs"
                     >
                       Enable cloud AI
@@ -105,13 +96,26 @@ export const SettingsView: React.FC = () => {
           </div>
         )}
         {activeTab === 'security' && (
-          <div
-            id="panel-security"
-            role="tabpanel"
-            aria-labelledby="subtab-security-btn"
-            className="max-w-5xl mx-auto space-y-6"
-          >
-            <SecurityPanel onRefreshNotes={() => {}} />
+          <div id="panel-security" role="tabpanel" aria-labelledby="subtab-security-btn" className="max-w-5xl mx-auto space-y-6">
+            <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Note lock
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Optional PIN to protect your notes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 border border-zinc-200 dark:border-zinc-800 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors flex items-center gap-2"
+              >
+                <Lock className="w-4 h-4 text-zinc-600 dark:text-zinc-400 shrink-0" />
+                <span>Set note PIN</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
