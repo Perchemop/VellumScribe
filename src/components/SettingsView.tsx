@@ -3,7 +3,8 @@ import {
   Cloud,
   Sparkles,
   Shield,
-  Download,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { CloudSyncEngine } from '../../lib/cloudSync';
 import { PrivacyManager } from '../../lib/privacyManager';
@@ -86,7 +87,7 @@ export const SettingsView: React.FC = () => {
                     >
                       Enable cloud AI
                     </button>
-                  </div>
+                  </>
                 ) : (
                   <>
                     <div className="flex items-start gap-2">
@@ -96,7 +97,7 @@ export const SettingsView: React.FC = () => {
                           Cloud AI transcription is on
                         </div>
                         <p className="text-xs text-zinc-500 mt-0.5">
-                          Recordings are transcribed with Google AI Studio (Gemini).
+                          Recordings are transcribed using Google AI Studio (Gemini).
                         </p>
                       </div>
                     </div>
