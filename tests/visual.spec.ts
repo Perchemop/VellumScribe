@@ -139,14 +139,12 @@ test('settings — diagnostics tab (export logs / crash reporting)', async ({ pa
   await page.locator('#nav-settings-view-btn').click();
   await settle(page);
 
-  // Diagnostics lives behind Advanced mode; switch first (loud failures —
-  // a capture of the wrong tab is worse than no capture).
-  await page.locator('#settings-mode-advanced').click({ timeout: 10000 });
-  const diagTab = page.locator('#subtab-diagnostics-btn');
-  await diagTab.click({ timeout: 10000 });
-  await page.locator('#panel-diagnostics').waitFor({ state: 'visible', timeout: 10000 });
+  // Settings now has Cloud, AI, Security tabs directly (no Simple/Advanced mode).
+  const aiTab = page.locator('#subtab-ai-btn');
+  await aiTab.click({ timeout: 10000 });
+  await page.locator('#panel-ai-studio').waitFor({ state: 'visible', timeout: 10000 });
   await settle(page);
-  await page.screenshot({ path: `${OUT}/settings-diagnostics.png`, fullPage: true });
+  await page.screenshot({ path: `${OUT}/settings-ai.png`, fullPage: true });
 
   expect(errors, `settings must load without errors:\n${errors.join('\n')}`).toEqual([]);
 });
