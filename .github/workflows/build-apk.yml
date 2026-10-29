@@ -41,11 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: ${{
-          github.event_name == 'workflow_dispatch'
-          && fromJSON(format('["{0}"]', inputs.whisper_mode))
-          || (startsWith(github.ref, 'refs/tags/') && fromJSON('["real", "stub"]') || fromJSON('["real"]'))
-        }}
+        mode: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.whisper_mode)) || (startsWith(github.ref, 'refs/tags/') && fromJSON('["real", "stub"]') || fromJSON('["real"]')) }}
 
     steps:
       - name: Checkout Code
