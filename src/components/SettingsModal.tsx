@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 import {
   X,
   Sparkles,
@@ -37,6 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSettingsUpdated,
 }) => {
   useModalBackHandler(true, onClose, 'settings-modal');
+  const dialogCardRef = useDialogFocusTrap<HTMLDivElement>(true);
   const [activeTab, setActiveTab] = useState<'ai' | 'backup' | 'security' | 'offline-ai'>(
     initialTab === 'security'
       ? 'security'
@@ -125,6 +127,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/60 backdrop-blur-xs select-none animate-fade-in">
       <div
+        ref={dialogCardRef}
         id="settings-modal-card"
         className="w-full max-w-xl bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >

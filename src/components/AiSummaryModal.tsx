@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 import {
   Sparkles,
   X,
@@ -83,6 +84,7 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
   onApplySummary,
 }) => {
   useModalBackHandler(isOpen, onClose, 'ai-summary-modal');
+  const dialogCardRef = useDialogFocusTrap<HTMLDivElement>(true);
   const [selectedFormat, setSelectedFormat] = useState<SummaryFormat>('executive');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [includeTranscripts, setIncludeTranscripts] = useState<boolean>(true);
@@ -150,7 +152,10 @@ export const AiSummaryModal: React.FC<AiSummaryModalProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-        <div className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div
+          ref={dialogCardRef}
+          className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        >
           {/* Header */}
           <div className="p-4 sm:p-5 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
             <div className="flex items-center gap-3">
