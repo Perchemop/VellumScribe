@@ -184,7 +184,8 @@ export const SimpleSettingsPanel: React.FC = () => {
                 Enable cloud AI
                 </div>
               </div>
-            </>
+            </div>
+            <>
           ) : (
             <>
               {!hasCloudKey ? (
