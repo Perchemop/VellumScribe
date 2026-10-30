@@ -256,13 +256,10 @@ export const SimpleSettingsPanel: React.FC = () => {
                     <Mic className="w-4 h-4" />
                   </button>
                 </div>
-              </div>
             )}
           </>
         )}
       </div>
-
-      {/* Security */}
       <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
         <div className="flex items-center justify-between">
           <div>
