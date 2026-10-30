@@ -255,8 +255,6 @@ export const SimpleSettingsPanel: React.FC = () => {
                   >
                     <Mic className="w-4 h-4" />
                   </button>
-                </div>
-              </div>
             )}
           </>
         )}
