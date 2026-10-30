@@ -182,7 +182,8 @@ export const SimpleSettingsPanel: React.FC = () => {
                 className="mt-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold shadow-2xs"
               >
                 Enable cloud AI
-              </button>
+                </div>
+              </div>
             </>
           ) : (
             <>
