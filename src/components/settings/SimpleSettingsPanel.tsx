@@ -257,7 +257,6 @@ export const SimpleSettingsPanel: React.FC = () => {
                   </button>
             )}
           </>
-        )}
       </div>
 
       {/* Security */}
