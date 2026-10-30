@@ -456,19 +456,18 @@ export class AudioRecordingManager {
       throw new Error(`Audio file is too large (max ${MAX_IMPORT_BYTES / (1024 * 1024)} MB).`);
     }
 
-    // Materialize content-URI File into a plain Blob (critical on Android)
-    let safeBlob: Blob;
+    // Read once into memory — this is our single source of truth
+    let rawBuffer: ArrayBuffer;
     try {
-      const ab = await this.safeReadAsArrayBuffer(file as Blob);
-      safeBlob = new Blob([ab], { type: (file as File).type || 'audio/wav' });
+      rawBuffer = await this.safeReadAsArrayBuffer(file as Blob);
     } catch (e) {
       throw new Error('Could not read the selected audio file. Try a different file or format.', {
         cause: e,
       });
     }
 
-    const mimeType = (file as File).type || safeBlob.type || 'audio/mpeg';
-    let finalBlob: Blob = safeBlob;
+    const mimeType = (file as File).type || 'audio/wav';
+    let finalBlob: Blob;
     let wasConverted = false;
     let wasTruncated = false;
     let wasConversionSkipped = false;
@@ -478,7 +477,7 @@ export class AudioRecordingManager {
     try {
       onProgress?.(20, 'Converting to 16kHz mono WAV…');
       pcmWavBlob = await this.convertTo16kHzMonoWavAsync(
-        safeBlob,
+        new Blob([rawBuffer], { type: mimeType }),
         (pct) => {
           onProgress?.(20 + Math.round(pct * 0.4), 'Encoding speech audio…');
         },
@@ -506,8 +505,14 @@ export class AudioRecordingManager {
       AppLogger.warn('AudioRecordingManager', 'Import WAV conversion fallback', e);
     }
 
+    // Free rawBuffer now that conversion is done — pcmWavBlob holds the result if converted
+    rawBuffer = undefined;
+
     onProgress?.(70, 'Computing checksum…');
-    const arrayBuffer = await this.safeReadAsArrayBuffer(finalBlob);
+    // Reuse existing buffer instead of re-reading from disk/file
+    const arrayBuffer = pcmWavBlob
+      ? await this.safeReadAsArrayBuffer(pcmWavBlob)
+      : await this.safeReadAsArrayBuffer(rawBuffer); // fall back to safeBlob if conversion skipped
     const checksum = await this.calculateSha256(arrayBuffer);
 
     let durationSeconds = 1;
