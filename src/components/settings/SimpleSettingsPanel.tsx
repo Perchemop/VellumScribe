@@ -15,6 +15,7 @@ import { CloudSyncEngine } from '../lib/cloudSync';
 import { AiSettingsManager } from '../lib/aiSettings';
 import { PrivacyManager } from '../lib/privacyManager';
 import { AppLogger } from '../lib/logger';
+import { describeAudioImport } from '../lib/audioImportNotices';
 
 export const SimpleSettingsPanel: React.FC = () => {
   const [accounts, setAccounts] = useState(() => CloudSyncEngine.getAccounts());
