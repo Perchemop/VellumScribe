@@ -5,6 +5,8 @@ import { OfflineAiManager } from '../../services/OfflineAiManager';
 import { AiCapabilities, SpeechModelProfile } from '../../types';
 import { AppLogger } from '../../lib/logger';
 import { asErrorLike } from '../../lib/errorLike';
+import { useModalBackHandler } from '../../lib/modalBackStack';
+import { useDialogFocusTrap } from '../../lib/dialogFocus';
 
 /** Compact on-device Whisper status + model install. */
 export const OfflineAiPanel: React.FC = () => {
@@ -15,6 +17,15 @@ export const OfflineAiPanel: React.FC = () => {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // In-app removal confirmation (audit M-3): never a blocking browser dialog.
+  const [confirmRemoveModelId, setConfirmRemoveModelId] = useState<string | null>(null);
+
+  useModalBackHandler(
+    confirmRemoveModelId !== null,
+    () => setConfirmRemoveModelId(null),
+    'offline-ai-remove-model-confirm'
+  );
+  const confirmRemoveRef = useDialogFocusTrap<HTMLDivElement>(confirmRemoveModelId !== null);
 
   const loadData = async () => {
     setLoading(true);
@@ -67,7 +78,7 @@ export const OfflineAiPanel: React.FC = () => {
   };
 
   const handleDeleteModel = async (modelId: string) => {
-    if (!confirm('Remove this speech model?')) return;
+    setConfirmRemoveModelId(null);
     try {
       await OfflineAi.deleteSpeechModel({ modelId });
       setSuccessMessage('Model removed');
@@ -180,7 +191,8 @@ export const OfflineAiPanel: React.FC = () => {
               ) : isInstalled ? (
                 <button
                   type="button"
-                  onClick={() => handleDeleteModel(model.id)}
+                  onClick={() => setConfirmRemoveModelId(model.id)}
+                  aria-label={`Remove ${model.displayName}`}
                   className="px-2.5 py-1.5 text-xs rounded-lg text-rose-600 hover:bg-rose-500/10"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -200,6 +212,56 @@ export const OfflineAiPanel: React.FC = () => {
           );
         })}
       </div>
+
+      {confirmRemoveModelId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+          <div
+            ref={confirmRemoveRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="offline-ai-remove-confirm-title"
+            aria-describedby="offline-ai-remove-confirm-desc"
+            className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3
+                  id="offline-ai-remove-confirm-title"
+                  className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
+                >
+                  Remove this speech model?
+                </h3>
+                <p
+                  id="offline-ai-remove-confirm-desc"
+                  className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5"
+                >
+                  The model files are deleted from this device. You can download it again anytime.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveModelId(null)}
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteModel(confirmRemoveModelId)}
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
+              >
+                Remove model
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -145,6 +145,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       document.documentElement.classList.remove('dark');
     }
+    // Keep the Android/web chrome colour in step with the theme (m-4). The
+    // inline bootstrap in index.html sets the first-paint value.
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute('content', darkMode ? '#121215' : '#fafaf9');
   }, [darkMode]);
 
   const createEvent = useCallback(

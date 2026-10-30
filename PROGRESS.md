@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-10-31
 
 ---
 
@@ -11,22 +11,23 @@ Append here for every slice; never rewrite history.
 
 | Signal           | State                                                                                                                                                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run verify` | ✅ **GREEN on CI (all three OS runners)** — `typecheck` + `lint` (0 warnings) + `check:orphans` + 86 tests. Run `1cbc192` on `opencode/ci`.                                                                |
+| `npm run verify` | PENDING CI for the 2026-10-31 polish slice — no `ci.sh` run yet; last green: `verify` ×3 OS on `main` (e2e audit §5) plus the v3.1.1 cycle.                                                                |
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                           |
-| Lint ceiling     | `--max-warnings=0` (warnings denied, guide §4). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job now also runs `check:orphans` (✅ 119 files) and the 86-test suite (✅). |
-| Test suite       | 12 files / 86 tests (last run green locally; re-verified on CI via `ci.sh`).                                                                                                                               |
-| Working tree     | clean, committed and pushed                                                                                                                                                                                |
+| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1. |
+| Test suite       | Re-verified on CI via `ci.sh`; contract tests added this slice (pending CI).                                                                                                                               |
+| Working tree     | polish slice (in tree, WIP)                                                                                                                                                                                |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                            |
-| Android APK      | ✅ **built in CI** — artifact `VellumScribe-Android-APKs-real`, `versionName=3.1.0 versionCode=30100`, **`signed=false`**                                                                                  |
-| Signed APK       | ⛔ not produced — no keystore yet (Q-002)                                                                                                                                                                  |
+| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**.                                                                                  |
+| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                  |
 | Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                |
 
-**Status sentence:** code compiles and tests pass; CI is operational on three
-OS runners with a real (unsigned) APK. The active blocker is lint:
-`--max-warnings=0` now denies warnings (guide §4), lint is now clean (B-4 → 332,
-B-5 → 275, B-6 → 229, B-7 → 0), so `npm run verify` passes end-to-end on all
-three OS runners. The remaining non-blocking red is the staged Prettier job
-(slice B-3).
+**Status sentence:** the app is released through `v3.1.1` (signed real + stub
+APKs attached to the GitHub Release). The active work is the 2026-10-31 4.0.0
+polish slice — design-audit fixes (M-3, m-1…m-4, m-6, m-7), dead-code and
+dependency removal, and wider rendered evidence — present in the working tree
+and **pending `ci.sh` verification**. Still open: the raster store banner PNG
+(m-5, owner decision), permission-denied UX for camera/mic/location, and the
+on-hardware proofs in `docs/qc/on-device-proof-3.1.1.md`.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
 `tsc`, `vitest`, or `npm ci` runs on this machine. Verify changes with
@@ -82,6 +83,46 @@ can never be committed.
 
 **QC:** docs-only slice — `docs/qc/manual-checklists.md` §1 walked; `npm run
 verify` re-run and green.
+
+---
+
+## 2026-10-31 — 4.0.0 polish: remaining design-audit Low items + wider rendered evidence
+
+In the working tree, **verification pending: a `ci.sh` run to follow** — nothing
+below is CI-verified yet.
+
+- **Brand mark single-sourced (m-1, m-2).** New `src/components/BrandMarkGlyph.tsx`
+  is the one source of the mark geometry; `AppLogo` uses it and Settings → About
+  shows the real mark instead of a letter "V". `scripts/generate-brand-assets.mjs`
+  now also copies `assets/brand/vellumscribe-mark.svg` → `public/favicon.svg`
+  and the maskable variant → `public/maskable.svg`; `index.html`'s splash renders
+  `/favicon.svg` instead of an inline copy.
+- **No theme flash at first paint (m-4).** An inline head script applies the
+  stored theme (`omninote_dark_mode_v1`, same JSON boolean as `AppContext`)
+  before first paint; the splash follows the theme (light `#fafaf9` / dark
+  `#121215`); `AppContext` keeps `meta[name=theme-color]` in step.
+- **In-app delete confirmation (M-3).** The note editor's Delete uses the
+  in-app confirm dialog instead of blocking `window.confirm`; Escape closes the
+  editor sheets and the confirmation, and the destructive confirmation is on the
+  Android back stack.
+- **Forced-colours layer (m-6).** `@media (forced-colors: active)` in
+  `src/index.css`: system-coloured control edges, explicit focus outline,
+  decorative shadows removed.
+- **Bottom-nav legibility (m-7).** Labels 10px → 11px with stable ids and
+  `aria-current`.
+- **Dead code/deps removed (m-3).** `RichBodyEditor.tsx` deleted (never
+  imported); `motion` and `react-markdown` dropped from `package.json`; the
+  lockfile is pruned and its version synced (3.1.0 → 3.1.1).
+- **Rendered evidence widened.** `tests/visual.spec.ts` adds: Settings → About
+  (desktop + 390px phone via the bottom nav), the in-app delete confirmation
+  (asserts no native dialog fires), a forced-colours landing capture (the theme
+  toggle keeps a 1px border), a dense virtualised list, and a pre-first-paint
+  theme test (stored preference ⇒ `<html>` class + `theme-color` + splash
+  surface).
+
+Still open, honestly: **m-5** (a raster 1024×500 store banner PNG — needs an
+SVG-rasteriser dependency or an external tool, an owner decision) and the
+**permission-denied UI** for camera/mic/location (e2e audit §6).
 
 ---
 
@@ -468,17 +509,20 @@ Remaining warning mix (per OS run): `no-explicit-any` ≈229,
 1. ~~**Q-005 — lint warnings denied, CI failing.**~~ ✅ **RESOLVED 2026-10-23** —
    656 → 0 across slices B-4…B-7; `npm run verify` is green on
    ubuntu/windows/macos (`1cbc192`) including`check:orphans` and the 86 tests.
-2. **Q-002 — no release keystore (release blocker).** Generate it per
-   `docs/BUILD_RELEASE.md` §1, set the four `ANDROID_KEYSTORE_*` secrets,
-   then re-run slice A-2 and confirm `signed=true`.
-3. **A-3 — update-in-place proof** on a physical `arm64` device (needs a
-   signed APK from blocker 2).
-4. **Q-003 — `assetlinks.json` placeholder** once the keystore exists.
-5. **Q-004 — format baseline:** 194 unformatted files. Staged non-blocking
-   format job in CI until slice B-3 establishes the baseline.
+2. ~~**Q-002 — no release keystore (release blocker).**~~ ✅ **RESOLVED
+   2026-10-24** (D-421) — keystore wired to CI; `signed=true`; signed APKs ship
+   on Release `v3.1.1`.
+3. **A-3 — update-in-place proof** on a physical `arm64` device (signed APKs
+   exist; the proof run is missing).
+4. ~~**Q-003 — `assetlinks.json` placeholder**~~ ✅ **RESOLVED** — fingerprint
+   filled from the release keystore (CHANGELOG 3.1.1).
+5. ~~**Q-004 — format baseline**~~ ✅ **RESOLVED 2026-10-23** — slice B-3
+   established the baseline; `format` is now a required CI gate.
 6. **Q-009 / Q-010 — product decisions:** `arm64`-only ABI acceptability and
    ~30 MB bundled Whisper model in APK assets.
-7. **C-1…C-5 — test coverage gaps** (R-2 notes & capture has no tests).
+7. **C-1…C-5 — test coverage gaps** — largely closed: 32/34 requirements
+   verified (see `REQUIREMENTS_TRACEABILITY.md`); on-hardware proof (C-5)
+   remains.
 
 ## 2026-10-24 — C-2 hardening parts 4 & 5 (SSRF-derived URLs, memory-only passphrase)
 

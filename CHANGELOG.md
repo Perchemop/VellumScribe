@@ -10,7 +10,70 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+
+- **Wider rendered evidence** in `tests/visual.spec.ts`: the Settings → About
+  panel (desktop and 390px phone, the phone leg reached through the bottom nav
+  as m-7 evidence), the in-app delete confirmation (asserting that no native
+  dialog fires), a forced-colours landing capture (asserting the theme toggle
+  keeps a system-coloured 1px border), a dense virtualised notes list, and a
+  pre-first-paint theme test (a stored light/dark preference must apply the
+  `<html>` class, `theme-color` and the splash surface). Pending CI
+  verification.
+- **Contract tests** for the audit fixes: `src/design/brandContract.test.ts`
+  (web icons stay byte-identical copies of `assets/brand/`, the first-paint
+  bootstrap stays in lockstep with `AppContext`, and no UI source may open a
+  blocking browser `confirm` dialog) and `src/components/BrandMarkGlyph.test.tsx`
+  (canonical geometry, ARIA behaviour, drift guard against the canonical SVG).
+
+### Changed
+
+- **The brand mark has a single source:** the new `BrandMarkGlyph` component
+  carries the mark geometry, `AppLogo` uses it, and Settings → About shows the
+  real mark instead of a letter "V" (audit m-2).
+- **Favicons are generated, not hand-copied:**
+  `scripts/generate-brand-assets.mjs` now also copies
+  `assets/brand/vellumscribe-mark.svg` → `public/favicon.svg` and the maskable
+  variant → `public/maskable.svg`; the first-paint splash in `index.html`
+  renders `/favicon.svg` instead of an inline copy (audit m-1).
+- **No theme flash at first paint:** an inline head script applies the stored
+  theme (same `localStorage` key and JSON shape as `AppContext`) before first
+  paint and themes the splash (light `#fafaf9` / dark `#121215`); `AppContext`
+  keeps `meta[name=theme-color]` in step (audit m-4).
+- **Forced-colours (high-contrast) support:** a `@media (forced-colors: active)`
+  layer in `src/index.css` gives controls system-coloured edges and an explicit
+  focus outline, and removes decorative shadows (audit m-6).
+- **Mobile bottom-nav labels** are 11px (was 10px) with stable ids and
+  `aria-current` on the active item (audit m-7).
+
+### Fixed
+
+- **Note delete in the editor no longer uses a blocking `window.confirm`:** it
+  opens the in-app confirmation dialog used elsewhere; Escape closes the editor
+  sheets and the confirmation, and the destructive confirmation sits on the
+  Android back stack (audit M-3).
+- **The same blocking dialog in Settings → Offline AI is gone:** "Remove this
+  speech model?" now uses the in-app confirmation (focus trap, back stack, and
+  an accessible name on the icon-only remove button).
+- **Location denial is honest (audit §4 item 3):** when the browser blocks or
+  fails geolocation, the editor's location picker explains what happened and
+  stays open — it no longer silently writes a fake "Current device location"
+  onto the note.
+- **Last ring-less control (audit S-1 family):** the mobile sort `<select>` in
+  the notes list shows a keyboard focus ring and carries an accessible name.
+
+### Removed
+
+- Dead code and unused dependencies: the never-imported
+  `src/components/note-editor/RichBodyEditor.tsx`, and the `motion` and
+  `react-markdown` dependencies. `package-lock.json` is pruned accordingly and
+  its version field is back in step with `package.json` (3.1.0 → 3.1.1)
+  (audit m-3).
+
+Still open from the design audit: the raster 1024×500 store banner PNG (m-5 —
+needs an SVG-rasteriser dependency or an external tool; owner decision, recorded
+as Q-022) and dedicated camera/microphone permission-denied copy (location is
+done). CI verification for this slice is pending.
 
 ## [3.1.1] - 2026-10-30
 

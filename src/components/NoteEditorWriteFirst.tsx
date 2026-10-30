@@ -118,6 +118,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showReminderPicker, setShowReminderPicker] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [locationNotice, setLocationNotice] = useState<string | null>(null);
   const [showAudioStudioModal, setShowAudioStudioModal] = useState(false);
   const [showAiKeyModal, setShowAiKeyModal] = useState(false);
   const [showAiSummaryModal, setShowAiSummaryModal] = useState(false);
@@ -309,6 +310,10 @@ ${tr.transcript}`
     }
   }, [focusMode]);
 
+  useEffect(() => {
+    // Reset any location notice whenever the picker opens or closes.
+    setLocationNotice(null);
+  }, [showLocationPicker]);
   const notifyUpdatedDebounced = (updatedNote: NoteRecord) => {
     if (debounceTimerRef.current) window.clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = window.setTimeout(() => onNoteUpdated(updatedNote), 400);
@@ -400,8 +405,9 @@ ${tr.transcript}`
   };
 
   const handleDetectLocation = () => {
+    setLocationNotice(null);
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setLocationName('Location unavailable');
+      setLocationNotice('This device does not support location, so type a place name instead.');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -416,12 +422,18 @@ ${tr.transcript}`
         if (updated) onNoteUpdated(updated);
         setShowLocationPicker(false);
       },
-      () => {
-        const fallback = 'Current device location';
-        setLocationName(fallback);
-        const updated = StorageManager.updateNote(note.id, { location_name: fallback });
-        if (updated) onNoteUpdated(updated);
-        setShowLocationPicker(false);
+      (err: GeolocationPositionError) => {
+        if (err.code === 1) {
+          setLocationNotice('Your browser blocked location access, so type a place name instead.');
+        } else if (err.code === 2) {
+          setLocationNotice(
+            'Your device could not determine its position, so try again or type a place name.'
+          );
+        } else if (err.code === 3) {
+          setLocationNotice('The location request timed out, so try again or type a place name.');
+        } else {
+          setLocationNotice('Location could not be determined, so try again or type a place name.');
+        }
       }
     );
   };
@@ -613,6 +625,14 @@ ${tr.transcript}`
             placeholder="Place name or address"
             className="px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 min-w-[12rem] flex-1"
           />
+          {locationNotice && (
+            <div
+              role="alert"
+              className="w-full text-xs text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-xl px-2 py-1"
+            >
+              {locationNotice}
+            </div>
+          )}
           <button
             type="button"
             className="px-2 py-1 rounded-lg bg-sky-700 text-white dark:bg-sky-300 dark:text-sky-950 font-medium"

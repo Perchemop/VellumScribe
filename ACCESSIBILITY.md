@@ -35,7 +35,19 @@ Android web-view build, which share one codebase).
   ESLint **error**, `click-events-have-key-events` a warning-as-zero since
   slice B-6), but manual passes are still on the roadmap (`ROADMAP.md`,
   4.0.0).
-- 200%-zoom and narrow-viewport reflow has not been audited end to end.
+- 200%-zoom and narrow-viewport reflow has not been audited end to end. The
+  visual-evidence job now captures the landing screen at the WCAG 1.4.10
+  reference width (320 CSS px, `tests/visual.spec.ts`) as rendered evidence, but
+  nobody has yet walked the wider app at 200% zoom on a device.
+- **Forced-colours / Windows High Contrast** now has a `@media (forced-colors:
+active)` layer (`src/index.css`) giving form controls and buttons a
+  system-coloured edge and an explicit focus outline, with a rendered capture in
+  the same visual job. It is verified by emulation and by the border assertion
+  in that job, not on a real Windows high-contrast desktop.
+- **Permission-denied states** for camera, microphone and location are surfaced
+  in-app for location (the editor's location picker explains the denial and
+  keeps the picker open); camera and microphone denial copy has not been given
+  the same treatment yet.
 
 ## How to report an accessibility problem
 

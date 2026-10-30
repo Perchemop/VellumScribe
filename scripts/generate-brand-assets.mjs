@@ -6,6 +6,10 @@
  * splash screens directly from the VellumScribe brand mark so the native app
  * matches the web icon (`public/favicon.svg`).
  *
+ * It also copies `assets/brand/vellumscribe-mark.svg` and
+ * `vellumscribe-mark-maskable.svg` to `public/favicon.svg` and
+ * `public/maskable.svg`, so those web icons are never hand-maintained copies.
+ *
  * The mark reproduces the favicon geometry
  *   (V arms (4.5,4.5)->(12,19.5)->(19.5,4.5) stroke 2.5,
  *    stem (12,19.5)->(12,11) stroke 2,
@@ -226,6 +230,22 @@ function write(relPath, buffer) {
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, buffer);
   written.push(path.relative(ROOT, abs));
+}
+
+// Web icons are copies of the canonical SVGs, not hand-maintained duplicates:
+// the mark geometry lives only in assets/brand/ (design audit m-1).
+function writeRoot(relPath, buffer) {
+  const abs = path.join(ROOT, relPath);
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, buffer);
+  written.push(relPath);
+}
+
+for (const [source, dest] of [
+  ['assets/brand/vellumscribe-mark.svg', 'public/favicon.svg'],
+  ['assets/brand/vellumscribe-mark-maskable.svg', 'public/maskable.svg'],
+]) {
+  writeRoot(dest, fs.readFileSync(path.join(ROOT, source)));
 }
 
 const DENSITIES = {

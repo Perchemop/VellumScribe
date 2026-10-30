@@ -150,6 +150,19 @@ with URLs: `docs/product-name.md`.
 _Remaining (human/legal):_ the formal trademark search in software classes;
 the heraldry-artist coexistence is a legal judgement, not an agent's.
 
+**Q-022. Store-banner rasterisation (design audit m-5).**
+`metadata/fdroid/feature-graphic.svg` exists (SVG source, 1024×500) but stores
+accept PNG/JPEG banners only, and the repository has no SVG rasteriser: the only
+generated raster assets are the Android launcher/splash PNGs from
+`scripts/generate-brand-assets.mjs`, which draws the mark with its own coverage
+rasteriser and has no font, so it cannot render the banner's wordmark.
+**Decision needed:** add a rasteriser dependency (for example
+`@resvg/resvg-js`) and generate `metadata/fdroid/feature-graphic.png` in CI, or
+rasterise the SVG once with an external tool and commit the PNG (a binary asset
+with no regeneration path). Either way it is a one-time store-submission asset,
+independent of the app build. Deferred rather than guessed — agents must not
+fabricate a banner PNG or invent a fake rasteriser.
+
 **Q-020. Corrections to the local `guide.md` (raised by the 2026-10-27 review,
 owner-deferred).** Three spots in the local-only guide are inaccurate; agents
 must not edit it, so they are recorded here for the owner:
@@ -257,15 +270,16 @@ Evidence — CI `39566612176` (Linux + Windows + macOS green), Security
 Scanning `39566612217` (green), Build Android APK `39566612127` (green,
 artifact `VellumScribe-Android-APKs-real`). Recorded as fact F-007.
 
-**Q-011. SQLite has no delete path for recordings or OCR scans.**
-While typing `lib/storage.ts` (slice B-7a) three dead guards were removed —
-`deleteRecording`, `deleteOcrScan` and `cleanOrphanedMedia` probed
-`SqliteRepository` for methods that do not exist anywhere in the codebase, so
-those branches were never taken. `StorageManager.deleteRecording()` /
-`deleteOcrScan()` therefore only invalidate the in-memory cache, and
-`cleanOrphanedMedia()` always reports `{ cleanedCount: 0 }` (real pruning lives
-on `SqliteRepository.findOrphanMediaKeys()` / `removeOrphanMediaRecord()`, which
-the storage dashboard already calls directly). Behaviour is unchanged, but the
-rows stay in SQLite after a delete. **Decision needed:** add the missing
-`SqliteRepository` deletes, or document the cascade/cleanup path as a known
-limitation.
+**Q-011. ✅ Resolved 2026-10-29 — real delete paths added.**
+_Was:_ `StorageManager.deleteRecording()` / `deleteOcrScan()` only invalidated
+the in-memory cache and `cleanOrphanedMedia()` always reported
+`{ cleanedCount: 0 }` (slice B-7a had removed three dead guards that probed
+`SqliteRepository` methods that did not exist), so deleted media rows stayed in
+SQLite.
+_Resolution:_ the e2e audit of 2026-10-29 (findings S-F1/S-F2, closed in the
+follow-up slice) gave the methods real bodies — `deleteRecording()` removes the
+transcript rows, the recording row and the stored blob; `deleteOcrScan()` calls
+`SqliteRepository.deleteOcrScan()`; `cleanOrphanedMedia()` sweeps
+`SqliteRepository.findOrphanMediaKeys()` and deletes each blob and record. Each
+carries a comment referencing the audit finding. Covered by
+`src/lib/storageLifecycle.test.ts`.

@@ -846,7 +846,8 @@ export const EventNotesList: React.FC<EventNotesListProps> = ({
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-transparent text-zinc-600 dark:text-zinc-300 text-xs font-medium focus:outline-hidden cursor-pointer"
+            aria-label="Sort notes by"
+            className="bg-transparent text-zinc-600 dark:text-zinc-300 text-xs font-medium focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-lg cursor-pointer"
           >
             <option value="updated">Recent</option>
             <option value="created">Created</option>

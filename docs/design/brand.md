@@ -29,8 +29,15 @@ the events they belong to.
 ## Assets
 
 - **Canonical source:** `assets/brand/vellumscribe-mark.svg` — the single source
-  of truth for the logo geometry.
-- **Web/app copy:** `public/favicon.svg` (same geometry).
+  of truth for the logo geometry (the maskable variant is
+  `vellumscribe-mark-maskable.svg`).
+- **In-app rendering:** `src/components/BrandMarkGlyph.tsx` draws the same
+  geometry (24-unit viewBox, `currentColor`) and is the only place the mark's
+  paths appear in the bundle; `AppLogo` and Settings → About render it.
+- **Web/app copy:** `public/favicon.svg` and `public/maskable.svg` are copied
+  from `assets/brand/` by the asset script below — never hand-edited.
+- **First paint:** `index.html`'s splash renders `public/favicon.svg` and
+  follows the stored theme (light `#fafaf9` / dark `#121215`).
 - **Platform rasters:** Android launcher, adaptive-icon foreground and splash
   PNGs are generated from the mark by `scripts/generate-brand-assets.mjs`
   (`npm run assets:brand`).
