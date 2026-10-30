@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { EventRecord, NoteRecord } from '../types';
 import { StorageManager } from '../lib/storage';
+import { useModalBackHandler } from '../lib/modalBackStack';
+import { useDialogFocusTrap } from '../lib/dialogFocus';
 
 export type SaveStatus = 'saving' | 'saved' | 'stored';
 
@@ -95,6 +97,38 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
   } = props;
 
   const safeEvents: EventRecord[] = Array.isArray(events) ? events : [];
+
+  // In-app confirmation for note delete (design audit M-3). A blocking
+  // window.confirm is inconsistent with every other destructive action in the
+  // app and is jarring inside the Android WebView.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Escape closes whichever editor overlay is open, even when keyboard focus
+  // never left the trigger button (design audit M-4). Android back is handled
+  // by the shared modal back stack.
+  useEffect(() => {
+    if (!showAttachSheet && !showMoreActionsSheet && !confirmDelete) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (confirmDelete) setConfirmDelete(false);
+      else if (showAttachSheet) setShowAttachSheet(false);
+      else setShowMoreActionsSheet(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [
+    showAttachSheet,
+    showMoreActionsSheet,
+    confirmDelete,
+    setShowAttachSheet,
+    setShowMoreActionsSheet,
+  ]);
+
+  useModalBackHandler(confirmDelete, () => setConfirmDelete(false), 'note-delete-confirm');
+
+  // Contain focus in the delete confirmation, the same way the app's other
+  // dialogs do (design audit M-4).
+  const confirmDialogRef = useDialogFocusTrap<HTMLDivElement>(confirmDelete);
 
   return (
     <>
@@ -412,7 +446,7 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
                 className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-left text-rose-600 dark:text-rose-400 min-h-[48px]"
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  if (window.confirm('Delete this note?')) onNoteDeleted(note.id);
+                  setConfirmDelete(true);
                 }}
               >
                 <Trash2 className="w-5 h-5" />
@@ -448,6 +482,58 @@ export const NoteEditorChrome: React.FC<NoteEditorChromeProps> = (props) => {
             </div>
           </div>
         </>
+      )}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/65 backdrop-blur-xs select-none animate-fade-in">
+          <div
+            ref={confirmDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="note-delete-confirm-title"
+            aria-describedby="note-delete-confirm-desc"
+            className="w-full max-w-sm bg-white dark:bg-[#16161a] rounded-2xl border border-zinc-200 dark:border-zinc-800 p-5 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3
+                  id="note-delete-confirm-title"
+                  className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
+                >
+                  Delete this note?
+                </h3>
+                <p
+                  id="note-delete-confirm-desc"
+                  className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5"
+                >
+                  This removes the note from this device. This cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2.5 min-h-[44px] text-xs text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 font-medium rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                  onNoteDeleted(note.id);
+                }}
+                className="px-4 py-2.5 min-h-[44px] text-xs bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl shadow-2xs transition-colors"
+              >
+                Delete note
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

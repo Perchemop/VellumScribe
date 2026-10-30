@@ -1,6 +1,7 @@
 import React from 'react';
 import { BookOpen, ShieldCheck } from 'lucide-react';
 import { CURRENT_APP_VERSION } from '../../lib/appUpdateManager';
+import { AppLogo } from '../AppLogo';
 
 interface AboutPanelProps {
   onOpenOnboardingGuide?: () => void;
@@ -10,8 +11,8 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({ onOpenOnboardingGuide })
   return (
     <div className="space-y-4">
       <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40 flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center text-lg font-bold shrink-0">
-          V
+        <div className="shrink-0">
+          <AppLogo size="lg" showText={false} />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

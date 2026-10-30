@@ -4,6 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#121215" />
+    <!--
+      Apply the stored theme before first paint (design audit m-4, 2026-10-28).
+      The app keeps its preference in localStorage and toggles `.dark` on
+      <html>; doing it here means a light-mode user never sees a dark splash
+      that snaps to light once React mounts. Mirrors the initial state in
+      src/context/AppContext.tsx (same key, same JSON boolean).
+    -->
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('omninote_dark_mode_v1');
+          var dark =
+            saved === null
+              ? window.matchMedia('(prefers-color-scheme: dark)').matches
+              : JSON.parse(saved) === true;
+          if (dark) document.documentElement.classList.add('dark');
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', dark ? '#121215' : '#fafaf9');
+        } catch (e) {
+          /* storage or JSON unavailable: fall back to the light default */
+        }
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -44,70 +67,75 @@
       name="twitter:description"
       content="Offline-first multimodal note-taking studio with interactive checklists, drawing canvas, voice transcriptions, OCR document scans, PIN security, and cloud sync."
     />
+    <!--
+      First-paint loader theming (design audit m-4): the splash follows the
+      stored theme, so a light-mode launch never flashes a dark screen.
+    -->
+    <style>
+      html,
+      body {
+        background: #fafaf9;
+        color: #18181b;
+      }
+      html.dark,
+      html.dark body {
+        background: #121215;
+        color: #f4f4f5;
+      }
+      #vellumscribe-init-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #fafaf9;
+        color: #18181b;
+        font-family:
+          'Plus Jakarta Sans',
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        letter-spacing: -0.011em;
+        z-index: 99999;
+      }
+      html.dark #vellumscribe-init-loader {
+        background: #121215;
+        color: #f4f4f5;
+      }
+      .vs-loader-mark {
+        display: block;
+        margin-bottom: 18px;
+      }
+      .vs-loader-title {
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 6px;
+      }
+      .vs-loader-subtitle {
+        font-size: 13px;
+        color: #52525b;
+        letter-spacing: -0.01em;
+      }
+      html.dark .vs-loader-subtitle {
+        color: #a1a1aa;
+      }
+    </style>
   </head>
-  <body class="bg-[#121215] text-zinc-100">
+  <body>
     <div id="root">
-      <!-- Instant Splash/Loading View displayed while SQLite WebAssembly & Keystore initializes -->
-      <div
-        id="vellumscribe-init-loader"
-        style="
-          position: fixed;
-          inset: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background: #121215;
-          color: #e4e4e7;
-          font-family:
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            Roboto,
-            sans-serif;
-          z-index: 99999;
-        "
-      >
-        <!-- Brand mark at first paint: matches the launcher icon, favicon and
-             Android splash (white V-quill on the near-black tile). -->
-        <svg
-          width="52"
-          height="52"
-          viewBox="0 0 100 100"
-          fill="none"
-          role="img"
-          aria-label="VellumScribe"
-          style="margin-bottom: 18px; display: block"
-        >
-          <rect width="100" height="100" rx="24" fill="#09090b" />
-          <g transform="translate(14, 14) scale(3)">
-            <path
-              d="M4.5 4.5L12 19.5L19.5 4.5"
-              stroke="#ffffff"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              fill="none"
-            />
-            <path d="M12 19.5V11" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
-            <circle cx="12" cy="8.5" r="1.75" fill="#ffffff" />
-          </g>
-        </svg>
-        <div
-          style="
-            font-size: 17px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            color: #f4f4f5;
-            margin-bottom: 6px;
-          "
-        >
-          VellumScribe
-        </div>
-        <div style="font-size: 13px; color: #a1a1aa; letter-spacing: -0.01em">
-          Loading your notes…
-        </div>
+      <!-- Instant splash while SQLite WASM & Keystore initialise. The mark is
+           the canonical /favicon.svg (generated from assets/brand by
+           `npm run assets:brand`), so the geometry lives in one place
+           (design audit m-1). -->
+      <div id="vellumscribe-init-loader">
+        <img class="vs-loader-mark" src="/favicon.svg" width="52" height="52" alt="" />
+        <div class="vs-loader-title">VellumScribe</div>
+        <div class="vs-loader-subtitle">Loading your notes…</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

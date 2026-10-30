@@ -204,3 +204,36 @@
     animation: vs-slide-up 0.24s ease-out both;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Forced colours / Windows High Contrast (design audit m-6, 2026-10-28)
+   Forced-colours mode replaces the palette with system colours, so a control
+   that relies on a Tailwind border for its edge can disappear. Restore a
+   system-coloured edge on the form controls and buttons people actually use,
+   make keyboard focus explicit, and drop decorative shadows (which flatten
+   into solid blocks). Android has no equivalent mode; this is desktop web.
+--------------------------------------------------------------------------- */
+@media (forced-colors: active) {
+  :where(input, textarea, select) {
+    border: 1px solid ButtonText;
+    background-color: Canvas;
+    color: CanvasText;
+  }
+
+  :where(button, [role='button']) {
+    border: 1px solid ButtonText;
+  }
+
+  :where(button, [role='button'], input, textarea, select, a):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .shadow-2xs,
+  .shadow-md,
+  .shadow-lg,
+  .shadow-xl,
+  .shadow-2xl {
+    box-shadow: none;
+  }
+}

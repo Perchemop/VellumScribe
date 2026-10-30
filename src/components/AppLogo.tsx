@@ -1,5 +1,6 @@
 import React from 'react';
 import { version } from '../../package.json';
+import { BrandMarkGlyph } from './BrandMarkGlyph';
 
 interface AppLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -35,25 +36,12 @@ export const AppLogo: React.FC<AppLogoProps> = ({
         {/* Subtle decorative inner corner sheen */}
         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-white/20 opacity-60 pointer-events-none" />
 
-        {/* Geometric Vellum Monogram SVG */}
-        <svg
-          width={iconDimension[size]}
-          height={iconDimension[size]}
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
+        {/* Geometric Vellum Monogram — single source of the mark geometry */}
+        <BrandMarkGlyph
+          size={iconDimension[size]}
           className="relative z-10 drop-shadow-xs"
-        >
-          <path
-            d="M4.5 4.5L12 19.5L19.5 4.5"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path d="M12 19.5V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          <circle cx="12" cy="8.5" r="1.75" fill="currentColor" />
-        </svg>
+          title={showText ? undefined : 'VellumScribe'}
+        />
       </div>
 
       {/* Brand Typography */}

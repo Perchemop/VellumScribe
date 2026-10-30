@@ -601,6 +601,9 @@ export default function App() {
           {!focusMode && (
             <nav className="md:hidden flex items-center justify-around border-t border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-[#121215]/95 backdrop-blur-md safe-area-pb min-h-14 px-1">
               <button
+                type="button"
+                id="bottom-nav-notes-btn"
+                aria-current={activeView === 'notes' ? 'page' : undefined}
                 onClick={() => {
                   setActiveView('notes');
                   setSelectedNoteId(null);
@@ -608,9 +611,12 @@ export default function App() {
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'notes' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <FileText className="w-5 h-5" />
-                <span className="text-[10px]">Notes</span>
+                <span className="text-[11px] leading-tight">Notes</span>
               </button>
               <button
+                type="button"
+                id="bottom-nav-recents-btn"
+                aria-current={activeView === 'recents' ? 'page' : undefined}
                 onClick={() => {
                   setActiveView('recents');
                   setSelectedNoteId(null);
@@ -618,9 +624,12 @@ export default function App() {
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'recents' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Clock className="w-5 h-5" />
-                <span className="text-[10px]">Recent</span>
+                <span className="text-[11px] leading-tight">Recent</span>
               </button>
               <button
+                type="button"
+                id="bottom-nav-archive-btn"
+                aria-current={activeView === 'archive' ? 'page' : undefined}
                 onClick={() => {
                   setActiveView('archive');
                   setSelectedNoteId(null);
@@ -628,9 +637,12 @@ export default function App() {
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'archive' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Archive className="w-5 h-5" />
-                <span className="text-[10px]">Archive</span>
+                <span className="text-[11px] leading-tight">Archive</span>
               </button>
               <button
+                type="button"
+                id="bottom-nav-settings-btn"
+                aria-current={activeView === 'settings' ? 'page' : undefined}
                 onClick={() => {
                   setActiveView('settings');
                   setSelectedNoteId(null);
@@ -638,7 +650,7 @@ export default function App() {
                 className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg ${activeView === 'settings' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400'}`}
               >
                 <Settings className="w-5 h-5" />
-                <span className="text-[10px]">Settings</span>
+                <span className="text-[11px] leading-tight">Settings</span>
               </button>
             </nav>
           )}
