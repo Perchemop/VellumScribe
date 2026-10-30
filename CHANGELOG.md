@@ -18,8 +18,8 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   dialog fires), a forced-colours landing capture (asserting the theme toggle
   keeps a system-coloured 1px border), a dense virtualised notes list, and a
   pre-first-paint theme test (a stored light/dark preference must apply the
-  `<html>` class, `theme-color` and the splash surface). Pending CI
-  verification.
+  `<html>` class, `theme-color` and the splash surface). Verified green on
+  PR #147 (all required checks, merged to `main` as `8b66bfb`).
 - **Contract tests** for the audit fixes: `src/design/brandContract.test.ts`
   (web icons stay byte-identical copies of `assets/brand/`, the first-paint
   bootstrap stays in lockstep with `AppContext`, and no UI source may open a

@@ -11,11 +11,11 @@ Append here for every slice; never rewrite history.
 
 | Signal           | State                                                                                                                                                                                                      |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run verify` | PENDING CI for the 2026-10-31 polish slice — no `ci.sh` run yet; last green: `verify` ×3 OS on `main` (e2e audit §5) plus the v3.1.1 cycle.                                                                |
+| `npm run verify` | ✅ **GREEN on CI for the 2026-10-31 polish slice** — `verify` ×3 OS (run `41138375751`), `format`, all security scans green; PR #147 merged to `main` (`8b66bfb`).                                         |
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                           |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1. |
-| Test suite       | Re-verified on CI via `ci.sh`; contract tests added this slice (pending CI).                                                                                                                               |
-| Working tree     | polish slice (in tree, WIP)                                                                                                                                                                                |
+| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                |
+| Working tree     | clean; slice merged to `main` (`8b66bfb`)                                                                                                                                                                  |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                            |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**.                                                                                  |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                  |
@@ -88,8 +88,8 @@ verify` re-run and green.
 
 ## 2026-10-31 — 4.0.0 polish: remaining design-audit Low items + wider rendered evidence
 
-In the working tree, **verification pending: a `ci.sh` run to follow** — nothing
-below is CI-verified yet.
+Verified on CI (PR #147, run `41138375751` on three OSes, visual job
+`41138375669`, merged as `8b66bfb`):
 
 - **Brand mark single-sourced (m-1, m-2).** New `src/components/BrandMarkGlyph.tsx`
   is the one source of the mark geometry; `AppLogo` uses it and Settings → About

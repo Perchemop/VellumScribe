@@ -90,15 +90,15 @@ CI runs.
 
 ## Release & platform
 
-| Capability                                       | Status               | Evidence                                                                                                                                     |
-| ------------------------------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signed APK able to update an installed copy      | Implemented          | signed release proven in CI (`signed=true`); signed APKs ship on Release `v3.1.1`; update-in-place on hardware unproven (A-3)                |
-| Derived `versionCode` from `package.json`        | **Verified**         | CI run `39566612127`: `versionName=3.1.0 versionCode=30100` logged for both `assembleDebug` and `assembleRelease`                            |
-| APK build in CI (debug + release)                | **Verified**         | CI run `39566612127` green; artifact `VellumScribe-Android-APKs-real`                                                                        |
-| Brand-consistent launcher icons + splash         | **Polished**         | `npm run assets:brand`; 26 PNGs + 11 XMLs validated                                                                                          |
-| PWA manifest + brand favicon                     | **Polished**         | `public/manifest.json`; favicon + maskable now generated from the canonical mark (2026-10-31 slice, pending CI)                              |
-| CI verification signal                           | **Verified**         | CI run `39566612176` green on Linux + Windows + macOS; `format` required since B-3 (D-407); secret/personal-data/licence/SBOM scans required |
-| Lint gate — warnings denied (`--max-warnings=0`) | **Enforced — green** | lint burned down 656 → 0 in B-4…B-7 (Q-005 resolved); warnings remain denied                                                                 |
+| Capability                                       | Status               | Evidence                                                                                                                                                                                        |
+| ------------------------------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signed APK able to update an installed copy      | Implemented          | signed release proven in CI (`signed=true`); signed APKs ship on Release `v3.1.1`; update-in-place on hardware unproven (A-3)                                                                   |
+| Derived `versionCode` from `package.json`        | **Verified**         | CI run `39566612127`: `versionName=3.1.0 versionCode=30100` logged for both `assembleDebug` and `assembleRelease`                                                                               |
+| APK build in CI (debug + release)                | **Verified**         | CI run `39566612127` green; artifact `VellumScribe-Android-APKs-real`                                                                                                                           |
+| Brand-consistent launcher icons + splash         | **Polished**         | `npm run assets:brand`; 26 PNGs + 11 XMLs validated                                                                                                                                             |
+| PWA manifest + brand favicon                     | **Polished**         | `public/manifest.json`; favicon + maskable now generated from the canonical mark (verified on PR #147)                                                                                          |
+| CI verification signal                           | **Verified**         | CI run `39566612176` green on Linux + Windows + macOS; `format` required since B-3 (D-407); secret/personal-data/licence/SBOM scans required; latest slice green on PR #147 (run `41138375751`) |
+| Lint gate — warnings denied (`--max-warnings=0`) | **Enforced — green** | lint burned down 656 → 0 in B-4…B-7 (Q-005 resolved); warnings remain denied                                                                                                                    |
 
 ---
 
@@ -119,4 +119,4 @@ CI runs.
 5. **Rendered visual evidence is partial:** transcript viewer, modals, error
    and focused states have no captures; the 2026-10-31 polish slice adds
    About, bottom-nav, delete-confirmation, forced-colours and theme captures
-   (pending CI).
+   (verified: PR #147).

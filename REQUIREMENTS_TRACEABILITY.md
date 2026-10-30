@@ -15,12 +15,12 @@ ubuntu/windows/macos: `format` (`prettier --check .`), `lint`
 `check:orphans`, and the test suite (`vitest run` — 31 `*.test.ts(x)` files
 under `src/`; the pass count is taken from each CI run).
 
-| Gate                            | State                                                                                                                                                    |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `typecheck` / `lint` / `format` | ✅ green (lint 656 → 0 in slices B-4…B-7)                                                                                                                |
-| `check:orphans`                 | ✅ green (count per CI run; 119 at the B-7 baseline)                                                                                                     |
-| Tests                           | ✅ green as of the last `main` run — 31 `*.test.ts(x)` files under `src/` (86 tests was the 2026-10-23 count); the 2026-10-31 polish slice is pending CI |
-| CodeQL code scanning            | ✅ 0 open — hardening complete (D-409); residual SSRF alerts dismissed with the D-420 rationale                                                          |
+| Gate                            | State                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `typecheck` / `lint` / `format` | ✅ green (lint 656 → 0 in slices B-4…B-7)                                                                                |
+| `check:orphans`                 | ✅ green (count per CI run; 119 at the B-7 baseline)                                                                     |
+| Tests                           | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files under `src/` (86 tests was the 2026-10-23 count) |
+| CodeQL code scanning            | ✅ 0 open — hardening complete (D-409); residual SSRF alerts dismissed with the D-420 rationale                          |
 
 A requirement may only be marked Verified when the gate covering it is green on
 the PR that claims it (guide §9).
@@ -86,7 +86,7 @@ the PR that claims it (guide §9).
 | ----- | -------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | R-6.1 | A new APK updates an already-installed copy                                | `android/app/build.gradle` signing configs                         | 🟢 signed release verified (Q-002 resolved, run `40129841250` `signed=true`; `v3.1.1` ships signed APKs); update-in-place on hardware = A-3 (pending device) |
 | R-6.2 | `versionCode` is derived and monotonically increasing                      | `android/app/build.gradle`                                         | 🟢 CI run `39566612127` logged `versionName=3.1.0 versionCode=30100` (3.1.1 derives 30101)                                                                   |
-| R-6.3 | Launcher icons and splash match the web brand                              | `scripts/generate-brand-assets.mjs`                                | ✅ asset validation in `npm run assets:brand`; favicon/maskable now copied from the canonical mark (2026-10-31 slice, pending CI)                            |
+| R-6.3 | Launcher icons and splash match the web brand                              | `scripts/generate-brand-assets.mjs`                                | ✅ asset validation in `npm run assets:brand`; favicon/maskable copied from the canonical mark (verified on PR #147)                                         |
 | R-6.4 | CI enforces format, lint (warnings denied), orphan, typecheck, test, build | `.github/workflows/ci.yml`                                         | 🟢 CI run `39566612176` green on Linux + Windows + macOS; format enforced (B-3, D-407) and lint burned down 656 → **0** (B-7, Q-005 resolved)                |
 | R-6.5 | Releases are published from a semver tag with notes + checksums            | `.github/workflows/release.yml`, `.github/workflows/build-apk.yml` | 🟢 `v3.1.1` released from the tag: CHANGELOG body + signed APKs + `APK-SHA256SUMS.txt` (run `40960758092`)                                                   |
 | R-6.6 | `main` is protected; merges require the authoritative checks               | GitHub branch protection, `.ci-required.txt`                       | enforced on `Perchemop/VellumScribe` (D-415); private vulnerability reporting enabled — config-enforced, no automated test                                   |
