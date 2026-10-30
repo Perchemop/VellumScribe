@@ -257,7 +257,6 @@ export const SimpleSettingsPanel: React.FC = () => {
                   </button>
                 </div>
             )}
-          </>
         )}
       </div>
       <div className="p-5 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-900/40">
