@@ -66,10 +66,9 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   `AudioRecordingModal` show a plain-language notice with a usable fallback
   (gallery/upload or device settings) instead of a generic failure. Covered by
   `src/lib/permissionFailure.test.ts`.
-- **Store banner PNG (m-5):** added `@resvg/resvg-js` devDependency,
-  `scripts/rasterize-banner.mjs`, and committed
-  `metadata/fdroid/feature-graphic.png` (1024×500) for store submissions; Q-022
-  resolved.
+- **Store banner PNG (m-5):** added `scripts/rasterize-banner.mjs` using
+  `rsvg-convert`, and committed `metadata/fdroid/feature-graphic.png`
+  (1024×500) for store submissions; Q-022 resolved.
 
 ### Removed
 
