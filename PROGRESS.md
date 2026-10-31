@@ -22,11 +22,11 @@ Append here for every slice; never rewrite history.
 | Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                |
 
 **Status sentence:** the app is released through `v3.1.1` (signed real + stub
-APKs attached to the GitHub Release). The active work is the 2026-10-31 4.0.0
-polish slice — design-audit fixes (M-3, m-1…m-4, m-6, m-7), dead-code and
-dependency removal, and wider rendered evidence — present in the working tree
-and **pending `ci.sh` verification**. Still open: the raster store banner PNG
-(m-5, owner decision), permission-denied UX for camera/mic/location, and the
+APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
+(design-audit M-3, m-1…m-4, m-6, m-7, dead-code/dependency removal and wider
+rendered evidence) is **merged and CI-verified** (PR #147). The camera/mic
+permission-denied copy is in the working tree **pending `ci.sh` verification**.
+Still open: the raster store banner PNG (m-5, owner decision) and the
 on-hardware proofs in `docs/qc/on-device-proof-3.1.1.md`.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
@@ -121,8 +121,26 @@ Verified on CI (PR #147, run `41138375751` on three OSes, visual job
   surface).
 
 Still open, honestly: **m-5** (a raster 1024×500 store banner PNG — needs an
-SVG-rasteriser dependency or an external tool, an owner decision) and the
-**permission-denied UI** for camera/mic/location (e2e audit §6).
+SVG-rasteriser dependency or an external tool, an owner decision).
+
+---
+
+## 2026-10-31 — Camera and microphone permission-denied UX
+
+Pending `ci.sh` verification.
+
+- **One classifier, two surfaces.** `src/lib/permissionFailure.ts` maps
+  `NotAllowedError` / `PermissionDeniedError` / `SecurityError` to `denied`
+  and `NotFoundError` / `DevicesNotFoundError` to `not-found`.
+- **Camera:** `OcrScannerModal` shows a plain-language notice for a blocked
+  viewfinder (with the gallery/upload fallback) and for a missing camera;
+  Capacitor's permission denial no longer falls through to a silent file-input
+  click.
+- **Microphone:** `AudioRecordingModal` explains a blocked or missing
+  microphone and points at the upload fallback, instead of surfacing a raw
+  browser error.
+- **Tests:** `src/lib/permissionFailure.test.ts` covers classification and each
+  message, so the copy cannot drift away from the error names.
 
 ---
 

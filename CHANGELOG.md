@@ -61,6 +61,11 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   onto the note.
 - **Last ring-less control (audit S-1 family):** the mobile sort `<select>` in
   the notes list shows a keyboard focus ring and carries an accessible name.
+- **Camera and microphone denial are explained:** `src/lib/permissionFailure.ts`
+  classifies blocked and missing-device errors, and both `OcrScannerModal` and
+  `AudioRecordingModal` show a plain-language notice with a usable fallback
+  (gallery/upload or device settings) instead of a generic failure. Covered by
+  `src/lib/permissionFailure.test.ts`.
 
 ### Removed
 
@@ -72,8 +77,7 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
 Still open from the design audit: the raster 1024×500 store banner PNG (m-5 —
 needs an SVG-rasteriser dependency or an external tool; owner decision, recorded
-as Q-022) and dedicated camera/microphone permission-denied copy (location is
-done). CI verification for this slice is pending.
+as Q-022). CI verification for this slice is pending.
 
 ## [3.1.1] - 2026-10-30
 

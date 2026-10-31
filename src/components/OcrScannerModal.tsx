@@ -24,6 +24,7 @@ import { useModalBackHandler } from '../lib/modalBackStack';
 import { generatePrefixedId } from '../lib/uuid';
 import { AppLogger } from '../lib/logger';
 import { asErrorLike } from '../lib/errorLike';
+import { classifyPermissionFailure, cameraPermissionMessage } from '../lib/permissionFailure';
 
 interface OcrScannerModalProps {
   noteId: number;
@@ -85,9 +86,7 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         e
       );
       setCameraActive(false);
-      setCameraError(
-        'Live viewfinder unavailable. Click "Take Photo with Camera" below to capture using your device camera.'
-      );
+      setCameraError(cameraPermissionMessage(classifyPermissionFailure(e)));
     }
   };
 
@@ -144,9 +143,20 @@ export const OcrScannerModal: React.FC<OcrScannerModalProps> = ({
         'Capacitor camera failed or dismissed, falling back to input capture:',
         err
       );
-      // If permission was denied or cancelled, try native file capture input
-      if (nativeFileInputRef.current) {
-        nativeFileInputRef.current.click();
+      const failure = classifyPermissionFailure(err);
+      const isPermission =
+        failure === 'denied' ||
+        /permission/i.test(String(err?.message || '')) ||
+        String(err?.code || '') === 'PERMISSION_DENIED';
+      if (isPermission) {
+        setCameraError(
+          'Camera permission was denied. Choose an image from your gallery below or grant access in your device settings.'
+        );
+      } else {
+        // Fall back to file input for user cancellation or other errors
+        if (nativeFileInputRef.current) {
+          nativeFileInputRef.current.click();
+        }
       }
     }
   };

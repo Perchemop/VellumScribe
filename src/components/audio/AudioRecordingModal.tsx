@@ -9,6 +9,10 @@ import { TranscriptionProgressCard } from '../TranscriptionProgressCard';
 import { describeAudioImport } from '../../lib/audioImportNotices';
 import { AppLogger } from '../../lib/logger';
 import { asErrorLike } from '../../lib/errorLike';
+import {
+  classifyPermissionFailure,
+  microphonePermissionMessage,
+} from '../../lib/permissionFailure';
 
 interface AudioRecordingModalProps {
   noteId: number;
@@ -100,7 +104,12 @@ export const AudioRecordingModal: React.FC<AudioRecordingModalProps> = ({
       }, 500);
     } catch (_err) {
       const err = asErrorLike(_err);
-      setErrorMessage(err?.message || 'Could not access microphone.');
+      const failure = classifyPermissionFailure(err);
+      setErrorMessage(
+        failure === 'unknown'
+          ? err?.message || microphonePermissionMessage(failure)
+          : microphonePermissionMessage(failure)
+      );
       setIsRecording(false);
       setMode('idle');
     }
