@@ -153,11 +153,10 @@ the heraldry-artist coexistence is a legal judgement, not an agent's.
 **Q-022. Store-banner rasterisation (design audit m-5).**
 `metadata/fdroid/feature-graphic.svg` exists (SVG source, 1024×500) but stores
 accept PNG/JPEG banners only.
-**Decision (2026-10-31):** add `@resvg/resvg-js` devDependency and generate
-`metadata/fdroid/feature-graphic.png` via `scripts/rasterize-banner.mjs`
-(`npm run rasterize:banner`). The PNG is now committed (rasterised from the SVG
-with `rsvg-convert` on 2026-10-31) and will stay in sync with the SVG via the
-script/CI.
+**Decision (2026-10-31):** generate `metadata/fdroid/feature-graphic.png` via
+`scripts/rasterize-banner.mjs` (`npm run rasterize:banner`), which uses the
+system `rsvg-convert` tool. The PNG is now committed (rasterised from the SVG
+on 2026-10-31) and will stay in sync with the SVG via the script.
 
 **Q-020. Corrections to the local `guide.md` (raised by the 2026-10-27 review,
 owner-deferred).** Three spots in the local-only guide are inaccurate; agents
