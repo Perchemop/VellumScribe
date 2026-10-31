@@ -362,3 +362,110 @@ test('stored theme is applied before first paint', async ({ page }) => {
   expect(dark.themeColor).toBe('#121215');
   await settle(page);
 });
+
+test('empty state in dark mode', async ({ page, context }) => {
+  await context.clearCookies();
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('omninote_dark_mode_v1', 'true');
+    } catch {}
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+      localStorage.setItem('vellumscribe_splash_seen_v1', 'true');
+    } catch {}
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' });
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/empty-state-dark.png`, fullPage: true });
+  console.log(`captured ${OUT}/empty-state-dark.png`);
+});
+
+test('settings — diagnostics tab in dark mode', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('omninote_dark_mode_v1', 'true');
+    } catch {}
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+    } catch {}
+  });
+  await page.goto(BASE);
+  await settle(page);
+
+  await page.locator('#nav-settings-view-btn').click();
+  await settle(page);
+  await page.locator('#settings-mode-advanced').click({ timeout: 10000 });
+  await page.locator('#subtab-diagnostics-btn').click({ timeout: 10000 });
+  await page.locator('#panel-diagnostics').waitFor({ state: 'visible', timeout: 10000 });
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/settings-diagnostics-dark.png`, fullPage: true });
+
+  expect(errors, `settings must load without errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
+test('note editor in dark mode with phone viewport', async ({ page }) => {
+  // The "New Note" button is visible at >= 640px (sm breakpoint), so use width 640
+  // which gives us a phone-width with header controls visible.
+  await page.setViewportSize({ width: 640, height: 844 });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('omninote_dark_mode_v1', 'true');
+    } catch {}
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+    } catch {}
+  });
+  await page.goto(BASE);
+  await settle(page);
+
+  await page.locator('#header-new-note-dropdown-btn').click();
+  await page.locator('#note-editor-container').waitFor({ state: 'visible', timeout: 15000 });
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/note-editor-dark-phone.png`, fullPage: false });
+  console.log(`captured ${OUT}/note-editor-dark-phone.png`);
+});
+
+test('focused state on editor body input', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('vellumscribe_onboarding_completed_v1', 'true');
+    } catch {}
+  });
+  await page.goto(BASE);
+  await settle(page);
+
+  // Create a note first
+  await page.locator('#header-new-note-dropdown-btn').click();
+  await page.locator('#note-editor-container').waitFor({ state: 'visible', timeout: 15000 });
+  await settle(page);
+
+  // Focus the body textarea (has aria-label="Note body")
+  const bodyInput = page.getByLabel('Note body').first();
+  await bodyInput.focus();
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/editor-focus-body.png`, fullPage: false });
+
+  // Check focus ring via getComputedStyle
+  const hasFocusRing = await page.evaluate(() => {
+    const el = document.querySelector('[aria-label="Note body"]');
+    if (!el) return false;
+    const outline = getComputedStyle(el).outline;
+    const boxShadow = getComputedStyle(el).boxShadow;
+    return (outline !== 'none' && outline.length > 4) || (boxShadow ?? '').includes('ring');
+  });
+
+  expect(errors, `editor must load without errors:\n${errors.join('\n')}`).toEqual([]);
+  console.log(
+    `captured ${OUT}/editor-focus-body.png`,
+    hasFocusRing ? '(focus ring detected)' : '(no focus ring)'
+  );
+});
