@@ -121,8 +121,8 @@ Verified on CI (PR #147, run `41138375751` on three OSes, visual job
   theme test (stored preference ⇒ `<html>` class + `theme-color` + splash
   surface).
 
-Still open, honestly: **m-5** (a raster 1024×500 store banner PNG — needs an
-SVG-rasteriser dependency or an external tool, an owner decision).
+Still open, honestly: on-hardware a11y spot-check (hardware-blocked per
+`docs/qc/on-device-proof-3.1.1.md`).
 
 ---
 

@@ -20,6 +20,9 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   pre-first-paint theme test (a stored light/dark preference must apply the
   `<html>` class, `theme-color` and the splash surface). Verified green on
   PR #147 (all required checks, merged to `main` as `8b66bfb`).
+  **Extended** in PR #152 with: empty state in dark mode, settings → Diagnostics
+  dark mode, editor dark mode at 640px phone viewport, and focused state capture
+  verifying focus rings on editor body input.
 - **Contract tests** for the audit fixes: `src/design/brandContract.test.ts`
   (web icons stay byte-identical copies of `assets/brand/`, the first-paint
   bootstrap stays in lockstep with `AppContext`, and no UI source may open a
