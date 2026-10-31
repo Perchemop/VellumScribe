@@ -409,7 +409,9 @@ test('settings — diagnostics tab in dark mode', async ({ page }) => {
 });
 
 test('note editor in dark mode with phone viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+  // The "New Note" button is visible at >= 640px (sm breakpoint), so use width 640
+  // which gives us a phone-width with header controls visible.
+  await page.setViewportSize({ width: 640, height: 844 });
   await page.addInitScript(() => {
     try {
       localStorage.setItem('omninote_dark_mode_v1', 'true');
