@@ -152,16 +152,12 @@ the heraldry-artist coexistence is a legal judgement, not an agent's.
 
 **Q-022. Store-banner rasterisation (design audit m-5).**
 `metadata/fdroid/feature-graphic.svg` exists (SVG source, 1024×500) but stores
-accept PNG/JPEG banners only, and the repository has no SVG rasteriser: the only
-generated raster assets are the Android launcher/splash PNGs from
-`scripts/generate-brand-assets.mjs`, which draws the mark with its own coverage
-rasteriser and has no font, so it cannot render the banner's wordmark.
-**Decision needed:** add a rasteriser dependency (for example
-`@resvg/resvg-js`) and generate `metadata/fdroid/feature-graphic.png` in CI, or
-rasterise the SVG once with an external tool and commit the PNG (a binary asset
-with no regeneration path). Either way it is a one-time store-submission asset,
-independent of the app build. Deferred rather than guessed — agents must not
-fabricate a banner PNG or invent a fake rasteriser.
+accept PNG/JPEG banners only.
+**Decision (2026-10-31):** add `@resvg/resvg-js` devDependency and generate
+`metadata/fdroid/feature-graphic.png` via `scripts/rasterize-banner.mjs`
+(`npm run rasterize:banner`). The PNG is now committed (rasterised from the SVG
+with `rsvg-convert` on 2026-10-31) and will stay in sync with the SVG via the
+script/CI.
 
 **Q-020. Corrections to the local `guide.md` (raised by the 2026-10-27 review,
 owner-deferred).** Three spots in the local-only guide are inaccurate; agents

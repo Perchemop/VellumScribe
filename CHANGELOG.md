@@ -66,6 +66,10 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   `AudioRecordingModal` show a plain-language notice with a usable fallback
   (gallery/upload or device settings) instead of a generic failure. Covered by
   `src/lib/permissionFailure.test.ts`.
+- **Store banner PNG (m-5):** added `@resvg/resvg-js` devDependency,
+  `scripts/rasterize-banner.mjs`, and committed
+  `metadata/fdroid/feature-graphic.png` (1024×500) for store submissions; Q-022
+  resolved.
 
 ### Removed
 
@@ -75,9 +79,8 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   its version field is back in step with `package.json` (3.1.0 → 3.1.1)
   (audit m-3).
 
-Still open from the design audit: the raster 1024×500 store banner PNG (m-5 —
-needs an SVG-rasteriser dependency or an external tool; owner decision, recorded
-as Q-022). CI verification for this slice is pending.
+Still open from the design audit: on-hardware a11y spot-check (pending device
+build). CI verification for this slice is pending.
 
 ## [3.1.1] - 2026-10-30
 
