@@ -26,6 +26,7 @@
     "check:orphans": "node scripts/check-orphaned-files.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
     "assets:brand": "node scripts/generate-brand-assets.mjs",
+    "rasterize:banner": "node scripts/rasterize-banner.mjs",
     "verify": "npm run typecheck && npm run lint && npm run check:orphans && npm run test",
     "setup:whisper": "bash scripts/setup-whisper-third-party.sh"
   },
@@ -58,6 +59,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@resvg/resvg-js": "^2.7.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
     "@types/react": "^19.2.18",

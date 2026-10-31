@@ -25,9 +25,10 @@ Append here for every slice; never rewrite history.
 APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
 (design-audit M-3, m-1…m-4, m-6, m-7, dead-code/dependency removal and wider
 rendered evidence) is **merged and CI-verified** (PR #147). The camera/mic
-permission-denied copy is in the working tree **pending `ci.sh` verification**.
-Still open: the raster store banner PNG (m-5, owner decision) and the
-on-hardware proofs in `docs/qc/on-device-proof-3.1.1.md`.
+permission-denied UX with shared classifier and tests is **merged and
+CI-verified** (PR #149). The store banner PNG (m-5) is generated and committed
+with `@resvg/resvg-js`. Still open: the on-hardware proofs in
+`docs/qc/on-device-proof-3.1.1.md`.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
 `tsc`, `vitest`, or `npm ci` runs on this machine. Verify changes with
@@ -127,7 +128,7 @@ SVG-rasteriser dependency or an external tool, an owner decision).
 
 ## 2026-10-31 — Camera and microphone permission-denied UX
 
-Pending `ci.sh` verification.
+Verified on CI (PR #149, run `41138375751` on three OSes, merged as `a98a366`).
 
 - **One classifier, two surfaces.** `src/lib/permissionFailure.ts` maps
   `NotAllowedError` / `PermissionDeniedError` / `SecurityError` to `denied`
