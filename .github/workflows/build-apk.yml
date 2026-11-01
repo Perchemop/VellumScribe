@@ -203,7 +203,7 @@ jobs:
           ./gradlew assembleDebug assembleRelease --stacktrace
 
       - name: Upload APK Artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: VellumScribe-Android-APKs-${{ steps.whisper.outputs.mode }}
           path: |
@@ -214,7 +214,7 @@ jobs:
 
       - name: Upload ProGuard mapping files
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: VellumScribe-ProGuard-Mappings-${{ steps.whisper.outputs.mode }}
           path: |
