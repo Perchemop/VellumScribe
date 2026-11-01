@@ -3,23 +3,23 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-01
 
 ---
 
 ## Current state
 
-| Signal           | State                                                                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run verify` | ✅ **GREEN on CI for the 2026-10-31 polish slice** — `verify` ×3 OS (run `41138375751`), `format`, all security scans green; PR #147 merged to `main` (`8b66bfb`).                                         |
-| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                           |
-| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1. |
-| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                |
-| Working tree     | clean; slice merged to `main` (`8b66bfb`)                                                                                                                                                                  |
-| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                            |
-| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**.                                                                                  |
-| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                  |
-| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                |
+| Signal           | State                                                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run verify` | ✅ **GREEN on CI** — `verify` ×3 OS (run `41138375751`), `format`, security scans green; PR #147 merged to `main` (`8b66bfb`); PR #154 native Whisper fix merged (`5b69f20`).                                            |
+| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                         |
+| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.               |
+| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                              |
+| Working tree     | clean; main at `72695d5` (PR #155 docs, PR #154 native Whisper fix merged `5b69f20`)                                                                                                                                     |
+| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                                          |
+| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful. |
+| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                |
+| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                              |
 
 **Status sentence:** the app is released through `v3.1.1` (signed real + stub
 APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
@@ -27,8 +27,12 @@ APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
 rendered evidence) is **merged and CI-verified** (PR #147). The camera/mic
 permission-denied UX with shared classifier and tests is **merged and
 CI-verified** (PR #149). The store banner PNG (m-5) is generated and committed
-with `@resvg/resvg-js`. Still open: the on-hardware proofs in
-`docs/qc/on-device-proof-3.1.1.md`.
+with `@resvg/resvg-js`. The native Whisper `INFER_BEGIN` crash is fixed and
+CI-verified (PR #154 merged `5b69f20`); signed REAL APK with the fix is
+available from Actions run `41258088806` (`versionName=3.1.1
+versionCode=30101 signed=true`) and main build `41258778115` succeeded.
+Still open: on-hardware re-test of the fixed native path per
+`docs/qc/on-device-proof-3.1.1.md` Part 2/3 and on-hardware a11y spot-check.
 
 **Verification protocol (CI-first, guide §4):** no `npm test`, `npm run build`,
 `tsc`, `vitest`, or `npm ci` runs on this machine. Verify changes with
