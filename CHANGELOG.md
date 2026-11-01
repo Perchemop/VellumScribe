@@ -72,6 +72,23 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 - **Store banner PNG (m-5):** added `scripts/rasterize-banner.mjs` using
   `rsvg-convert`, and committed `metadata/fdroid/feature-graphic.png`
   (1024×500) for store submissions; Q-022 resolved.
+- **Native Whisper no longer kills the app at the first inference.** The
+  on-device trail ended at `INFER_BEGIN` because three defects compounded:
+  (1) `nativeInit` left `flash_attn` at its new `true` default, so a CPU-only
+  device built the GPU-oriented flash-attention graph (`ggml_flash_attn_ext`);
+  (2) `nativeTranscribe` set `detect_language = true` for `"auto"`, which makes
+  `whisper_full` run language detection only and return before transcribing;
+  and (3) a C++ exception escaping the `extern "C"` JNI boundary calls
+  `std::terminate` → `abort()`. The JNI now forces `flash_attn = false` for the
+  CPU build, uses the documented auto-language parameters, wraps every whisper
+  call in `try`/`catch` so `std::bad_alloc` and engine errors arrive as normal
+  Java exceptions, installs a signal handler that appends the faulting signal
+  and a native backtrace to the existing breadcrumb file, and routes
+  whisper.cpp's log stream to logcat. `TranscriptionWorker` gains a memory
+  headroom gate (fails honestly with `OFFLINE_AI_OUT_OF_MEMORY` instead of a
+  doomed run) and catches `Throwable` so engine `Error`s become failure
+  results, and `OfflineAiManager.mapErrorCodeToUserMessage` keeps the worker's
+  specific sentences and maps the new codes.
 
 ### Removed
 
