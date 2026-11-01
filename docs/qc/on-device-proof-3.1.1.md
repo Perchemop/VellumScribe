@@ -9,11 +9,14 @@ item is enough. Two builds are used, both **v3.1.1**, both signed:
 > parameters, C++ exceptions caught at the JNI boundary, a native signal
 > handler writing `NATIVE_CRASH | signal=… addr=…` plus a backtrace into this
 > breadcrumb file, and a memory headroom gate. Re-run Part 2 and Part 3 with a
-> **newly built** APK (push to `main` after the fix, or dispatch
-> _Build Android APK_ with mode `real`). If the app still closes, the banner
-> will now name the exact failing stage **and** the native signal/frames.
-> A `FAIL_LOW_MEMORY` breadcrumb means the device genuinely lacked RAM — the
-> message tells the user to free memory, it is not a silent failure.
+> **newly built** APK. Build that carries the fix: Actions →
+> _Build & Package Android APK (real)_ → run `41258088806` → artifact
+> `VellumScribe-Android-APKs-real` (`versionName=3.1.1 versionCode=30101
+> signed=true`, so it installs in place over the current copy). If the app
+> still closes, the banner will now name the exact failing stage **and** the
+> native signal/frames. A `FAIL_LOW_MEMORY` breadcrumb means the device
+> genuinely lacked RAM — the message tells the user to free memory, it is not a
+> silent failure.
 
 | Build    | Where                       | File                                                 | Size     | Purpose                                               |
 | -------- | --------------------------- | ---------------------------------------------------- | -------- | ----------------------------------------------------- |
