@@ -31,6 +31,21 @@ public class WhisperEngine {
     }
 
     /**
+     * Point the native crash trail at the same breadcrumb file the Java worker
+     * writes to. On a SIGSEGV/SIGABRT inside libwhisper the native signal
+     * handler appends the signal and a backtrace there, so the next launch can
+     * show exactly where inference died. Safe to call repeatedly; never throws.
+     */
+    public static void setCrashLogPath(String absolutePath) {
+        if (!isNativeLibraryLoaded) return;
+        try {
+            nativeSetCrashLogPath(absolutePath);
+        } catch (UnsatisfiedLinkError | Exception e) {
+            Log.w(TAG, "Could not set native crash log path: " + e.getMessage());
+        }
+    }
+
+    /**
      * Probes whether the compiled native library contains an active GGML tensor execution runtime.
      * Prevents misleading capability claims when only a non-inferencing stub is linked.
      */
@@ -107,4 +122,5 @@ public class WhisperEngine {
     private static native String nativeTranscribe(long contextPtr, float[] pcmData, String language, int nThreads);
     private static native void nativeFree(long contextPtr);
     private static native boolean nativeHasTensorRuntime();
+    private static native void nativeSetCrashLogPath(String path);
 }

@@ -28,7 +28,7 @@ import java.util.TimeZone;
  */
 public final class CrashBreadcrumbs {
     private static final String TAG = "CrashBreadcrumbs";
-    private static final String FILE_NAME = "transcription_breadcrumbs.txt";
+    public static final String FILE_NAME = "transcription_breadcrumbs.txt";
     /** Keep the file small: drop the oldest entries when it exceeds this size. */
     private static final long MAX_BYTES = 16 * 1024;
 
@@ -86,6 +86,12 @@ public final class CrashBreadcrumbs {
             Log.w(TAG, "Failed to read breadcrumbs", e);
             return null;
         }
+    }
+
+    /** Absolute path of the breadcrumb file (so native code can append to it). */
+    public static String path(Context context) {
+        if (context == null) return null;
+        return file(context).getAbsolutePath();
     }
 
     private static File file(Context context) {

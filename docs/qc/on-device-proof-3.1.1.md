@@ -4,6 +4,17 @@ Owner-executed on a physical Android device (unblocks A-3 and R-3/C-5).
 Every step records what to note down; "Works / Broken (+ banner text)" per
 item is enough. Two builds are used, both **v3.1.1**, both signed:
 
+> **2026-11-01 update (INFER_BEGIN crash fix):** the native Whisper path was
+> fixed — `flash_attn` forced off for CPU builds, correct auto-language
+> parameters, C++ exceptions caught at the JNI boundary, a native signal
+> handler writing `NATIVE_CRASH | signal=… addr=…` plus a backtrace into this
+> breadcrumb file, and a memory headroom gate. Re-run Part 2 and Part 3 with a
+> **newly built** APK (push to `main` after the fix, or dispatch
+> _Build Android APK_ with mode `real`). If the app still closes, the banner
+> will now name the exact failing stage **and** the native signal/frames.
+> A `FAIL_LOW_MEMORY` breadcrumb means the device genuinely lacked RAM — the
+> message tells the user to free memory, it is not a silent failure.
+
 | Build    | Where                       | File                                                 | Size     | Purpose                                               |
 | -------- | --------------------------- | ---------------------------------------------------- | -------- | ----------------------------------------------------- |
 | **REAL** | Actions → run `40853385643` | `VellumScribe-Android-APKs-real` → `app-release.apk` | ~76.5 MB | full app incl. native Whisper                         |

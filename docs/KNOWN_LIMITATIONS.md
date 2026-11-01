@@ -62,3 +62,23 @@ Then NDK-build a **real** APK and smoke-test offline transcription on device.
 - **In-place updates require a stable signing key.** A newly downloaded APK can replace an installed copy only when it shares the same `applicationId`, the same signing certificate, and a `versionCode` ≥ the installed one. If the key changes, Android refuses the install ("App not installed") until the old app is uninstalled.
 - **Bump the version before releasing.** `versionCode` is derived from `package.json` (`major*10000 + minor*100 + patch`); leaving the version unchanged still installs, but bumping is the reliable way to force an upgrade prompt.
 - Debug and release builds are both signed with the configured key (when present) so a sideloaded debug build stays upgradable to a release build.
+
+## 9. Open Dependabot alerts (dev-only, not shipped)
+
+Two `medium` npm advisories are open on `main`: `minimatch` (GHSA-g3hv-75wg-m249,
+fixed in 11.0.1) and `glob` (GHSA-3g3m-2fjr-6pw4).
+
+- **They are dev-only and transitive** — `minimatch` comes in through
+  `eslint` / `@typescript-eslint/typescript-estree` / `@eslint/config-array`,
+  `glob` through `rimraf`. Neither is imported by the app bundle, so neither is
+  present in the shipped APK or reachable by end users.
+- **Not exploitable here.** Both advisories need an attacker-supplied glob
+  pattern; a linter and a cleanup script never receive one from untrusted input.
+- **Why not force the fix now:** the only patched `minimatch` is a **major**
+  bump (10.x → 11.x). Forcing it through `overrides` risks breaking the
+  `eslint`-based lint gate (a known incompatibility with the v11 `makeRe`
+  contract). The clean remediation is the upstream parent bumps, which
+  Dependabot raises as alerts turn into PRs; merge those when green.
+- **Lockfile constraint:** the lockfile cannot be regenerated on this machine
+  (`npm install` is banned), so hand-forcing versions through `overrides` is not
+  a safe option.

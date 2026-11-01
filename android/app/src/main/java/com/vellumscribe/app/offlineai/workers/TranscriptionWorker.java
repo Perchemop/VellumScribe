@@ -142,6 +142,31 @@ public class TranscriptionWorker extends Worker {
         return defaultThreads;
     }
 
+    /**
+     * Free memory reported by the OS, in MiB, or -1 when unavailable.
+     */
+    private long availableMemoryMb() {
+        try {
+            ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+            if (am != null) {
+                ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+                am.getMemoryInfo(mi);
+                return mi.availMem / (1024 * 1024);
+            }
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    /**
+     * whisper-tiny needs roughly 200-300 MB of native memory for the model +
+     * compute buffers. Under that headroom the native allocator throws, and a
+     * throw that escapes the JNI boundary used to terminate the process. Now
+     * that the native layer reports the failure as a normal Java exception, we
+     * still refuse up front when the device is clearly too tight, so the user
+     * gets an honest message instead of a slow, doomed run.
+     */
+    private static final long MIN_INFERENCE_MEMORY_MB = 160L;
+
     @NonNull
     @Override
     public Result doWork() {
@@ -160,6 +185,10 @@ public class TranscriptionWorker extends Worker {
         CrashBreadcrumbs.clear(context);
         CrashBreadcrumbs.write(context, "JOB_START",
             "job=" + jobId + " model=" + modelId + " lang=" + language + " startChunk=" + inputStartChunk);
+
+        // Route native faults (SIGSEGV/SIGABRT inside libwhisper) into the same
+        // breadcrumb file, so a hard crash is diagnosable on the next launch.
+        WhisperEngine.setCrashLogPath(CrashBreadcrumbs.path(context));
 
         try {
             setForegroundAsync(createForegroundInfo("Preparing offline speech recognition..."));
@@ -280,6 +309,19 @@ public class TranscriptionWorker extends Worker {
             boolean preferBattery = getInputData().getBoolean("prefer_battery_over_speed", false);
             int nThreads = determineOptimalThreadCount(preferBattery);
 
+            long availMb = availableMemoryMb();
+            if (availMb >= 0 && availMb < MIN_INFERENCE_MEMORY_MB) {
+                CrashBreadcrumbs.write(context, "FAIL_LOW_MEMORY", "availMb=" + availMb);
+                engine.release();
+                if (db != null && db.isOpen()) db.close();
+                return Result.failure(new Data.Builder()
+                    .putString("error_code", "OFFLINE_AI_OUT_OF_MEMORY")
+                    .putString("error_message",
+                        "Not enough free memory for offline transcription (" + availMb + " MB available). Close other apps or free up storage, then try again.")
+                    .build());
+            }
+            CrashBreadcrumbs.write(context, "MEMORY_OK", "availMb=" + availMb + " threads=" + nThreads);
+
             boolean hadSpeechActivity = false;
             boolean engineUnavailable = false;
 
@@ -335,11 +377,27 @@ public class TranscriptionWorker extends Worker {
                             if (fullTranscript.length() > 0) fullTranscript.append(" ");
                             fullTranscript.append(chunkText.trim());
                         }
-                    } catch (Exception ex) {
+                    } catch (Throwable ex) {
+                        // Throwable, not Exception: the native layer now raises
+                        // java.lang.OutOfMemoryError (and IllegalStateException)
+                        // for native failures, and those are Errors. Re-throwing
+                        // would kill the worker process; reporting is honest.
                         Log.w(TAG, "Error processing chunk " + currentChunk, ex);
-                        if (ex.getMessage() != null && ex.getMessage().contains("OFFLINE_AI_ENGINE_UNAVAILABLE")) {
+                        String msg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                        if (msg.contains("OFFLINE_AI_ENGINE_UNAVAILABLE")) {
                             engineUnavailable = true;
                             break;
+                        }
+                        if (ex instanceof OutOfMemoryError
+                                || msg.contains("OFFLINE_AI_OUT_OF_MEMORY")) {
+                            CrashBreadcrumbs.write(context, "FAIL_LOW_MEMORY", "chunk=" + currentChunk);
+                            engine.release();
+                            if (db != null && db.isOpen()) db.close();
+                            return Result.failure(new Data.Builder()
+                                .putString("error_code", "OFFLINE_AI_OUT_OF_MEMORY")
+                                .putString("error_message",
+                                    "Not enough free memory for offline transcription. Close other apps or free up storage, then try again.")
+                                .build());
                         }
                     }
                 }
@@ -431,14 +489,18 @@ public class TranscriptionWorker extends Worker {
                 .putInt("total_chunks", totalChunks)
                 .build());
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // Throwable: Errors (OutOfMemoryError, UnsatisfiedLinkError, …) must
+            // become a failure result, not a dead process.
             Log.e(TAG, "TranscriptionWorker execution failed", e);
-            CrashBreadcrumbs.write(context, "FAIL_RUNTIME_ERROR", e.getMessage());
+            CrashBreadcrumbs.write(context, "FAIL_RUNTIME_ERROR",
+                e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             engine.release();
             if (db != null && db.isOpen()) db.close();
             return Result.failure(new Data.Builder()
                 .putString("error_code", "OFFLINE_AI_RUNTIME_ERROR")
-                .putString("error_message", e.getMessage())
+                .putString("error_message",
+                    e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName())
                 .build());
         } finally {
             if (chunksDir.exists()) {

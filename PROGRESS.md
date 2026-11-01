@@ -126,6 +126,42 @@ Still open, honestly: on-hardware a11y spot-check (hardware-blocked per
 
 ---
 
+## 2026-11-01 — Native Whisper crash at INFER_BEGIN fixed
+
+Device trail (`JOB_START → AUDIO_FILE_OK → MODEL_OK → ENGINE_INIT_OK →
+SEGMENTED → INFER_BEGIN`) showed the app dying inside the native inference
+call. Three compounding defects in `jni_whisper.cpp`:
+
+- **`flash_attn` left at its new `true` default.** whisper.cpp 1.9.x changed the
+  default to `true`; the JNI set `use_gpu = false` but not `flash_attn = false`,
+  so the CPU-only build built the GPU-oriented flash-attention graph.
+- **`detect_language = true` for `"auto"`.** `whisper_full_with_state` then runs
+  language detection and **returns 0 before transcribing**, so even a successful
+  run produced no text.
+- **An escaping C++ exception aborts the process.** `whisper_full` allocates
+  `std::vector`s and can throw `std::bad_alloc`; an exception crossing an
+  `extern "C"` JNI boundary calls `std::terminate` → `abort()`.
+
+Fixes, all CI-verified:
+
+- `flash_attn = false` forced for the CPU build; documented auto-language
+  parameters (`language = "auto"`, `detect_language = false`).
+- Every whisper call wrapped in `try`/`catch` — `std::bad_alloc` is reported as
+  `java.lang.OutOfMemoryError`, other exceptions as `IllegalStateException`,
+  so the worker returns a failure result instead of dying.
+- A native signal handler appends the faulting signal + backtrace to the same
+  breadcrumb file the worker uses (`NATIVE_CRASH | signal=… addr=…`), and
+  whisper.cpp's own log stream is routed to logcat.
+- `TranscriptionWorker`: memory headroom gate (`OFFLINE_AI_OUT_OF_MEMORY` with
+  an actionable message) and `catch (Throwable)` so engine `Error`s become
+  failures; `OfflineAiManager.mapErrorCodeToUserMessage` keeps the worker's
+  specific sentences and maps the new codes.
+
+Verified on CI (PR #154). The native APK build must be re-run and the device
+re-tested with `docs/qc/on-device-proof-3.1.1.md` Part 2/3.
+
+---
+
 ## 2026-10-31 — Camera and microphone permission-denied UX
 
 Verified on CI (PR #149, run `41138375751` on three OSes, merged as `a98a366`).
