@@ -423,12 +423,27 @@ ${content}`
         return 'The audio recording could not be read. The original file remains safely saved on your device.';
       case 'OFFLINE_AI_STORAGE_LOW':
         return 'Low device storage prevented transcription. Free up space on your device to continue.';
+      case 'OFFLINE_AI_OUT_OF_MEMORY':
+        return 'Not enough free memory for offline transcription. Close other apps or free up storage, then try again.';
+      case 'OFFLINE_AI_ENGINE_UNAVAILABLE':
+      case 'OFFLINE_AI_ENGINE_FAILURE':
+        return 'On-device speech recognition is not available on this device. Cloud AI or live dictation can still be used.';
       case 'OFFLINE_AI_CANCELLED':
         return 'Transcription was cancelled.';
       case 'OFFLINE_AI_UNSUPPORTED_DEVICE':
         return 'This device does not meet the minimum hardware requirements for on-device AI transcription.';
-      default:
+      default: {
+        // The Android transcription worker reports full sentences (see
+        // TranscriptionWorker: "Not enough free memory…", "Whisper model 'x' is
+        // not installed…"). Those are already user-facing, so keep them instead
+        // of replacing them with a generic fallback. Only a bare code, or a
+        // code with no detail, falls back to the generic guidance.
+        const raw = typeof code === 'string' ? code.trim() : '';
+        if (raw.length > 0 && !raw.startsWith('OFFLINE_AI_')) {
+          return raw;
+        }
         return 'Transcription could not be completed. Your recording is still safely stored on this device.';
+      }
     }
   }
 
