@@ -7,10 +7,16 @@
 #include <stdexcept>
 #include <exception>
 #include <android/log.h>
-#include <execinfo.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include "whisper.h"
+
+// bionic only declares backtrace()/backtrace_symbols_fd() in <execinfo.h> from
+// API 33 onwards, but the app targets a lower minimum. Declaring them weakly
+// keeps the build working for every API level and lets the handler fall back to
+// logging just the signal + fault address on older devices.
+extern "C" int backtrace(void ** buffer, int size) __attribute__((weak));
+extern "C" void backtrace_symbols_fd(void * const * buffer, int size, int fd) __attribute__((weak));
 
 #define TAG "WhisperJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -63,13 +69,15 @@ static void vellum_signal_handler(int sig, siginfo_t * info, void * ucontext) {
                      info != nullptr ? info->si_addr : nullptr);
     if (n > 0) vellum_append_raw(header, n);
 
-    void * frames[64];
-    int count = backtrace(frames, 64);
-    if (count > 0 && g_crash_log_path[0] != 0) {
-        int fd = open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        if (fd >= 0) {
-            backtrace_symbols_fd(frames, count, fd);
-            close(fd);
+    if (backtrace != nullptr && backtrace_symbols_fd != nullptr) {
+        void * frames[64];
+        int count = backtrace(frames, 64);
+        if (count > 0 && g_crash_log_path[0] != 0) {
+            int fd = open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            if (fd >= 0) {
+                backtrace_symbols_fd(frames, count, fd);
+                close(fd);
+            }
         }
     }
 
