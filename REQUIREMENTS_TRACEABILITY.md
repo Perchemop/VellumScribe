@@ -5,7 +5,7 @@ proves it**. A requirement with no test may not be marked Verified.
 
 Legend: ✅ automated test · 🟢 proven by an inspected CI run (not a unit test) · ⚠ implemented, untested · 🚫 blocked
 
-Last updated: 2026-10-31.
+Last updated: 2026-11-01.
 
 ## Verification gates (CI, guide §4)
 
