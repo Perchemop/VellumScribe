@@ -9,17 +9,17 @@ Append here for every slice; never rewrite history.
 
 ## Current state
 
-| Signal           | State                                                                                                                                                                                                                                                             |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run verify` | ✅ **GREEN on CI** — `verify` ×3 OS (run `41138375751`), `format`, security scans green; PR #147 merged to `main` (`8b66bfb`); PR #154 native Whisper fix merged (`5b69f20`).                                                                                     |
-| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                  |
-| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                        |
-| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                       |
-| Working tree     | slice S-1 (security-gate restore, 2026-11-12) in the working tree on top of `main` at `7b1e9a2`                                                                                                                                                                   |
-| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`) and is fixed by slice S-1 (2026-11-12). |
-| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                          |
-| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                         |
-| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                                                                       |
+| Signal           | State                                                                                                                                                                                                                                                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run verify` | ✅ **GREEN on CI** — `verify` ×3 OS (run `41138375751`), `format`, security scans green; PR #147 merged to `main` (`8b66bfb`); PR #154 native Whisper fix merged (`5b69f20`).                                                                                                                                                           |
+| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
+| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
+| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
+| Working tree     | slice S-1 merged to `main` as `1f07905` (PR #171, 2026-11-13); slice S-2 (dependency hygiene) starting                                                                                                                                                                                                                                  |
+| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
+| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
+| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
+| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                                                                                                                                             |
 
 **Status sentence:** the app is released through `v3.1.1` (signed real + stub
 APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
@@ -141,7 +141,14 @@ does not provide).
 
 Evidence:
 
-CI run: <pending>
+- CI run `43386837368` — `format` + `verify` on Linux, Windows and macOS, all
+  green on PR #171; merged to `main` as `1f07905` (2026-11-13).
+- Security Scanning run `43386837714` — the PR's diff-scoped `secret scan`,
+  green (that run alone would not prove the history is clean).
+- **Full-history audit run `43394163146`** — `Security Scanning` dispatched on
+  `main` (`workflow_dispatch`, `fetch-depth: 0`): **456 commits scanned, `no
+leaks found`**. This is the authoritative evidence that the weekly cron will
+  be green.
 
 ## 2026-10-31 — 4.0.0 polish: remaining design-audit Low items + wider rendered evidence
 
