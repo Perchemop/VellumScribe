@@ -5,6 +5,25 @@ updates:
     schedule:
       interval: 'weekly'
     open-pull-requests-limit: 10
+    groups:
+      # React requires "react" and "react-dom" to be the exact same version:
+      # react-dom has a runtime guard that throws when the two differ, and the
+      # matching @types packages must track the same release. They must never be
+      # split into separate PRs, so Dependabot bumps them together in one PR.
+      # (PR #170 bumped only "react" to 19.3.1 and broke every verify job and
+      # the visual job because react-dom stayed at 19.3.0.)
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+      # The Capacitor packages form one mobile shell and share a single
+      # migration step, so they are upgraded together rather than as separate
+      # inter-dependent PRs.
+      capacitor:
+        patterns:
+          - '@capacitor/*'
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
