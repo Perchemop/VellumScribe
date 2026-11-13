@@ -55,6 +55,13 @@ builds:
     subdir: android
     gradle:
       - assembleRelease
+    # The Capacitor web layer is generated output and is no longer committed, so a
+    # source build must run these steps here. whisper.cpp is vendored and tracked in
+    # git, so no whisper setup/network step is needed; only `npm ci` uses network.
+    prebuild: |
+      npm ci --legacy-peer-deps --no-fund --no-audit
+      npm run build:spa
+      npx cap sync android
     ndk: 26.1.10909125
     sdk: 36
     disableCMake: false

@@ -82,3 +82,19 @@ fixed in 11.0.1) and `glob` (GHSA-3g3m-2fjr-6pw4).
 - **Lockfile constraint:** the lockfile cannot be regenerated on this machine
   (`npm install` is banned), so hand-forcing versions through `overrides` is not
   a safe option.
+
+## 10. Security scanning cadence and generated assets
+
+- **The full-history secret audit is scheduled, not per-PR.** `gitleaks` audits
+  the whole repository history only when `Security Scanning` runs on the
+  `schedule` (Monday 04:00 UTC) or a manual `workflow_dispatch` invocation,
+  because that path needs a full clone (`fetch-depth: 0`). The push and
+  pull-request runs of the same job scan only the pushed commit range. A finding
+  that exists only in history is therefore caught at most a week after it is
+  introduced — or immediately by dispatching the workflow (D-427).
+- **The F-Droid source build needs network in its `prebuild` phase** for
+  `npm ci`; the recipe then runs `npm run build:spa` + `npx cap sync android`,
+  because the Capacitor web bundle under
+  `android/app/src/main/assets/public/` is generated output and is no longer
+  committed. The vendored `whisper.cpp` tree remains tracked, so no other fetch
+  is required.

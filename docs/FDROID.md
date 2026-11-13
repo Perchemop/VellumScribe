@@ -15,6 +15,25 @@ F-Droid builds apps from source on its own build servers. To publish:
 3. **F-Droid metadata** (`metadata.yml`) submitted to the fdroiddata repo.
 4. **Reproducible builds** — ProGuard/R8 minification, pinned toolchain.
 
+### Build recipe: the `prebuild` step
+
+The F-Droid recipe builds with `subdir: android` and the `assembleRelease`
+gradle task. Because the Capacitor web bundle under
+`android/app/src/main/assets/public/` is generated output and is no longer
+committed, the recipe now runs a `prebuild` step before gradle:
+
+```
+npm ci
+npm run build:spa
+npx cap sync android
+```
+
+This means `npm ci` needs network access during F-Droid's prebuild phase. No
+other build input depends on a committed bundle — the vendored `whisper.cpp`
+source tree is tracked in git and compiled from that source by the existing
+NDK/CMake configuration. `docs/BUILD_RELEASE.md` states the same rule for the
+GitHub Actions release build.
+
 ## What is already in place
 
 | Requirement                 | Status | File                                                    |

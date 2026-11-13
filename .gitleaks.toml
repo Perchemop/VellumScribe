@@ -11,9 +11,67 @@ description = "Documented example credentials and the placeholder env template"
 # `AKIAIOSFODNN7EXAMPLE` is the example access-key ID printed throughout AWS's
 # own documentation. It appears in this repository's history (commit bbe9aaa)
 # as a placeholder in an SSO migration and was never a usable credential.
+#
+# regexTarget = "line" — every regex below matches a source *shape* (a storage
+# key *name*, a test fixture call or a UI placeholder field) instead of
+# restating a key-shaped value, so this config never carries a credential-
+# shaped literal itself (guide II.29.1). None of them can match a value a real
+# credential would take.
+regexTarget = "line"
 regexes = [
   '''AKIAIOSFODNN7EXAMPLE''',
+
+  # --- Classified false positives (weekly full-history `secret scan`) --------
+  # Each entry is a triaged false-positive class and records its reason, so the
+  # allowlist can be audited rather than trusted. It must never be used to hide
+  # a real credential. Drop an entry once its class is gone from history.
+
+  # The app's own storage-key *names* — identifiers for localStorage / SQLite
+  # slots and never a credential value itself:
+  #   vellumscribe_groq_api_key_v1 + vellumscribe_deepgram_api_key_v1
+  #     (src/lib/aiSettings.ts STORAGE_KEYS constants)
+  #   vellumscribe_splash_seen_v1 (src/components/FirstTimeUserGuideModal.tsx)
+  #   previous_db_v1 (src/lib/sqlite/sqliteEngine.ts SQLite key constant — its
+  #     siblings current_db_v1 / authoritative_db_v1 are already excluded by
+  #     gitleaks' built-in stopwords, so only this one needs an entry)
+  '''vellumscribe_(?:groq|deepgram)_api_key_v1''',
+  '''vellumscribe_splash_seen_v1''',
+  '''previous_db_v1''',
+
+  # Retired in-source test fixture (src/lib/crashReporter.test.ts) — the fake
+  # Google key literal was rebuilt at runtime in ddde132, but the literal line
+  # survives in history where a source edit cannot reach it. Matches only the
+  # redaction fixture call and never a real credential.
+  '''redactSecrets\('key AIza[A-Za-z0-9_-]{20,}'\)''',
+
+  # Same file — the generic-api-key rule also fires on the submitReport test
+  # call, where the extracted value is a repository slug and not a credential.
+  '''submitReport\(report, 'ghp_token', '[^']+'\)''',
+
+  # Retired UI placeholder fixture (CloudConnectModal.tsx) — a provider's
+  # tokenPlaceholder once showed an app-password-shaped example. Guide II.29.1
+  # now requires obviously synthetic placeholders and a later refactor removed
+  # the field, but the line survives in history.
+  #
+  # Deliberately bounded: a short single-line value with the closing quote
+  # required. gitleaks 8.24.3 (pinned by gitleaks/gitleaks-action@v2) honours
+  # `regexTarget = "line"` in this top-level [allowlist] table and OR-matches
+  # every regex, and a global allowlist cannot be scoped by path — so an
+  # unbounded pattern would mask a real credential pasted into the same field.
+  '''tokenPlaceholder:\s*'[^']{1,64}'[,\s]*''',
 ]
 paths = [
   '''(^|/)\.env\.example$''',
+
+  # Vendored upstream tree (guide II.29.2) — whisper.cpp's own GitHub workflow
+  # carries ccache cache `key:` values (ggml-ci-*-cpu-low-perf) that the
+  # generic-api-key rule reads as a secret. Third-party upstream content and
+  # not ours to rewrite.
+  '''^android/app/src/main/cpp/third_party/''',
+
+  # Generated Capacitor web bundle — minified output of the app build (not
+  # hand-written source) that embeds the app's own storage-key names. The
+  # directory is untracked in this change, so this entry only needs to cover
+  # the copies already in history.
+  '''^android/app/src/main/assets/public/''',
 ]
