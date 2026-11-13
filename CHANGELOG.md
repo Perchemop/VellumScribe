@@ -111,6 +111,8 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   own storage-key _names_ (never a credential value), and bounded line shapes
   for retired synthetic fixtures (guide II.29.2). An allowlist entry without a
   recorded reason is a defect, and the allowlist must never mask a credential.
+  Verified by a full-history `workflow_dispatch` run on `main` — run
+  `43394163146`, 456 commits scanned, `no leaks found`.
 - **Generated Capacitor output is no longer committed** (39 files, ~2.6 MB):
   `android/app/src/main/assets/public/**`, `assets/capacitor.config.json` and
   `assets/capacitor.plugins.json` are produced by `npm run build:spa` +

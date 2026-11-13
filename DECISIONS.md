@@ -758,6 +758,13 @@ cache keys — but none had ever been triaged, so the only history-wide gate was
 red and meaningless. The underlying hygiene defect was that a generated
 Capacitor bundle was committed to git at all.
 
+**Verified.** PR #171 (CI run `43386837368`, `format` + `verify` ×3 green)
+merged to `main` as `1f07905`. The full-history audit was then run on `main`
+with `workflow_dispatch` — run `43394163146`, **456 commits scanned,
+`no leaks found`** — which is the direct evidence that the weekly cron is green
+again. The PR-scoped `secret scan` (run `43386837714`) was green too, but it
+proves only the diff.
+
 **Consequences.**
 
 - Generated build output is never tracked again: `android/app/src/main/assets/public/**`,
