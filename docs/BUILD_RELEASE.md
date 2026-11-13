@@ -162,3 +162,42 @@ App Links / OAuth deep links depend on `public/.well-known/assetlinks.json`. Rep
 keytool -list -v -keystore vellumscribe-release.jks -alias vellumscribe \
   | grep SHA256 | awk '{ print $2$3$4$5$6$7$8$9$10 }' | tr -d ':'
 ```
+
+## 6. Release checklist (suite standards, guide §12.1)
+
+Cutting a release is more than tagging: the tag run also updates the token
+ledger and publishes the metrics section in the release notes.
+
+1. **Bump the version in the same change as the ledger.** `package.json`,
+   `src/lib/appUpdateManager.ts` (`CURRENT_APP_VERSION`) and
+   `docs/tokens.json` (`release_version`) must agree — a test asserts the ledger
+   matches the running version, so a version bump that forgets the ledger fails
+   `verify`. Update it with:
+
+   ```bash
+   npx tsx scripts/tokens-ledger.ts --version <new-version> --tokens <tokens-this-release>
+   ```
+
+   `--tokens 0` is honest when the figure is not measured: the ledger and the
+   release notes render `0` as "not measured", never as a measurement.
+
+2. **Tag from `main`** (`v<x.y.z>`). `.github/workflows/release.yml` then:
+   - appends the `### Token metrics` section (generated for this tag) to the
+     release body and creates or updates the GitHub Release;
+   - runs the `token-ledger` job, which records this tag's figure in
+     `docs/tokens.json` and **opens a pull request** (a direct push to the
+     protected `main` would be rejected). Merge that PR like any other.
+3. **Dry run without releasing** (verifies the ledger CLI and the JSON in CI):
+
+   ```bash
+   gh workflow run "Release (tag)" -f release_tokens=0 -f tag=<x.y.z>
+   ```
+
+   A manual run writes nothing, opens no PR, and never touches a release.
+
+4. **Confirm the release assets**: signed APK variants plus
+   `APK-SHA256SUMS.txt`, and the token-metrics section in the notes.
+
+See `docs/suite-standards.md` for how this repository maps each guide §12.1
+suite standard (and where it deliberately deviates — there is no in-app
+self-update).

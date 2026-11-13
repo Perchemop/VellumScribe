@@ -4,19 +4,51 @@ name: Release (tag)
 # CHANGELOG.md. The APK workflow (build-apk.yml) attaches the binaries to the
 # same release; whichever finishes first creates it and the other updates it,
 # so ordering is never a race we have to win.
+#
+# The published notes also carry a token-metrics section produced by the
+# CI-managed ledger CLI (scripts/tokens-ledger.ts), and a follow-up
+# `token-ledger` job records this tag's figure in `docs/tokens.json`
+# (guide.md §12.1). Because `main` is a protected branch that ledger update is
+# proposed as a pull request — a direct push would be rejected, and the
+# bookkeeping must never hold up the release itself.
+#
+# `workflow_dispatch` exists so the ledger CLI and the JSON ledger can be
+# verified in CI without cutting a release: a manual run is a read-only dry run
+# that writes nothing and opens no PR.
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      # Per-release token figure for docs/tokens.json (guide.md §12.1). The
+      # honest default is 0, which the ledger and the notes render as
+      # "not measured" rather than passing a zero off as a measurement.
+      release_tokens:
+        description: 'Tokens this release consumed (feeds docs/tokens.json)'
+        required: false
+        default: '0'
+      # Version to preview in the dry run. Optional: when blank, the run falls
+      # back to the version already recorded in the ledger, so a bare dispatch
+      # still proves the CLI works.
+      tag:
+        description: 'Version to preview (without the leading v); blank uses the ledger version'
+        required: false
+        default: ''
 
 permissions:
   contents: write
+  # The token-ledger job opens a PR (main is protected), so it needs this too.
+  pull-requests: write
 
 jobs:
   release:
     name: Publish release notes
     runs-on: ubuntu-latest
+    # Tag pushes only. A manual dispatch runs the read-only dry run below and
+    # must never create or edit a release.
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - uses: actions/checkout@v7
 
@@ -44,6 +76,34 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # The notes quote the token ledger (guide.md §12.1), so the ledger CLI
+      # has to run here and needs Node plus its dependencies to run under tsx.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      - name: Append the token-metrics section to the release body
+        env:
+          RELEASE_TOKENS: ${{ inputs.release_tokens || vars.RELEASE_TOKENS || '0' }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          # The section is generated for *this* tag with the supplied figure,
+          # not read straight from docs/tokens.json: the ledger job that records
+          # this tag only runs after this one, so reading the file here would
+          # quote the previous release's numbers.
+          {
+            echo ""
+            echo "---"
+            echo ""
+            npx tsx scripts/tokens-ledger.ts --version "${TAG}" --tokens "${RELEASE_TOKENS}" --print
+          } >> /tmp/release_body.md
+
       - name: Create or update the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,3 +118,186 @@ jobs:
               --title "VellumScribe $TAG" \
               --notes-file /tmp/release_body.md
           fi
+
+  # Records this tag's token figure in docs/tokens.json (guide.md §12.1). It
+  # `needs:` the release job so a failed release never advances the ledger, and
+  # runs on tag pushes only.
+  #
+  # Nothing in this job can un-publish the release: the release job has already
+  # finished by the time it runs, so a problem here (the ledger PR cannot be
+  # opened, say) degrades to a warning in the log rather than a failed release.
+  token-ledger:
+    name: Update token ledger (guide §12.1)
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # `main` is protected, so the ledger change is proposed as a PR and never
+      # pushed directly — that push would be rejected by branch protection.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so `origin/main` is available: the ledger branch is cut
+          # from main, not from the tag, so the PR diff is exactly
+          # docs/tokens.json.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      # Cut the branch and set the identity before the CLI writes anything, so
+      # the edit lands on main's tree and survives into the commit below.
+      - name: Prepare the ledger branch
+        run: |
+          set -euo pipefail
+          # The app's dev identity (guide §5.5) — never a real person.
+          git config user.name "VellumScribe Dev"
+          git config user.email "dev@example.com"
+          git fetch origin main
+          git checkout -B "ci/token-ledger-${GITHUB_REF_NAME#v}" origin/main
+
+      - name: Record the token figure in docs/tokens.json
+        env:
+          RELEASE_TOKENS: ${{ inputs.release_tokens || vars.RELEASE_TOKENS || '0' }}
+        run: |
+          set -euo pipefail
+          # The ledger is written only through the CLI, never with sed/printf:
+          # docs/tokens.json is Prettier-checked and only the CLI emits
+          # Prettier-compatible JSON (it also reports "not measured" for a 0).
+          npx tsx scripts/tokens-ledger.ts \
+            --version "${GITHUB_REF_NAME#v}" \
+            --tokens "${RELEASE_TOKENS:-0}"
+
+      - name: Commit the ledger and open a pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TOKENS: ${{ inputs.release_tokens || vars.RELEASE_TOKENS || '0' }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          BRANCH="ci/token-ledger-${VERSION}"
+          PUSHED="false"
+
+          git add docs/tokens.json
+          if git diff --cached --quiet; then
+            echo "docs/tokens.json already records ${VERSION}; nothing to commit."
+          else
+            git commit -m "ci: update tokens.json ledger for ${GITHUB_REF_NAME}"
+            if git push --force origin "HEAD:${BRANCH}"; then
+              PUSHED="true"
+            else
+              echo "::warning::Could not push the ledger branch ${BRANCH}. The release for ${GITHUB_REF_NAME} is already published; the ledger was not advanced."
+              exit 0
+            fi
+          fi
+
+          PR_BODY=$(cat <<BODY
+          ### What changed
+
+          \`docs/tokens.json\` now records the token figure for **${GITHUB_REF_NAME}**.
+
+          ### Where this came from
+
+          This pull request is generated by the release workflow
+          (\`.github/workflows/release.yml\`, job \`token-ledger\`); it was not written
+          by hand. The ledger is the source the published release notes quote
+          (guide.md §12.1) — the release body's "Token ledger" section states the
+          same figure.
+
+          ### About the figure
+
+          The value supplied to the workflow for this release is
+          \`${RELEASE_TOKENS:-0}\` tokens. A value of \`0\` means **not measured** —
+          no figure has been recorded yet — and is never an estimate of zero
+          usage.
+
+          Merging this only advances the ledger; it changes no application
+          behaviour.
+          BODY
+          )
+
+          # A re-run of the same tag reuses the branch, so a PR may already be
+          # open: comment on it instead of failing on `gh pr create`.
+          if gh pr view "$BRANCH" -R "$GITHUB_REPOSITORY" --json number --jq .number >/tmp/ledger_pr 2>/dev/null; then
+            PR_NUMBER="$(cat /tmp/ledger_pr)"
+            echo "A pull request for ${BRANCH} already exists (#${PR_NUMBER}); leaving it in place."
+            gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" \
+              --body "Re-run of the release workflow for ${GITHUB_REF_NAME}; the ledger figure is ${RELEASE_TOKENS:-0} tokens." || true
+            exit 0
+          fi
+
+          if [ "$PUSHED" != "true" ]; then
+            echo "Nothing to propose for ${VERSION}; no pull request opened."
+            exit 0
+          fi
+
+          if gh pr create -R "$GITHUB_REPOSITORY" \
+               --base main \
+               --head "$BRANCH" \
+               --title "ci: update tokens.json ledger for ${GITHUB_REF_NAME}" \
+               --body "$PR_BODY"; then
+            echo "Opened the ledger pull request for ${BRANCH}."
+          else
+            # The release is already out; a missing ledger PR must not look like
+            # a release failure, so warn and let the run succeed.
+            echo "::warning::Could not open the ledger pull request for ${GITHUB_REF_NAME}. Open or merge ${BRANCH} by hand if the ledger needs updating."
+          fi
+
+  # Read-only verification of the ledger and its CLI for `workflow_dispatch`
+  # runs: it prints the section the release notes would carry, validates that
+  # docs/tokens.json parses, and deliberately writes nothing and opens no PR.
+  # This is what lets CI prove the CLI works without cutting a release.
+  ledger-dry-run:
+    name: Validate the token ledger (dry run)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      # The `tag` input is optional so a bare dispatch still exercises the CLI:
+      # when it is blank, preview the version the ledger already records.
+      - name: Resolve the version to preview
+        id: version
+        env:
+          # The input reaches the shell through the environment, not by being
+          # interpolated into the script text (guide §5.5.11).
+          TAG_INPUT: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${TAG_INPUT}"
+          if [ -z "$TAG" ]; then
+            TAG="$(node -e "process.stdout.write(JSON.parse(require('node:fs').readFileSync('docs/tokens.json','utf8')).release_version)")"
+            echo "No 'tag' input given; previewing the ledger's current version ${TAG}."
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate that docs/tokens.json parses
+        run: |
+          set -euo pipefail
+          node -e "JSON.parse(require('node:fs').readFileSync('docs/tokens.json','utf8'))"
+          echo "docs/tokens.json parses."
+
+      - name: Preview the token-metrics section (writes nothing)
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_TOKENS: ${{ inputs.release_tokens }}
+        run: |
+          set -euo pipefail
+          npx tsx scripts/tokens-ledger.ts --version "${TAG:?tag input required}" --tokens "${RELEASE_TOKENS}" --print

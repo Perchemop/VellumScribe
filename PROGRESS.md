@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-13
+**Last updated:** 2026-11-14
 
 ---
 
@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | clean; `main` at `f6db088` — S-1 (`1f07905`) and S-2 (dependency hygiene) merged; slice S-3 (Release Notes popup + token ledger) starting                                                                                                                                                                                               |
+| Working tree     | S-3 (Release Notes popup + token ledger) in the working tree; `main` at `4fd8f7d` carries S-1 (`1f07905`) and S-2 (`f6db088` + docs)                                                                                                                                                                                                    |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
@@ -90,6 +90,58 @@ can never be committed.
 verify` re-run and green.
 
 ---
+
+## 2026-11-14 — Slice S-3: Release Notes popup + CI-managed token ledger (guide §12.1)
+
+The guide's suite standards were audited against the app and the two missing
+pieces were built. No Rust crates are consumed by this repository (TypeScript
+web + Capacitor), so every standard is satisfied by a stated non-Rust
+equivalent, recorded in the new `docs/suite-standards.md` — including the one
+deliberate deviation: there is **no in-app self-update**, so the standard's
+verify-then-activate flow does not apply and manual installation with published
+checksums is the equivalent (already listed in `docs/KNOWN_LIMITATIONS.md`).
+
+**Built.**
+
+1. **The version affordance and the standard popup.** `VersionFootprint` renders
+   `v3.1.1` subtly in the bottom-right corner (10px muted chrome, hit area grown
+   past the 24×24 px minimum, positioned clear of both the mobile bottom nav and
+   the create-note FAB); clicking it opens `ReleaseNotesModal`, which carries the
+   four standard sections in order: version history (`APP_CHANGELOGS`),
+   per-release app usage, token metrics, and the Update action.
+2. **Token metrics ledger.** `docs/tokens.json` (CI-managed), the pure logic in
+   `src/lib/tokenLedger.ts`, and `scripts/tokens-ledger.ts` for the pipeline.
+   A `0` is rendered as "not measured" in the UI and in the release notes — never
+   as a measurement — and the usage section says plainly when metrics recording
+   is off (opt-in, on-device) instead of drawing empty counters.
+3. **Release pipeline wiring.** `release.yml` appends the ledger's
+   `### Token metrics` section to the published release body and a
+   `token-ledger` job records the tag's figure and opens a pull request (a direct
+   push to the protected `main` is rejected); the release itself is never held
+   hostage to the ledger PR. `workflow_dispatch` runs the same CLI as a
+   **read-only dry run**, which is how CI proves the ledger and the CLI without
+   cutting a release.
+4. **Safety and honesty rules enforced in code and tests.** Update links are
+   https-only and normalised, with `RELEASES_PAGE_URL` as the documented
+   fallback; the network consent gate (`PrivacyManager.assertNetworkAllowed`)
+   still guards the check; nothing auto-installs.
+
+**Review.** A `reviewer` pass found no blockers and two should-fix items, both
+applied: the chip's touch target measured ≈45×14 px (now ≥24×24 via an expanded
+hit area plus an offset that clears the FAB arc), and `resolveReleaseHref`
+returned the raw candidate rather than the normalised URL (now `new URL(x).href`,
+with hostile-input tests for `https:\/\/evil`, uppercase schemes,
+protocol-relative links, userinfo and fragments).
+
+**A tripwire worth knowing.** `src/lib/tokenLedger.test.ts` asserts
+`docs/tokens.json`'s `release_version` equals `CURRENT_APP_VERSION`, so a version
+bump that forgets the ledger fails `verify`. The required companion step is
+documented in `docs/BUILD_RELEASE.md` §6 (run `npx tsx scripts/tokens-ledger.ts
+--version <new>` in the version-bump change).
+
+Evidence:
+
+CI run: <pending>
 
 ## 2026-11-13 — Slice S-2: dependency hygiene (Dependabot groups, 11 updates, 4 action majors)
 

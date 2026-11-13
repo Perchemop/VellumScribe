@@ -29,6 +29,28 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   blocking browser `confirm` dialog) and `src/components/BrandMarkGlyph.test.tsx`
   (canonical geometry, ARIA behaviour, drift guard against the canonical SVG).
 
+### Added
+
+- **Release Notes popup, opened from a subtle bottom-right version chip.** The
+  running version now sits on its own, quietly, in the bottom-right corner
+  (`VersionFootprint`); clicking it opens the standard suite Release Notes popup
+  (`ReleaseNotesModal`): version history, per-release app usage, token metrics,
+  and an Update action that links to the release page. The Update link is
+  https-only with a documented safe fallback, the popup never auto-installs
+  anything, and the usage section states plainly when metrics recording is off
+  (opt-in, on-device). Covered by `src/lib/releaseNotes.test.ts` and
+  `src/components/releaseNotesContract.test.tsx`.
+- **CI-managed token ledger (guide §12.1).** `docs/tokens.json` records the
+  suite token metrics (`total_tokens_since_start`, `release_tokens`,
+  `release_version`), `scripts/tokens-ledger.ts` updates it, and the tag-triggered
+  `release.yml` now appends the ledger's `### Token metrics` section to the
+  published release body and proposes the ledger update as a pull request.
+  A figure of `0` means _not measured_ and is rendered as words wherever it
+  appears — never as a measurement. `workflow_dispatch` runs the same CLI as a
+  read-only dry run, and `docs/suite-standards.md` records how every §12.1 suite
+  standard maps onto this (non-Rust) app, including the deliberate deviation
+  that there is no in-app self-update.
+
 ### Changed
 
 - **The brand mark has a single source:** the new `BrandMarkGlyph` component
