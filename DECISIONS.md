@@ -772,7 +772,7 @@ Capacitor bundle was committed to git at all.
   cost a full clone per pull request; the weekly cadence is the accepted
   trade-off, recorded in `docs/KNOWN_LIMITATIONS.md`.
 - `gitleaks/gitleaks-action@v2` pins gitleaks **8.24.3**, where `regexTarget =
-  "line"` inside the deprecated singular `[allowlist]` table is honoured while
+"line"` inside the deprecated singular `[allowlist]` table is honoured while
   the newer `[[allowlists]]` form is silently ignored. The deprecated form is
   therefore deliberate, not legacy debt, and any bump of the action must
   re-verify this behaviour before the config is migrated.
