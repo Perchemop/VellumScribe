@@ -49,6 +49,28 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 - **Mobile bottom-nav labels** are 11px (was 10px) with stable ids and
   `aria-current` on the active item (audit m-7).
 
+- **Dependencies brought up to date (2026-11-13):** the grouped Dependabot
+  updates landed on `main` — `react` + `react-dom` together to 19.3.1,
+  `@capacitor/*` (android/cli/core 8.6.0, app 8.1.2, camera 8.2.6),
+  `vite` 8.3.7, `@vitejs/plugin-react` 6.3.0, `@tailwindcss/vite` 4.3.5,
+  `jsdom` 31.0.0, `lucide-react` 1.71.0, `dotenv` 18.0.10, `eslint` 10.14.0,
+  `vitest` 5.1.0, and the grouped security update `glob` 13.0.6 → 14.0.6
+  (merges on `main` `f6db088`: CI `43414252378`, Security Scanning
+  `43414252497`, Android APK `43414252325`, all green).
+- **Dependabot can no longer split React:** `.github/dependabot.yml` now groups
+  `react`, `react-dom` and `@types/react*` into one PR, and `@capacitor/*`
+  into one mobile-shell PR. React requires `react` and `react-dom` to be the
+  exact same version, which is what made PR #170 (a `react`-only bump) fail
+  every `verify` job and the visual job; #170 is closed and superseded by the
+  grouped PR (D-428).
+- **GitHub Actions brought to current majors:** `github/codeql-action` v3 → v4
+  (Node 24 runtime; v3 is deprecated in December 2026),
+  `gitleaks/gitleaks-action` v2 → v3 (Node 24 runtime only — it still pins
+  gitleaks 8.24.3, so the `.gitleaks.toml` allowlist from D-427 is unchanged),
+  `actions/dependency-review-action` v4 → v5, `actions/upload-artifact`
+  4.6.2 → 7.0.2 (the `visual.yml` pin moves v4.6.2 → v7.0.2; every input the
+  workflows pass is unchanged).
+
 ### Fixed
 
 - **Note delete in the editor no longer uses a blocking `window.confirm`:** it

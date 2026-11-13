@@ -54,7 +54,8 @@ regexes = [
   # the field, but the line survives in history.
   #
   # Deliberately bounded: a short single-line value with the closing quote
-  # required. gitleaks 8.24.3 (pinned by gitleaks/gitleaks-action@v2) honours
+  # required. gitleaks 8.24.3 (pinned by both gitleaks/gitleaks-action@v2 and
+  # @v3 — v3 changes only the Node runtime) honours
   # `regexTarget = "line"` in this top-level [allowlist] table and OR-matches
   # every regex, and a global allowlist cannot be scoped by path — so an
   # unbounded pattern would mask a real credential pasted into the same field.

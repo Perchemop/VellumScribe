@@ -65,15 +65,17 @@ Then NDK-build a **real** APK and smoke-test offline transcription on device.
 
 ## 9. Open Dependabot alerts (dev-only, not shipped)
 
-Two `medium` npm advisories are open on `main`: `minimatch` (GHSA-g3hv-75wg-m249,
-fixed in 11.0.1) and `glob` (GHSA-3g3m-2fjr-6pw4).
+One `medium` npm advisory remains open on `main`: `minimatch`
+(GHSA-g3hv-75wg-m249, fixed in 11.0.1). The `glob` advisory
+(GHSA-3g3m-2fjr-6pw4) is **resolved** — Dependabot's grouped security update
+(then PR #172) moved `glob` 13.0.6 → 14.0.6 on 2026-11-13.
 
-- **They are dev-only and transitive** — `minimatch` comes in through
-  `eslint` / `@typescript-eslint/typescript-estree` / `@eslint/config-array`,
-  `glob` through `rimraf`. Neither is imported by the app bundle, so neither is
-  present in the shipped APK or reachable by end users.
-- **Not exploitable here.** Both advisories need an attacker-supplied glob
-  pattern; a linter and a cleanup script never receive one from untrusted input.
+- **It is dev-only and transitive** — `minimatch` comes in through
+  `eslint` / `@typescript-eslint/typescript-estree` / `@eslint/config-array`.
+  It is not imported by the app bundle, so it is neither present in the shipped
+  APK nor reachable by end users.
+- **Not exploitable here.** The advisory needs an attacker-supplied glob
+  pattern; a linter never receives one from untrusted input.
 - **Why not force the fix now:** the only patched `minimatch` is a **major**
   bump (10.x → 11.x). Forcing it through `overrides` risks breaking the
   `eslint`-based lint gate (a known incompatibility with the v11 `makeRe`
@@ -81,7 +83,14 @@ fixed in 11.0.1) and `glob` (GHSA-3g3m-2fjr-6pw4).
   Dependabot raises as alerts turn into PRs; merge those when green.
 - **Lockfile constraint:** the lockfile cannot be regenerated on this machine
   (`npm install` is banned), so hand-forcing versions through `overrides` is not
-  a safe option.
+  a safe option. Dependency moves therefore arrive as Dependabot PRs, which
+  carry a lockfile CI can verify.
+- **Grouped updates:** `.github/dependabot.yml` groups `react` + `react-dom` +
+  `@types/react*` (React requires `react` and `react-dom` to be the exact same
+  version — see D-428 and closed PR #170) and `@capacitor/*` (one mobile-shell
+  migration step). A future React _security_ update still arrives as its own
+  single-dependency PR, so the parity protection remains the CI failure, not the
+  grouping.
 
 ## 10. Security scanning cadence and generated assets
 
