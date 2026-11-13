@@ -786,3 +786,54 @@ proves only the diff.
 - The `metadata/fdroid/metadata.yml` recipe now needs network access during
   F-Droid's `prebuild` phase (`npm ci`); the vendored `whisper.cpp` tree stays
   tracked and compiles from source, so no other fetch is required.
+
+### D-428 · 2026-11-13 · Dependabot grouping, and action majors are merged only after a source read
+
+**Decision.** Two rules for dependency maintenance.
+
+1. `.github/dependabot.yml` **groups** `react` + `react-dom` + `@types/react*`
+   into one PR, and `@capacitor/*` into one PR. React requires `react` and
+   `react-dom` to be the exact same version at runtime, so they must never be
+   bumped separately.
+2. A GitHub Actions **major** bump is merged only after reading the upstream
+   action's source at the target tag for (a) the runtime/tool versions it pins
+   or downloads, and (b) whether any input, output or permission the workflow
+   uses has changed. The finding is recorded with the merge.
+
+**Why.** PR #170 bumped only `react` (19.3.0 → 19.3.1) and left `react-dom` at
+19.3.0. `react-dom`'s own isomorphic-version guard threw, so `verify` failed on
+all three OSes and the visual job rendered an empty `#root` (the visual workflow
+serves through `npm start` without `NODE_ENV=production`, so it exercises the
+development `react-dom` client). The bump was correct but incomplete, and a
+`react`-only bump cannot be repaired safely on a lockfile this machine cannot
+regenerate. Grouping makes that class of PR impossible: the grouped PR (#175)
+carried `react` and `react-dom` to 19.3.1 together and passed.
+
+The action rule exists because "a major bump" hides the one fact that matters —
+which tool version the action actually runs. The four bumps merged on
+2026-11-13 were each verified at source:
+
+- `gitleaks/gitleaks-action` v2 → v3 changes **only** the Node runtime
+  (`node20` → `node24`); both tags pin `GITLEAKS_VERSION || "8.24.3"`, and the
+  action requires no licence for a user-owned public repository. So the
+  `.gitleaks.toml` allowlist shape from D-427 stays valid and is deliberately
+  **not** migrated.
+- `github/codeql-action` v3 → v4 is the Node 24 runtime only; `init`/`analyze`
+  inputs, `languages: javascript-typescript`, the masked SARIF-upload failure
+  and `continue-on-error` are unchanged. v3 is deprecated in December 2026.
+- `actions/dependency-review-action` v4 → v5 is the Node 24 runtime only;
+  inputs are identical and the `pull_request`-only job and permissions stay.
+- `actions/upload-artifact` 4.6.2 → 7.0.2 adds an `archive` input and drops or
+  renames nothing the three workflows pass (`name`, `path`, `retention-days`,
+  `if-no-files-found` are unchanged); the new `visual.yml` SHA pin
+  `cf430e0…` was confirmed to be the authentic `v7.0.2` tag commit.
+
+**Consequences.** Dependency moves arrive as Dependabot PRs (the lockfile cannot
+be regenerated locally), and each is verified by its own PR checks before merge.
+A future React **security** update will still open as a single-dependency PR —
+grouping applies to version updates — so the CI parity failure, not the grouping,
+remains the backstop. If `GITLEAKS_VERSION` is ever set to `latest`, or the
+action ships a gitleaks ≥ 8.25 default, `.gitleaks.toml` must migrate the single
+deprecated `[allowlist]` table to top-level `[[allowlists]]` entries — one per
+group of regexes or paths, each keeping `regexTarget = "line"` — because 8.25+
+rejects mixing the two forms.

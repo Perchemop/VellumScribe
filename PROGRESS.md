@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-12
+**Last updated:** 2026-11-13
 
 ---
 
@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | slice S-1 merged to `main` as `1f07905` (PR #171, 2026-11-13); slice S-2 (dependency hygiene) starting                                                                                                                                                                                                                                  |
+| Working tree     | clean; `main` at `f6db088` — S-1 (`1f07905`) and S-2 (dependency hygiene) merged; slice S-3 (Release Notes popup + token ledger) starting                                                                                                                                                                                               |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
@@ -90,6 +90,56 @@ can never be committed.
 verify` re-run and green.
 
 ---
+
+## 2026-11-13 — Slice S-2: dependency hygiene (Dependabot groups, 11 updates, 4 action majors)
+
+Every open Dependabot PR was worked to a decision; **no PR remains open**. All
+of it is green on `main` at `f6db088`: CI run `43414252378`, Security Scanning
+run `43414252497`, Android APK run `43414252325`.
+
+**The React split (PR #170) — root cause found and made impossible.**
+
+Dependabot bumped only `react` 19.3.0 → 19.3.1 and left `react-dom` at 19.3.0.
+React requires **the exact same version** of both; `react-dom`'s own
+isomorphic-version guard threw, so `verify` failed on all three OSes and the
+`visual` job rendered an empty `#root` (the visual workflow serves via
+`npm start` without `NODE_ENV=production`, so it exercises the _development_
+`react-dom` client, where the guard is present). A `react`-only bump cannot be
+repaired on a lockfile this machine cannot regenerate. Fixed by grouping rather
+than by patching the PR: `.github/dependabot.yml` now has a `react` group
+(`react`, `react-dom`, `@types/react`, `@types/react-dom`) with the reason
+recorded, plus a `@capacitor/*` group for the mobile shell (D-428). Dependabot
+immediately superseded the individual PRs: the grouped **#175** carried both
+packages to 19.3.1 and passed, and **#170 is closed** with the root cause in a
+comment. Because grouping applies to version updates, a future React _security_
+update will still arrive alone — the CI parity failure remains the backstop.
+
+**Merged (each verified by its own PR checks before merge).** Grouped react
+#175; grouped `@capacitor/*` #176 (android/cli/core 8.6.0, app 8.1.2, camera
+8.2.6); `vite` 8.3.7 #179; `@vitejs/plugin-react` 6.3.0 #178;
+`@tailwindcss/vite` 4.3.5 #177; `jsdom` 31.0.0 #181; `lucide-react` 1.71.0
+#182; `dotenv` 18.0.10 #180; `eslint` 10.14.0 #165; `vitest` 5.1.0 #169;
+grouped security update `glob` 13.0.6 → 14.0.6 #172. Two individual PRs (#167,
+#162, plus five more) were auto-closed by Dependabot when the groups landed,
+superseded by the grouped PRs.
+
+**Action majors, each read at source before merge** (D-428): `codeql-action`
+v3 → v4 (Node 24 runtime only; v3 deprecated December 2026) #159;
+`gitleaks-action` v2 → v3 (Node 24 runtime only — **both tags still pin
+gitleaks 8.24.3**, so the D-427 `.gitleaks.toml` stays valid and was
+deliberately not migrated) #158; `dependency-review-action` v4 → v5 (identical
+inputs) #160; `upload-artifact` 4.6.2 → 7.0.2 (no input used by any workflow
+changed; the new `visual.yml` SHA pin was confirmed as the authentic `v7.0.2`
+commit) #157.
+
+**Security alerts.** `glob` (GHSA-3g3m-2fjr-6pw4) is resolved; only the
+dev-only transitive `minimatch` advisory remains open
+(`docs/KNOWN_LIMITATIONS.md` §9 updated with the reason it is not force-fixed).
+
+**Side-evidence for S-1.** The Android APK job rebuilt successfully on every
+merge after the generated Capacitor bundle was untracked, which proves the
+`npm run build:spa` + `npx cap sync android` steps regenerate everything gradle
+needs.
 
 ## 2026-11-12 — Slice S-1: green security gates restored (full-history secret audit)
 
