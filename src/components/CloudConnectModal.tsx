@@ -612,7 +612,7 @@ export const CloudConnectModal: React.FC<CloudConnectModalProps> = ({
                       <input
                         type="password"
                         required
-                        placeholder="App password / token"
+                        placeholder="Paste your app password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full px-3 py-2 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500"

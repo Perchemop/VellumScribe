@@ -5,8 +5,13 @@ on:
     branches: ['main']
   pull_request:
     branches: ['main']
+  # Scope note: a pull_request run makes gitleaks scan only this PR's commits,
+  # while the weekly `schedule` run and a manual `workflow_dispatch` run
+  # checkout with fetch-depth: 0 and audit the whole history — which is where
+  # retired false positives resurface even after the source was fixed.
   schedule:
     - cron: '0 4 * * 1'
+  workflow_dispatch:
 
 jobs:
   codeql:

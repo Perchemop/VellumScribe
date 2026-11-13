@@ -736,3 +736,46 @@ of unenforceable. Meta-doc edits stay with the owner, as the guide requires.
 client `BROKEN` report must become a regression test before the fix. Agent
 merges continue under the `Perchemop` account, now as a stated rule rather than
 an unstated exception.
+
+### D-427 · 2026-11-12 · Security scanning: the full-history audit is the authoritative secret gate
+
+**Decision.** The weekly `schedule` run of the `Security Scanning` workflow —
+plus the `workflow_dispatch` trigger added in this slice — is the authoritative
+secret check, because it checks out with `fetch-depth: 0` and audits the whole
+history. The `pull_request` and `push` runs of the same job are diff-scoped
+utility checks: gitleaks scans only the pushed commit range there, so they can
+never clear a history-only finding. Every entry in `.gitleaks.toml` must carry a
+recorded plain-language reason, must be the narrowest shape that covers the
+classified false positive, and must never be used to hide a credential — the
+allowlist is audited, not trusted (guide §5.5.11, §II.29.2).
+
+**Why.** The scheduled run failed on 2026-11-02 (run `41440884939`) and
+2026-11-09 (run `42617404430`) with 13 findings over 453 commits, while every
+push and PR run reported success. The findings were all false positives —
+minified generated build output, the application's own storage-key names, the
+retired synthetic fixtures of a redaction test, and vendored `whisper.cpp` CI
+cache keys — but none had ever been triaged, so the only history-wide gate was
+red and meaningless. The underlying hygiene defect was that a generated
+Capacitor bundle was committed to git at all.
+
+**Consequences.**
+
+- Generated build output is never tracked again: `android/app/src/main/assets/public/**`,
+  `assets/capacitor.config.json` and `assets/capacitor.plugins.json` are produced
+  by `npm run build:spa` + `npx cap sync android`. They drift from source, bloat
+  the tree and add scanner noise. Every consumer must regenerate them: the
+  `Build Android APK` workflow already does; the F-Droid recipe gained a
+  `prebuild` step; and `docs/BUILD_RELEASE.md` tells a fresh clone the same.
+- A history-only finding is caught at most a week after it is introduced (or
+  immediately, via a manual dispatch run). Making the full-history scan a
+  per-PR check is not possible with the diff-scoped action default and would
+  cost a full clone per pull request; the weekly cadence is the accepted
+  trade-off, recorded in `docs/KNOWN_LIMITATIONS.md`.
+- `gitleaks/gitleaks-action@v2` pins gitleaks **8.24.3**, where `regexTarget =
+  "line"` inside the deprecated singular `[allowlist]` table is honoured while
+  the newer `[[allowlists]]` form is silently ignored. The deprecated form is
+  therefore deliberate, not legacy debt, and any bump of the action must
+  re-verify this behaviour before the config is migrated.
+- The `metadata/fdroid/metadata.yml` recipe now needs network access during
+  F-Droid's `prebuild` phase (`npm ci`); the vendored `whisper.cpp` tree stays
+  tracked and compiles from source, so no other fetch is required.

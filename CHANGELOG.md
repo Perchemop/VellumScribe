@@ -98,8 +98,39 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   its version field is back in step with `package.json` (3.1.0 → 3.1.1)
   (audit m-3).
 
+### Security
+
+- **The weekly full-history secret audit is triaged and green.** The
+  `Security Scanning` → `secret scan` job failed twice on `main` (runs
+  `41440884939`, `42617404430`): `gitleaks/gitleaks-action@v2` audits the whole
+  history on a `schedule` (or dispatch) run, while its push and pull-request
+  runs scan only the pushed commit range — so findings that live only in
+  history had never been triaged. All 13 findings are now classified, each with
+  its reason, and covered by a minimal `.gitleaks.toml` allowlist: vendored
+  `whisper.cpp` CI cache keys, the generated Capacitor bundle, the application's
+  own storage-key _names_ (never a credential value), and bounded line shapes
+  for retired synthetic fixtures (guide II.29.2). An allowlist entry without a
+  recorded reason is a defect, and the allowlist must never mask a credential.
+- **Generated Capacitor output is no longer committed** (39 files, ~2.6 MB):
+  `android/app/src/main/assets/public/**`, `assets/capacitor.config.json` and
+  `assets/capacitor.plugins.json` are produced by `npm run build:spa` +
+  `npx cap sync android`. The committed copy drifted from source and was itself
+  a source of scanner noise; `.github/workflows/build-apk.yml` already
+  regenerates it before gradle, and `docs/BUILD_RELEASE.md` now states the rule
+  for a fresh clone.
+- **The F-Droid recipe regenerates the web layer too:**
+  `metadata/fdroid/metadata.yml` gained a `prebuild` step (`npm ci` +
+  `npm run build:spa` + `npx cap sync android`), because the recipe previously
+  relied on the committed bundle (`docs/FDROID.md`).
+- **The full-history audit can be run on demand:** `security-scan.yml` now
+  accepts `workflow_dispatch`, so a history finding can be confirmed or cleared
+  without waiting for the Monday cron.
+- **Credential-field copy is obviously synthetic:** the CloudConnectModal
+  app-password field now reads "Paste your app password" instead of a
+  token-shaped placeholder (guide II.29.1).
+
 Still open from the design audit: on-hardware a11y spot-check (pending device
-build). CI verification for this slice is pending.
+build). CI verification for the 4.0.0 polish slice is pending.
 
 ## [3.1.1] - 2026-10-30
 

@@ -3,23 +3,23 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-01
+**Last updated:** 2026-11-12
 
 ---
 
 ## Current state
 
-| Signal           | State                                                                                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run verify` | ✅ **GREEN on CI** — `verify` ×3 OS (run `41138375751`), `format`, security scans green; PR #147 merged to `main` (`8b66bfb`); PR #154 native Whisper fix merged (`5b69f20`).                                            |
-| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                         |
-| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.               |
-| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                              |
-| Working tree     | clean; main at `72695d5` (PR #155 docs, PR #154 native Whisper fix merged `5b69f20`)                                                                                                                                     |
-| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS (runs `39566612176`, `39574556505`), Security Scanning green, Android APK build green.                                                                          |
-| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful. |
-| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                |
-| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                              |
+| Signal           | State                                                                                                                                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run verify` | ✅ **GREEN on CI** — `verify` ×3 OS (run `41138375751`), `format`, security scans green; PR #147 merged to `main` (`8b66bfb`); PR #154 native Whisper fix merged (`5b69f20`).                                                                                     |
+| Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                  |
+| Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                        |
+| Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                       |
+| Working tree     | slice S-1 (security-gate restore, 2026-11-12) in the working tree on top of `main` at `7b1e9a2`                                                                                                                                                                  |
+| GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`) and is fixed by slice S-1 (2026-11-12). |
+| Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                          |
+| Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                         |
+| Guide adoption   | ✅ documentation set + CI-first agent definitions (commit `5743e45`), model map `docs/current-model-map.md`                                                                                                                                                       |
 
 **Status sentence:** the app is released through `v3.1.1` (signed real + stub
 APKs attached to the GitHub Release). The 2026-10-31 4.0.0 polish slice
@@ -90,6 +90,58 @@ can never be committed.
 verify` re-run and green.
 
 ---
+
+## 2026-11-12 — Slice S-1: green security gates restored (full-history secret audit)
+
+The weekly `schedule` run of `Security Scanning` had been red on `main` while
+every push and pull-request run reported success: run `41440884939`
+(2026-11-02) and run `42617404430` (2026-11-09) both failed the `secret scan`
+job, where `gitleaks/gitleaks-action@v2` checked out with `fetch-depth: 0` and
+audited **453 commits, 13 findings**. Push/PR runs only scan the pushed commit
+range, which is why the history-wide gate was failing unnoticed.
+
+Root causes and fixes:
+
+1. **All 13 full-history findings triaged** as false positives, each classified
+   with a recorded reason (guide II.29.2: a hit is a finding unless it is
+   obviously synthetic or third-party upstream content). Classes: committed
+   generated build output (minified Capacitor bundle), the application's own
+   storage-key _names_ (`vellumscribe_*_api_key_v1`, the splash key, the SQLite
+   `previous_db_v1` key), retired synthetic fixtures of the crash-reporter
+   redaction test, and vendored `whisper.cpp` CI cache `key:` values.
+2. **`.gitleaks.toml`** — minimal reasoned allowlist additions for exactly those
+   classes, with `regexTarget = "line"` on the existing singular `[allowlist]`
+   table (honoured by the gitleaks **8.24.3** that the action pins; the newer
+   `[[allowlists]]` form is silently ignored there, so it is deliberately not
+   used). The broadest entry is bounded (`tokenPlaceholder:\s*'[^']{1,64}'`) so
+   it cannot mask a real value. Every entry records why, and the allowlist is
+   audited rather than trusted.
+3. **Generated Capacitor output untracked** (39 files, ~2.6 MB):
+   `android/app/src/main/assets/public/**`, `assets/capacitor.config.json`,
+   `assets/capacitor.plugins.json` — build output of `npm run build:spa` +
+   `npx cap sync android`, no longer drifted from source and no longer scanner
+   noise. `.gitignore` updated; `docs/BUILD_RELEASE.md` states the rule for a
+   fresh clone; `.github/workflows/build-apk.yml` already regenerates them
+   before gradle.
+4. **F-Droid consequence handled:** `metadata/fdroid/metadata.yml` gained a
+   `prebuild` step (`npm ci` + `npm run build:spa` + `npx cap sync android`)
+   because the recipe previously relied on the committed bundle, and
+   `docs/FDROID.md` documents it (including the `npm ci` network need).
+5. **`security-scan.yml` gains `workflow_dispatch`**, so the full-history audit
+   can be run on demand instead of waiting for the Monday 04:00 UTC cron.
+6. **UI copy:** the CloudConnectModal app-password placeholder is now
+   `"Paste your app password"` — obviously synthetic (guide II.29.1) and still
+   meaningful.
+
+Review: `reviewer` subagent checked the diff; it verified the gitleaks 8.24.3
+`regexTarget` behaviour against the action's pinned version and flagged the two
+items fixed in (2) and in `scripts/check-personal-data.mjs` (the scanner
+allowlist comment no longer claims coverage the `git ls-files`-based tree scan
+does not provide).
+
+Evidence:
+
+CI run: <pending>
 
 ## 2026-10-31 — 4.0.0 polish: remaining design-audit Low items + wider rendered evidence
 

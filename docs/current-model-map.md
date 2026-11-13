@@ -10,6 +10,12 @@ Provider order: **OpenCode free first → NVIDIA free second** (§5.1). Switch t
 NVIDIA free only when OpenCode free is exhausted, and record the switch in
 `PROGRESS.md`.
 
+**Guide revision:** the local guide in force is `~/guide.md` dated 2026-11-09,
+whose Part II includes II.30 (Rust GUI/UX — stack matching, tokens, evidence,
+added 2026-11-09); this repository is a web/Capacitor app, so II.30's Rust rules
+apply only if a native Rust shell is ever added. The ruleset was last
+re-synchronised on 2026-11-12 (slice S-1).
+
 Role → capability → current model (OpenCode free), reviewed 2026-10-27:
 
 | Role                | Capability needed                               | Current model                              | Selection guidance                                                                               |

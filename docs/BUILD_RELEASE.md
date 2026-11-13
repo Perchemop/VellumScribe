@@ -95,6 +95,8 @@ cd android
 
 The bundle is located at: `android/app/build/outputs/bundle/release/app-release.aab`.
 
+**Generated assets are not committed.** Step 2 writes the web bundle and Capacitor plugin metadata into the Android project — `android/app/src/main/assets/public/`, `android/app/src/main/assets/capacitor.config.json` and `android/app/src/main/assets/capacitor.plugins.json`. These are build output from the web build + `cap sync`, so they are intentionally not tracked in git: a fresh clone must run steps 1 and 2 above before any `./gradlew` build, or Gradle packages an empty (or stale) web layer. `.github/workflows/build-apk.yml` runs both steps automatically.
+
 ### Option B: Release Universal / ABI APK (For GitHub Releases / F-Droid)
 
 ```bash
