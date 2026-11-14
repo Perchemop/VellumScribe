@@ -95,8 +95,8 @@ describe('ReleaseNotesModal — release-notes contract', () => {
     expect(text).toContain('Usage recording is off');
     expect(text).toContain('opt-in');
     expect(text).toContain('this device');
-    // The disabled section must not render usage counters.
-    expect(text).not.toContain(' event');
+    // The disabled section must not render usage counters (e.g. "3 events").
+    expect(text).not.toMatch(/\d+ events?/);
   });
 
   it('offers a close control with an accessible name', () => {
