@@ -176,10 +176,10 @@ export const ReleaseNotesModal: React.FC<ReleaseNotesModalProps> = ({ onClose })
                 id="release-notes-title"
                 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-serif-editorial"
               >
-                VellumScribe v{CURRENT_APP_VERSION}
+                {`VellumScribe v${CURRENT_APP_VERSION}`}
               </h2>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                Release notes &bull; Build #{CURRENT_BUILD_NUMBER}
+                {`Release notes • Build #${CURRENT_BUILD_NUMBER}`}
               </p>
             </div>
           </div>
