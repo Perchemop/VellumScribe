@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-14
+**Last updated:** 2026-11-14 (closing gates on `main`: CI `43543127039`, full-history secret audit `43543173795` — 473 commits, no leaks found, Android APK `43543126957`, all green at `bbeaca9`)
 
 ---
 
@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | clean; `main` at `4096109` — S-1…S-4 merged **and** Dependabot sql.js 1.16.0 (#183) landed; no open pull requests                                                                                                                                                                                                                       |
+| Working tree     | clean; `main` at `bbeaca9` — S-1…S-4 merged, sql.js 1.16.0 landed (#183), session docs recorded; **no open pull requests**; closing gates green: main CI run `43543127039`, full-history audit run `43543173795` (**473 commits, no leaks found**), Android APK run `43543126957`                                                       |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
