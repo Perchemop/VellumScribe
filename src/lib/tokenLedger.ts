@@ -268,14 +268,23 @@ function measuredOrNot(count: number): string {
  */
 export function releaseNotesSection(ledger: TokenLedger): string {
   const version = asVersion(ledger.release_version);
-  return [
+  const lines = [
     '## Token ledger',
     '',
     `Token metrics${version ? ` for v${version}` : ''} are tracked in \`docs/tokens.json\` (guide.md §12.1).`,
     '',
     `- Tokens used for this release: ${measuredOrNot(ledger.release_tokens)}`,
     `- Tokens used since the project started: ${measuredOrNot(ledger.total_tokens_since_start)}`,
-    '',
-    '_Updated automatically by the release workflow on tag push. "not measured" means no figure has been recorded yet — it is not an estimate._',
-  ].join('\n');
+  ];
+  // The legend exists only to define the phrase "not measured", so emit it
+  // solely when at least one figure actually carries that phrase (a `0` in the
+  // ledger means "not measured", never a real zero). Printing it next to two
+  // measured figures is noise — and it made a real assertion meaningless.
+  if (ledger.release_tokens === 0 || ledger.total_tokens_since_start === 0) {
+    lines.push(
+      '',
+      '_Updated automatically by the release workflow on tag push. "not measured" means no figure has been recorded yet — it is not an estimate._'
+    );
+  }
+  return lines.join('\n');
 }
