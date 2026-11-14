@@ -1,3 +1,11 @@
+// @vitest-environment jsdom
+//
+// This file parses the server-rendered markup (see `visibleText`) so that
+// assertions read *visible text* instead of raw HTML. Parsing needs a DOM,
+// while the repository's default vitest environment is `node`
+// (vitest.config.ts), so the override is scoped to this file. The suite runs on
+// Node 22 in CI, which is the runtime the jsdom environment requires.
+
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReleaseNotesModal } from './ReleaseNotesModal';
@@ -7,9 +15,9 @@ import { VersionFootprint } from './VersionFootprint';
  * Contract tests for the suite-standard Release Notes popup and the bottom-right
  * version footprint (guide §12.1).
  *
- * Rendered to static markup with react-dom/server — no DOM needed (this repo's
- * test environment is node). The metrics and token-ledger modules are mocked so
- * the popup's copy is pinned deterministically, including the honest
+ * Rendered to static markup with react-dom/server, then parsed so the copy can
+ * be asserted as visible text. The metrics and token-ledger modules are mocked
+ * so the popup's copy is pinned deterministically, including the honest
  * "usage recording is off" branch when metrics are disabled.
  */
 
@@ -37,12 +45,18 @@ vi.mock('../lib/tokenLedger', () => ({
 }));
 
 /**
- * react-dom/server separates adjacent text nodes with an empty comment
- * (`VellumScribe v<!-- -->3.1.1`), which splits interpolated strings. Strip it
- * before asserting on visible text.
+ * The visible text of a server-rendered markup string.
+ *
+ * `react-dom/server` separates adjacent text nodes with an empty HTML comment,
+ * so asserting on the raw markup string would need markup surgery — the
+ * incomplete-sanitisation pattern CodeQL rejects
+ * (`js/incomplete-multi-character-sanitization`). Parsing instead of sanitising
+ * removes the problem at its source: comments are simply not part of
+ * `textContent`, and no string is ever rewritten.
  */
 function visibleText(markup: string): string {
-  return markup.replace(/<!--\s*-->/g, '');
+  const doc = new DOMParser().parseFromString(markup, 'text/html');
+  return doc.body.textContent ?? '';
 }
 
 describe('ReleaseNotesModal — release-notes contract', () => {
@@ -95,7 +109,7 @@ describe('VersionFootprint — bottom-right version affordance', () => {
 
   it('renders an accessible name containing the running version', () => {
     expect(markup).toContain('aria-label="Version 3.1.1 — release notes"');
-    expect(text).toContain('>v3.1.1<');
+    expect(text).toContain('v3.1.1');
   });
 
   it('is a real button that stays fixed at the bottom-right and out of the flow', () => {
