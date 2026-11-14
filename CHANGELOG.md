@@ -28,9 +28,6 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   bootstrap stays in lockstep with `AppContext`, and no UI source may open a
   blocking browser `confirm` dialog) and `src/components/BrandMarkGlyph.test.tsx`
   (canonical geometry, ARIA behaviour, drift guard against the canonical SVG).
-
-### Added
-
 - **Release Notes popup, opened from a subtle bottom-right version chip.** The
   running version now sits on its own, quietly, in the bottom-right corner
   (`VersionFootprint`); clicking it opens the standard suite Release Notes popup
@@ -92,9 +89,33 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
   `actions/dependency-review-action` v4 → v5, `actions/upload-artifact`
   4.6.2 → 7.0.2 (the `visual.yml` pin moves v4.6.2 → v7.0.2; every input the
   workflows pass is unchanged).
+- **The sql.js WASM pair is generated at build time, not committed.**
+  `public/sql-wasm.js` / `public/sql-wasm.wasm` are copied from
+  `node_modules/sql.js` by `scripts/vendor-sql-wasm.mjs` (npm runs it via
+  `prebuild` / `prebuild:spa`), so the JavaScript glue the bundler ships and the
+  binary the app force-serves can never come from different sql.js builds — the
+  drift that made the 1.16.0 bump fail to boot. The two files are no longer
+  tracked in git (`docs/BUILD_RELEASE.md` §3).
 
 ### Fixed
 
+- **Backup import no longer silently drops events.** `saveEvent` decided
+  "existing" from the record's id alone, so restoring a backup whose events
+  carry ids not yet in the database matched **0 rows** and imported nothing —
+  the notes then referenced an event that was never created. The import only
+  appeared to work because a sql.js quirk silently disabled foreign-key
+  enforcement. `saveEvent` is now a true upsert (existence is queried; an
+  explicit id is preserved on insert so references resolve), covered by
+  regression tests, and the same audit cleared the recording/transcript/OCR
+  savers. Side effect worth knowing: the demo sample events also carry explicit
+  ids, so on a fresh database they were all silently dropped — this fix repairs
+  that path too.
+- **Foreign-key enforcement is now real, not accidental.** sql.js ≤ 1.14.2
+  silently reset `PRAGMA foreign_keys` inside `export()`, so the engine's
+  stated policy (`foreign_keys = ON`) quietly lapsed after the first export.
+  The engine re-asserts the pragma after every export, and the tests that
+  deliberately plant dangling foreign keys suspend enforcement only around
+  those inserts.
 - **Note delete in the editor no longer uses a blocking `window.confirm`:** it
   opens the in-app confirmation dialog used elsewhere; Escape closes the editor
   sheets and the confirmation, and the destructive confirmation sits on the

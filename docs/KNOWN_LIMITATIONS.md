@@ -107,3 +107,13 @@ One `medium` npm advisory remains open on `main`: `minimatch`
   `android/app/src/main/assets/public/` is generated output and is no longer
   committed. The vendored `whisper.cpp` tree remains tracked, so no other fetch
   is required.
+- **The sql.js WASM pair is also generated, not committed:**
+  `public/sql-wasm.js` / `public/sql-wasm.wasm` are copied from
+  `node_modules/sql.js` by `scripts/vendor-sql-wasm.mjs`, which npm runs through
+  the `prebuild` / `prebuild:spa` hooks. Two consequences: a **dev-server-only
+  session** (`npm run dev` on a fresh clone, before any build) has no hook, so
+  `/sql-wasm.wasm` 404s until the first build or a manual
+  `node scripts/vendor-sql-wasm.mjs`; and the glue the bundler ships and the
+  binary the app force-serves must always come from the same sql.js build —
+  mixing them (bundled 1.16 glue against a hand-committed 1.14 binary) fails at
+  app boot, which is exactly the drift this removes.
