@@ -5,7 +5,7 @@ import { asErrorLike } from './errorLike';
 
 export type SummaryFormat = 'executive' | 'action_items' | 'tldr' | 'outline' | 'clean_notes';
 
-export type LlmProvider = 'google' | 'groq' | 'offline_rules';
+export type LlmProvider = 'google' | 'groq' | 'nvidia' | 'offline_rules';
 export type TranscriptionProvider =
   'google' | 'groq_whisper' | 'deepgram' | 'local_whisper' | 'browser_speech';
 export type OcrProvider = 'google' | 'offline_rules';
@@ -42,6 +42,44 @@ export interface AiIntegrationSettings {
 }
 
 export const AI_PROVIDERS_META = {
+  nvidia: {
+    id: 'nvidia',
+    name: 'NVIDIA NIM (Nemotron)',
+    category: 'NVIDIA NIM (Free Tier)',
+    description:
+      'Hosted OpenAI-compatible inference for Nemotron reasoning + vision models and other open-weight LLMs. Free trial tier, no credit card required. Generate a key at build.nvidia.com/settings.',
+    models: [
+      {
+        id: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+        name: 'Nemotron 3.5 Super VL (Recommended)',
+        desc: 'Reasoning, vision & tool-calling — ideal for notes & handwritten OCR',
+      },
+      {
+        id: 'nvidia/nemotron-3-ultra-550b-a55b',
+        name: 'Nemotron 3 Ultra 550B',
+        desc: 'Large-scale reasoning model',
+      },
+      {
+        id: 'meta/llama-3.3-70b-instruct',
+        name: 'Llama 3.3 70B Instruct',
+        desc: 'Top-tier open-weight chat model',
+      },
+      {
+        id: 'deepseek-ai/deepseek-v4.1-flash',
+        name: 'DeepSeek V4.1 Flash',
+        desc: 'Fast reasoning & code',
+      },
+      {
+        id: 'qwen/qwen3-coder-480b-a35b-instruct',
+        name: 'Qwen3 Coder 480B',
+        desc: 'Code-focused reasoning',
+      },
+    ],
+    transcriptionModels: [],
+    keyUrl: 'https://build.nvidia.com/settings',
+    keyPlaceholder: 'nvapi-...',
+    keyPrefix: 'nvapi-',
+  },
   google: {
     id: 'google',
     name: 'Google AI Studio (Gemini)',
@@ -165,6 +203,7 @@ const STORAGE_KEYS = {
   GOOGLE_KEY: 'vellumscribe_ai_studio_api_key_v1',
   GROQ_KEY: 'vellumscribe_groq_api_key_v1',
   DEEPGRAM_KEY: 'vellumscribe_deepgram_api_key_v1',
+  NVIDIA_KEY: 'vellumscribe_nvidia_api_key_v1',
   LAST_VERIFIED: 'vellumscribe_ai_last_verified_v1',
 };
 
@@ -176,6 +215,7 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
   googleApiKey: '',
   groqApiKey: '',
   deepgramApiKey: '',
+  nvidiaApiKey: '',
 
   googleModel: 'gemini-3.6-flash',
   groqModel: 'llama-3.3-70b-versatile',
@@ -198,6 +238,7 @@ export class AiSettingsManager {
   private static cachedGoogleKey: string | null = null;
   private static cachedGroqKey: string | null = null;
   private static cachedDeepgramKey: string | null = null;
+  private static cachedNvidiaKey: string | null = null;
 
   public static async initialize(): Promise<void> {
     if (!this.initPromise) {
@@ -257,6 +298,21 @@ export class AiSettingsManager {
             }
           }
           this.cachedDeepgramKey = deepgramKey || '';
+
+          // 4. NVIDIA NIM API Key
+          let nvidiaKey = await AndroidKeystoreManager.getSecret('nvidia_api_key');
+          if (!nvidiaKey) {
+            const legacy = StorageManager.getItem<string>(STORAGE_KEYS.NVIDIA_KEY, '');
+            if (legacy && legacy.trim()) {
+              await AndroidKeystoreManager.saveSecret('nvidia_api_key', legacy.trim(), 'api_key');
+              const verified = await AndroidKeystoreManager.getSecret('nvidia_api_key');
+              if (verified === legacy.trim()) {
+                StorageManager.removeItem(STORAGE_KEYS.NVIDIA_KEY);
+                nvidiaKey = verified;
+              }
+            }
+          }
+          this.cachedNvidiaKey = nvidiaKey || '';
         } catch (e) {
           AppLogger.warn(
             'AiSettings',
@@ -336,6 +392,9 @@ export class AiSettingsManager {
    */
   public static getApiKey(): string {
     const settings = this.getSettings();
+    if (settings.primaryLlmProvider === 'nvidia') {
+      return this.getNvidiaApiKey();
+    }
     if (settings.primaryLlmProvider === 'groq') {
       return this.getGroqApiKey();
     }
@@ -355,19 +414,46 @@ export class AiSettingsManager {
     this.cachedGoogleKey = '';
     this.cachedGroqKey = '';
     this.cachedDeepgramKey = '';
+    this.cachedNvidiaKey = '';
     StorageManager.removeItem(STORAGE_KEYS.GOOGLE_KEY);
     StorageManager.removeItem(STORAGE_KEYS.GROQ_KEY);
     StorageManager.removeItem(STORAGE_KEYS.DEEPGRAM_KEY);
+    StorageManager.removeItem(STORAGE_KEYS.NVIDIA_KEY);
     StorageManager.removeItem(STORAGE_KEYS.LAST_VERIFIED);
     AndroidKeystoreManager.deleteSecret('google_api_key').catch(() => {});
     AndroidKeystoreManager.deleteSecret('groq_api_key').catch(() => {});
     AndroidKeystoreManager.deleteSecret('deepgram_api_key').catch(() => {});
+    AndroidKeystoreManager.deleteSecret('nvidia_api_key').catch(() => {});
+  }
+
+  // --- NVIDIA NIM key accessors ---
+  public static getNvidiaApiKey(): string {
+    if (this.cachedNvidiaKey !== null) return this.cachedNvidiaKey;
+    return StorageManager.getItem<string>(STORAGE_KEYS.NVIDIA_KEY, '') || '';
+  }
+
+  public static setNvidiaApiKey(key: string): void {
+    const trimmed = key.trim();
+    this.cachedNvidiaKey = trimmed;
+    StorageManager.removeItem(STORAGE_KEYS.NVIDIA_KEY);
+    if (trimmed) {
+      AndroidKeystoreManager.saveSecret('nvidia_api_key', trimmed, 'api_key').catch((e) => {
+        AppLogger.warn('AiSettings', 'Failed to save NVIDIA NIM API key to keystore', e);
+      });
+    } else {
+      AndroidKeystoreManager.deleteSecret('nvidia_api_key').catch((e) => {
+        AppLogger.warn('AiSettings', 'Failed to delete NVIDIA NIM API key from keystore', e);
+      });
+    }
   }
 
   public static hasLocalKey(): boolean {
     const s = this.getSettings();
     if (s.primaryLlmProvider === 'offline_rules') {
       return true; // Local inference doesn't require cloud key
+    }
+    if (s.primaryLlmProvider === 'nvidia') {
+      return Boolean(this.getNvidiaApiKey());
     }
     if (s.primaryLlmProvider === 'groq') {
       return Boolean(this.getGroqApiKey());
@@ -391,6 +477,7 @@ export class AiSettingsManager {
     const googleKey = this.getGoogleApiKey();
     const groqKey = this.getGroqApiKey();
     const deepgramKey = this.getDeepgramApiKey();
+    const nvidiaKey = this.getNvidiaApiKey();
     const lastVerified = StorageManager.getItem<string>(STORAGE_KEYS.LAST_VERIFIED, '');
 
     const resolved: AiIntegrationSettings = {
@@ -403,7 +490,8 @@ export class AiSettingsManager {
       googleApiKey: googleKey,
       groqApiKey: groqKey,
       deepgramApiKey: deepgramKey,
-      apiKey: googleKey || groqKey,
+      nvidiaApiKey: nvidiaKey,
+      apiKey: googleKey || groqKey || nvidiaKey,
       lastVerifiedAt: lastVerified || undefined,
     };
 
@@ -421,7 +509,10 @@ export class AiSettingsManager {
       if (settings.deepgramApiKey !== undefined) {
         this.setDeepgramApiKey(settings.deepgramApiKey);
       }
-      if (settings.apiKey !== undefined && !settings.googleApiKey) {
+      if (settings.nvidiaApiKey !== undefined) {
+        this.setNvidiaApiKey(settings.nvidiaApiKey);
+      }
+      if (settings.apiKey !== undefined && !settings.googleApiKey && !settings.nvidiaApiKey) {
         this.setGoogleApiKey(settings.apiKey);
       }
 
@@ -432,6 +523,7 @@ export class AiSettingsManager {
         googleApiKey: _googleApiKey,
         groqApiKey: _groqApiKey,
         deepgramApiKey: _deepgramApiKey,
+        nvidiaApiKey: _nvidiaApiKey,
         apiKey: _apiKey,
         ...toSave
       } = updated;
@@ -447,7 +539,7 @@ export class AiSettingsManager {
    */
   public static extractApiKeyFromFile(content: string): {
     key: string | null;
-    provider?: 'google' | 'groq' | 'deepgram';
+    provider?: 'google' | 'groq' | 'deepgram' | 'nvidia';
     error?: string;
   } {
     if (!content || !content.trim()) {
@@ -455,6 +547,11 @@ export class AiSettingsManager {
     }
 
     const trimmed = content.trim();
+
+    // 0. NVIDIA NIM key
+    if (/^nvapi-[A-Za-z0-9_-]{20,}$/.test(trimmed)) {
+      return { key: trimmed, provider: 'nvidia' };
+    }
 
     // 1. Google AI Studio key
     if (/^AIzaSy[A-Za-z0-9_-]{33}$/.test(trimmed)) {
@@ -525,7 +622,7 @@ export class AiSettingsManager {
     return {
       key: null,
       error:
-        'Could not detect a valid Google AI Studio (AIzaSy...), Groq (gsk_...), or Deepgram API key in this input.',
+        'Could not detect a valid NVIDIA NIM (nvapi-...), Google AI Studio (AIzaSy...), Groq (gsk_...), or Deepgram API key in this input.',
     };
   }
 
@@ -543,7 +640,56 @@ export class AiSettingsManager {
   }> {
     const startTime = Date.now();
 
-    // 1. Google AI Studio
+    // 1. NVIDIA NIM
+    if (provider === 'nvidia') {
+      const keyToTest = (options?.key || this.getNvidiaApiKey()).trim();
+      if (!keyToTest) {
+        return {
+          success: false,
+          message: 'Please provide an NVIDIA NIM API key (starts with nvapi-).',
+        };
+      }
+
+      try {
+        const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
+          headers: { Authorization: `Bearer ${keyToTest}` },
+        });
+        const data: any = await res.json().catch(() => null);
+        const latency = Date.now() - startTime;
+
+        if (res.ok && data?.data) {
+          const modelList = (data.data as Array<{ id: string }>).map((m) => m.id);
+          const now = new Date().toISOString();
+          StorageManager.setItem(STORAGE_KEYS.LAST_VERIFIED, now);
+          return {
+            success: true,
+            message: `Connected to NVIDIA NIM in ${latency}ms! ${modelList.length} models available.`,
+            availableModels: modelList.filter(
+              (m) =>
+                m.includes('nemotron') ||
+                m.includes('llama') ||
+                m.includes('deepseek') ||
+                m.includes('qwen') ||
+                m.includes('mistral')
+            ),
+            latencyMs: latency,
+          };
+        }
+
+        return {
+          success: false,
+          message: data?.error?.message || 'Authentication rejected by NVIDIA NIM.',
+        };
+      } catch (_err) {
+        const err = asErrorLike(_err);
+        return {
+          success: false,
+          message: err?.message || 'Network error connecting to NVIDIA NIM.',
+        };
+      }
+    }
+
+    // 2. Google AI Studio
     if (provider === 'google') {
       const keyToTest = (options?.key || this.getGoogleApiKey()).trim();
       if (!keyToTest) {
