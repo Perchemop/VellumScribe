@@ -36,18 +36,33 @@ import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/sch
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 
-export const CURRENT_APP_VERSION = '3.1.1';
-export const CURRENT_BUILD_NUMBER = 31000;
+export const CURRENT_APP_VERSION = '3.2.0';
+export const CURRENT_BUILD_NUMBER = 32000;
 export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
 export const CURRENT_BACKUP_FORMAT_VERSION = '3.1';
 export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '3.2.0',
+    buildNumber: 32000,
+    releaseDate: '2026-11-14',
+    isCurrent: true,
+    highlights: [
+      'Release Notes popup opened from a bottom-right version chip (guide §12.1)',
+      'CI-managed token ledger (docs/tokens.json) quoted in release notes',
+      'sql.js WASM pair generated at build time instead of committed',
+      'Foreign-key enforcement made real (was silently reset by sql.js export())',
+      'Backup import no longer silently drops events (saveEvent upsert)',
+    ],
+    features: [],
+    fixes: [],
+  },
+  {
     version: '3.1.1',
     buildNumber: 31000,
     releaseDate: '2026-10-03',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Real native Whisper build path (upstream whisper.cpp + ggml when third_party is present)',
       'Dual-mode JNI bridge supporting full tensor inference and fail-closed stub',
