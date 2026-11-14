@@ -42,7 +42,17 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
     const note = createNote('Valid note');
 
     insertMedia('media-valid', note.id);
-    insertMedia('media-orphan-deleted', 99999);
+    // The 99999 parent note deliberately does not exist: this row simulates legacy corruption so
+    // the orphan-repair path has something to find. sql.js >= 1.15.2 actually enforces the FK
+    // pragma (<= 1.14 silently reset it in export()), so suspend enforcement for the dangling
+    // insert only and restore enforcement immediately after the window.
+    const adapter = getDatabaseAdapter();
+    adapter.run('PRAGMA foreign_keys = OFF;');
+    try {
+      insertMedia('media-orphan-deleted', 99999);
+    } finally {
+      adapter.run('PRAGMA foreign_keys = ON;');
+    }
     insertMedia('media-orphan-null', null);
 
     const orphans = SqliteRepository.findOrphanMediaKeys();

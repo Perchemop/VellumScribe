@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportSafetyPipeline } from './importSafety';
 import { SqliteEngine } from './sqlite/sqliteEngine';
+import { getDatabaseAdapter } from './sqlite/databaseAdapter';
 import { StorageManager } from './storage';
 
 beforeEach(async () => {
@@ -91,13 +92,21 @@ describe('ImportSafetyPipeline', () => {
   });
 
   it('creates a safety backup snapshot and executes transactional import with integrity check', async () => {
-    // Add an initial note
-    StorageManager.addNote({
-      event_id: 1,
-      title: 'Initial Note Before Import',
-      body: 'Pre-existing content',
-      created_at: new Date().toISOString(),
-    });
+    // Add an initial note; event 1 deliberately does not exist (simulated legacy data the import
+    // must tolerate), so suspend FK enforcement for this dangling insert — sql.js >= 1.15.2
+    // enforces the pragma (<= 1.14 silently reset it in export()) — and restore it right after.
+    const db = getDatabaseAdapter();
+    db.run('PRAGMA foreign_keys = OFF;');
+    try {
+      StorageManager.addNote({
+        event_id: 1,
+        title: 'Initial Note Before Import',
+        body: 'Pre-existing content',
+        created_at: new Date().toISOString(),
+      });
+    } finally {
+      db.run('PRAGMA foreign_keys = ON;');
+    }
     expect(StorageManager.getNotes().length).toBeGreaterThanOrEqual(1);
 
     const backupPayload = JSON.stringify({

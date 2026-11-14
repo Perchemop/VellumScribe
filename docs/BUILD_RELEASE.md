@@ -106,6 +106,12 @@ cd android
 
 The signed APK is located at: `android/app/build/outputs/apk/release/app-release.apk`.
 
+### Generated sql.js WebAssembly pair (`public/sql-wasm.*`)
+
+`public/sql-wasm.js` and `public/sql-wasm.wasm` are **generated, not committed**: `scripts/vendor-sql-wasm.mjs` copies them from `node_modules/sql.js/dist/`, and npm runs that script automatically before every web build (`prebuild` / `prebuild:spa`). A fresh clone needs `npm ci` (or `npm install`) before the first build — which step 1 above already requires. To regenerate by hand, e.g. in a checkout used only for `npm run dev` (which has no pre-hook), run `node scripts/vendor-sql-wasm.mjs`.
+
+The pair must always come from a single sql.js build: the app bundles the JS glue from the installed package, while `src/lib/sqlite/sqliteEngine.ts` force-serves the binary from `/sql-wasm.wasm`. When the two drift — the bundled sql.js 1.16 glue meeting a hand-committed 1.14 binary — engine init fails at boot (`ka is not a function`). Generating both files at build time from the installed package makes that drift impossible.
+
 ---
 
 ## 4. ProGuard & R8 Verification
