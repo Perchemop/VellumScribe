@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-14 — **Release v3.2.0 cut** (`572fa90`, tag `v3.2.0`, GitHub Release published with real + stub APKs + SHA-256 checksums, all CI gates green).
+**Last updated:** 2026-11-14 — **Release v3.2.1 cut** (`181ac32`, tag `v3.2.1`, GitHub Release published with real + stub APKs + SHA-256 checksums, all CI gates green).
 
 ---
 
@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | clean; `main` at `572fa90` — **v3.2.0 released** (tag `v3.2.0`, release `43564676569`, APK build `43564676701`, all green); no open pull requests; all agent-actionable slices complete                                                                                                                                                 |
+| Working tree     | clean; `main` at `181ac32` — **v3.2.1 released** (tag `v3.2.1`, release `43586395926`, APK build `43586395926`, all green); no open pull requests; all agent-actionable slices complete                                                                                                                                                 |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
