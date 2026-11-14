@@ -69,7 +69,7 @@ describe('ReleaseNotesModal — release-notes contract', () => {
     expect(markup).toContain('aria-labelledby="release-notes-title"');
     expect(markup).toContain('id="release-notes-title"');
     expect(text).toContain('VellumScribe v3.2.0');
-    expect(text).toContain('Build #31000');
+    expect(text).toContain('Build #32000');
   });
 
   it('renders the version history with at least one historical version', () => {

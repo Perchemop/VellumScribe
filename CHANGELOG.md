@@ -99,7 +99,7 @@ code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
 ### Fixed
 
-- **Backup import no longer silently drops events.** `saveEvent` decided
+- **Backup import no longer silently drops imported notes.** `saveEvent` decided
   "existing" from the record's id alone, so restoring a backup whose events
   carry ids not yet in the database matched **0 rows** and imported nothing —
   the notes then referenced an event that was never created. The import only
