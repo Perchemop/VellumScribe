@@ -44,10 +44,22 @@ export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '3.2.2',
+    buildNumber: 32002,
+    releaseDate: '2026-11-14',
+    isCurrent: true,
+    highlights: [
+      'Native Whisper model-load crash fixed (model SHA-256 verified before init; single-threaded inference)',
+      'CI-managed token ledger (docs/tokens.json) quoted in release notes',
+    ],
+    features: [],
+    fixes: [],
+  },
+  {
     version: '3.2.1',
     buildNumber: 32001,
     releaseDate: '2026-11-14',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Release Notes popup opened from a bottom-right version chip (guide §12.1)',
       'CI-managed token ledger (docs/tokens.json) quoted in release notes',
