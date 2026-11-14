@@ -1712,9 +1712,10 @@ app.post('/api/nvidia/verify', async (req, res) => {
       .toString()
       .trim();
     if (!key) {
-      return res
-        .status(400)
-        .json({ success: false, error: 'Please provide an NVIDIA NIM API key (starts with nvapi-).' });
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide an NVIDIA NIM API key (starts with nvapi-).',
+      });
     }
     const response = await fetch('https://integrate.api.nvidia.com/v1/models', {
       headers: { Authorization: `Bearer ${key}` },
@@ -1752,11 +1753,9 @@ app.post('/api/nvidia/chat', async (req, res) => {
       .toString()
       .trim();
     if (!key) {
-      return res
-        .status(400)
-        .json({
-          error: 'NVIDIA NIM API key required. Paste your free key from build.nvidia.com/settings.',
-        });
+      return res.status(400).json({
+        error: 'NVIDIA NIM API key required. Paste your free key from build.nvidia.com/settings.',
+      });
     }
     const { prompt, model = 'nvidia/nemotron-3.5-super-vl-120b-a12b', systemPrompt } = req.body;
     const messages: Array<{ role: string; content: string }> = [];
