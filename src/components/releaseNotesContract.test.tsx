@@ -68,12 +68,13 @@ describe('ReleaseNotesModal — release-notes contract', () => {
     expect(markup).toContain('aria-modal="true"');
     expect(markup).toContain('aria-labelledby="release-notes-title"');
     expect(markup).toContain('id="release-notes-title"');
-    expect(text).toContain('VellumScribe v3.2.0');
+    expect(text).toContain('VellumScribe v3.2.1');
     expect(text).toContain('Build #32000');
   });
 
   it('renders the version history with at least one historical version', () => {
     expect(text).toContain('Version history');
+    expect(text).toContain('Version 3.2.1');
     expect(text).toContain('Version 3.2.0');
     expect(text).toContain('Version 3.1.1');
     expect(text).toContain('Version 3.0.0');
@@ -84,7 +85,7 @@ describe('ReleaseNotesModal — release-notes contract', () => {
     expect(text).toContain('Token metrics');
     expect(text).toContain('Total tokens since start');
     expect(text).toContain('20,948,427');
-    expect(text).toContain('v3.2.0');
+    expect(text).toContain('v3.2.1');
   });
 
   it('renders the update button label for the idle footer', () => {
@@ -109,8 +110,8 @@ describe('VersionFootprint — bottom-right version affordance', () => {
   const text = visibleText(markup);
 
   it('renders an accessible name containing the running version', () => {
-    expect(markup).toContain('aria-label="Version 3.2.0 — release notes"');
-    expect(text).toContain('v3.2.0');
+    expect(markup).toContain('aria-label="Version 3.2.1 — release notes"');
+    expect(text).toContain('v3.2.1');
   });
 
   it('is a real button that stays fixed at the bottom-right and out of the flow', () => {
