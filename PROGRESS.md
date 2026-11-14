@@ -3,7 +3,7 @@
 Running status of the project. Newest entries at the top of each section.
 Append here for every slice; never rewrite history.
 
-**Last updated:** 2026-11-14 (closing gates on `main`: CI `43543127039`, full-history secret audit `43543173795` — 473 commits, no leaks found, Android APK `43543126957`, all green at `bbeaca9`)
+**Last updated:** 2026-11-14 — **Release v3.2.0 cut** (`572fa90`, tag `v3.2.0`, GitHub Release published with real + stub APKs + SHA-256 checksums, all CI gates green).
 
 ---
 
@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | clean; `main` at `bbeaca9` — S-1…S-4 merged, sql.js 1.16.0 landed (#183), session docs recorded; **no open pull requests**; closing gates green: main CI run `43543127039`, full-history audit run `43543173795` (**473 commits, no leaks found**), Android APK run `43543126957`                                                       |
+| Working tree     | clean; `main` at `572fa90` — **v3.2.0 released** (tag `v3.2.0`, release `43564676569`, APK build `43564676701`, all green); no open pull requests; all agent-actionable slices complete                                                                                                                                                 |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
@@ -90,6 +90,44 @@ can never be committed.
 verify` re-run and green.
 
 ---
+
+## 2026-11-14 — Release v3.2.0
+
+**Release `v3.2.0`** — https://github.com/Perchemop/VellumScribe/releases/tag/v3.2.0
+(created by `release.yml` from tag `v3.2.0` at commit `572fa90`; APKs attached by
+the `Build Android APK` tag run `43564676701`, both legs success):
+
+| Asset                                  | Size                 |
+| -------------------------------------- | -------------------- |
+| `VellumScribe-v3.2.0-real-release.apk` | 38.8 MB              |
+| `VellumScribe-v3.2.0-real-debug.apk`   | 46.0 MB              |
+| `VellumScribe-v3.2.0-stub-release.apk` | 7.4 MB               |
+| `VellumScribe-v3.2.0-stub-debug.apk`   | 14.0 MB              |
+| SHA-256 checksums                      | attached per variant |
+
+All required CI gates green on `main` at `572fa90`: CI (format + verify ×3 OS),
+Security Scanning (full-history secret audit, 473 commits, no leaks found),
+Android APK — real + stub. Release notes include the full `[Unreleased]` →
+`[3.2.0]` changelog section plus the `### Token ledger` section from
+`docs/tokens.json` ("not measured" for both figures, as required by the
+honesty rule).
+
+Closing gates:
+
+- CI run `43564057934` — success
+- Security Scanning run `43564057979` — success
+- Android APK — real run `43564057978` — success
+- Android APK — real + stub (release) run `43564676701` — success
+
+**Agent-actionable work is now complete.** No open pull requests, `main` is
+green on all gates. Remaining items are person-gated:
+
+- On-device verification (A-3 update-in-place, C-5 native Whisper inference,
+  on-hardware a11y spot-check) per `docs/qc/on-device-proof-3.1.1.md` — needs
+  a physical arm64 device; install the real APK from run `43564676701`
+- Q-015 (employer IP check — legal), Q-019 (formal trademark clearance —
+  human/legal), Q-009/Q-010 (ABI and APK size appetite) — recorded in
+  `docs/assumptions-and-questions.md` and `IMPLEMENTATION_PLAN.md` D-3
 
 ## 2026-11-14 — Slice S-4: sql.js hygiene + the FK hardening exposed a real import bug
 
