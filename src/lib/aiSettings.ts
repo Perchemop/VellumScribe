@@ -659,6 +659,7 @@ export class AiSettingsManager {
         });
         const data = (await res.json().catch(() => null)) as {
           data?: Array<{ id?: string }>;
+          error?: { message?: string };
         } | null;
         const latency = Date.now() - startTime;
 
