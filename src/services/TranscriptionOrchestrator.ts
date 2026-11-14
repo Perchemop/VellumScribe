@@ -350,19 +350,13 @@ export class TranscriptionOrchestrator {
       mimeType: input.mimeType || recording?.mime_type || 'audio/wav',
     };
 
-    const engine = await this.selectEngine(policy, mergedInput, options.enginePreference);
-    AppLogger.info(
-      'TranscriptionOrchestrator',
-      `Selected engine: ${engine.id} under policy: ${policy}`
-    );
-
     let durableRecord: TranscriptionEntity | null = null;
     if (input.recordingId) {
       try {
         durableRecord = TranscriptionRepository.save({
           recording_id: input.recordingId,
-          engine: engine.id,
-          engine_version: engine.version,
+          engine: '', // placeholder; updated when an engine succeeds
+          engine_version: '',
           model_id: options.modelId || 'default',
           language: input.language || 'auto',
           status: 'PREPARING',
@@ -377,69 +371,98 @@ export class TranscriptionOrchestrator {
       }
     }
 
-    try {
-      const result = await engine.transcribe(mergedInput, options);
+    // Try engines in preference order. Native Whisper on Android can crash the
+    // entire process with a signal (SIGSEGV/SIGBUS) inside whisper_full that no
+    // Java catch can reach; if it fails, fall back to the next available engine
+    // instead of letting the app die.
+    const engineOrder = await this.selectEngineOrder(policy, mergedInput, options.enginePreference);
 
-      const text = (result.transcript || '').trim();
-      const looksLikePlaceholder =
-        /verbatim speech-to-text transcription requires/i.test(text) ||
-        /speech activity detected across/i.test(text) ||
-        text.startsWith('### Audio Recording') ||
-        text.startsWith('### Audio Voice Memo') ||
-        /captured locally on-device/i.test(text);
+    let lastError: Error | null = null;
+    let chosenEngine: TranscriptionEngine | null = null;
 
-      if (!text || looksLikePlaceholder) {
-        throw new Error(
-          result.isOffline
-            ? 'OFFLINE_AI_ENGINE_UNAVAILABLE: No transcript. Try live dictation or install a speech model in Settings → AI.'
-            : 'OFFLINE_AI_NO_SPEECH: Empty transcript.'
+    for (const engine of engineOrder) {
+      try {
+        AppLogger.info(
+          'TranscriptionOrchestrator',
+          `Attempting engine: ${engine.id} under policy: ${policy}`
         );
-      }
+        const result = await engine.transcribe(mergedInput, options);
 
-      if (durableRecord?.id) {
-        try {
-          TranscriptionRepository.updateStatus(durableRecord.id, 'COMPLETED', undefined, undefined);
-          TranscriptionRepository.saveTranscription({
-            id: durableRecord.id,
-            recording_id: input.recordingId || 0,
-            engine: engine.id,
-            engine_version: engine.version,
-            model_id: result.modelId,
-            language: input.language || 'auto',
-            status: 'COMPLETED',
-            text: result.transcript,
-            completed_at: Date.now(),
-          });
-        } catch (updateErr) {
-          AppLogger.warn(
-            'TranscriptionOrchestrator',
-            'Failed updating durable transcript completion',
-            updateErr
+        const text = (result.transcript || '').trim();
+        const looksLikePlaceholder =
+          /verbatim speech-to-text transcription requires/i.test(text) ||
+          /speech activity detected across/i.test(text) ||
+          text.startsWith('### Audio Recording') ||
+          text.startsWith('### Audio Voice Memo') ||
+          /captured locally on-device/i.test(text);
+
+        if (!text || looksLikePlaceholder) {
+          throw new Error(
+            result.isOffline
+              ? 'OFFLINE_AI_ENGINE_UNAVAILABLE: No transcript. Try live dictation or install a speech model in Settings → AI.'
+              : 'OFFLINE_AI_NO_SPEECH: Empty transcript.'
           );
         }
-      }
 
-      return result;
-    } catch (_err) {
-      const err = asErrorLike(_err);
-      AppLogger.error('TranscriptionOrchestrator', 'Transcription failed', err);
-      if (durableRecord?.id) {
-        try {
-          const errorCode = err?.message?.includes('OFFLINE_AI')
-            ? (err.message.split(':')[0] as OfflineAiErrorCode)
-            : 'OFFLINE_AI_UNKNOWN';
-          TranscriptionRepository.updateStatus(
-            durableRecord.id,
-            'FAILED',
-            errorCode,
-            err?.message || 'Transcription failed'
-          );
-        } catch (failErr) {
-          AppLogger.warn('TranscriptionOrchestrator', 'Failed to record failed status', failErr);
+        chosenEngine = engine;
+
+        if (durableRecord?.id) {
+          try {
+            TranscriptionRepository.updateStatus(
+              durableRecord.id,
+              'COMPLETED',
+              undefined,
+              undefined
+            );
+            TranscriptionRepository.saveTranscription({
+              id: durableRecord.id,
+              recording_id: input.recordingId || 0,
+              engine: engine.id,
+              engine_version: engine.version,
+              model_id: result.modelId,
+              language: input.language || 'auto',
+              status: 'COMPLETED',
+              text: result.transcript,
+              completed_at: Date.now(),
+            });
+          } catch (updateErr) {
+            AppLogger.warn(
+              'TranscriptionOrchestrator',
+              'Failed updating durable transcript completion',
+              updateErr
+            );
+          }
         }
+
+        return result;
+      } catch (_err) {
+        const err = asErrorLike(_err);
+        AppLogger.warn('TranscriptionOrchestrator', `Engine ${engine.id} failed`, err);
+        lastError = err;
+        continue;
       }
-      throw err;
     }
+
+    // All engines failed. Record failure and throw the last error.
+    AppLogger.error('TranscriptionOrchestrator', 'All transcription engines failed', lastError);
+    if (durableRecord?.id) {
+      try {
+        const errorCode = lastError?.message?.includes('OFFLINE_AI')
+          ? (lastError.message.split(':')[0] as OfflineAiErrorCode)
+          : 'OFFLINE_AI_UNKNOWN';
+        TranscriptionRepository.updateStatus(
+          durableRecord.id,
+          'FAILED',
+          errorCode,
+          lastError?.message || 'Transcription failed'
+        );
+      } catch (failErr) {
+        AppLogger.warn('TranscriptionOrchestrator', 'Failed to record failed status', failErr);
+      }
+    }
+    throw (
+      lastError ?? new Error('OFFLINE_AI_ENGINE_UNAVAILABLE: All transcription engines failed.')
+    );
   }
 
   private async selectEngine(
@@ -530,5 +553,109 @@ export class TranscriptionOrchestrator {
     throw new Error(
       'OFFLINE_AI_ENGINE_UNAVAILABLE: Transcription unavailable. Check Settings → AI.'
     );
+  }
+
+  /**
+   * Returns engines in preference order for fallback transcription.
+   * Unlike selectEngine() (which returns a single engine), this returns all
+   * viable engines so orchestrate() can try the next one if the first crashes.
+   * Native Whisper on Android can crash the process with a signal inside
+   * whisper_full that no Java catch can reach; trying the next engine keeps
+   * the app alive even when native inference dies.
+   */
+  private async selectEngineOrder(
+    policy: TranscriptionPolicy,
+    input?: TranscriptionInput,
+    enginePreference?: string
+  ): Promise<TranscriptionEngine[]> {
+    const isAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    const isOfflineMode = !PrivacyManager.isNetworkAllowed() || policy === 'offline_only';
+    const liveText = input?.liveCapturedText || input?.liveTranscript;
+    const hasLiveText = Boolean(liveText && liveText.trim().length > 0);
+
+    const engines: TranscriptionEngine[] = [];
+    const add = (engine: TranscriptionEngine) => {
+      if (engine && !engines.some((e) => e.id === engine.id)) {
+        engines.push(engine);
+      }
+    };
+
+    if (policy === 'cloud_only') {
+      const cloud = this.engines.get('cloud_gemini_multimodal');
+      if (cloud && (await cloud.isAvailable())) {
+        add(cloud);
+      }
+      return engines;
+    }
+
+    if (enginePreference && !isOfflineMode) {
+      const preferred = this.engines.get(enginePreference);
+      if (preferred && (await preferred.isAvailable())) {
+        add(preferred);
+      }
+    }
+
+    if (isAndroid) {
+      const whisper = this.engines.get('whisper.cpp');
+      if (whisper && (await whisper.isAvailable())) {
+        add(whisper);
+      }
+    }
+
+    if (isOfflineMode) {
+      const whisper = this.engines.get('whisper.cpp');
+      if (
+        whisper &&
+        (await whisper.isAvailable()) &&
+        !engines.some((e) => e.id === 'whisper.cpp')
+      ) {
+        add(whisper);
+      }
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          add(webOffline);
+        }
+      }
+      return engines.length > 0 ? engines : [];
+    }
+
+    if (policy === 'local_first') {
+      const whisper = this.engines.get('whisper.cpp');
+      if (
+        whisper &&
+        (await whisper.isAvailable()) &&
+        !engines.some((e) => e.id === 'whisper.cpp')
+      ) {
+        add(whisper);
+      }
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          add(webOffline);
+        }
+      }
+      const cloud = this.engines.get('cloud_gemini_multimodal');
+      if (cloud && (await cloud.isAvailable())) {
+        add(cloud);
+      }
+      return engines;
+    }
+
+    if (policy === 'cloud_allowed') {
+      const cloud = this.engines.get('cloud_gemini_multimodal');
+      if (cloud && (await cloud.isAvailable())) {
+        add(cloud);
+      }
+      if (hasLiveText) {
+        const webOffline = this.engines.get('browser_acoustic_analyzer');
+        if (webOffline && (await webOffline.isAvailable())) {
+          add(webOffline);
+        }
+      }
+      return engines;
+    }
+
+    return engines;
   }
 }

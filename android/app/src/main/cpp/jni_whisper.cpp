@@ -255,8 +255,12 @@ Java_com_vellumscribe_app_offlineai_whisper_WhisperEngine_nativeTranscribe(
         }
     }
 
-    int threads = nThreads > 0 ? nThreads : 2;
-    if (threads > 4) threads = 4;
+    // Single-threaded inference is more CPU-compatible: multi-threaded GGML
+    // can use SIMD instructions that fault (SIGSEGV/SIGBUS) on some ARM CPUs,
+    // killing the whole process before any Java catch can run. One thread is
+    // plenty for whisper-tiny on short clips and avoids the crash entirely.
+    int threads = nThreads > 0 ? nThreads : 1;
+    if (threads > 1) threads = 1;
     LOGI("nativeTranscribe: samples=%d threads=%d lang=%s real_build=%d",
          sampleCount, threads, langStr.c_str(), VELLUM_WHISPER_REAL_BUILD);
 
