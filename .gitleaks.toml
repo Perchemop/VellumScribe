@@ -30,11 +30,13 @@ regexes = [
   # slots and never a credential value itself:
   #   vellumscribe_groq_api_key_v1 + vellumscribe_deepgram_api_key_v1
   #     (src/lib/aiSettings.ts STORAGE_KEYS constants)
+  #   vellumscribe_nvidia_api_key_v1 (src/lib/aiSettings.ts STORAGE_KEYS constant
+  #     for the NVIDIA NIM provider added 2026-11-14)
   #   vellumscribe_splash_seen_v1 (src/components/FirstTimeUserGuideModal.tsx)
   #   previous_db_v1 (src/lib/sqlite/sqliteEngine.ts SQLite key constant — its
   #     siblings current_db_v1 / authoritative_db_v1 are already excluded by
   #     gitleaks' built-in stopwords, so only this one needs an entry)
-  '''vellumscribe_(?:groq|deepgram)_api_key_v1''',
+  '''vellumscribe_(?:groq|deepgram|nvidia)_api_key_v1''',
   '''vellumscribe_splash_seen_v1''',
   '''previous_db_v1''',
 

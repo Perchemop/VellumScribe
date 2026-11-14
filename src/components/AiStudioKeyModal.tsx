@@ -27,7 +27,7 @@ interface AiStudioKeyModalProps {
   onSuccess?: () => void;
   title?: string;
   description?: string;
-  initialProvider?: 'google' | 'groq' | 'deepgram' | 'offline_rules';
+  initialProvider?: 'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules';
 }
 
 export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
@@ -35,13 +35,13 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   onClose,
   onSuccess,
   title = 'AI Provider & Intelligence Backend',
-  description = 'Choose your preferred intelligence engine: use free BYOK cloud keys or 100% offline private processing.',
-  initialProvider = 'google',
+  description = 'Choose your preferred intelligence engine: paste any provider API key and it works across all AI features.',
+  initialProvider = 'nvidia',
 }) => {
   useModalBackHandler(isOpen, onClose, 'ai-studio-key-modal');
   const isAdvancedProvider = ['groq', 'deepgram'].includes(initialProvider);
   const [selectedProvider, setSelectedProvider] = useState<
-    'google' | 'groq' | 'deepgram' | 'offline_rules'
+    'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules'
   >(initialProvider);
   const [showAdvancedProviders, setShowAdvancedProviders] = useState(isAdvancedProvider);
   const [keyInput, setKeyInput] = useState<string>('');
@@ -54,10 +54,12 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   const [, setFileFeedback] = useState<string | null>(null);
 
   const loadProviderKey = (
-    provider: 'google' | 'groq' | 'deepgram' | 'offline_rules',
+    provider: 'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules',
     currentSettings = AiSettingsManager.getSettings()
   ) => {
-    if (provider === 'google') {
+    if (provider === 'nvidia') {
+      setKeyInput(currentSettings.nvidiaApiKey || currentSettings.apiKey || '');
+    } else if (provider === 'google') {
       setKeyInput(currentSettings.googleApiKey || currentSettings.apiKey || '');
     } else if (provider === 'groq') {
       setKeyInput(currentSettings.groqApiKey || '');
@@ -78,7 +80,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     }
   }, [isOpen, initialProvider]);
 
-  const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'offline_rules') => {
+  const handleSelectTab = (prov: 'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules') => {
     if (['groq', 'deepgram'].includes(prov)) {
       setShowAdvancedProviders(true);
     }
@@ -113,10 +115,16 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         if (text && text.trim()) {
           const extracted = AiSettingsManager.extractApiKeyFromFile(text);
           if (extracted.key) {
+            setSelectedProvider(
+              extracted.provider as 'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules'
+            );
             setKeyInput(extracted.key);
-            setFileFeedback('Pasted API key from clipboard.');
+            setFileFeedback('Pasted API key from clipboard — provider detected automatically.');
           } else {
             setKeyInput(text.trim());
+            setFileFeedback(
+              'Pasted text — not recognized as a provider key. Enter it manually to verify.'
+            );
           }
         }
       }
@@ -135,7 +143,32 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     setVerifyStatus(null);
 
     try {
-      if (selectedProvider === 'google') {
+      if (selectedProvider === 'nvidia') {
+        const trimmed = keyInput.trim();
+        if (!trimmed) {
+          setVerifyStatus({ success: false, message: 'Please paste your NVIDIA NIM key.' });
+          setIsVerifying(false);
+          return;
+        }
+        const res = await AiSettingsManager.testProviderConnection('nvidia', { key: trimmed });
+        if (res.success) {
+          AiSettingsManager.setNvidiaApiKey(trimmed);
+          AiSettingsManager.updateSettings({ primaryLlmProvider: 'nvidia' });
+          setVerifyStatus({
+            success: true,
+            message: res.message || 'Connected to NVIDIA NIM!',
+          });
+          setTimeout(() => {
+            if (onSuccess) onSuccess();
+            onClose();
+          }, 1000);
+        } else {
+          setVerifyStatus({
+            success: false,
+            message: res.message || 'NVIDIA NIM verification failed.',
+          });
+        }
+      } else if (selectedProvider === 'google') {
         const trimmed = keyInput.trim();
         if (!trimmed) {
           setVerifyStatus({ success: false, message: 'Please paste your Google AI Studio key.' });
@@ -220,6 +253,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
   };
 
   const handleClearKey = () => {
+    if (selectedProvider === 'nvidia') AiSettingsManager.setNvidiaApiKey('');
     if (selectedProvider === 'google') AiSettingsManager.setGoogleApiKey('');
     if (selectedProvider === 'groq') AiSettingsManager.setGroqApiKey('');
     if (selectedProvider === 'deepgram') AiSettingsManager.setDeepgramApiKey('');
@@ -258,6 +292,19 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         <div className="flex items-center border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50 px-5 pt-3 gap-1 overflow-x-auto">
           <button
             type="button"
+            onClick={() => handleSelectTab('nvidia')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
+              selectedProvider === 'nvidia'
+                ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400 bg-white dark:bg-[#131317]'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>NVIDIA NIM (Recommended)</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => handleSelectTab('google')}
             className={`px-3 py-2 text-xs font-semibold rounded-t-xl transition-colors flex items-center gap-1.5 border-b-2 whitespace-nowrap min-h-[44px] ${
               selectedProvider === 'google'
@@ -266,7 +313,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Google AI (Recommended)</span>
+            <span>Google AI Studio</span>
           </button>
 
           <button
@@ -282,7 +329,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
             <span>Offline Engine (No Keys)</span>
           </button>
 
-          {showAdvancedProviders || ['groq', 'deepgram'].includes(selectedProvider) ? (
+          {showAdvancedProviders || ['groq', 'deepgram', 'nvidia'].includes(selectedProvider) ? (
             <>
               <button
                 type="button"
@@ -330,7 +377,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               type="button"
               onClick={() => setShowAdvancedProviders(true)}
               className="ml-auto px-2.5 py-1.5 text-xs text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap min-h-[36px]"
-              title="Show developer & self-hosted options (Groq, Deepgram)"
+              title="Show developer & self-hosted options (Groq, Deepgraph)"
             >
               <span>+ More Providers</span>
               <ChevronDown className="w-3.5 h-3.5" />
@@ -341,6 +388,21 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
         {/* Body */}
         <div className="p-5 space-y-4 text-xs overflow-y-auto flex-1">
           {/* Provider Specific Information */}
+          {selectedProvider === 'nvidia' && (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-300 flex items-start gap-2.5">
+              <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-xs text-emerald-800 dark:text-emerald-300">
+                  NVIDIA NIM (Nemotron 3.5 Super VL)
+                </p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-400/90 leading-relaxed">
+                  Free tier, no credit card required. Nemotron reasoning + vision + tool-calling
+                  models — ideal for note synthesis, OCR, and action-item extraction. Key generated
+                  at build.nvidia.com/settings.
+                </p>
+              </div>
+            </div>
+          )}
           {selectedProvider === 'google' && (
             <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-300 flex items-start gap-2.5">
               <Shield className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -425,11 +487,13 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               </div>
               <a
                 href={
-                  selectedProvider === 'google'
-                    ? 'https://aistudio.google.com/app/apikey'
-                    : selectedProvider === 'groq'
-                      ? 'https://console.groq.com/keys'
-                      : 'https://console.deepgram.com/'
+                  selectedProvider === 'nvidia'
+                    ? 'https://build.nvidia.com/settings'
+                    : selectedProvider === 'google'
+                      ? 'https://aistudio.google.com/app/apikey'
+                      : selectedProvider === 'groq'
+                        ? 'https://console.groq.com/keys'
+                        : 'https://console.deepgram.com/'
                 }
                 target="_blank"
                 rel="noreferrer"
@@ -437,11 +501,13 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
               >
                 <span>
                   Open{' '}
-                  {selectedProvider === 'google'
-                    ? 'AI Studio'
-                    : selectedProvider === 'groq'
-                      ? 'Groq Console'
-                      : 'Deepgram'}
+                  {selectedProvider === 'nvidia'
+                    ? 'NVIDIA NIM Keys'
+                    : selectedProvider === 'google'
+                      ? 'AI Studio'
+                      : selectedProvider === 'groq'
+                        ? 'Groq Console'
+                        : 'Deepgram'}
                 </span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -485,11 +551,13 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
                     setVerifyStatus(null);
                   }}
                   placeholder={
-                    selectedProvider === 'google'
-                      ? 'AIzaSy...'
-                      : selectedProvider === 'groq'
-                        ? 'gsk_...'
-                        : 'Paste Deepgram key...'
+                    selectedProvider === 'nvidia'
+                      ? 'nvapi-...'
+                      : selectedProvider === 'google'
+                        ? 'AIzaSy...'
+                        : selectedProvider === 'groq'
+                          ? 'gsk_...'
+                          : 'Paste Deepgram key...'
                   }
                   className="w-full px-3.5 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl font-mono text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-20"
                 />

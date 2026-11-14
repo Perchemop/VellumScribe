@@ -420,6 +420,54 @@ export class GeminiApiService {
   }
 
   /**
+   * Direct NVIDIA NIM chat completion
+   * OpenAI-compatible endpoint at integrate.api.nvidia.com/v1
+   * Auth: Bearer nvapi-... key from build.nvidia.com/settings
+   */
+  private static async executeNvidiaChat(
+    prompt: string,
+    model = 'nvidia/nemotron-3.5-super-vl-120b-a12b'
+  ): Promise<string> {
+    PrivacyManager.assertNetworkAllowed('NVIDIA NIM');
+    const key = AiSettingsManager.getNvidiaApiKey().trim();
+    if (!key) throw new Error('NVIDIA NIM API key not configured.');
+
+    // 1. Direct fetch to NVIDIA NIM (OpenAI-compatible)
+    try {
+      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.2,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.choices?.[0]?.message?.content) {
+        return data.choices[0].message.content;
+      }
+    } catch {
+      // Try server proxy fallback
+    }
+
+    // 2. Server proxy fallback
+    const proxyRes = await fetch('/api/nvidia/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ prompt, model, apiKey: key }),
+    });
+    const proxyData = await proxyRes.json().catch(() => null);
+    if (proxyRes.ok && proxyData?.text) {
+      return proxyData.text;
+    }
+    throw new Error(proxyData?.error || 'NVIDIA NIM synthesis request failed.');
+  }
+
+  /**
    * Handwritten note OCR using Google AI Studio
    */
   public static async scanHandwrittenNote(
@@ -1337,7 +1385,31 @@ Formatting Directives:
 - Use clean GitHub-flavored Markdown.
 - Output ONLY the synthesized content without meta-introductions, polite chat, or sign-offs.`;
 
-    // 1. Route to Groq if selected
+    // 1. Route to NVIDIA NIM if selected (user's preferred provider)
+    if (llmProvider === 'nvidia') {
+      try {
+        const nimText = await this.executeNvidiaChat(
+          fullPrompt,
+          settings.nvidiaModel || 'nvidia/nemotron-3.5-super-vl-120b-a12b'
+        );
+        return {
+          summary: nimText,
+          format: options.format || 'executive',
+          source: `nvidia/${settings.nvidiaModel || 'nemotron-3.5-super-vl-120b-a12b'}`,
+          keyUsed: 'custom',
+        };
+      } catch (_nimErr) {
+        const nimErr = asErrorLike(_nimErr);
+        if (!settings.autoFallbackToLocal) throw nimErr;
+        AppLogger.warn(
+          'GeminiService',
+          'NVIDIA NIM synthesis failed, attempting fallback:',
+          nimErr
+        );
+      }
+    }
+
+    // 2. Route to Groq if selected
     if (llmProvider === 'groq') {
       try {
         const groqText = await this.executeGroqChat(

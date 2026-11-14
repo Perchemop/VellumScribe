@@ -1700,7 +1700,104 @@ app.post('/api/groq/transcribe', async (req, res) => {
   }
 });
 
-// 4. Deepgram Verify Endpoint
+// 4. NVIDIA NIM Verify Endpoint
+app.post('/api/nvidia/verify', async (req, res) => {
+  try {
+    const key = (
+      req.body?.apiKey ||
+      req.headers['x-nvidia-api-key'] ||
+      process.env.NVIDIA_API_KEY ||
+      ''
+    )
+      .toString()
+      .trim();
+    if (!key) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide an NVIDIA NIM API key (starts with nvapi-).',
+      });
+    }
+    const response = await fetch('https://integrate.api.nvidia.com/v1/models', {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data: any = await response.json().catch(() => null);
+    if (response.ok && data?.data) {
+      const models = (data.data as Array<any>).map((m) => m.id);
+      return res.json({
+        success: true,
+        message: `Connected to NVIDIA NIM! Found ${models.length} available models.`,
+        models,
+      });
+    }
+    return res.status(401).json({
+      success: false,
+      error: data?.error?.message || 'NVIDIA NIM key verification failed.',
+    });
+  } catch (err: any) {
+    console.error('NVIDIA NIM verify error:', err);
+    return res
+      .status(500)
+      .json({ success: false, error: sanitizeErrorMessage(err, 'Failed to contact NVIDIA NIM.') });
+  }
+});
+
+// 5. NVIDIA NIM Chat / Synthesis Endpoint
+app.post('/api/nvidia/chat', async (req, res) => {
+  try {
+    const key = (
+      req.body?.apiKey ||
+      req.headers['x-nvidia-api-key'] ||
+      process.env.NVIDIA_API_KEY ||
+      ''
+    )
+      .toString()
+      .trim();
+    if (!key) {
+      return res.status(400).json({
+        error: 'NVIDIA NIM API key required. Paste your free key from build.nvidia.com/settings.',
+      });
+    }
+    const { prompt, model = 'nvidia/nemotron-3.5-super-vl-120b-a12b', systemPrompt } = req.body;
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt || 'Synthesize these notes.' });
+
+    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.2,
+      }),
+    });
+
+    const data: any = await response.json().catch(() => null);
+    if (!response.ok || !data?.choices?.[0]?.message?.content) {
+      return res.status(response.status || 500).json({
+        error: data?.error?.message || 'NVIDIA NIM generation failed.',
+      });
+    }
+
+    return res.json({
+      text: data.choices[0].message.content,
+      modelUsed: model,
+      source: `nvidia/${model}`,
+    });
+  } catch (err: any) {
+    console.error('NVIDIA NIM synthesis error:', err);
+    return res
+      .status(500)
+      .json({ error: sanitizeErrorMessage(err, 'Failed to execute NVIDIA NIM synthesis.') });
+  }
+});
+
+// 6. Deepgram Verify Endpoint
 app.post('/api/deepgram/verify', async (req, res) => {
   try {
     const key = (
