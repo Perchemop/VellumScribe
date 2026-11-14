@@ -20,11 +20,13 @@ export interface AiIntegrationSettings {
   googleApiKey: string;
   groqApiKey: string;
   deepgramApiKey: string;
+  nvidiaApiKey: string;
 
   // Model & Endpoint configurations
   googleModel: string;
   groqModel: string;
   deepgramModel: string;
+  nvidiaModel: string;
   localWhisperEndpoint: string;
 
   // Backward-compatible properties
@@ -220,6 +222,7 @@ const DEFAULT_SETTINGS: AiIntegrationSettings = {
   googleModel: 'gemini-3.6-flash',
   groqModel: 'llama-3.3-70b-versatile',
   deepgramModel: 'nova-3',
+  nvidiaModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   localWhisperEndpoint: '',
 
   apiKey: '',

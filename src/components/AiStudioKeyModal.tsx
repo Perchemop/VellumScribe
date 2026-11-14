@@ -80,7 +80,7 @@ export const AiStudioKeyModal: React.FC<AiStudioKeyModalProps> = ({
     }
   }, [isOpen, initialProvider]);
 
-  const handleSelectTab = (prov: 'google' | 'groq' | 'deepgram' | 'offline_rules') => {
+  const handleSelectTab = (prov: 'google' | 'groq' | 'nvidia' | 'deepgram' | 'offline_rules') => {
     if (['groq', 'deepgram'].includes(prov)) {
       setShowAdvancedProviders(true);
     }

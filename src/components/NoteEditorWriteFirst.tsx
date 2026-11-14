@@ -70,6 +70,7 @@ const TranscriptionRecoverySheet = lazy(() =>
 );
 
 const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
+  nvidia: 'NVIDIA NIM (Nemotron)',
   google: 'Google Gemini',
   groq: 'Groq',
   offline_rules: 'Offline rules engine',
