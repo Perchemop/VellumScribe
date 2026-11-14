@@ -36,18 +36,30 @@ import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/sch
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 
-export const CURRENT_APP_VERSION = '3.2.1';
-export const CURRENT_BUILD_NUMBER = 32000;
+export const CURRENT_APP_VERSION = '3.2.2';
+export const CURRENT_BUILD_NUMBER = 32002;
 export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
 export const CURRENT_BACKUP_FORMAT_VERSION = '3.1';
 export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
+    version: '3.2.2',
+    buildNumber: 32002,
+    releaseDate: '2026-11-14',
+    isCurrent: true,
+    highlights: [
+      'Native Whisper model-load crash fixed (model SHA-256 verified before init; single-threaded inference)',
+      'CI-managed token ledger (docs/tokens.json) quoted in release notes',
+    ],
+    features: [],
+    fixes: [],
+  },
+  {
     version: '3.2.1',
     buildNumber: 32001,
     releaseDate: '2026-11-14',
-    isCurrent: true,
+    isCurrent: false,
     highlights: [
       'Release Notes popup opened from a bottom-right version chip (guide §12.1)',
       'CI-managed token ledger (docs/tokens.json) quoted in release notes',

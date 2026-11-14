@@ -109,18 +109,18 @@ public class ModelManager {
             return false;
         }
         ModelMeta meta = VERIFIED_MODELS.get(modelId);
-        if (meta != null) {
-            if (meta.expectedBytes > 0) {
-                long len = f.length();
-                long min = (long) (meta.expectedBytes * 0.95);
-                long max = (long) (meta.expectedBytes * 1.05) + 1024 * 1024;
-                if (len >= min && len <= max) {
-                    return true;
-                }
-            }
-            return verifyChecksum(modelId, meta.expectedSha256);
+        if (meta == null) {
+            return true;
         }
-        return true;
+        if (meta.expectedBytes > 0) {
+            long len = f.length();
+            long min = (long) (meta.expectedBytes * 0.95);
+            long max = (long) (meta.expectedBytes * 1.05) + 1024 * 1024;
+            if (len < min || len > max) {
+                return false;
+            }
+        }
+        return verifyChecksum(modelId, meta.expectedSha256);
     }
 
     /**
