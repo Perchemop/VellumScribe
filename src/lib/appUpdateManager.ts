@@ -44,8 +44,8 @@ export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
 
 export const APP_CHANGELOGS: ReleaseInfo[] = [
   {
-    version: '3.2.0',
-    buildNumber: 32000,
+    version: '3.2.1',
+    buildNumber: 32001,
     releaseDate: '2026-11-14',
     isCurrent: true,
     highlights: [
