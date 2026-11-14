@@ -86,11 +86,20 @@ describe('storage lifecycle — deletions must persist (audit S-F1/S-F2)', () =>
 
   it('sweeps orphan media for real and reports the count', async () => {
     const db = getDatabaseAdapter();
-    db.run(
-      `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ['media-orphan-sweep', 424242, 'image', 'image/png', 10, Date.now()]
-    );
+    // note_id 424242 deliberately points at a note that does not exist: the sweep needs planted
+    // legacy corruption so the orphan-repair path has something to find. sql.js >= 1.15.2 actually
+    // enforces the FK pragma (<= 1.14 silently reset it in export()), so suspend enforcement for
+    // the dangling insert only and restore enforcement immediately after the window.
+    db.run('PRAGMA foreign_keys = OFF;');
+    try {
+      db.run(
+        `INSERT OR REPLACE INTO media_files (media_key, note_id, media_type, mime_type, byte_size, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        ['media-orphan-sweep', 424242, 'image', 'image/png', 10, Date.now()]
+      );
+    } finally {
+      db.run('PRAGMA foreign_keys = ON;');
+    }
     expect(SqliteRepository.findOrphanMediaKeys()).toContain('media-orphan-sweep');
 
     const result = await StorageManager.cleanOrphanedMedia();

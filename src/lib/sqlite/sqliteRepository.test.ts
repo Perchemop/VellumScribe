@@ -42,7 +42,17 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
     const note = createNote('Valid note');
 
     insertMedia('media-valid', note.id);
-    insertMedia('media-orphan-deleted', 99999);
+    // The 99999 parent note deliberately does not exist: this row simulates legacy corruption so
+    // the orphan-repair path has something to find. sql.js >= 1.15.2 actually enforces the FK
+    // pragma (<= 1.14 silently reset it in export()), so suspend enforcement for the dangling
+    // insert only and restore enforcement immediately after the window.
+    const adapter = getDatabaseAdapter();
+    adapter.run('PRAGMA foreign_keys = OFF;');
+    try {
+      insertMedia('media-orphan-deleted', 99999);
+    } finally {
+      adapter.run('PRAGMA foreign_keys = ON;');
+    }
     insertMedia('media-orphan-null', null);
 
     const orphans = SqliteRepository.findOrphanMediaKeys();
@@ -75,5 +85,61 @@ describe('Orphan media repair at cold start (R-1.5)', () => {
 
     SqliteRepository.removeOrphanMediaRecord('media-orphan-after-delete');
     expect(SqliteRepository.findOrphanMediaKeys()).toEqual([]);
+  });
+
+  it('upserts an event whose explicit id is not in the database (backup restore)', async () => {
+    // A backup dump carries explicit ids for rows the (fresh or partial) database
+    // does not have yet. saveEvent used to treat "has id" as "row exists", match
+    // 0 rows with its UPDATE and silently drop the event.
+    SqliteRepository.saveEvent({
+      id: 4242,
+      title: 'Imported event',
+      event_date: '2026-11-14',
+    });
+
+    const rows = await SqliteRepository.queryAsync<{ id: number; title: string }>(
+      'SELECT id, title FROM events WHERE id = 4242'
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0].title).toBe('Imported event');
+  });
+
+  it('saves a note referencing an imported event id with foreign keys enforced', async () => {
+    SqliteRepository.saveEvent({
+      id: 4242,
+      title: 'Imported event',
+      event_date: '2026-11-14',
+    });
+
+    // The parent now exists under its explicit id, so no pragma window is needed:
+    // the note insert must satisfy notes.event_id -> events(id) under enforcement.
+    const note = StorageManager.addNote({
+      event_id: 4242,
+      title: 'Note under imported event',
+      body: 'body',
+      created_at: new Date().toISOString(),
+    });
+
+    const stored = SqliteRepository.getNoteById(note.id);
+    expect(stored?.event_id).toBe(4242);
+    expect(stored?.title).toBe('Note under imported event');
+  });
+
+  it('updates an event that already exists without duplicating it', async () => {
+    const created = SqliteRepository.saveEvent({
+      id: 0,
+      title: 'Original title',
+      event_date: '2026-11-14',
+    });
+    expect(created.id).toBeGreaterThan(0);
+
+    SqliteRepository.saveEvent({ ...created, title: 'Renamed event' });
+
+    const rows = await SqliteRepository.queryAsync<{ id: number; title: string }>(
+      'SELECT id, title FROM events WHERE id = ?',
+      [created.id]
+    );
+    expect(rows.length).toBe(1);
+    expect(rows[0].title).toBe('Renamed event');
   });
 });

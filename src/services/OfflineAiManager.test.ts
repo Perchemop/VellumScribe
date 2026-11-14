@@ -26,28 +26,37 @@ describe('OfflineAiManager crash recovery (R-3.6)', () => {
   ): Promise<number> {
     const db = getDatabaseAdapter();
     const id = overrides.id ?? Date.now();
-    await db.run(
-      `INSERT INTO transcriptions (
-        id, recording_id, engine, engine_version, model_id, model_checksum, language,
-        status, text, created_at, started_at, completed_at, error_code, error_message
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        overrides.recording_id ?? 1,
-        overrides.engine ?? 'whisper.cpp',
-        overrides.engine_version ?? '1.0.0',
-        overrides.model_id ?? 'whisper-tiny',
-        null,
-        overrides.language ?? 'auto',
-        overrides.status ?? 'PROCESSING',
-        null,
-        Date.now(),
-        Date.now(),
-        null,
-        null,
-        null,
-      ]
-    );
+    // Every seeded job deliberately points recording_id at a recording that was never created:
+    // crash recovery must find these interrupted jobs. sql.js >= 1.15.2 actually enforces the FK
+    // pragma (<= 1.14 silently reset it in export()), so suspend enforcement for the dangling
+    // insert and restore enforcement immediately after the window.
+    await db.run('PRAGMA foreign_keys = OFF;');
+    try {
+      await db.run(
+        `INSERT INTO transcriptions (
+          id, recording_id, engine, engine_version, model_id, model_checksum, language,
+          status, text, created_at, started_at, completed_at, error_code, error_message
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          overrides.recording_id ?? 1,
+          overrides.engine ?? 'whisper.cpp',
+          overrides.engine_version ?? '1.0.0',
+          overrides.model_id ?? 'whisper-tiny',
+          null,
+          overrides.language ?? 'auto',
+          overrides.status ?? 'PROCESSING',
+          null,
+          Date.now(),
+          Date.now(),
+          null,
+          null,
+          null,
+        ]
+      );
+    } finally {
+      await db.run('PRAGMA foreign_keys = ON;');
+    }
     return id;
   }
 
@@ -58,12 +67,21 @@ describe('OfflineAiManager crash recovery (R-3.6)', () => {
     status: 'completed' | 'pending' = 'completed'
   ): Promise<void> {
     const db = getDatabaseAdapter();
-    await db.run(
-      `INSERT INTO transcription_chunk_checkpoints (
-        job_id, chunk_index, start_ms, end_ms, status, transcript_text, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [String(jobId), chunkIndex, 0, 1000, status, transcriptText, Date.now(), Date.now()]
-    );
+    // job_id deliberately references a transcription_jobs row that does not exist (the recovery
+    // path matches checkpoints against transcriptions ids, simulating crash debris). sql.js
+    // >= 1.15.2 actually enforces the FK pragma (<= 1.14 silently reset it in export()), so
+    // suspend enforcement for the dangling insert and restore enforcement right after the window.
+    await db.run('PRAGMA foreign_keys = OFF;');
+    try {
+      await db.run(
+        `INSERT INTO transcription_chunk_checkpoints (
+          job_id, chunk_index, start_ms, end_ms, status, transcript_text, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [String(jobId), chunkIndex, 0, 1000, status, transcriptText, Date.now(), Date.now()]
+      );
+    } finally {
+      await db.run('PRAGMA foreign_keys = ON;');
+    }
   }
 
   it('recovers a partial transcript from completed chunk checkpoints after a crash', async () => {

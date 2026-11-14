@@ -885,8 +885,18 @@ export class SqliteRepository {
   public static saveEvent(evt: EventRecord): EventRecord {
     return this.transaction(() => {
       let eventId = evt.id;
-      const isExisting = Boolean(eventId && eventId > 0);
-      if (eventId && eventId > 0) {
+      // Existence must be queried, not inferred from the id: a restored backup
+      // delivers events whose explicit id is not yet in the database. Deciding
+      // from the id alone took the UPDATE branch, matched 0 rows and the event
+      // was silently never inserted, so its notes dangled on a missing event_id
+      // and the import failed with FOREIGN KEY constraint failed once real FK
+      // enforcement landed (sql.js <= 1.14.2 silently reset the pragma in export()).
+      const isExisting =
+        eventId && eventId > 0
+          ? this.query<{ id: number }>('SELECT id FROM events WHERE id = ?', [eventId]).length > 0
+          : false;
+
+      if (isExisting) {
         // Must use UPDATE rather than INSERT OR REPLACE.
         // SQLite's REPLACE delete-then-insert semantics triggers FOREIGN KEY ON DELETE SET NULL on notes.event_id!
         this.run(
@@ -905,21 +915,41 @@ export class SqliteRepository {
           ]
         );
       } else {
-        this.run(
-          `INSERT INTO events (title, event_date, description, location, category, color, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            evt.title || 'Untitled',
-            evt.event_date || new Date().toISOString().slice(0, 10),
-            evt.description || null,
-            evt.location || null,
-            evt.category || null,
-            evt.color || null,
-            Date.now(),
-            Date.now(),
-          ]
-        );
-        eventId = this.getLastInsertId();
+        if (eventId && eventId > 0) {
+          // Explicit id with no row yet (backup restore): INSERT must preserve the
+          // caller's id so notes' event_id references from the same dump resolve.
+          this.run(
+            `INSERT INTO events (id, title, event_date, description, location, category, color, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              eventId,
+              evt.title || 'Untitled',
+              evt.event_date || new Date().toISOString().slice(0, 10),
+              evt.description || null,
+              evt.location || null,
+              evt.category || null,
+              evt.color || null,
+              Date.now(),
+              Date.now(),
+            ]
+          );
+        } else {
+          this.run(
+            `INSERT INTO events (title, event_date, description, location, category, color, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              evt.title || 'Untitled',
+              evt.event_date || new Date().toISOString().slice(0, 10),
+              evt.description || null,
+              evt.location || null,
+              evt.category || null,
+              evt.color || null,
+              Date.now(),
+              Date.now(),
+            ]
+          );
+          eventId = this.getLastInsertId();
+        }
       }
       this.recordItemChange('event', eventId, isExisting ? 'update' : 'create', 1, evt);
       return { ...evt, id: eventId };

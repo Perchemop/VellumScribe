@@ -507,6 +507,9 @@ export class SqliteEngine {
 
     // Pre-migration backup snapshot for rollback safety
     const preMigrationBinary = this.db.export();
+    // sql.js <= 1.14.2 export() silently reset connection PRAGMAs (sql.js #159); 1.15.2+ preserves
+    // them. Re-assert so the engine's foreign_keys=ON policy is explicit and version-independent.
+    this.db.run('PRAGMA foreign_keys = ON;');
 
     // Ensure schema_migrations table exists
     this.db.run(`
@@ -831,6 +834,9 @@ export class SqliteEngine {
 
     try {
       const binary = this.db.export();
+      // sql.js <= 1.14.2 export() silently reset connection PRAGMAs (sql.js #159); 1.15.2+ preserves
+      // them. Re-assert so the engine's foreign_keys=ON policy is explicit and version-independent.
+      this.db.run('PRAGMA foreign_keys = ON;');
       await idbStorage.saveBinary(binary);
 
       if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
@@ -881,7 +887,11 @@ export class SqliteEngine {
    */
   public static exportDatabaseBinary(): Uint8Array {
     const db = this.getDb();
-    return db.export();
+    const binary = db.export();
+    // sql.js <= 1.14.2 export() silently reset connection PRAGMAs (sql.js #159); 1.15.2+ preserves
+    // them. Re-assert so the engine's foreign_keys=ON policy is explicit and version-independent.
+    db.run('PRAGMA foreign_keys = ON;');
+    return binary;
   }
 
   /**
@@ -947,6 +957,9 @@ export class SqliteEngine {
   }> {
     const db = this.getDb();
     const originalBinary = db.export();
+    // sql.js <= 1.14.2 export() silently reset connection PRAGMAs (sql.js #159); 1.15.2+ preserves
+    // them. Re-assert so the engine's foreign_keys=ON policy is explicit and version-independent.
+    db.run('PRAGMA foreign_keys = ON;');
     const originalSizeBytes = originalBinary.length;
 
     db.run('VACUUM;');
@@ -955,6 +968,9 @@ export class SqliteEngine {
     await this.flush();
 
     const compactedBinary = db.export();
+    // sql.js <= 1.14.2 export() silently reset connection PRAGMAs (sql.js #159); 1.15.2+ preserves
+    // them. Re-assert so the engine's foreign_keys=ON policy is explicit and version-independent.
+    db.run('PRAGMA foreign_keys = ON;');
     const compactedSizeBytes = compactedBinary.length;
     const bytesReclaimed = Math.max(0, originalSizeBytes - compactedSizeBytes);
 

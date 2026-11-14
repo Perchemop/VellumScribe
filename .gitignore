@@ -25,6 +25,10 @@ android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
 android/app/src/main/assets/capacitor.plugins.json
 
+# Generated from node_modules/sql.js by scripts/vendor-sql-wasm.mjs; see docs/BUILD_RELEASE.md §3.
+public/sql-wasm.js
+public/sql-wasm.wasm
+
 # IDE
 .idea/
 *.iml
