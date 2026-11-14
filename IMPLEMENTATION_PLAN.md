@@ -6,7 +6,7 @@ the owner reorders them.
 
 Status legend: `Backlog` · `Ready` · `In progress` · `Done` · `Blocked`
 
-Last reviewed: 2026-10-21.
+Last reviewed: 2026-11-14.
 
 ---
 
@@ -30,29 +30,29 @@ resolved) — `prettier --check .` passes across all tracked files.
 
 ### A-2 · First signed release build
 
-**Status: Ready — only Q-002 (keystore) blocks it.** The pipeline itself is
-proven: CI already builds `assembleDebug` and `assembleRelease`, logging
-`versionName=3.1.0 versionCode=30100 signed=false`.
+**Status: Done (2026-10-30)** — Q-002 resolved; signed release APKs ship.
 
-Acceptance criteria:
+Evidence:
 
-- Release keystore generated and backed up outside the repo.
-- Four signing secrets configured in CI (or `android/keystore.properties`
-  locally).
-- `assembleRelease` logs `VELLUM: assembleRelease -> versionName=3.1.0
-versionCode=30100 signed=true`.
-- The release APK inside the artifact passes `apksigner verify --print-certs`
-  and reports the expected certificate.
+- `assembleRelease` logs `versionName=3.1.1 versionCode=30101 signed=true`
+  (CI run `40129841250`, `41258088806` native-INFER_BEGIN-fix build).
+- `v3.1.1` released from tag `40960758092`: signed real + stub APKs +
+  `APK-SHA256SUMS.txt`, both verified green on Linux/macOS/Windows.
+- Release keystore generated and backed up outside the repo
+  (`docs/RELEASE_KEYSTORE.md`); CI signing secrets configured (`BUILD_RELEASE.md`).
 
 ### A-3 · Update-in-place proof
 
-**Status: Backlog** (depends on A-2)
+**Status: Blocked** (depends on physical `arm64` device; owner action)
 
 Acceptance criteria:
 
 - Previous version installed on a physical `arm64` device.
 - New APK installs over it with no error; no data loss.
 - QC §5 checklist walked and recorded in `PROGRESS.md`.
+
+Signed build is verified (`signed=true`); only on-device proof remains (A-3,
+R-6.1), which cannot be done without a device.
 
 ---
 
@@ -100,17 +100,9 @@ Acceptance criteria — all met:
 
 ### B-4 · Burn lint warnings to zero
 
-**Status: Active — blocker #1 (Q-005). First task per guide §4.**
-
-`--max-warnings=0` is set in `package.json` (D-403); CI lint is currently
-FAILING on 656 pre-existing warnings.
-
-Acceptance criteria:
-
-- Warning count reduced from 656 to 0 in slices of ≤50, each verified on CI
-  via `ci.sh run` (never locally).
-- `--max-warnings=0` set in `package.json` ✅ (done).
-- `npm run lint` passes on all three OS runners.
+**Status: Done (2026-10-23)** — Q-005 resolved; `--max-warnings=0` enforced
+in `package.json`, CI lint passes on all three OS runners (656 → 0 via
+slices B-4…B-7).
 
 ---
 
@@ -170,8 +162,25 @@ provenance badge, offline (airplane mode).
 
 **Status: Needs owner decision**
 
-`arm64`-only ABI and the ~30 MB bundled Whisper model in APK assets. Both
-affect install reach and APK size.
+`arm64`-only ABI (Q-009) and the ~30 MB bundled Whisper model in APK assets
+(Q-010). Both affect install reach and APK size. Recorded in
+`docs/assumptions-and-questions.md`; both still unanswered.
+
+### D-3 · Guide Part II §26 open questions
+
+**Status: Needs owner decision**
+
+Recorded in `docs/assumptions-and-questions.md` ("Guide Part II §26 conflicts
+— decisions requested"):
+
+- Q-012 — Branch protection: require human review on top of agent merge?
+- Q-013 — Local-test vs. no-heavy-work contributor wording?
+- Q-014 — Keep repository public?
+- Q-015 — Employer IP check (legal)?
+- Q-019 — Formal trademark clearance (human/legal part)?
+- Q-020 — Corrections to local `guide.md` (three stale statements)?
+
+None block CI-gated work; all block launch readiness.
 
 ---
 
