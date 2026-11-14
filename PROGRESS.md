@@ -15,7 +15,7 @@ Append here for every slice; never rewrite history.
 | Format gate      | ✅ **required** since slice B-3 (D-407) — `prettier --check .` passes across every tracked file.                                                                                                                                                                                                                                        |
 | Lint ceiling     | `--max-warnings=0` (warnings denied). ✅ **CI lint PASSES — 0 warnings** (656 → 0 via slices B-4…B-7). The `verify` job runs `check:orphans` (each CI run) and the unit-test suite — green through v3.1.1.                                                                                                                              |
 | Test suite       | ✅ green on PR #147 (run `41138375751`, 3 OS) — 31 `*.test.ts(x)` files incl. the new brand contract tests.                                                                                                                                                                                                                             |
-| Working tree     | S-3 (Release Notes popup + token ledger) in the working tree; `main` at `4fd8f7d` carries S-1 (`1f07905`) and S-2 (`f6db088` + docs)                                                                                                                                                                                                    |
+| Working tree     | clean; `main` at `4096109` — S-1…S-4 merged **and** Dependabot sql.js 1.16.0 (#183) landed; no open pull requests                                                                                                                                                                                                                       |
 | GitHub Actions   | ✅ **operational** — CI green on Linux + Windows + macOS; push/PR Security Scanning and the Android APK build green. The weekly **scheduled** Security Scanning run was red on `main` (runs `41440884939`, `42617404430`); slice S-1 fixed it and the full-history audit is now green (run `43394163146`, 456 commits, no leaks found). |
 | Android APK      | ✅ **built in CI** — Releases `v3.1.1` (tag run `40960758092`): real + stub APKs; `versionName=3.1.1`, **`signed=true`**; fix build `41258088806` (REAL APK with INFER_BEGIN fix) + main build `41258778115` successful.                                                                                                                |
 | Signed APK       | ✅ produced — Q-002 resolved; signed=true                                                                                                                                                                                                                                                                                               |
@@ -91,6 +91,58 @@ verify` re-run and green.
 
 ---
 
+## 2026-11-14 — Slice S-4: sql.js hygiene + the FK hardening exposed a real import bug
+
+**Why this slice exists.** Dependabot's sql.js 1.14.2 → 1.16.0 bump (PR #183)
+failed every `verify` job and the visual suite. The investigation found two
+independent causes, and fixing the second one surfaced a latent production bug.
+
+1. **The vendored WASM pair could drift.** The browser build bundles the sql.js
+   _glue_ from the installed package, but `SqliteEngine` force-serves the binary
+   from `/sql-wasm.wasm`, which was a **hand-committed copy from 1.14.2** —
+   nothing kept it in sync, so 1.16 glue met a 1.14 binary and the app failed to
+   boot ("ka is not a function"). Fixed structurally: `scripts/vendor-sql-wasm.mjs`
+   copies the pair from `node_modules/sql.js` (printing version, sizes and
+   sha-256), npm runs it automatically via `prebuild` / `prebuild:spa`, and the
+   two files are **no longer tracked** — they are build output, like the
+   Capacitor bundle (`docs/BUILD_RELEASE.md` §3 documents the rule and the
+   failure mode).
+2. **sql.js 1.15.2 made `export()` preserve PRAGMAs.** Before that, `export()`
+   silently reset `PRAGMA foreign_keys` to OFF, so the engine's FK policy was an
+   accident of the installed version and four test suites that deliberately
+   plant dangling foreign keys passed by accident. Two changes:
+   - `sqliteEngine.ts` re-asserts `PRAGMA foreign_keys = ON` after **every**
+     `export()` (five sites), making the policy explicit and version-independent;
+   - the four suites (`sqliteRepository`, `storageLifecycle`,
+     `OfflineAiManager`, `importSafety`) suspend enforcement **only around the
+     deliberate dangling insert**, with a why-comment at each window, and
+     restore it immediately — no assertion was weakened.
+
+**The bug the hardening exposed (real, user-facing).** With FK genuinely on,
+the backup-import test failed with `FOREIGN KEY constraint failed`. Root cause:
+`saveEvent` decided "existing" from the id alone — an event from a backup that
+carries an explicit id but is not yet in the database took the UPDATE branch,
+matched **0 rows**, and was silently never inserted; its notes then dangled.
+The import only ever "worked" because the silent FK reset let them through.
+`saveEvent` is now a true upsert (existence queried like `saveNote`; an
+explicit id is preserved on insert so references resolve), with regression
+tests. The same audit cleared `saveRecording`/`saveTranscript`/`saveOcrScan`
+(they use `INSERT OR REPLACE`, which inserts absent ids). A bonus from the same
+audit: the demo sample events carry explicit ids, so on a fresh database the old
+code silently dropped every one of them — the upsert fix repairs that path too.
+
+Evidence: PR #192 (head `4897080`) — CI run `43540297307`, Security Scanning
+`43540297477`, Visual `43540297299`, all green (CodeQL check green); merged to
+`main` as `8035895`. The intermediate diagnostics runs (`738093c`, `60ce663`)
+are the bisection trail recorded in the test now: `importSafety` surfaces the
+pipeline's own failure message in its assertion, so the next regression is
+diagnosable from the CI log alone.
+
+Open on this track: **closed.** Dependabot PR #183 (sql.js 1.16.0) rebased onto
+this slice and passed every check — including the three `verify` jobs and the
+visual suite that exercise the regenerated WASM pair — and was merged
+(`4096109`). sql.js 1.16.0 is on `main`.
+
 ## 2026-11-14 — Slice S-3: Release Notes popup + CI-managed token ledger (guide §12.1)
 
 The guide's suite standards were audited against the app and the two missing
@@ -141,7 +193,17 @@ documented in `docs/BUILD_RELEASE.md` §6 (run `npx tsx scripts/tokens-ledger.ts
 
 Evidence:
 
-CI run: <pending>
+- Slice CI: PR #190 (head `f6437c9`) — CI run `43531352844`, Security Scanning
+  `43531352928`, Visual `43531352860`, all green; merged to `main` as
+  `1e11aed`. The **CodeQL check reported 1 new high-severity alert in the
+  slice's own test code** (`js/incomplete-multi-character-sanitization` on the
+  SSR-comment-stripping helper); fixed at the source in PR #191 (parse the
+  markup instead of sanitising it — no string is rewritten), CI run
+  `43534966262` with the CodeQL check **green**, merged as `8b06504`.
+- Release-workflow dry run: `workflow_dispatch` run `43531935718` —
+  `docs/tokens.json parses` and the `## Token ledger` section is previewed;
+  writes nothing, opens no PR, touches no release. This is the CI evidence that
+  the ledger CLI and the JSON ledger work end to end.
 
 ## 2026-11-13 — Slice S-2: dependency hygiene (Dependabot groups, 11 updates, 4 action majors)
 
