@@ -133,7 +133,10 @@ describe('ImportSafetyPipeline', () => {
     });
 
     const result = await ImportSafetyPipeline.executeImport(backupPayload);
-    expect(result.success).toBe(true);
+    // Surface the pipeline's own failure message in the assertion output: a bare
+    // boolean makes a regression undiagnosable from the CI log alone (a guard
+    // must say why).
+    expect(result.success, `import failed: ${result.message} ${result.error ?? ''}`).toBe(true);
     expect(result.counts?.notes).toBe(2);
 
     // Verify notes are stored in SQLite and integrity check passed
