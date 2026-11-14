@@ -255,6 +255,33 @@ public class TranscriptionWorker extends Worker {
 
         CrashBreadcrumbs.write(context, "MODEL_OK",
             "model=" + modelId + " size=" + modelFile.length());
+
+        // Pre-flight checksum guard: never hand a right-sized-but-corrupt model
+        // to whisper_init_from_file_with_params (it hard-crashes the process).
+        ModelManager.ModelMeta meta = ModelManager.VERIFIED_MODELS.get(modelId);
+        if (meta != null && !modelManager.verifyChecksum(modelId, meta.expectedSha256)) {
+            CrashBreadcrumbs.write(context, "MODEL_CORRUPT", "model=" + modelId + " size=" + modelFile.length());
+            modelFile.delete();
+            return Result.failure(new Data.Builder()
+                .putString("error_code", "OFFLINE_AI_MODEL_CORRUPT")
+                .putString("error_message", "Offline model file is corrupt. Re-download it in Settings → Offline AI.")
+                .build());
+        }
+
+        CrashBreadcrumbs.write(context, "MODEL_LOAD_BEGIN", "model=" + modelId);
+
+        // Memory headroom gate BEFORE native model load: an OOM mid-load kills
+        // the process (SIGABRT/SIGSEGV inside ggml). Fail cleanly instead.
+        long availMb = availableMemoryMb();
+        if (availMb >= 0 && availMb < MIN_INFERENCE_MEMORY_MB) {
+            CrashBreadcrumbs.write(context, "FAIL_LOW_MEMORY", "availMb=" + availMb);
+            return Result.failure(new Data.Builder()
+                .putString("error_code", "OFFLINE_AI_OUT_OF_MEMORY")
+                .putString("error_message",
+                    "Not enough free memory for offline transcription (" + availMb + " MB available). Close other apps or free up storage, then try again.")
+                    .build());
+        }
+
         WhisperEngine engine = new WhisperEngine();
         if (!WhisperEngine.isNativeLibraryAvailable() || !engine.initialize(modelFile)) {
             CrashBreadcrumbs.write(context, "FAIL_ENGINE_INIT",
@@ -308,19 +335,6 @@ public class TranscriptionWorker extends Worker {
 
             boolean preferBattery = getInputData().getBoolean("prefer_battery_over_speed", false);
             int nThreads = determineOptimalThreadCount(preferBattery);
-
-            long availMb = availableMemoryMb();
-            if (availMb >= 0 && availMb < MIN_INFERENCE_MEMORY_MB) {
-                CrashBreadcrumbs.write(context, "FAIL_LOW_MEMORY", "availMb=" + availMb);
-                engine.release();
-                if (db != null && db.isOpen()) db.close();
-                return Result.failure(new Data.Builder()
-                    .putString("error_code", "OFFLINE_AI_OUT_OF_MEMORY")
-                    .putString("error_message",
-                        "Not enough free memory for offline transcription (" + availMb + " MB available). Close other apps or free up storage, then try again.")
-                    .build());
-            }
-            CrashBreadcrumbs.write(context, "MEMORY_OK", "availMb=" + availMb + " threads=" + nThreads);
 
             boolean hadSpeechActivity = false;
             boolean engineUnavailable = false;

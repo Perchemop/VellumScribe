@@ -8,6 +8,12 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
+## [3.2.2] - 2026-11-14
+
+### Fixed
+
+- **Native Whisper model-load crash on Android** — `ModelManager.isModelInstalled()` accepted any whisper-tiny file whose size matched (~32 MB) without verifying its SHA-256, so a corrupted model reached `whisper_init_from_file_with_params` and hard-killed the app (no catchable exception). The check now always verifies SHA-256 before trusting a model; a corrupt file is deleted and the user is prompted to re-download it in Settings → Offline AI. `TranscriptionWorker` now also writes a `MODEL_LOAD_BEGIN` breadcrumb before native init and checks free memory **before** loading the model, failing cleanly with `OFFLINE_AI_OUT_OF_MEMORY` instead of risking a process kill mid-load.
+
 ## [3.2.1] - 2026-11-14
 
 ### Added
