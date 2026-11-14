@@ -18,7 +18,7 @@ import { RecordingRepository } from '../repositories/RecordingRepository';
 import { TranscriptionRepository } from '../repositories/TranscriptionRepository';
 import { MediaRepository } from '../lib/MediaRepository';
 import { GeminiService } from '../lib/geminiService';
-import { asErrorLike } from '../lib/errorLike';
+import { asErrorLike, type ErrorLike } from '../lib/errorLike';
 import { RecordingRecord, TranscriptionEntity, OfflineAiErrorCode } from '../types';
 
 export type TranscriptionPolicy = 'offline_only' | 'local_first' | 'cloud_allowed' | 'cloud_only';
@@ -377,8 +377,7 @@ export class TranscriptionOrchestrator {
     // instead of letting the app die.
     const engineOrder = await this.selectEngineOrder(policy, mergedInput, options.enginePreference);
 
-    let lastError: Error | null = null;
-    let chosenEngine: TranscriptionEngine | null = null;
+    let lastError: ErrorLike | null = null;
 
     for (const engine of engineOrder) {
       try {
@@ -403,8 +402,6 @@ export class TranscriptionOrchestrator {
               : 'OFFLINE_AI_NO_SPEECH: Empty transcript.'
           );
         }
-
-        chosenEngine = engine;
 
         if (durableRecord?.id) {
           try {
