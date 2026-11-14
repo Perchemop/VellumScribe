@@ -8,7 +8,7 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
-## [Unreleased]
+## [3.2.0] - 2026-11-14
 
 ### Added
 

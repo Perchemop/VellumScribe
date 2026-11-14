@@ -36,7 +36,7 @@ import { CURRENT_SCHEMA_VERSION as SQLITE_DB_SCHEMA_VERSION } from './sqlite/sch
 import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 
-export const CURRENT_APP_VERSION = '3.1.1';
+export const CURRENT_APP_VERSION = '3.2.0';
 export const CURRENT_BUILD_NUMBER = 31000;
 export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
 export const CURRENT_BACKUP_FORMAT_VERSION = '3.1';
