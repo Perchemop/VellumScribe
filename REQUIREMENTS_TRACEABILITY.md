@@ -91,6 +91,13 @@ the PR that claims it (guide §9).
 | R-6.5 | Releases are published from a semver tag with notes + checksums            | `.github/workflows/release.yml`, `.github/workflows/build-apk.yml` | 🟢 `v3.1.1` released from the tag: CHANGELOG body + signed APKs + `APK-SHA256SUMS.txt` (run `40960758092`)                                                   |
 | R-6.6 | `main` is protected; merges require the authoritative checks               | GitHub branch protection, `.ci-required.txt`                       | enforced on `Perchemop/VellumScribe` (D-415); private vulnerability reporting enabled — config-enforced, no automated test                                   |
 
+## R-7 · Suite standards (guide §12.1)
+
+| #     | Requirement                                                                                                                                                         | Implements                                                                                                | Test                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| R-7.1 | The version is shown subtly bottom-right; clicking it opens the standard Release Notes popup (version history, per-release app usage, token metrics, Update button) | `src/components/VersionFootprint.tsx`, `src/components/ReleaseNotesModal.tsx`, `src/lib/releaseNotes.ts`  | `src/lib/releaseNotes.test.ts` ✅ + `src/components/releaseNotesContract.test.tsx` ✅                      |
+| R-7.2 | A CI-managed token ledger is updated on each semver tag and the release notes quote its values                                                                      | `docs/tokens.json`, `scripts/tokens-ledger.ts`, `src/lib/tokenLedger.ts`, `.github/workflows/release.yml` | `src/lib/tokenLedger.test.ts` ✅ (ledger, update and serialise) + `release.yml` dry run 🟢 (`PROGRESS.md`) |
+
 ---
 
 ## Coverage summary
@@ -103,7 +110,8 @@ the PR that claims it (guide §9).
 | R-4 Security              | 5            | 5                    |
 | R-5 Optional cloud        | 5            | 5                    |
 | R-6 Release & platform    | 6            | 4                    |
-| **Total**                 | **34**       | **32**               |
+| R-7 Suite standards       | 2            | 2                    |
+| **Total**                 | **36**       | **34**               |
 
 Verified = an automated test (✅) or an inspected CI run (🟢) proves the
 requirement. The two not yet verified are **R-6.1** (update-in-place on

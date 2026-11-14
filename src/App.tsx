@@ -23,6 +23,8 @@ import { RecentNotesSection } from './components/RecentNotesSection';
 import { ArchiveSection } from './components/ArchiveSection';
 import { SettingsView } from './components/SettingsView';
 import { AppUpdateModal } from './components/AppUpdateModal';
+import { ReleaseNotesModal } from './components/ReleaseNotesModal';
+import { VersionFootprint } from './components/VersionFootprint';
 import { AppUpdateManager } from './lib/appUpdateManager';
 import { ModalBackStack } from './lib/modalBackStack';
 import {
@@ -70,6 +72,7 @@ export default function App() {
     () => !hasCompletedOnboarding()
   );
   const [showUpdateModal, setShowUpdateModal] = useState<boolean>(false);
+  const [showReleaseNotes, setShowReleaseNotes] = useState<boolean>(false);
 
   // Mount-only bootstrap: capture the latest context values in refs so the
   // effect does not need to re-run (it starts migrations and update checks).
@@ -228,6 +231,11 @@ export default function App() {
         window.history.pushState({ vellumscribe: 'active' }, '');
         return;
       }
+      if (showReleaseNotes) {
+        setShowReleaseNotes(false);
+        window.history.pushState({ vellumscribe: 'active' }, '');
+        return;
+      }
       if (selectedNoteId) {
         setSelectedNoteId(null);
         window.history.pushState({ vellumscribe: 'active' }, '');
@@ -248,6 +256,7 @@ export default function App() {
     showFabSpeedDial,
     showOnboardingGuide,
     showUpdateModal,
+    showReleaseNotes,
     selectedNoteId,
     setSelectedNoteId,
     activeView,
@@ -666,6 +675,10 @@ export default function App() {
           )}
 
           {showUpdateModal && <AppUpdateModal onClose={() => setShowUpdateModal(false)} />}
+
+          <VersionFootprint onOpen={() => setShowReleaseNotes(true)} />
+
+          {showReleaseNotes && <ReleaseNotesModal onClose={() => setShowReleaseNotes(false)} />}
 
           {toastMessage && (
             <div
