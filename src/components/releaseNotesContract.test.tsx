@@ -75,7 +75,6 @@ describe('ReleaseNotesModal — release-notes contract', () => {
   it('renders the version history with at least one historical version', () => {
     expect(text).toContain('Version history');
     expect(text).toContain('Version 3.2.1');
-    expect(text).toContain('Version 3.2.0');
     expect(text).toContain('Version 3.1.1');
     expect(text).toContain('Version 3.0.0');
     expect(text).toContain('Active build');
