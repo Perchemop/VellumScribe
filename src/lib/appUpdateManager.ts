@@ -37,7 +37,7 @@ import { AppLogger } from './logger';
 import { asErrorLike } from './errorLike';
 
 export const CURRENT_APP_VERSION = '3.2.2';
-export const CURRENT_BUILD_NUMBER = 32001;
+export const CURRENT_BUILD_NUMBER = 32002;
 export const CURRENT_DB_SCHEMA_VERSION = SQLITE_DB_SCHEMA_VERSION;
 export const CURRENT_BACKUP_FORMAT_VERSION = '3.1';
 export const CURRENT_SCHEMA_VERSION = CURRENT_DB_SCHEMA_VERSION;
