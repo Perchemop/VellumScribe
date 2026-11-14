@@ -657,11 +657,13 @@ export class AiSettingsManager {
         const res = await fetch('https://integrate.api.nvidia.com/v1/models', {
           headers: { Authorization: `Bearer ${keyToTest}` },
         });
-        const data: any = await res.json().catch(() => null);
+        const data = (await res.json().catch(() => null)) as {
+          data?: Array<{ id?: string }>;
+        } | null;
         const latency = Date.now() - startTime;
 
         if (res.ok && data?.data) {
-          const modelList = (data.data as Array<{ id: string }>).map((m) => m.id);
+          const modelList = data.data.map((m) => m.id ?? '').filter(Boolean);
           const now = new Date().toISOString();
           StorageManager.setItem(STORAGE_KEYS.LAST_VERIFIED, now);
           return {
