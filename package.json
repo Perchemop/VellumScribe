@@ -54,7 +54,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-window": "^2.4.1",
+    "react-window": "^2.5.3",
     "sql.js": "^1.14.2"
   },
   "devDependencies": {
