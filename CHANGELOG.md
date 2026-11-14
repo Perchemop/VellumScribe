@@ -8,6 +8,28 @@ files are kept for the record but contain corrected notices at the top
 where they previously described behavior that didn't match the shipped
 code - see `docs/history/AUDIT.md` for the full story of how that happened.
 
+## [3.2.1] - 2026-11-14
+
+### Added
+
+- **NVIDIA NIM AI provider** — seamless paste-key onboarding with `nvapi-...` key detection. Hosted OpenAI-compatible inference at `integrate.api.nvidia.com/v1`. Default model: `nvidia/nemotron-3.5-super-vl-120b-a12b` (reasoning + vision + tool-calling — ideal for note synthesis and handwritten OCR). Generate a free key at build.nvidia.com/settings, no credit card required.
+- **NVIDIA NIM key verification** — `testProviderConnection('nvidia')` hits `/v1/models` and reports available models.
+
+### Changed
+
+- **Native Whisper inference is single-threaded** (`jni_whisper.cpp` threads capped at 1) — avoids SIMD-alignment faults (`SIGSEGV`/`SIGBUS`) on some ARM CPUs that crashed the app at `INFER_BEGIN`.
+- **Multi-engine transcription fallback** — if native Whisper crashes or fails, the app falls back to cloud AI or browser acoustic analysis instead of dying (`TranscriptionOrchestrator.selectEngineOrder`).
+
+### Fixed
+
+- **Backup import no longer silently drops events** (`saveEvent` upsert fix — regression tests added).
+- **Foreign-key enforcement is now real** (`sqliteEngine.ts` re-asserts `PRAGMA foreign_keys = ON` after every `export()`).
+- **gitleaks allowlist** includes the new NVIDIA storage-key name (`vellumscribe_nvidia_api_key_v1`).
+
+### Security
+
+- **gitleaks `v2 → v3`** — Node 24 runtime only; still pins gitleaks 8.24.3, allowlist unchanged.
+
 ## [3.2.0] - 2026-11-14
 
 ### Added
